@@ -5,6 +5,14 @@
  * resolves round 8. Never both.
  */
 import { render, screen } from '@testing-library/react';
+import type { Ref } from 'react';
+import { markDeskReturn, takeDeskReturn } from '@/lib/document/paper/paper-origin';
+
+let mockHydrated = true;
+const mockAnchorId = 'studio-attention-task_due:project:proj-1';
+function mockDeskBody(props: { deskRoot: Ref<HTMLElement>; arrivalRoot: boolean }) {
+  return props.arrivalRoot ? <main ref={props.deskRoot}><button id={mockAnchorId}>Open Holloway Den</button></main> : null;
+}
 
 const mockRenderer = { current: { renderer: 'pending' } as { renderer: string; source?: string } };
 const mockRound8Props = jest.fn();
@@ -17,11 +25,11 @@ jest.mock('@/components/document/studio/round8-desk', () => ({
   __esModule: true,
   default: (props: Record<string, unknown>) => {
     mockRound8Props(props);
-    return <div data-testid="round8-desk" />;
+    return <div data-testid="round8-desk">{mockDeskBody(props as Parameters<typeof mockDeskBody>[0])}</div>;
   },
 }));
 jest.mock('@/components/document/frame/legacy-desk-body', () => ({
-  LegacyDeskBody: () => <div data-testid="legacy-desk" />,
+  LegacyDeskBody: (props: Parameters<typeof mockDeskBody>[0]) => <div data-testid="legacy-desk">{mockDeskBody(props)}</div>,
 }));
 jest.mock('@/components/loading', () => ({
   useLoadingRegister: () => false,
@@ -55,7 +63,7 @@ jest.mock('@/hooks/use-desk-engagements', () => ({
   }),
 }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'me', name: 'Leah' } }) }));
-jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
+jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => mockHydrated }));
 jest.mock('@/hooks/use-viewer-studio', () => ({ useViewerStudio: () => ({ isSettled: true }) }));
 jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => ({ value: false, isLoading: false }) }));
 jest.mock('@/hooks/use-teaching-note', () => ({
@@ -81,8 +89,54 @@ import DeskPage from '../../../../app/(document)/desk/page';
 import { resetDeskVisit } from '@/components/document/desk-arbiter';
 
 beforeEach(() => {
+  mockHydrated = true;
+  window.sessionStorage.clear();
+  window.scrollTo = jest.fn();
+  Element.prototype.scrollIntoView = jest.fn();
+  Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: 2000 });
   resetDeskVisit();
   mockRound8Props.mockClear();
+});
+
+describe.each(['round8', 'legacy'])('Desk explicit return (%s)', (renderer) => {
+  it('restores the opener once the root latches without popstate and consumes the intent', async () => {
+    mockRenderer.current = { renderer };
+    mockHydrated = false;
+    window.sessionStorage.setItem('patina.desk.place', JSON.stringify({ y: 0, anchor: 'old-row' }));
+    markDeskReturn({ focusId: mockAnchorId, anchorId: 'old-row' });
+    const view = render(<DeskPage />);
+    await screen.findByTestId(renderer === 'round8' ? 'round8-desk' : 'legacy-desk');
+    expect(screen.queryByRole('button', { name: 'Open Holloway Den' })).not.toBeInTheDocument();
+    mockHydrated = true;
+    view.rerender(<DeskPage />);
+    expect(screen.getByRole('button', { name: 'Open Holloway Den' })).toHaveFocus();
+    expect(takeDeskReturn()).toBeNull();
+    view.unmount();
+    render(<DeskPage />);
+    expect(await screen.findByRole('button', { name: 'Open Holloway Den' })).not.toHaveFocus();
+  });
+
+  it('does not restore a held place on an unrelated visit without a return intent', async () => {
+    mockRenderer.current = { renderer };
+    window.sessionStorage.setItem('patina.desk.place', JSON.stringify({ y: 0, anchor: mockAnchorId }));
+    render(<DeskPage />);
+    expect(await screen.findByRole('button', { name: 'Open Holloway Den' })).not.toHaveFocus();
+    expect(takeDeskReturn()).toBeNull();
+  });
+
+  it('scrolls to the origin anchor when no held Desk offset exists', async () => {
+    mockRenderer.current = { renderer };
+    mockHydrated = false;
+    markDeskReturn({ focusId: null, anchorId: mockAnchorId });
+    const view = render(<DeskPage />);
+    await screen.findByTestId(renderer === 'round8' ? 'round8-desk' : 'legacy-desk');
+    mockHydrated = true;
+    view.rerender(<DeskPage />);
+    const anchor = screen.getByRole('button', { name: 'Open Holloway Den' });
+    expect(anchor).toHaveFocus();
+    expect(anchor.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+    expect(takeDeskReturn()).toBeNull();
+  });
 });
 
 describe('desk/page.tsx — one body per renderer decision', () => {

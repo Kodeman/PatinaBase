@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { canReturnToPaperOrigin, type PaperOrigin } from '@/lib/document/paper/paper-origin';
+import { canReturnToPaperOrigin, markDeskReturn, type PaperOrigin } from '@/lib/document/paper/paper-origin';
 import type { ReactNode } from 'react';
 
 export interface JobHeadProps {
@@ -31,6 +31,7 @@ export function JobHead({ returnTo, origin, jobName, context }: JobHeadProps) {
           if (!origin || (origin.kind !== 'desk' && origin.kind !== 'deep-link') ||
               event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
+          markDeskReturn(origin);
           if (canReturnToPaperOrigin(origin)) router.back();
           else router.push('/desk');
         }}

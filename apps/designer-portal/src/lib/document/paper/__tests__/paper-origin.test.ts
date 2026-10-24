@@ -5,6 +5,8 @@ import {
   paperOriginLabel,
   readPaperOrigin,
   rememberPaperOrigin,
+  markDeskReturn,
+  takeDeskReturn,
 } from "@/lib/document/paper/paper-origin";
 import {
   readRoomOrigin,
@@ -111,6 +113,27 @@ describe("paper-origin", () => {
       JSON.stringify({ docId: DOC, path: 7 }),
     );
     expect(readPaperOrigin(DOC).kind).toBe("deep-link");
+  });
+
+  it("round-trips the Desk return focus hint exactly once without copying scroll", () => {
+    rememberPaperOrigin(DOC, { path: "/desk", focusId: "pressed-control", anchorId: "desk-row" });
+    markDeskReturn(readPaperOrigin(DOC));
+    expect(takeDeskReturn()).toEqual({ focusId: "pressed-control", anchorId: "desk-row" });
+    expect(takeDeskReturn()).toBeNull();
+  });
+
+  it("makes Desk return a no-op with storage disabled", () => {
+    jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
+    expect(() => markDeskReturn({ focusId: "control", anchorId: null })).not.toThrow();
+    expect(takeDeskReturn()).toBeNull();
+    jest.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });
+    expect(takeDeskReturn()).toBeNull();
+  });
+
+  it("consumes malformed Desk return data without throwing", () => {
+    window.sessionStorage.setItem("patina:desk-return:v1", "{not json");
+    expect(takeDeskReturn()).toBeNull();
+    expect(window.sessionStorage.getItem("patina:desk-return:v1")).toBeNull();
   });
 
   it("clears", () => {
