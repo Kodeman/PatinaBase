@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject }
 import { captionText, captionTriplet, catalogueCaption, plateAlt } from '@/lib/editorial/caption';
 import { GALLERY_DESKTOP_ASPECT, GALLERY_PHONE_ASPECT } from '@patina/utils';
 import { arrivalMode, containedRendition, galleryRendition } from '@/lib/editorial/gallery-picture';
+import { GALLERY_PHONE_MEDIA, GALLERY_DESK_MEDIA } from '@/lib/editorial/crop';
 import type { EditorialAsset, PaletteSwatch } from '@/lib/editorial/types';
 
 export function GalleryPaint({ palette }: { palette: readonly PaletteSwatch[] }) {
@@ -39,8 +40,8 @@ function ResponsivePhoto({ phone, desktop, asset, arrival, onError }: {
     if (image.current?.complete && image.current.naturalWidth === 0) onError();
   }, [onError]);
   return <picture onErrorCapture={onError}>
-    {phone.picture.sources.map((source) => <source key={`phone-${source.type}`} {...source} media="(max-width: 899px)" />)}
-    {desktop.picture.sources.map((source) => <source key={`wide-${source.type}`} {...source} media="(min-width: 900px)" />)}
+    {phone.picture.sources.map((source) => <source key={`phone-${source.type}`} {...source} media={GALLERY_PHONE_MEDIA} />)}
+    {desktop.picture.sources.map((source) => <source key={`wide-${source.type}`} {...source} media={GALLERY_DESK_MEDIA} />)}
     {/* eslint-disable-next-line @next/next/no-img-element -- authenticated plate renditions, no image optimizer */}
     <img ref={image} src={desktop.picture.src} alt={plateAlt(asset)} width={asset.width} height={asset.height}
       loading={arrival ? 'eager' : 'lazy'} fetchPriority={arrival ? 'high' : undefined} />

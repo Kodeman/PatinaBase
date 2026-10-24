@@ -66,7 +66,7 @@ export interface RoomPlateChoice {
 
 /** Each room's plates; a picture in `placed` (the hero, an edition's held plate) stands elsewhere. */
 export function roomPlates(
-  editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms'>,
+  editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms' | 'project'>,
   placed: readonly string[] = [],
 ): RoomPlateChoice[] {
   const byId = new Map(editorial.assets.map((a) => [a.id, a]));
@@ -90,7 +90,8 @@ export function roomPlates(
       itemId: item.id,
       asset:
         lookup(item.assetIds)
-          .filter((a) => tierOf(a) !== null && placeRole('piece', a.width, a.height) === 'piece')
+          .filter((a) => tierOf(a) !== null && placeRole('piece', a.width, a.height) === 'piece'
+            && Boolean(piecePhotoCaption(item, a, editorial.project.showMakers)))
           .sort(compareAssets)[0] ?? null,
     }));
     return {
@@ -104,13 +105,9 @@ export function roomPlates(
 
 /** Renderable piece photographs in room/item order, ranked within each item. */
 export function arrivalPieces(editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms' | 'project'>) {
-  const byId = new Map(editorial.assets.map(asset => [asset.id, asset]));
+  const choices = new Map(roomPlates(editorial).map(room => [room.roomId, room.pieces]));
   return editorial.rooms.flatMap(room => room.items.flatMap(item => {
-    const asset = item.assetIds.map(id => byId.get(id))
-      .filter((asset): asset is EditorialAsset => Boolean(asset))
-      .filter(asset => tierOf(asset) !== null && placeRole('piece', asset.width, asset.height) === 'piece'
-        && Boolean(piecePhotoCaption(item, asset, editorial.project.showMakers)))
-      .sort(compareAssets)[0];
+    const asset = choices.get(room.id)?.find(piece => piece.itemId === item.id)?.asset;
     return asset ? [{ item, asset }] : [];
   })).slice(0, 4);
 }

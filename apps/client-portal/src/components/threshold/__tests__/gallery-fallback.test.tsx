@@ -47,3 +47,24 @@ it('uses piece-sized photographs in room/item order when the server vetoes the h
     expect(within(piece).getByText(/not your piece/i)).toBeVisible();
   }
 });
+
+it.each(['missing crop', 'incomplete caption'] as const)('arrival and chapter share the renderable piece choice: %s', failure => {
+  const upload = { ...bed, id: 'upload', sourceKind: 'upload' as const, ground: 'scene' as const,
+    width: 300, height: 1000, crops: failure === 'missing crop' ? {} : bed.crops,
+    caption: { ...bed.caption, what: failure === 'missing crop' ? 'Upload' : null } };
+  const editorial = arrivalFixture([upload, bed], null);
+  editorial.rooms = [{ id: 'room', name: 'Bedroom', anchor: 'room-bedroom', conceptAssetId: null, scanAssetIds: [], items: [
+    { id: 'bed-item', nameAsSigned: 'Sierra Queen Bed', category: 'bed', status: null, material: null, finish: null,
+      dimensions: null, descriptionAsSigned: null, silhouetteKind: null, assetIds: ['upload', 'bed'] },
+  ] }];
+  const props = { projectName: 'Elm', ready: true, bands: [{ roomId: 'room', name: 'Bedroom', anchor: 'room-bedroom', pieces: [] } as unknown as RoomBandModel],
+    issue: houseIssue(editorial), otherHouses: [], pieces: () => null, documents: () => null } as unknown as ComponentProps<typeof GalleryPage>;
+  const { container } = render(<GalleryPage {...props} />);
+  const arrival = container.querySelector('.gallery-arrival')!;
+  const chapter = screen.getByRole('region', { name: 'Bedroom' });
+  for (const surface of [arrival, chapter]) {
+    expect(surface.querySelector('img')).toHaveAttribute('src', expect.stringContaining('piece-768.webp'));
+    expect(surface.querySelector('source')).toHaveAttribute('srcset', expect.stringContaining(bed.sha256));
+    expect(surface.querySelector('.ed-piece--silhouette')).toBeNull();
+  }
+});

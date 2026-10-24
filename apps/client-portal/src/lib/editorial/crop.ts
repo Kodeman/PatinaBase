@@ -1,7 +1,7 @@
 /* Crop geometry the page needs: object-position from a crop rectangle and the
    `<picture>` sources built from an asset's stored crops. */
 
-import { arrivalMode, arrivalRendition } from '@patina/utils';
+import { arrivalMode, arrivalRendition, GALLERY_PHONE_ASPECT, GALLERY_DESKTOP_ASPECT } from '@patina/utils';
 import { plateSrcSet, plateUrl, type PlateFormat } from '@/lib/plates';
 
 import { heroDesktopLayout, type HeroDesktopLayout } from './floors';
@@ -220,12 +220,30 @@ export interface HeroPreloadSource {
   media?: string;
 }
 
+export const GALLERY_PHONE_MEDIA = '(max-width: 899px)';
+export const GALLERY_DESK_MEDIA = '(min-width: 900px)';
+
+/** Geometry is evaluated on the served rendition, never on an unavailable original. */
+export function galleryRendition(scope: string, asset: EditorialAsset, aspect: number) {
+  const crop = arrivalRendition(asset, aspect);
+  if (!crop) return null;
+  const picture = platePicture(scope, asset, crop.key as PlateCropKey, '100vw');
+  return picture ? { picture, position: crop.position, pixels: crop.width } : null;
+}
+
 export function galleryHeroPreloadSources(scopeId: string, asset: EditorialAsset): HeroPreloadSource[] {
   if (arrivalMode(asset) === 'contained') {
     const crop = arrivalRendition(asset, null);
     return crop ? [{ imageSrcSet: plateUrl(scopeId, asset.sha256, crop.key as PlateCropKey, crop.width, 'webp', asset.crops[crop.key as PlateCropKey]?.rev), imageSizes: '100vw' }] : [];
   }
-  return heroPreloadSources(scopeId, asset);
+  return [
+    { aspect: GALLERY_PHONE_ASPECT, media: GALLERY_PHONE_MEDIA },
+    { aspect: GALLERY_DESKTOP_ASPECT, media: GALLERY_DESK_MEDIA },
+  ].flatMap(({ aspect, media }) => {
+    const rendition = galleryRendition(scopeId, asset, aspect);
+    const source = rendition?.picture.sources.find(source => source.type === 'image/avif');
+    return source ? [{ imageSrcSet: source.srcSet, imageSizes: source.sizes, media }] : [];
+  });
 }
 
 /** The hero's preload, one per art-directed source: the crops and `sizes` `heroPicture` draws. */
