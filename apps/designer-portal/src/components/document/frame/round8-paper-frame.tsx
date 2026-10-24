@@ -36,6 +36,7 @@ import {
 import { openUnfold } from '@/components/document/paper/unfold-instrument';
 import type { WorkRoom } from '@/components/document/paper/chapters/ffe-work-room';
 import { FfeChapter } from '@/components/document/paper/chapters/ffe-chapter';
+import { Round8MarginContext } from '@/components/document/paper/margin-layout';
 import { JobHead } from '@/components/document/paper/job-head';
 import { PaperChapter } from '@/components/document/paper/paper-chapter';
 import type { DocumentIndexKey } from '@/lib/document/document-index';
@@ -256,6 +257,7 @@ export default function Round8PaperFrame({
   return (
     <>
       {slots.arrival}
+      <Round8MarginContext.Provider value={true}>
       <div
         {...shellProps}
         data-document-shell
@@ -287,7 +289,7 @@ export default function Round8PaperFrame({
             </button>
           </p>
         ) : null}
-        <div className="mx-auto grid w-full max-w-[var(--r8-paper-measure)] grid-cols-1 gap-[var(--r8-paper-gap)] px-[18px] pt-[24px] min-[600px]:px-[4%] min-[1180px]:grid-cols-[minmax(0,1fr)_var(--r8-contents)] min-[1440px]:grid-cols-[minmax(0,1fr)_var(--r8-contents)_232px]">
+        <div data-paper-grid="" className="mx-auto grid w-full max-w-[var(--r8-paper-measure)] grid-cols-1 gap-[var(--r8-paper-gap)] px-[18px] pt-[24px] min-[600px]:px-[4%] min-[1180px]:grid-cols-[minmax(0,1fr)_var(--r8-contents)] ">
           {/* No stacking context: fixed procurement panels must escape the paper. */}
           <main
             {...paperProps}
@@ -310,11 +312,13 @@ export default function Round8PaperFrame({
             mountedKeys={contents.mountedKeys}
             activeKey={contents.activeKey}
             onSelect={contents.onSelect}
-          />
-          {slots.margin}
+          >
+            {slots.margin}
+          </ContentsMargin>
         </div>
         {slots.overlays}
       </div>
+      </Round8MarginContext.Provider>
     </>
   );
 }

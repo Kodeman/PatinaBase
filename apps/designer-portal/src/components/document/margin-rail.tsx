@@ -81,6 +81,7 @@ import {
   groupMarginRows,
   marginListable,
 } from '@/lib/document/margin-groups';
+import { Round8MarginContext } from './paper/margin-layout';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
 
 /**
@@ -161,7 +162,9 @@ const FOCUSABLE_MARGIN_CONTROLS = [
  * familiar sticky rail. The content stays mounted across both modes so notes,
  * open folds, and draft composers do not reset during a resize.
  */
-export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
+export function ResponsiveMarginRail({ children, stacked }: { children: ReactNode; stacked?: boolean }) {
+  const round8 = useContext(Round8MarginContext);
+  const isStacked = stacked ?? round8;
   const [open, setOpen] = useState(false);
   const [isCompactShell, setIsCompactShell] = useState(false);
   const [isFullRail, setIsFullRail] = useState(false);
@@ -182,7 +185,7 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const compactMedia = window.matchMedia(COMPACT_MARGIN_QUERY);
-    const fullMedia = window.matchMedia(FULL_MARGIN_QUERY);
+    const fullMedia = window.matchMedia(isStacked ? COMPACT_MARGIN_QUERY : FULL_MARGIN_QUERY);
     const syncMode = () => {
       setIsCompactShell(compactMedia.matches);
       setIsFullRail(fullMedia.matches);
@@ -200,13 +203,19 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
       compactMedia.removeEventListener('change', syncMode);
       fullMedia.removeEventListener('change', syncMode);
     };
-  }, []);
+  }, [isStacked]);
 
   useEffect(() => {
-    const onOpenRequest = () => setOpen(true);
+    const onOpenRequest = () => {
+      if (isStacked && window.matchMedia(COMPACT_MARGIN_QUERY).matches) {
+        const panel = panelRef.current;
+        panel?.scrollIntoView({ block: 'nearest' });
+        panel?.querySelector<HTMLElement>(FOCUSABLE_MARGIN_CONTROLS)?.focus();
+      } else setOpen(true);
+    };
     window.addEventListener(OPEN_MARGIN_EVENT, onOpenRequest);
     return () => window.removeEventListener(OPEN_MARGIN_EVENT, onOpenRequest);
-  }, []);
+  }, [isStacked]);
 
   useEffect(() => {
     if (!open || !isCompactShell || isFullRail) return;
@@ -290,6 +299,17 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
     if (!openAsSheet) return;
     return lockBodyScroll();
   }, [openAsSheet]);
+
+  if (isStacked) {
+    return (
+      <aside ref={panelRef} aria-label="In the margin" data-margin-panel data-margin-mode="stacked" className="mt-[24px] hidden min-[1180px]:block">
+        <p className="t-authorship border-b border-[var(--ink)] pb-[12px]">In the margin</p>
+        <MarginSummaryContext.Provider value={publishSummary}>
+          <DocSheetOriginProvider origin="margin">{children}</DocSheetOriginProvider>
+        </MarginSummaryContext.Provider>
+      </aside>
+    );
+  }
 
   return (
     <>

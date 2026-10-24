@@ -70,7 +70,7 @@ export function CommissionSpread({
   return (
     <div
       data-studio-spread
-      className="grid grid-cols-1 items-start gap-10 min-[1180px]:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)] min-[1440px]:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]"
+      className="grid grid-cols-1 items-start gap-[24px] min-[1440px]:gap-[48px] min-[1180px]:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)] min-[1440px]:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]"
     >
       {job && (
         <section aria-labelledby="studio-featured-job" data-studio-featured={job.jobId}>

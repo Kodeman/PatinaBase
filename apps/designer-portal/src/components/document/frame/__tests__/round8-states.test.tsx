@@ -8,12 +8,15 @@ describe('round-8 unresolved identity', () => {
     render(<Round8DocumentState state="loading" />);
     expect(screen.getByRole('main', { name: 'Loading document' })).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('status')).toHaveTextContent('Picking up the document');
+    expect(screen.getByRole('status').closest('[aria-busy="true"]')).toBeNull();
     expect(screen.getByTestId('geometry')).toBeInTheDocument();
   });
   it('announces a failed read and retries only on an explicit press', () => {
     const retry = jest.fn();
     render(<Round8DocumentState state="error" onRetry={retry} />);
-    expect(screen.getByRole('alert')).toHaveTextContent('The read failed');
+    expect(screen.getByRole('heading', { name: 'This document could not be loaded.' })).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent('The read failed. Try again.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/saved/i);
     expect(retry).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(retry).toHaveBeenCalledTimes(1);
