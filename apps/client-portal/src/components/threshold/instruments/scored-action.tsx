@@ -534,10 +534,13 @@ export interface HoldActionProps
   wrapperClassName?: string;
 }
 
-function pointerOutside(event: ReactPointerEvent<HTMLButtonElement>) {
-  const rect = event.currentTarget.getBoundingClientRect();
-  return event.clientX < rect.left || event.clientX > rect.right ||
-    event.clientY < rect.top || event.clientY > rect.bottom;
+function pointerOutside(
+  target: HTMLButtonElement,
+  point: { clientX: number; clientY: number },
+) {
+  const rect = target.getBoundingClientRect();
+  return point.clientX < rect.left || point.clientX > rect.right ||
+    point.clientY < rect.top || point.clientY > rect.bottom;
 }
 
 export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
@@ -576,6 +579,8 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const running = useRef(false);
     const heldRect = useRef<DOMRect | null>(null);
     const heldPointer = useRef<number | null>(null);
+    const heldPoint = useRef<{ clientX: number; clientY: number } | null>(null);
+    const frame = useRef<number | null>(null);
     const latestOnHold = useRef(onHold);
     useLayoutEffect(() => {
       latestOnHold.current = onHold;
@@ -620,8 +625,11 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const stop = useCallback(() => {
       if (timer.current) clearTimeout(timer.current);
       timer.current = null;
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
       running.current = false;
       heldPointer.current = null;
+      heldPoint.current = null;
       ink(0);
       setHolding(false);
     }, [ink]);
@@ -675,26 +683,44 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       rest.id, stop, surfaceKey, variant, verb,
     ]);
 
-    const start = useCallback((pointerId: number | null = null) => {
+    const heldPointerOutside = useCallback(() => {
+      const point = heldPoint.current;
+      const target = control.current;
+      return point !== null && (!target || pointerOutside(target, point));
+    }, []);
+
+    const start = useCallback((
+      pointerId: number | null = null,
+      point: { clientX: number; clientY: number } | null = null,
+    ) => {
       if (unavailable || running.current) return;
       running.current = true;
       heldPointer.current = pointerId;
+      heldPoint.current = point;
       heldRect.current = control.current?.getBoundingClientRect() ?? null;
       setHolding(true);
       control.current?.style.setProperty('--hold-ms', `${holdMs}ms`);
-      // The fill is a CSS transition on the pool, so it is set on the next
-      // frame in a browser and immediately in jsdom; either way the timer,
-      // not the paint, is what decides when the act is taken.
       ink(1);
+      if (point) {
+        const checkPointer = () => {
+          if (!running.current) return;
+          if (heldPointerOutside()) {
+            stop();
+            return;
+          }
+          frame.current = requestAnimationFrame(checkPointer);
+        };
+        frame.current = requestAnimationFrame(checkPointer);
+      }
       timer.current = setTimeout(() => {
-        timer.current = null;
-        running.current = false;
-        heldPointer.current = null;
-        setHolding(false);
-        ink(0);
+        if (heldPointerOutside()) {
+          stop();
+          return;
+        }
+        stop();
         take();
       }, holdMs);
-    }, [holdMs, ink, take, unavailable]);
+    }, [heldPointerOutside, holdMs, ink, stop, take, unavailable]);
 
     function onKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
@@ -761,11 +787,12 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
               if (event.button !== 0) return;
               if ((event.pointerType === 'touch' || event.pointerType === 'pen') && !event.isPrimary) return;
               markInkPoint(event);
-              start(event.pointerId);
+              start(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
             }}
             onPointerMove={(event) => {
               if (heldPointer.current === event.pointerId) {
-                if ((event.buttons & 1) === 0 || pointerOutside(event)) stop();
+                heldPoint.current = { clientX: event.clientX, clientY: event.clientY };
+                if ((event.buttons & 1) === 0 || heldPointerOutside()) stop();
               }
               rest.onPointerMove?.(event);
             }}

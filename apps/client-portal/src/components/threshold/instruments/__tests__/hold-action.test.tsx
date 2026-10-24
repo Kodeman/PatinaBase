@@ -46,6 +46,9 @@ function hold(target: HTMLElement, ms = HOLD_MS) {
 
 beforeEach(() => {
   onHold.mockReset();
+  jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    top: 0, left: 0, right: 100, bottom: 44, width: 100, height: 44,
+  } as DOMRect);
 });
 
 afterEach(() => {
@@ -118,13 +121,13 @@ describe('HoldAction — the act, held', () => {
   it.each(['keyboard', 'pointer'])('keeps a %s hold through queued and unrelated scrolls that do not move the control', (input) => {
     const { container } = draw();
     const target = actWord();
-    jest.spyOn(target, 'getBoundingClientRect').mockReturnValue({ top: 200, left: 40 } as DOMRect);
+    jest.spyOn(target, 'getBoundingClientRect').mockReturnValue({ top: 200, left: 40, right: 140, bottom: 244 } as DOMRect);
     const unrelated = document.createElement('div');
     container.appendChild(unrelated);
 
     jest.useFakeTimers();
     if (input === 'keyboard') fireEvent.keyDown(target, { key: 'Enter' });
-    else fireEvent.pointerDown(target);
+    else fireEvent.pointerDown(target, { clientX: 50, clientY: 220 });
     act(() => { jest.advanceTimersByTime(200); });
     // Scroll events are queued: the drawer may already have settled before
     // keydown even though its scroll event is only now delivered in capture.
@@ -305,6 +308,93 @@ describe('HoldAction — the act, held', () => {
   });
 
   const pointerRect = { top: 0, left: 0, right: 100, bottom: 44, width: 100, height: 44 } as DOMRect;
+
+  describe('R7 stationary pointer layout guards', () => {
+    function begin() {
+      draw();
+      const target = actWord();
+      const rect = jest.spyOn(target, 'getBoundingClientRect')
+        .mockReturnValue(pointerRect);
+      jest.useFakeTimers();
+      fireEvent.pointerDown(target, {
+        pointerId: 7, pointerType: 'touch', buttons: 1, clientX: 50, clientY: 20,
+      });
+      act(() => { jest.advanceTimersByTime(400); });
+      return { target, rect };
+    }
+
+    it('cancels when layout moves the control away from a stationary held pointer', () => {
+      const { target, rect } = begin();
+      rect.mockReturnValue({ ...pointerRect, top: 200, bottom: 244 });
+      act(() => { jest.advanceTimersByTime(16); });
+      expect(target).toHaveAttribute('data-hold-state', 'idle');
+      expect(target.style.getPropertyValue('--hold-fill')).toBe('0');
+      act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+      expect(onHold).not.toHaveBeenCalled();
+      expect(makingEvents.actionSelected).not.toHaveBeenCalled();
+      expect(document.body.textContent).not.toMatch(/cancel|failed|try again/i);
+    });
+
+    it('does not resume when layout moves away then back before completion', () => {
+      const { target, rect } = begin();
+      rect.mockReturnValue({ ...pointerRect, top: 200, bottom: 244 });
+      act(() => { jest.advanceTimersByTime(16); });
+      rect.mockReturnValue(pointerRect);
+      act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+      expect(target).toHaveAttribute('data-hold-state', 'idle');
+      expect(onHold).not.toHaveBeenCalled();
+    });
+
+    it('completes once after a small layout change that keeps the pointer inside', () => {
+      const { target, rect } = begin();
+      rect.mockReturnValue({ ...pointerRect, top: 10, bottom: 54 });
+      act(() => { jest.advanceTimersByTime(16); });
+      expect(target).toHaveAttribute('data-hold-state', 'holding');
+      act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+      expect(onHold).toHaveBeenCalledTimes(1);
+      expect(target).toHaveAttribute('data-hold-state', 'idle');
+    });
+
+    it('rechecks the current bounds at completion even without another animation frame', () => {
+      const { target, rect } = begin();
+      act(() => { jest.advanceTimersByTime(HOLD_MS - 401); });
+      rect.mockReturnValue({ ...pointerRect, top: 200, bottom: 244 });
+      act(() => { jest.advanceTimersByTime(1); });
+      expect(target).toHaveAttribute('data-hold-state', 'idle');
+      expect(onHold).not.toHaveBeenCalled();
+    });
+
+    it('tracks the initiating pointer’s latest position, not a secondary pointer', () => {
+      const { rect } = begin();
+      fireEvent.pointerMove(actWord(), { pointerId: 7, buttons: 1, clientX: 90, clientY: 20 });
+      fireEvent.pointerMove(actWord(), { pointerId: 8, buttons: 1, clientX: 50, clientY: 20 });
+      rect.mockReturnValue({ ...pointerRect, left: 80, right: 180 });
+      act(() => { jest.advanceTimersByTime(HOLD_MS); });
+      expect(onHold).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['pointerUp', 'pointerCancel', 'pointerLeave', 'complete', 'unmount'] as const)(
+      'cancels animation-frame work on %s',
+      (ending) => {
+        const { unmount } = draw();
+        jest.useFakeTimers();
+        const frames = jest.spyOn(window, 'requestAnimationFrame');
+        const cancel = jest.spyOn(window, 'cancelAnimationFrame');
+        fireEvent.pointerDown(actWord(), { pointerId: 7, buttons: 1 });
+        act(() => { jest.advanceTimersByTime(400); });
+        expect(frames).toHaveBeenCalled();
+        if (ending === 'unmount') unmount();
+        else if (ending === 'complete') act(() => { jest.advanceTimersByTime(HOLD_MS - 400); });
+        else fireEvent[ending](actWord(), { pointerId: 7 });
+        const pending = frames.mock.results[frames.mock.results.length - 1].value;
+        expect(cancel).toHaveBeenCalledWith(pending);
+        const count = frames.mock.calls.length;
+        act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+        expect(frames).toHaveBeenCalledTimes(count);
+        expect(onHold).toHaveBeenCalledTimes(ending === 'complete' ? 1 : 0);
+      },
+    );
+  });
 
   it.each([[101, 20], [-1, 20], [50, -1], [50, 45]])(
     'R1 cancels captured touch movement outside the control at (%s, %s) without pointerleave',
