@@ -3,7 +3,7 @@ import { test, expect } from '../fixtures/auth';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const LIVING = 'f0180000-0000-4000-8000-000000000011';
-const WIDTHS = [320, 390, 768, 1024, 1179, 1180, 1181, 1439, 1440, 1441, 1920];
+const WIDTHS = [320, 390, 599, 600, 601, 768, 1024, 1179, 1180, 1181, 1439, 1440, 1441, 1920];
 
 async function settled(page: Page, path: string, selector: string) {
   await page.goto('about:blank');
@@ -39,6 +39,38 @@ async function unobscured(page: Page, control: Locator) {
   }), { message: 'keyboard focus is painted and not covered by the head or bottom edge' }).toEqual({
     withinViewport: true, uncovered: true, ringPainted: true,
   });
+}
+
+async function keyboardActivate(page: Page, control: Locator) {
+  const tab = page.context().browser()?.browserType().name() === 'webkit' ? 'Alt+Tab' : 'Tab';
+  // Traverse from the reader's current place: no focus(), click() or scroll rescue.
+  for (let step = 0; step < 60 && !await control.evaluate((element) => element === document.activeElement); step++) {
+    await page.keyboard.press(tab);
+  }
+  await expect(control, 'the compact destination is reachable through native tab order').toBeFocused();
+  await page.keyboard.press('Enter');
+}
+
+async function keyboardCommand(page: Page, query: string, label: string) {
+  await keyboardActivate(page, page.getByRole('button', { name: 'More studio actions', exact: true }));
+  const menu = page.getByRole('group', { name: 'More studio actions', exact: true });
+  await keyboardActivate(page, menu.getByRole('button', { name: /^Find anything/ }));
+  const search = page.getByRole('dialog', { name: 'Studio search', exact: true });
+  const input = search.getByRole('combobox', { name: 'Studio search', exact: true });
+  await expect(input).toBeFocused();
+  await page.keyboard.type(query);
+  const row = search.getByRole('option').filter({ has: page.getByText(label, { exact: true }) });
+  await expect(row).toBeVisible();
+  const id = await row.getAttribute('id');
+  expect(id, 'registry result has a keyboard selection identity').toBeTruthy();
+  const count = await search.getByRole('option').count();
+  for (let step = 0; step < count && await input.getAttribute('aria-activedescendant') !== id; step++) {
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(input).toHaveAttribute('aria-activedescendant', id!);
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Enter');
+  await expect(search).toHaveCount(0);
 }
 
 async function selectFfe(page: Page, width: number) {
@@ -92,6 +124,58 @@ async function unfoldAndReturn(page: Page, reducedMotion = false) {
 
 test.describe('WP-01.10 responsive studio and job paper (live F01)', () => {
   test.setTimeout(300_000);
+
+  test.describe('phone compact destinations at 390px', () => {
+    test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+    test('keyboard opens Studio accounts through More and Ledgers', async ({ authenticatedPage: page }) => {
+      await settled(page, '/desk', '[data-studio="round8"]');
+      await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeHidden();
+      await keyboardActivate(page, page.getByRole('button', { name: 'More studio actions', exact: true }));
+      await keyboardActivate(page, page.getByRole('group', { name: 'More studio actions', exact: true })
+        .getByRole('button', { name: 'Ledgers', exact: true }));
+      const ledgers = page.getByRole('dialog', { name: 'Ledgers', exact: true });
+      await expect(ledgers).toBeVisible();
+      await keyboardActivate(page, ledgers.getByRole('button', { name: 'Studio accounts', exact: true }));
+      await expect(page.getByRole('dialog', { name: 'Studio accounts', exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(page).toHaveURL(/\/desk(\?|$)/);
+    });
+
+    for (const [destination, query, label, path] of [
+      ['Library', 'library', 'Resource library', '/library'],
+      ['People', 'people', 'Studio contacts', '/people'],
+      ['Measured rooms', 'measured rooms', 'Measured rooms', '/rooms'],
+      ['Correspondence', 'inbox', 'Studio inbox', '/desk'],
+    ] as const) {
+      test(`keyboard Find reaches ${destination} through its registry row`, async ({ authenticatedPage: page }) => {
+        await settled(page, '/desk', '[data-studio="round8"]');
+        await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeHidden();
+        await keyboardCommand(page, query, label);
+        await expect(page).toHaveURL(new RegExp(`${path}(\\?|$)`), { timeout: 60_000 });
+        const landmark = destination === 'Correspondence'
+          ? page.getByRole('dialog', { name: label, exact: true })
+          : page.getByRole('heading', { name: label, exact: true, level: 1 });
+        await expect(landmark).toBeVisible({ timeout: 60_000 });
+      });
+    }
+
+    test('touch reaches Library through More and Find', async ({ authenticatedPage: page }) => {
+      await settled(page, '/desk', '[data-studio="round8"]');
+      await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeHidden();
+      await page.getByRole('button', { name: 'More studio actions', exact: true }).tap();
+      await page.getByRole('group', { name: 'More studio actions', exact: true })
+        .getByRole('button', { name: /^Find anything/ }).tap();
+      const search = page.getByRole('dialog', { name: 'Studio search', exact: true });
+      const input = search.getByRole('combobox', { name: 'Studio search', exact: true });
+      await input.tap();
+      await input.fill('library');
+      await search.getByRole('option').filter({ has: page.getByText('Resource library', { exact: true }) }).tap();
+      await expect(search).toHaveCount(0);
+      await expect(page).toHaveURL(/\/library(\?|$)/, { timeout: 60_000 });
+      await expect(page.getByRole('heading', { name: 'Resource library', exact: true, level: 1 }))
+        .toBeVisible({ timeout: 60_000 });
+    });
+  });
 
   test('studio stacks imagery first, reflows the register and yields compact navigation', async ({ authenticatedPage: page }) => {
     await settled(page, '/desk', '[data-studio="round8"]');
