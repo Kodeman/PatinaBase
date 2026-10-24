@@ -29,6 +29,8 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/doc/project-1',
 }));
 
+// SQ-1885 F2 — a failed Field read, switched per test.
+let mockVisitsFailed = false;
 jest.mock('@patina/supabase', () => ({
   /* US-36 K6 — the band's money read for a client-less job (SQ-1041). */
   useUnbilledTime: () => ({ data: undefined }),
@@ -61,8 +63,8 @@ jest.mock('@patina/supabase', () => ({
   useProjectVisits: () => ({
     data: [],
     isLoading: false,
-    isError: false,
-    error: null,
+    isError: mockVisitsFailed,
+    error: mockVisitsFailed ? new Error('field read failed') : null,
   }),
   useCaptureMediaUrls: () => ({ data: undefined }),
   useProjectV2: () => ({ data: undefined, isLoading: false, isError: false }),
@@ -581,6 +583,22 @@ describe('the round-8 paper order', () => {
     const bands = container.querySelectorAll('[data-account-band]');
     expect(bands).toHaveLength(1);
     expect(container.querySelector('[data-paper-chapter="financials"]')!.contains(bands[0])).toBe(true);
+  });
+
+  // SQ-1885 F2 — a failed Field read is an outage, not a field-less job: the
+  // Site chapter stays so VisitsBlock can say "Field data unavailable".
+  it('keeps the Site chapter when the visits read fails', async () => {
+    mockVisitsFailed = true;
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const { container } = await renderRound8();
+      const site = container.querySelector('[data-paper-chapter="site"]');
+      expect(site).not.toBeNull();
+      expect(site!.textContent).toContain('Field data unavailable');
+    } finally {
+      mockVisitsFailed = false;
+      (console.error as jest.Mock).mockRestore();
+    }
   });
 
   // SQ-1885 F3 — the continuous paper prints no active-section wrapper, so the
