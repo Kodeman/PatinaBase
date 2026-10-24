@@ -380,10 +380,40 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     authenticatedPage: page,
     browserName,
   }) => {
-    test.skip(
-      browserName !== 'chromium',
-      'Story log #41: a cross-route Back is held only where its navigate event is cancelable (Chromium, with activation); this WebKit Back is not, an accepted residual.',
-    );
+    /**
+     * Story log #41 guarantees this cross-route hold only where the Back's
+     * `navigate` event is cancelable. Outside Chromium (where activation is
+     * granted below, so it must hold) a Back the browser makes
+     * non-cancelable is the named residual: skip on that observed fact.
+     */
+    const backHeldWhereCancelable = async () => {
+      await page.evaluate(() => {
+        const w = window as unknown as {
+          navigation?: EventTarget;
+          __sq1902Cancelable?: boolean | null;
+        };
+        w.__sq1902Cancelable = null;
+        w.navigation?.addEventListener(
+          'navigate',
+          (event) => {
+            w.__sq1902Cancelable = event.cancelable;
+          },
+          { once: true },
+        );
+      });
+      await pressBack(page);
+      const cancelable = await page.evaluate(
+        () => (window as unknown as { __sq1902Cancelable?: boolean | null }).__sq1902Cancelable ?? null,
+      );
+      await test.info().attach('back-navigate-cancelable', {
+        body: `${browserName}: ${String(cancelable)}`,
+        contentType: 'text/plain',
+      });
+      test.skip(
+        browserName !== 'chromium' && cancelable !== true,
+        `Story log #41: this ${browserName} cross-route Back fired a navigate event with cancelable=${String(cancelable)}, so it cannot be held (accepted residual).`,
+      );
+    };
     const line = livingLineId('F01 Living Room selection 11');
     const typed = `Desk-held finish ${Date.now()}`;
     await openJob(page); // compiles /doc before the client navigation below
@@ -423,7 +453,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await expect(finish).toHaveAttribute('aria-invalid', 'true', { timeout: 30_000 });
     const length = await page.evaluate(() => history.length);
 
-    await pressBack(page);
+    await backHeldWhereCancelable();
     await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
       timeout: 30_000,
     });
@@ -454,7 +484,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await finish.press('End');
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect.poll(() => retried, { timeout: 30_000 }).toBe(1);
-    await pressBack(page);
+    await backHeldWhereCancelable();
     await expect(instrument(page)).toBeVisible();
     expect(new URL(page.url()).pathname, 'a pending save holds Back too').toBe(`/doc/${JOB}`);
     expect(unfoldParams(page).unfold).toBe('pieces');
