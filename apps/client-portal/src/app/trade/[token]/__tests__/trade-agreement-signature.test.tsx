@@ -52,7 +52,12 @@ describe('TradeAgreementSignature', () => {
     });
   });
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(HTMLButtonElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 0, left: 0, right: 100, bottom: 44, width: 100, height: 44,
+    } as DOMRect);
+  });
   afterEach(() => jest.useRealTimers());
 
   it('stays unarmed until there is a name, and says nothing about it', () => {
