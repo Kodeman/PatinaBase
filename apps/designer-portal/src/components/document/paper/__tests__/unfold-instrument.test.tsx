@@ -506,14 +506,17 @@ describe("UnfoldInstrument", () => {
     expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
 
     const backSpy = jest.spyOn(window.history, "back");
+    const goSpy = jest.spyOn(window.history, "go");
     const landed = popstate();
     await act(async () => finish());
     await act(async () => landed);
     await settle();
 
-    // One Back completes it; the earlier Return's answer adds none, and the
-    // completing pop is not held again.
-    expect(backSpy).toHaveBeenCalledTimes(1);
+    // One step back completes it; the earlier Return's answer adds none, and
+    // the completing pop is not held again.
+    expect(goSpy).toHaveBeenCalledTimes(1);
+    expect(goSpy).toHaveBeenCalledWith(-1);
+    expect(backSpy).not.toHaveBeenCalled();
     expect(push).toHaveBeenCalledTimes(2);
     expect(window.location.search).toBe("?sheet=call");
     expect(region()).toBeNull();
@@ -579,11 +582,58 @@ describe("UnfoldInstrument", () => {
     const before = window.location.href;
     unmount();
     const backSpy = jest.spyOn(window.history, "back");
+    const goSpy = jest.spyOn(window.history, "go");
 
     await act(async () => finish());
     await settle();
     expect(backSpy).not.toHaveBeenCalled();
+    expect(goSpy).not.toHaveBeenCalled();
     expect(window.location.href).toBe(before);
+  });
+
+  it("a Back the Navigation API can cancel never moves, then goes on once the save lands", async () => {
+    // Its `navigate` event fires ahead of Next's popstate listener, which
+    // unmounts the sheet on a Back to another route.
+    const navigation = Object.assign(new EventTarget(), {
+      currentEntry: { index: 2 },
+    });
+    Object.defineProperty(window, "navigation", {
+      value: navigation,
+      configurable: true,
+    });
+    const traverse = (url: string, index: number, cancelable = true) => {
+      const event = Object.assign(new Event("navigate", { cancelable }), {
+        navigationType: "traverse",
+        destination: { url, index },
+      });
+      act(() => {
+        navigation.dispatchEvent(event);
+      });
+      return event.defaultPrevented;
+    };
+    try {
+      const { finish } = pendingBuffer();
+      render(<Paper />);
+      fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+      const unfolded = window.location.href;
+      const desk = new URL("/desk", unfolded).href;
+      const go = jest.spyOn(window.history, "go").mockImplementation(() => {});
+      const push = jest.spyOn(window.history, "pushState");
+
+      expect(traverse(desk, 0, false)).toBe(false);
+      expect(traverse(desk, 0)).toBe(true);
+      expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+      expect(window.location.href).toBe(unfolded);
+      expect(push).not.toHaveBeenCalled();
+
+      await act(async () => finish());
+      await waitFor(() => expect(go).toHaveBeenCalledWith(-2));
+      expect(go).toHaveBeenCalledTimes(1);
+      // The traversal that completes it passes.
+      expect(traverse(desk, 0)).toBe(false);
+    } finally {
+      delete (window as { navigation?: unknown }).navigation;
+    }
   });
 
   it("asks the browser to confirm leaving only while a write is pending or marked", () => {

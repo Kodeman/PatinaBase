@@ -368,8 +368,10 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
   // navigation from the desk straight to its address): Back would leave the
   // document, and over a failed save it is held there all the same. Once the
   // save lands, the same Back goes on to the desk, once, without looping.
-  // (`window.next.router` is Next's debugging handle; it is the one way to
-  // reach this entry without a full page load, which no popstate can hold.)
+  // Next's popstate listener would unmount the sheet first, so the Back is
+  // cancelled at its Navigation API `navigate` event. (`window.next.router`
+  // is Next's debugging handle; it reaches this entry without a full page
+  // load, across which only the beforeunload guard can ask.)
   test('Back to the desk over a failed Spec save is held, then goes on once it lands', async ({
     authenticatedPage: page,
   }) => {
@@ -404,11 +406,14 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       });
     });
     await finish.fill(typed, { force: true });
+    // A real keystroke in the field: the activation a cancelable Back needs
+    // (the field sits outside the viewport until SQ-1889, so no click).
+    await finish.press('End');
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect(finish).toHaveAttribute('aria-invalid', 'true', { timeout: 30_000 });
     const length = await page.evaluate(() => history.length);
 
-    await page.goBack();
+    await pressBack(page);
     await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
       timeout: 30_000,
     });
@@ -420,17 +425,48 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     expect(await page.evaluate(() => history.length), 'a held Back grows no history').toBe(length);
     await test.info().attach('spec-desk-back-held', { body: await page.screenshot(), contentType: 'image/png' });
 
+    // The retry is held in flight, so the next Back waits on it.
     await page.unroute(specWrite);
-    await page.goBack();
+    let retried = 0;
+    let land: () => void = () => {};
+    const landed = new Promise<void>((resolve) => (land = resolve));
+    await page.route(specWrite, async (route) => {
+      if (route.request().method() !== 'PATCH') return route.continue();
+      retried += 1;
+      await landed;
+      return route.continue();
+    });
+    // A cancelled Back spends the activation; she is back in the field.
+    await finish.press('End');
+    await finish.evaluate((el: HTMLElement) => el.blur());
+    await expect.poll(() => retried, { timeout: 30_000 }).toBe(1);
+    await pressBack(page);
+    await expect(instrument(page)).toBeVisible();
+    expect(new URL(page.url()).pathname, 'a pending save holds Back too').toBe(`/doc/${JOB}`);
+    land();
     await expect(page).toHaveURL(/\/desk(\?|$)/, { timeout: 30_000 });
     await expect(studio).toBeVisible({ timeout: 30_000 });
     expect(await page.evaluate(() => history.length), 'the Back went on without a loop').toBe(length);
+    expect(retried, 'the held Back replayed nothing').toBe(1);
     expect(
       psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
-      'the Back retried the save and wrote the typed value',
+      'the retry wrote the typed value',
     ).toBe(typed);
+    await page.unroute(specWrite);
   });
 });
+
+/**
+ * The browser's Back button. A Back the sheet cancels never commits, so
+ * `page.goBack()` would wait on it until its timeout; this asks for the
+ * previous entry the way the toolbar does and returns.
+ */
+async function pressBack(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  const { currentIndex, entries } = await cdp.send('Page.getNavigationHistory');
+  await cdp.send('Page.navigateToHistoryEntry', { entryId: entries[currentIndex - 1].id });
+  await cdp.detach();
+}
 
 /** RPC-made line ids are not stable (f01-fixture.sql): read one by name. */
 function livingLineId(name: string): string {
