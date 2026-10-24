@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { DocumentSkeleton } from '@/components/loading';
+import { Round8DocumentLoading } from './round8-document-loading';
 
 /** Before identity resolves, print no job name, contents or cached chapter. */
 export function Round8DocumentState({ state, onRetry }: {
@@ -9,14 +9,7 @@ export function Round8DocumentState({ state, onRetry }: {
   onRetry?: () => void;
 }) {
   if (state === 'loading') {
-    return (
-      <>
-        <p role="status" className="sr-only">Picking up the document…</p>
-        <main aria-label="Loading document" aria-busy="true" className="min-h-screen bg-[var(--paper)]">
-          <DocumentSkeleton />
-        </main>
-      </>
-    );
+    return <Round8DocumentLoading />;
   }
   const failed = state === 'error';
   return (

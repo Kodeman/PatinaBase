@@ -74,7 +74,7 @@ import {
 import { type CapturedLead } from '@/components/document/overlays/capture-lead-sheet';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
-import { takeDeskReturn } from '@/lib/document/paper/paper-origin';
+import { takeDeskReturn } from '@/lib/document/paper/desk-return';
 
 // F6 — Back keeps the place. The Desk holds its scroll offset (and the row
 // last pressed) for this tab when it is left, and puts it back on a history
