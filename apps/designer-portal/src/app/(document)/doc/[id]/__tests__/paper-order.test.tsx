@@ -16,6 +16,7 @@
 import { act, render, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import DocumentPage from '../page';
+import { beginEntry } from '@/components/document/arrival/arrival-mount';
 import { PROJECT_PAPER_ORDER } from '@/lib/document/document-index';
 import { ROUND8_INDEX_KEYS, ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 
@@ -306,9 +307,10 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 jest.mock('@/lib/help-system/use-document-surface', () => ({
   useDocumentSurface: jest.fn(),
 }));
+let mockSeenBefore = false;
 jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
-  readRecentDocumentsInHand: () => [],
+  readRecentDocumentsInHand: () => mockSeenBefore ? [{ id: 'project-1' }] : [],
   documentEvents: {
     lensLineShown: jest.fn(),
     lensLineActed: jest.fn(),
@@ -700,5 +702,78 @@ describe('the round-8 paper order', () => {
       );
       await waitFor(() => expect(unfolded).toContain(unfolds));
     });
+  });
+});
+
+// SQ-1887 R2-F1 — tokenless revisits use the same stage-to-chapter mapping
+// as section actions, but retain the legacy below-the-fold resume rule.
+describe('a seen-before tokenless resume', () => {
+  beforeEach(() => {
+    mockSeenBefore = true;
+    beginEntry();
+    document.documentElement.classList.remove('arr-pre', 'arr-on', 'arr-press');
+    window.sessionStorage.removeItem('pl-arrive');
+    window.history.replaceState({}, '', '/doc/project-1');
+    HTMLElement.prototype.scrollIntoView = jest.fn();
+    jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: window.innerHeight,
+    } as DOMRect);
+  });
+  afterEach(() => {
+    mockSeenBefore = false;
+    mockFrameHold = null;
+    mockPaperRenderer = { renderer: 'legacy', source: 'override' };
+    PROJECT_ROW.active_section = 'project';
+    jest.restoreAllMocks();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it.each([
+    ['round8', 'project', '[data-paper-chapter="ffe"]'],
+    ['round8', 'install', '[data-paper-chapter="ffe"]'],
+    ['round8', 'care', '[data-paper-chapter="closeout"]'],
+    ['legacy', 'project', '[data-active-section]'],
+    ['legacy', 'install', '[data-active-section]'],
+    ['legacy', 'care', '[data-active-section]'],
+  ] as const)('resumes %s %s at its active work', async (renderer, section, selector) => {
+    mockPaperRenderer = { renderer, source: 'override' };
+    PROJECT_ROW.active_section = section;
+    let view!: ReturnType<typeof render>;
+    await act(async () => { view = render(<DocumentPage params={params} />); });
+    const target = view.container.querySelector(selector);
+    expect(target).not.toBeNull();
+    const scroll = HTMLElement.prototype.scrollIntoView as jest.Mock;
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll.mock.contexts[0]).toBe(target);
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' });
+  });
+
+  it('does not spend the resume before a delayed round-8 frame commits', async () => {
+    mockPaperRenderer = { renderer: 'round8', source: 'override' };
+    let release!: () => void;
+    mockFrameHold = new Promise<void>((resolve) => {
+      release = () => { mockFrameHold = null; resolve(); };
+    });
+    let view!: ReturnType<typeof render>;
+    await act(async () => { view = render(<DocumentPage params={params} />); });
+    expect(view.container.querySelector('[data-paper-chapter]')).toBeNull();
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+    await act(async () => { release(); });
+    const target = view.container.querySelector('[data-paper-chapter="ffe"]');
+    expect(target).not.toBeNull();
+    const scroll = HTMLElement.prototype.scrollIntoView as jest.Mock;
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll.mock.contexts[0]).toBe(target);
+    expect(scroll).toHaveBeenCalledWith({ block: 'start' });
+  });
+
+  it.each(['legacy', 'round8'] as const)('leaves %s active work already at the 0.6 viewport boundary in place', async (renderer) => {
+    mockPaperRenderer = { renderer, source: 'override' };
+    (HTMLElement.prototype.getBoundingClientRect as jest.Mock).mockReturnValue({
+      top: window.innerHeight * 0.6,
+    } as DOMRect);
+    await act(async () => { render(<DocumentPage params={params} />); });
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 });

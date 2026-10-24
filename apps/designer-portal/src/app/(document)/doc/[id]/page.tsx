@@ -1718,16 +1718,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       };
     }
     const landing = landedRef.current;
-    if (!landing.seen || landing.done) return;
+    if (!landing.seen || landing.done || !frameCommitted) return;
     return afterArrival((unplayed) => {
       landing.done = true;
       if (!unplayed) return;
-      const el = mainRef.current?.querySelector('[data-active-section]');
+      const el = mainRef.current?.querySelector('[data-active-section]') ??
+        (paperRenderer.renderer === 'round8' && row ? sectionChapter(row.active_section, null) : null);
       if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
         el.scrollIntoView({ block: 'start' });
       }
     });
-  }, [landingEngagementId]);
+  }, [landingEngagementId, frameCommitted, paperRenderer.renderer, row?.active_section]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.
   const lineage: SectionLineage | null = useMemo(() => {
