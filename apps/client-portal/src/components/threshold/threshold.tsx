@@ -1168,6 +1168,7 @@ export function Threshold({
     { enabled: hasProject, query: selectionsQuery }, { enabled: hasUser, query: pendingReviewQuery },
     { enabled: hasProject, query: scopeChangesQuery }, { enabled: !!editionId, query: editionQuery },
   ].filter((read) => read.enabled && read.query.isError);
+  const { ready: budgetReady, ask: budgetAsk, showInMenu: budgetInMenu } = budgetCheckpointProjection(projectId, budgetQuery);
   const waitingWall = wallMarks.find((mark) => mark.id === firstWallId);
   const waitingDoor = drawnDoors.find((mark) => openDoorIds.has(mark.id));
   const waitingAsk = [
@@ -1177,6 +1178,7 @@ export function Threshold({
     waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks),
     waitingEdition(editionId, editionQuery.data),
     waitingScopeChange(scopeChangesQuery.data),
+    progressAsk('budget-checkpoint', budgetAsk),
   ].find(Boolean);
   const progress: ProjectProgressProps = {
     now: openChapter.label ?? null,
@@ -1189,7 +1191,7 @@ export function Threshold({
             for (const read of unreadAsks) void read.query.refetch();
           },
         }
-      : projectApprovalsLoading || proposalsQuery.isPending
+      : [projectApprovalsLoading, proposalsQuery.isPending, !budgetReady].some(Boolean)
         ? { status: 'loading' }
         : { status: 'ready', value: waitingAsk ?? null },
     update: notesQuery.isError
@@ -1318,10 +1320,10 @@ export function Threshold({
           studioName={studioName}
         />
       ))}
-      <BudgetCheckpointReview projectId={projectId} query={budgetQuery} />
       <StudioReviewAsk projectId={projectId} standsUnfiled={standsUnfiledAsks} />
       <SelectionEditionAsk projectId={projectId} />
       <PendingScopeChangeAsk projectId={projectId} />
+      <BudgetCheckpointReview projectId={projectId} query={budgetQuery} />
       <MyScopeChangeRequestsAsk projectId={projectId} />
     </>
   );
@@ -1367,7 +1369,6 @@ export function Threshold({
 
 
   const houseHasSpoken = hydrated && !loading && !model.pending;
-  const { ready: budgetReady, ask: budgetAsk, showInMenu: budgetInMenu } = budgetCheckpointProjection(projectId, budgetQuery);
   const openApprovalIds = doorstepAsks.map((approval) => approval.decisionId);
   const waitingNames = [
     ...openDoorMarks.map((mark) => mark.label),

@@ -3961,6 +3961,37 @@ describe('Gallery review F1 budget checkpoint asks', () => {
     fireEvent.click(link);
     expect(screen.getByRole('dialog')).toContainElement(screen.getByRole('region', { name: 'Published spending plan' }));
   });
+  it('keeps a scope change before the checkpoint in the band, Menu and drawer', () => {
+    checkpoint();
+    const title = 'Add a runner to the stair hall';
+    scopeChangesMock.mockReturnValue(settled([
+      { id: 'sc-budget', title, status: 'sent', request_origin: 'designer_amendment' },
+    ]));
+    renderWithApprovals([]);
+    expect(document.querySelector('.gallery-asks-line')).toHaveTextContent(
+      `${title}, and the published spending plan.`,
+    );
+    openGallery('#menu');
+    const menu = within(screen.getByRole('navigation', { name: 'Page index' }));
+    const changeLink = menu.getByRole('link', { name: title });
+    const budgetLink = menu.getByRole('link', { name: 'Published spending plan' });
+    expect(changeLink.compareDocumentPosition(budgetLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(budgetLink);
+    const drawer = screen.getByRole('dialog');
+    const change = within(drawer).getByRole('heading', { name: title });
+    const budget = within(drawer).getByRole('heading', { name: 'Published spending plan' });
+    expect(change.compareDocumentPosition(budget) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  it('names the checkpoint in The house instead of claiming nothing is waiting', () => {
+    checkpoint();
+    renderWithApprovals([]);
+    openGallery('#menu');
+    fireEvent.click(screen.getByRole('link', { name: 'The house' }));
+    const waiting = screen.getByTestId('progress-waiting');
+    expect(waiting).not.toHaveTextContent('Nothing is waiting on you right now.');
+    expect(within(waiting).getByRole('link', { name: 'the published spending plan' }))
+      .toHaveAttribute('href', '#budget-checkpoint');
+  });
   it('keeps the past-due amount before the approval and checkpoint', () => {
     checkpoint();
     invoicesMock.mockReturnValue(settled([{ ...INVOICE, status: 'sent', currency: 'USD', total_cents: 60000, amount_paid_cents: 0, due_date: '2020-01-01', payments: [] }]));
@@ -3973,6 +4004,13 @@ describe('Gallery review F1 budget checkpoint asks', () => {
     renderWithApprovals([]);
     expect(document.querySelector('.gallery-asks-line')).not.toHaveTextContent('Nothing from');
     expect(document.querySelector('.gallery-asks-line')).toHaveTextContent('Your asks could not all be read.');
+    openGallery('#key');
+    expect(screen.queryByText('Nothing is waiting on you right now.')).not.toBeInTheDocument();
+    if (state === 'error') {
+      expect(screen.getByTestId('progress-waiting-error')).toBeInTheDocument();
+    } else {
+      expect(screen.queryByTestId('progress-waiting')).not.toBeInTheDocument();
+    }
   });
   it('does not count an acknowledged checkpoint as an ask', () => {
     const data = checkpoint();
