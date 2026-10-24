@@ -60,7 +60,7 @@ import { CommissionSpread } from '@/components/document/studio/commission-spread
 const jobs = [{ jobId: 'p1', projectId: 'p1', proposalId: 'q1' }];
 const featured = { jobId: 'p1', name: 'Lake House', personLine: 'Client', stage: 'Design', href: '/doc/p1', itemCount: 1 };
 
-function studio() {
+function Studio() {
   const { plates, isPending } = useCommissionPlates(jobs);
   return createElement('div', { 'data-pending': isPending }, createElement(CommissionSpread, {
     job: featured, plate: plates.get('p1'), onLeave: () => {}, attention: null,
@@ -111,7 +111,7 @@ describe('commission plates under the real client policy', () => {
 
   it('logs an optional plate read failure without a toast and renders the name fallback', async () => {
     mockFailure = new Error('optional cover read failed');
-    const view = render(createElement(studio), { wrapper });
+    const view = render(createElement(Studio), { wrapper });
     await waitFor(() => expect(mockLog).toHaveBeenCalledWith(mockFailure, expect.anything()));
     await waitFor(() => expect(view.container.firstChild).toHaveAttribute('data-pending', 'false'));
     expect(mockToast).not.toHaveBeenCalled();

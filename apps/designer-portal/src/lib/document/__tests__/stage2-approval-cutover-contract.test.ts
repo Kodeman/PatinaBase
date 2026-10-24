@@ -21,9 +21,20 @@ describe('designer Stage-2 cutover source contract', () => {
     expect(page).toMatch(
       /<FolioLetterhead[\s\S]*?<ProjectApprovalDocumentMount/,
     );
-    expect(page.indexOf('<SectionStageLineMount')).toBeGreaterThan(
-      page.indexOf('<ProjectApprovalDocumentMount'),
-    );
+    // WP-01.5 hoisted the stage line into `const stageLine` and moved both
+    // mounts into frame slots, so order is proven where they render: the
+    // approvals slot precedes the active spread that places {stageLine}, and
+    // the legacy frame paints the slots in that same order.
+    expect(page).toMatch(/const stageLine = [\s\S]{0,400}<SectionStageLineMount/);
+    const approvals = page.indexOf('approvals: (<>');
+    const spread = page.indexOf('activeSpread: (<>');
+    expect(approvals).toBeGreaterThan(-1);
+    expect(page.indexOf('<ProjectApprovalDocumentMount', approvals)).toBeLessThan(spread);
+    expect(page.indexOf('{stageLine}', spread)).toBeGreaterThan(spread);
+    const frame = read('components/document/frame/legacy-document-frame.tsx');
+    expect(frame.indexOf('{slots.letterhead}')).toBeGreaterThan(-1);
+    expect(frame.indexOf('{slots.approvals}')).toBeGreaterThan(frame.indexOf('{slots.letterhead}'));
+    expect(frame.indexOf('{slots.activeSpread}')).toBeGreaterThan(frame.indexOf('{slots.approvals}'));
     expect(page).toContain('project?.client_id ?? null');
     expect(page).not.toMatch(
       /<ProjectApprovalDocumentMount[\s\S]{0,1200}clientProfileId=\{row\.client_profile_id/,
