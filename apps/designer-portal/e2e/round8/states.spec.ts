@@ -50,6 +50,15 @@ async function switchToOutsider(page: Page) {
 test.describe('WP-01.11 truthful states (live F01 with named fault injection)', () => {
   test.setTimeout(180_000);
 
+  test('authenticated fixture yields a settled studio before direct job entry', async ({ authenticatedPage: page }) => {
+    // No polling here: readiness is the fixture's postcondition, not work the
+    // next navigation may interrupt after receiving the authenticated page.
+    expect(await page.locator('[data-arrival-ready]').count(), 'authenticated landing is already settled').toBe(1);
+    expect(await page.locator('html').getAttribute('class') ?? '', 'authenticated arrival has released interaction').not.toMatch(/\barr-(?:pre|on|press)\b/);
+    await openJob(page);
+    await expect(page.locator('[data-document-shell]')).toBeVisible();
+  });
+
   test('studio read failure is not an empty studio and retry recovers', async ({ authenticatedPage: page }) => {
     await settled(page);
     await page.route('**/rest/v1/rpc/desk_read', route => route.fulfill({ status: 503, json: { message: 'Read unavailable' } }));
