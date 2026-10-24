@@ -25,4 +25,4 @@ Status: the latest browser rerun exposed a Spec-lens entry gap in the test, not 
 
 ## Candidate
 
-Candidate SHA: pending scoped commit of the corrected spec and this evidence update.
+Spec change commit SHA: `6aacc1c72e140653c67c2716db91be98a9c350d5` (browser capture pending a new GO).
