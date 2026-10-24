@@ -27,6 +27,12 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
   useClientEditions: () => ({ data: mockEditions }),
+  useClientEditorialAssets: () => ({
+    data: (mockEditions as import('@patina/supabase').ClientEditions | undefined)?.editions.flatMap(edition => edition.images.map(image => ({
+      ...image, id: image.assetId, sha256: image.assetId,
+      crops: { wide: { rect: [0, 0, image.width, image.height], widths: [image.width] } },
+    }))),
+  }),
   useClientEditionSourceUrls: () => ({ data: undefined }),
   useProjectFFEItems: () => ({ data: undefined }),
   useStudioIdentity: () => ({ data: undefined }),
