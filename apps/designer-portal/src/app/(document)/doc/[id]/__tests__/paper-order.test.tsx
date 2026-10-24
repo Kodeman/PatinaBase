@@ -242,13 +242,24 @@ jest.mock('@/hooks/use-proposals', () => ({
 jest.mock('@/hooks/use-drafting-state', () => ({
   useDraftingState: () => ({ gaps: [], isLoading: false, error: null }),
 }));
-jest.mock('@/hooks/use-desk-engagements', () => ({
-  selectOperationalNeedForDocument: () => undefined,
-  selectOperationalNeedsForDocument: () => undefined,
-}));
+jest.mock('@/hooks/use-desk-engagements', () => {
+  const needs = (data: { folders?: { need?: unknown }[] } | undefined) =>
+    (data?.folders ?? []).flatMap((folder) => (folder.need ? [folder.need] : []));
+  return {
+    selectOperationalNeedForDocument: (data: { folders?: { need?: unknown }[] } | undefined) =>
+      needs(data)[0],
+    selectOperationalNeedsForDocument: (data: { folders?: { need?: unknown }[] } | undefined) => {
+      const list = needs(data);
+      return list.length ? list : undefined;
+    },
+  };
+});
+// WP-01.5 (SQ-1885 F3) — a need on this job, switched per test, so its act
+// lands through the page's own anchor seam.
+let mockNeedFolders: unknown[] = [];
 jest.mock('@/hooks/use-engagement-need', () => ({
   useEngagementNeed: () => ({
-    data: { folders: [], composed: {} },
+    data: { folders: mockNeedFolders, composed: {} },
     isPending: false,
     isError: false,
     refetch: jest.fn(),
@@ -263,9 +274,21 @@ jest.mock('@/hooks/use-section-work', () => ({
 // WP-01.5 (G5) — records every request for the round-8 frame's module: the
 // legacy paper must never load it; only the round-8 renderer's lazy import does.
 const mockRound8FrameRequested = jest.fn();
+// SQ-1885 F6 — a cold chunk: while held, the frame stays suspended under the
+// page's skeleton after the page's own reads have settled.
+let mockFrameHold: Promise<void> | null = null;
 jest.mock('@/components/document/frame/round8-paper-frame', () => {
   mockRound8FrameRequested();
-  return jest.requireActual('@/components/document/frame/round8-paper-frame');
+  const actual = jest.requireActual('@/components/document/frame/round8-paper-frame');
+  const { createElement } = jest.requireActual('react');
+  return {
+    __esModule: true,
+    ...actual,
+    default: (props: object) => {
+      if (mockFrameHold) throw mockFrameHold;
+      return createElement(actual.default, props);
+    },
+  };
 });
 // WP-01.5 — the renderer latch's answer, switched per describe.
 let mockPaperRenderer: { renderer: 'legacy' | 'round8'; source: 'override' } = {
@@ -558,5 +581,106 @@ describe('the round-8 paper order', () => {
     const bands = container.querySelectorAll('[data-account-band]');
     expect(bands).toHaveLength(1);
     expect(container.querySelector('[data-paper-chapter="financials"]')!.contains(bands[0])).toBe(true);
+  });
+
+  // SQ-1885 F3 — the continuous paper prints no active-section wrapper, so the
+  // shared anchor seam lands a section on the chapter carrying its work.
+  describe('a section landing on the continuous paper', () => {
+    afterEach(() => {
+      mockNeedFolders = [];
+    });
+
+    it('lands a need act on the chapter that carries the project work and focuses its heading', async () => {
+      mockNeedFolders = [
+        {
+          row: { engagement_id: 'project-1' },
+          need: {
+            kind: 'ceremony_pending',
+            text: 'Walk Avery through the schedule',
+            actionLabel: 'Continue the introduction',
+            urgent: false,
+            stamp: { label: 'WAITING' },
+          },
+        },
+      ];
+      const { getByRole, container } = await renderRound8();
+      const ffe = container.querySelector<HTMLElement>('[data-paper-chapter="ffe"]')!;
+      const scroll = jest.fn();
+      ffe.scrollIntoView = scroll;
+
+      act(() => {
+        getByRole('button', { name: 'Continue the introduction' }).click();
+      });
+
+      expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
+      expect(document.activeElement).toBe(container.querySelector('#ffe-chapter-heading'));
+    });
+
+    it('lands a closeout request on the Closeout chapter', async () => {
+      const { container } = await renderRound8();
+      const closeout = container.querySelector<HTMLElement>('[data-paper-chapter="closeout"]')!;
+      const scroll = jest.fn();
+      closeout.scrollIntoView = scroll;
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('document:open-section', { detail: 'care' }));
+      });
+
+      expect(scroll).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(container.querySelector('#closeout-chapter-heading'));
+    });
+  });
+
+  // SQ-1885 F6 — the Desk act's one-shot landing waits for the selected frame
+  // to commit, not merely for the page's reads: a cold round-8 chunk keeps the
+  // skeleton up after the page settles, and a landing spent then lands nowhere.
+  describe.each([
+    ['region', { kind: 'region', region: 'money' }, 'money'],
+    ['FF&E line', { kind: 'ffe', ffeItemId: 'ffe-1' }, 'ffe'],
+  ])('a Desk %s landing behind a cold frame', (_name, landing, unfolds) => {
+    let release: () => void = () => undefined;
+    const unfolded: string[] = [];
+    const onUnfold = (event: Event) =>
+      unfolded.push((event as CustomEvent<{ region: string }>).detail.region);
+
+    beforeEach(() => {
+      unfolded.length = 0;
+      mockFrameHold = new Promise<void>((resolve) => {
+        release = () => {
+          mockFrameHold = null;
+          resolve();
+        };
+      });
+      window.addEventListener('document:unfold-region', onUnfold);
+      window.history.replaceState({}, '', '/doc/project-1');
+      window.sessionStorage.setItem(
+        'pl-arrive',
+        JSON.stringify({ via: 'act', to: '/doc/project-1', at: Date.now(), landing }),
+      );
+    });
+    afterEach(() => {
+      mockFrameHold = null;
+      window.removeEventListener('document:unfold-region', onUnfold);
+      window.sessionStorage.removeItem('pl-arrive');
+      window.history.replaceState({}, '', '/');
+    });
+
+    it('spends the token on mount but lands only once the frame has committed', async () => {
+      let view!: ReturnType<typeof render>;
+      await act(async () => {
+        view = render(<DocumentPage params={params} />);
+      });
+      expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
+      expect(view.container.querySelector('[data-paper-renderer="round8"]')).toBeNull();
+      expect(unfolded).toEqual([]);
+
+      await act(async () => {
+        release();
+      });
+      await waitFor(() =>
+        expect(view.container.querySelector('[data-paper-renderer="round8"]')).not.toBeNull(),
+      );
+      await waitFor(() => expect(unfolded).toContain(unfolds));
+    });
   });
 });

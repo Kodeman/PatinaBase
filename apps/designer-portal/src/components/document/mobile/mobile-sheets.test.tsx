@@ -474,6 +474,48 @@ describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
   });
 });
 
+// WP-01.5 (SQ-1885 F1) — below 1180px the round-8 continuous paper's contents
+// ride this sheet: its mounted chapters, in paper order, each landing through
+// the page's chapter jump. The legacy paper keeps the open spread's regions.
+describe('the Sections sheet on the round-8 continuous paper', () => {
+  it('lists exactly the mounted chapters and asks the page to land on one', () => {
+    const onJump = jest.fn();
+    const onJumpRegion = jest.fn();
+    mountBarAndSheets({
+      doc: {
+        ...heldDocument,
+        onJumpRegion,
+        chapters: {
+          entries: [
+            { key: 'design', label: 'Design' },
+            { key: 'ffe', label: 'FF&E', subLabel: 'Price the console' },
+            { key: 'site', label: 'Site & team' },
+          ],
+          activeKey: 'ffe',
+          onJump,
+        },
+      },
+    });
+    openSections();
+    const panel = sectionsPanel();
+    const rows = within(panel)
+      .getAllByRole('button')
+      .filter((button) => !/back to the Desk/.test(button.textContent ?? ''))
+      .slice(0, 3);
+    expect(rows.map((row) => row.querySelector('span')?.textContent)).toEqual([
+      'Design',
+      'FF&E',
+      'Site & team',
+    ]);
+    expect(rows[1]).toHaveAttribute('aria-current', 'true');
+    expect(within(rows[1]).getByText('Price the console')).toBeInTheDocument();
+
+    fireEvent.click(rows[2]);
+    expect(onJump).toHaveBeenCalledWith('site');
+    expect(onJumpRegion).not.toHaveBeenCalled();
+  });
+});
+
 describe('the Sections sheet no longer carries the margin (D-B30)', () => {
   it('the spine sheet prints no "In the margin" section', () => {
     mockItems = [row({ item_id: 'a' })];

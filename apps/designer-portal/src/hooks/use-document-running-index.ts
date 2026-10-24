@@ -309,7 +309,10 @@ const READER_SCROLL = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
 /**
  * Bodies above the target that finish loading after the press push it down
  * mid-scroll, leaving focus on a heading below the fold. Follow the root
- * until the reader scrolls for themselves, or for two seconds.
+ * until the reader acts for themselves, or for two seconds. The reader's input
+ * is heard in the CAPTURE phase: controls that consume their keys (a month
+ * grid's arrows, an instrument's Escape) stop propagation, and a bubble-phase
+ * listener would leave the follower pulling the page back under them.
  */
 function holdLanding(root: Element, behavior: ScrollBehavior) {
   if (typeof ResizeObserver === 'undefined') return;
@@ -323,11 +326,13 @@ function holdLanding(root: Element, behavior: ScrollBehavior) {
   });
   const release = () => {
     follow.disconnect();
-    for (const type of READER_SCROLL) window.removeEventListener(type, release);
+    for (const type of READER_SCROLL) {
+      window.removeEventListener(type, release, { capture: true });
+    }
   };
   follow.observe(document.documentElement);
   for (const type of READER_SCROLL) {
-    window.addEventListener(type, release, { passive: true });
+    window.addEventListener(type, release, { capture: true, passive: true });
   }
   window.setTimeout(release, 2000);
 }

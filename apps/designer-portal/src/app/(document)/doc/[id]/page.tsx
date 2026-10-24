@@ -14,7 +14,7 @@ import { calendarDaysPast } from '@patina/supabase';
  * presence. Esc puts down (sheet-first priority, §3).
  */
 
-import { lazy, Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -87,6 +87,7 @@ import {
 } from '@/lib/document/document-index';
 import {
   ROUND8_INDEX_KEYS,
+  ROUND8_PAPER_ORDER,
   round8ChapterHeadingId,
   round8ChapterRegion,
   type Round8ChapterKey,
@@ -1001,11 +1002,34 @@ function WhenRoomFiles({ projectId, children }: { projectId: string; children: R
 }
 
 function WhenVisits({ projectId, children }: { projectId: string; children: ReactNode }) {
-  const { data: visits } = useProjectVisits(projectId);
-  return visits && visits.length > 0 ? children : null;
+  const { data: visits, isError } = useProjectVisits(projectId);
+  // VisitsBlock's own rule: a failed read prints "Field data unavailable",
+  // which is content — an outage is not a field-less project.
+  return isError || (visits && visits.length > 0) ? children : null;
 }
 
 const ROUND8_GATES = { design: WhenRoomFiles, site: WhenVisits };
+
+// R8-02 — the continuous paper prints no active-section wrapper, so a section
+// landing with no anchor lands on the chapter holding the control it was asked
+// to focus, or else the chapter that carries that stage's work. On the legacy
+// paper there are no chapters and this answers null: nothing changes there.
+const SECTION_CHAPTER: Partial<Record<SectionKey, Round8ChapterKey>> = {
+  project: 'ffe',
+  install: 'ffe',
+  care: 'closeout',
+};
+function sectionChapter(key: SectionKey, focus: HTMLElement | null): HTMLElement | null {
+  const paper = document.querySelector('[data-document-paper]');
+  const chapter = (k?: string) =>
+    paper?.querySelector<HTMLElement>(k ? `[data-paper-chapter="${k}"]` : '[data-paper-chapter]') ?? null;
+  if (!chapter()) return null;
+  return (
+    focus?.closest<HTMLElement>('[data-paper-chapter]') ??
+    chapter(SECTION_CHAPTER[key] ?? 'brief') ??
+    chapter()
+  );
+}
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   // F2 — the body is keyed on the document id so picking up a DIFFERENT
@@ -1043,6 +1067,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // WP-01.5 — presentation only; settles once per page load and never swaps a
   // frame under an edit (flag-inventory §4).
   const paperRenderer = usePaperRenderer();
+  // The round-8 frame is a lazy chunk: the page's effects run while it is
+  // still suspended under the skeleton. Anything that lands on the paper waits
+  // for the selected frame to have committed, not merely been chosen.
+  const [round8Committed, setRound8Committed] = useState(false);
+  const frameCommitted =
+    paperRenderer.renderer === 'legacy' ||
+    (paperRenderer.renderer === 'round8' && round8Committed);
 
   // L3 (00559) — the checklist's sixth row fires here, not on the Desk: the
   // moment it marks is a non-owner member opening a real Document. Reads the
@@ -1329,14 +1360,22 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     if (focusId?.startsWith('document-handoff-')) openMarginRail();
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const section = document.getElementById(sectionAnchorId(key));
+        const anchor = document.getElementById(sectionAnchorId(key));
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         const responsiveFocusId =
           focusId === 'document-pulse-control'
             ? `${focusId}-${window.matchMedia?.('(min-width: 1180px)').matches ? 'desktop' : 'mobile'}`
             : focusId;
+        const requested = responsiveFocusId ? document.getElementById(responsiveFocusId) : null;
+        const section = anchor ?? sectionChapter(key, requested);
+        // A chapter landing (round 8) puts focus on the chapter's own heading.
+        const chapterHeading =
+          !anchor && section
+            ? document.getElementById(section.getAttribute('aria-labelledby') ?? '')
+            : null;
         const focusTarget =
-          (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
+          requested ??
+          chapterHeading ??
           section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
         // SQ-544 (walk D6, P-2) — the section lands at its start unless that
         // would rest the focused control under the dock.
@@ -2486,6 +2525,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ladderValues,
           clientCopy: ticketInput?.clientCopy != null,
           onJumpRegion: jumpToRegion,
+          // R8-02 — below 1180px the continuous paper's contents ride the
+          // sections sheet: the mounted chapters, landing on their headings.
+          chapters: round8Continuous
+            ? {
+                entries: ROUND8_PAPER_ORDER.filter((chapter) =>
+                  runningIndex.mountedKeys.includes(chapter.key),
+                ).map(({ key, label, region }) => ({
+                  key,
+                  label,
+                  subLabel: region ? ladderValues[region] : undefined,
+                })),
+                activeKey: chapterKey,
+                onJump: (key) => jumpToChapter(key as Round8ChapterKey),
+              }
+            : null,
           onJumpToLine: jumpToLine,
           onJumpToRoom: jumpToRoom,
           marginCount: marginSheetCount,
@@ -3105,7 +3159,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // A press promotes without the lens, so it does not wait for its resolution.
   useEffect(() => {
     const pending = arrivalLandingRef.current;
-    if (!pending || pending.done || !paperSettled) return;
+    if (!pending || pending.done || !paperSettled || !frameCommitted) return;
     pending.done = true;
     const { landing } = pending;
     if (landing.kind === 'region') {
@@ -3117,7 +3171,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
       jumpToSection(landing.sectionKey as SectionKey);
     }
-  }, [paperSettled, jumpToRegion, jumpToLine, jumpToSection]);
+  }, [paperSettled, frameCommitted, jumpToRegion, jumpToLine, jumpToSection]);
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
@@ -3516,6 +3570,33 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ),
         }
       : { accountBand: null, kickoff: null };
+
+  // R24 — the active section's file-drop host. The legacy frame hangs it on
+  // the active section; the round-8 frame on the FF&E chapter, whose install
+  // and care bodies print the folio strip it feeds.
+  const sectionFileDrop = {
+    onDragOver: (e: ReactDragEvent<HTMLElement>) => {
+      if (!sectionTakesFiles || !e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+      setSectionDrag(true);
+    },
+    onDragLeave: () => setSectionDrag(false),
+    onDrop: (e: ReactDragEvent<HTMLElement>) => {
+      if (!sectionTakesFiles) return;
+      e.preventDefault();
+      setSectionDrag(false);
+      const files = Array.from(e.dataTransfer.files ?? []);
+      if (files.length) setFolioDrop(files);
+    },
+  };
+  // The stage sub-label and its live workflow tracks: the head of the open
+  // section on the legacy paper, the head of the Schedule chapter on round 8.
+  const stageLine = stageOnGlass ? (
+    <SectionStageLineMount
+      projectId={row.engagement_kind === 'project' ? row.project_id : null}
+      activeSection={row.active_section}
+    />
+  ) : null;
 
   // WP-01.5 — the spread's pieces, declared once. The legacy frame prints the
   // one active spread (§4); the round-8 frame prints them as chapters of one
@@ -3928,19 +4009,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             data-active-section
             tabIndex={-1}
             className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-            onDragOver={(e) => {
-              if (!sectionTakesFiles || !e.dataTransfer?.types?.includes('Files')) return;
-              e.preventDefault();
-              setSectionDrag(true);
-            }}
-            onDragLeave={() => setSectionDrag(false)}
-            onDrop={(e) => {
-              if (!sectionTakesFiles) return;
-              e.preventDefault();
-              setSectionDrag(false);
-              const files = Array.from(e.dataTransfer.files ?? []);
-              if (files.length) setFolioDrop(files);
-            }}
+            {...sectionFileDrop}
           >
             {/* R1 / M1-after (I114): the stage sub-label and its track bands are
                 the head of the OPEN section, not a free-standing band under the
@@ -3952,14 +4021,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 strip carries a real position and a real fidelity. The gate
                 reads `spreadSection`, not the row's own section, so a pinned
                 worktable cannot disagree with the paper it is printing. */}
-            {stageOnGlass && (
-              <SectionStageLineMount
-                projectId={
-                  row.engagement_kind === 'project' ? row.project_id : null
-                }
-                activeSection={row.active_section}
-              />
-            )}
+            {stageLine}
             <TableFrame
               composition={table}
               pending={worktableOn ? tablePin.pending : null}
@@ -4354,6 +4416,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const round8Pieces = round8Continuous
     ? {
         section: spreadSection,
+        stageLine,
+        fileDrop: sectionFileDrop,
         brief:
           row.lead_id || unfoldProposalId ? (
             <>
@@ -4405,6 +4469,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           shellProps={shellProps}
           paperProps={paperProps}
           docId={id}
+          onCommitted={setRound8Committed}
           jobName={row.title}
           context={householdName}
           pieces={round8Pieces}

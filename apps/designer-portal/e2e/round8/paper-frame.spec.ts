@@ -15,6 +15,13 @@ async function openJob(page: Page) {
   // The first next dev compile of /doc/[id] is slow.
   await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await expect(page.locator('[data-document-shell]')).toBeVisible({ timeout: 60_000 });
+  // Story log #34 — the paper is server-rendered under the override, so a
+  // visible shell is not yet an interactive one: wait for the arrival to end
+  // before the first press.
+  await expect(page.locator('[data-document-shell][data-arrival-ready]')).toHaveCount(1, {
+    timeout: 60_000,
+  });
+  await expect(page.locator('html')).not.toHaveClass(/\barr-(pre|on|press)\b/, { timeout: 30_000 });
 }
 
 const attrs = (page: Page, selector: string, name: string) =>

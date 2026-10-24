@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Round8PaperFrame, { type Round8Pieces, type Round8PaperFrameProps } from '../round8-paper-frame';
 import type { DocumentFrameSlots } from '../frame-slots';
@@ -36,9 +36,16 @@ function slots(overrides: Partial<DocumentFrameSlots> = {}): DocumentFrameSlots 
 }
 
 const piece = (name: string) => <div data-slot={name} />;
+const fileDrop = {
+  onDragOver: jest.fn(),
+  onDragLeave: jest.fn(),
+  onDrop: jest.fn(),
+};
 function pieces(section = 'project'): Round8Pieces {
   return {
     section,
+    stageLine: piece('stage-line'),
+    fileDrop,
     brief: null,
     roomFiles: piece('room-files'),
     scheduleSpine: piece('schedule-spine'),
@@ -58,12 +65,14 @@ function pieces(section = 'project'): Round8Pieces {
 
 function renderFrame(props: Partial<Round8PaperFrameProps> = {}) {
   const onSelect = jest.fn();
+  const onCommitted = jest.fn();
   const utils = render(
     <Round8PaperFrame
       slots={slots()}
       shellProps={{ 'data-reading-index': 'approvals', 'data-arr-engagement': 'eng-1' }}
       paperProps={{ 'data-shelf-open': undefined }}
       docId="doc-1"
+      onCommitted={onCommitted}
       jobName="The Harbour House"
       pieces={pieces()}
       gates={GATES}
@@ -79,7 +88,7 @@ function renderFrame(props: Partial<Round8PaperFrameProps> = {}) {
       {...props}
     />,
   );
-  return { ...utils, onSelect };
+  return { ...utils, onSelect, onCommitted };
 }
 
 const mountedChapters = (container: HTMLElement) =>
@@ -164,7 +173,7 @@ describe('Round8PaperFrame', () => {
     expect(slotsIn('ffe')).toEqual(ffe);
     expect(slotsIn('financials')).toEqual([...money, 'account-band']);
     expect(slotsIn('closeout')).toEqual(closeout);
-    expect(slotsIn('schedule')).toEqual(['schedule']);
+    expect(slotsIn('schedule')).toEqual(['stage-line', 'schedule']);
   });
 
   it("mounts Design and Site only when the page's gates find content", () => {
@@ -242,6 +251,55 @@ describe('Round8PaperFrame', () => {
     expect(screen.getByText('Room in hand: Living room')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Release the room' }));
     expect(onRelease).toHaveBeenCalledTimes(1);
+  });
+
+  it('heads the Schedule chapter with the live workflow tracks', () => {
+    const { container } = renderFrame();
+    const schedule = container.querySelector('[data-paper-chapter="schedule"]')!;
+    const slotsIn = Array.from(schedule.querySelectorAll('[data-slot]')).map((el) =>
+      el.getAttribute('data-slot'),
+    );
+    expect(slotsIn).toEqual(['stage-line', 'schedule', 'schedule-spine']);
+    expect(container.querySelectorAll('[data-slot="stage-line"]')).toHaveLength(1);
+  });
+
+  it('hangs the section file-drop host on the FF&E chapter, around the folio it feeds', () => {
+    fileDrop.onDragOver.mockClear();
+    fileDrop.onDrop.mockClear();
+    const { container } = renderFrame({ pieces: pieces('install') });
+    const hosts = container.querySelectorAll('[data-section-file-drop]');
+    expect(hosts).toHaveLength(1);
+    const host = hosts[0] as HTMLElement;
+    expect(host.querySelector('[data-paper-chapter="ffe"] [data-slot="install-ffe"]')).not.toBeNull();
+
+    // A drop anywhere on the chapter — not only on the strip — reaches the host.
+    const heading = container.querySelector('#ffe-chapter-heading')!;
+    fireEvent.dragOver(heading, { dataTransfer: { types: ['Files'], files: [] } });
+    fireEvent.drop(heading, { dataTransfer: { types: ['Files'], files: [] } });
+    expect(fileDrop.onDragOver).toHaveBeenCalledTimes(1);
+    expect(fileDrop.onDrop).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports its own commit once, so the page lands only on a mounted paper', () => {
+    const { onCommitted, rerender } = renderFrame();
+    expect(onCommitted).toHaveBeenCalledTimes(1);
+    expect(onCommitted).toHaveBeenCalledWith(true);
+    rerender(
+      <Round8PaperFrame
+        slots={slots()}
+        shellProps={{}}
+        paperProps={{}}
+        docId="doc-1"
+        onCommitted={onCommitted}
+        jobName="The Harbour House"
+        pieces={pieces()}
+        gates={GATES}
+        projectId="project-1"
+        contents={{ subLabels: {}, regions: [], mountedKeys: [], activeKey: null, onSelect: jest.fn() }}
+        roomInHand={null}
+      />,
+    );
+    expect(onCommitted).toHaveBeenCalledTimes(1);
   });
 
   it('never renders DocSpine', () => {

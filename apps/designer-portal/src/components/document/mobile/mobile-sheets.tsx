@@ -532,6 +532,29 @@ export function MobileSheets({
     const ladderRegions = activeSectionKey
       ? paperRegionsForSection(activeSectionKey)
       : [];
+    // WP-01.5 — the round-8 continuous paper publishes its own contents: the
+    // chapters it mounted, in paper order, and the page's chapter jump. The
+    // spread's regions are the legacy paper's contents.
+    const chapters = activeDoc?.chapters;
+    const rows = chapters
+      ? chapters.entries.map((chapter) => ({
+          key: chapter.key,
+          label: chapter.label,
+          value: chapter.subLabel,
+          current: chapters.activeKey === chapter.key,
+          jump: () => chapters.onJump(chapter.key),
+        }))
+      : ladderRegions.map((region) => ({
+          key: region.key,
+          label: DOCUMENT_INDEX_LABELS[region.key],
+          value: ladderValues[region.key],
+          current: activeDoc?.readingIndex === region.key,
+          // D-B18 — the page's handler, and only it: unfold, force every
+          // region through the target to full in one flushed commit, THEN
+          // scroll. This sheet used to run the first and third steps itself,
+          // landing on a stop the lens had never been asked to promote.
+          jump: () => activeDoc?.onJumpRegion(region.key),
+        }));
     return (
       <Sheet kind="spine" onClose={closeSheet}>
         <button
@@ -545,22 +568,15 @@ export function MobileSheets({
           ← Put down · back to the Desk
         </button>
         <ul className="mt-1">
-          {ladderRegions.map((region) => {
-            const current = activeDoc?.readingIndex === region.key;
-            const value = ladderValues[region.key];
+          {rows.map(({ key, label, value, current, jump }) => {
             return (
-              <li key={region.key}>
+              <li key={key}>
                 <button
                   type="button"
                   aria-current={current ? 'true' : undefined}
                   onClick={() => {
                     closeSheet();
-                    // D-B18 — the page's handler, and only it: unfold, force
-                    // every region through the target to full in one flushed
-                    // commit, THEN scroll. This sheet used to run the first and
-                    // third steps itself, landing on a stop the lens had never
-                    // been asked to promote.
-                    activeDoc?.onJumpRegion(region.key);
+                    jump();
                   }}
                   className={`flex min-h-11 w-full flex-col justify-center gap-0.5 py-1.5 text-left ${
                     current ? 'doc-room-lifted' : ''
@@ -573,7 +589,7 @@ export function MobileSheets({
                         : 'text-[var(--color-charcoal)]'
                     }`}
                   >
-                    {DOCUMENT_INDEX_LABELS[region.key]}
+                    {label}
                   </span>
                   {value && (
                     <span className="block truncate font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">

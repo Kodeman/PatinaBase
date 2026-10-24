@@ -20,7 +20,15 @@
  */
 
 import '@/components/document/paper/round8.css';
-import { Fragment, useMemo, type ComponentProps, type ComponentType, type ReactNode } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  type ComponentProps,
+  type ComponentType,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import {
   ContentsMargin,
   type ContentsEntry,
@@ -56,6 +64,16 @@ export interface Round8Contents {
 export interface Round8Pieces {
   /** The spread the stage pieces belong to: 'install' | 'care' | the project. */
   section: string;
+  /** The stage sub-label and live workflow tracks (SectionStageLineMount):
+   *  the head of the Schedule chapter. */
+  stageLine: ReactNode;
+  /** The active section's file-drop host (R24), hung on the FF&E chapter
+   *  whose install and care bodies print the folio strip it feeds. */
+  fileDrop: {
+    onDragOver: (event: DragEvent<HTMLElement>) => void;
+    onDragLeave: () => void;
+    onDrop: (event: DragEvent<HTMLElement>) => void;
+  };
   brief: ReactNode;
   roomFiles: ReactNode;
   scheduleSpine: ReactNode;
@@ -80,6 +98,9 @@ export interface Round8PaperFrameProps {
   shellProps: LegacyFrameProps['shellProps'];
   paperProps: LegacyFrameProps['paperProps'];
   docId: string;
+  /** Told once this frame has committed: the page's one-shot landings (the
+   *  Desk act token) wait for it, not for the lazy chunk's request. */
+  onCommitted: (committed: boolean) => void;
   jobName: string;
   /** One context line for the job head (hidden below 1180px). */
   context?: ReactNode;
@@ -109,6 +130,7 @@ function chapterBodies(
     approvals: slots.approvals,
     schedule: (
       <>
+        {pieces.stageLine}
         {slots.schedule}
         {stage(pieces.scheduleSpine, null, null)}
       </>
@@ -138,6 +160,7 @@ export default function Round8PaperFrame({
   shellProps,
   paperProps,
   docId,
+  onCommitted,
   jobName,
   context,
   pieces,
@@ -149,6 +172,9 @@ export default function Round8PaperFrame({
   // Mounted after hydration only (the page holds the first paint), so the
   // tab's remembered origin can be read here.
   const origin = useMemo(() => readPaperOrigin(docId), [docId]);
+  useEffect(() => {
+    onCommitted(true);
+  }, [onCommitted]);
   const chapters = pieces ? chapterBodies(slots, pieces) : {};
   // Contents: the ten chapters (the margin filters them to the mounted ones),
   // each sub-labelled with the stage reading DocSpine's ladder printed; a
@@ -180,13 +206,21 @@ export default function Round8PaperFrame({
                 {body}
               </PaperChapter>
             );
+            const hosted =
+              chapter.key === 'ffe' ? (
+                <div data-section-file-drop="" {...pieces.fileDrop}>
+                  {printed}
+                </div>
+              ) : (
+                printed
+              );
             const Gate = gates[chapter.key];
             return Gate && projectId ? (
               <Gate key={chapter.key} projectId={projectId}>
-                {printed}
+                {hosted}
               </Gate>
             ) : (
-              <Fragment key={chapter.key}>{printed}</Fragment>
+              <Fragment key={chapter.key}>{hosted}</Fragment>
             );
           })}
         </>,
