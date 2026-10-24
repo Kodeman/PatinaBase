@@ -1,7 +1,7 @@
 'use client';
 
 import { LegacyDocumentFrame } from '@/components/document/frame/legacy-document-frame';
-import { Round8DocumentState } from '@/components/document/frame/round8-states';
+import { Round8DocumentLoading } from '@/components/document/frame/round8-document-loading';
 import type { DocumentFrameSlots } from '@/components/document/frame/frame-slots';
 import { usePaperRenderer } from '@/hooks/use-paper-renderer';
 import { useLandParam } from '@/lib/document/paper/use-land-param';
@@ -988,6 +988,7 @@ function ladderFactsSignature(input: TicketInput): string {
 // would ride the legacy route's static chunks (G5). Client-only by construction
 // — the page renders the skeleton until hydrated and the latch settles, so the
 // import only ever runs in the browser; the same skeleton covers its load.
+const Round8DocumentState = lazy(() => import('@/components/document/frame/round8-states').then((module) => ({ default: module.Round8DocumentState })));
 const Round8PaperFrame = lazy(() => import('@/components/document/frame/round8-paper-frame'));
 const DesignChapter = lazy(() => import('@/components/document/paper/chapters/design-chapter').then((module) => ({ default: module.DesignChapter })));
 
@@ -3213,7 +3214,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     resolutionState === 'loading' ||
     paperRenderer.renderer === 'pending'
   ) {
-    if (paperRenderer.renderer === 'round8') return <Round8DocumentState state="loading" />;
+    if (paperRenderer.renderer === 'round8') return <Round8DocumentLoading />;
     if (loadingRegister) return <DocumentSkeleton />;
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
@@ -3226,7 +3227,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
 
   if (resolutionState === 'error') {
     if (paperRenderer.renderer === 'round8') {
-      return <Round8DocumentState state="error" onRetry={() => void retryDocumentResolution()} />;
+      return <Suspense fallback={<Round8DocumentLoading />}><Round8DocumentState state="error" onRetry={() => void retryDocumentResolution()} /></Suspense>;
     }
     return (
       <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
@@ -3250,7 +3251,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }
 
   if (resolutionState === 'missing' || !row) {
-    if (paperRenderer.renderer === 'round8') return <Round8DocumentState state="missing" />;
+    if (paperRenderer.renderer === 'round8') return <Suspense fallback={<Round8DocumentLoading />}><Round8DocumentState state="missing" /></Suspense>;
     return (
       <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
         <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
