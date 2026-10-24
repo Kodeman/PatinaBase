@@ -79,6 +79,8 @@ function isFrameable(storagePath: string | null): boolean {
 export interface PapersSheetProps {
   projectId: string;
   open: boolean;
+  /** Gallery supplies the single modal, focus boundary and scroll lock. */
+  embedded?: boolean;
   onDismiss: () => void;
   /**
    * The door's read view, when the page has one: an executed instrument is
@@ -94,6 +96,7 @@ export function PapersSheet({
   open,
   onDismiss,
   onOpenInstrument,
+  embedded = false,
 }: PapersSheetProps) {
   if (!open) return null;
   return (
@@ -101,6 +104,7 @@ export function PapersSheet({
       projectId={projectId}
       onDismiss={onDismiss}
       onOpenInstrument={onOpenInstrument}
+      embedded={embedded}
     />
   );
 }
@@ -109,6 +113,7 @@ function PapersSheetBody({
   projectId,
   onDismiss,
   onOpenInstrument,
+  embedded = false,
 }: Omit<PapersSheetProps, 'open'>) {
   const planSet = useClientPlanSet([projectId]);
   const filed = useClientDocuments([projectId]);
@@ -121,26 +126,28 @@ function PapersSheetBody({
   // The sheet takes the reading, gives it back to whatever laid it down, and
   // holds the house still underneath it while it is down.
   useEffect(() => {
+    if (embedded) return;
     const opener = document.activeElement as HTMLElement | null;
     containerRef.current?.focus();
     return () => {
       opener?.focus?.();
     };
-  }, []);
+  }, [embedded]);
   // The details sheet mounts in the same wrapper and holds the same lock; two
   // independent capture/restore pairs strand the page scrolled-locked when
   // they close in the other order.
-  useScrollLock(true);
+  useScrollLock(!embedded);
 
   // Escape is bound on the document, not the dialog: once the reading is
   // inside a cross-origin frame no keydown reaches a React handler.
   useEffect(() => {
+    if (embedded) return;
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') onDismiss();
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onDismiss]);
+  }, [onDismiss, embedded]);
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'Tab') return;
@@ -194,16 +201,16 @@ function PapersSheetBody({
   return (
     <div
       data-testid="papers-sheet-overlay"
-      className="fixed inset-0 z-[30] overflow-y-auto bg-[var(--bg-primary)] px-[clamp(14px,4vw,48px)] py-[clamp(18px,4vh,56px)]"
+      className={embedded ? "gallery-documents" : "fixed inset-0 z-[30] overflow-y-auto bg-[var(--bg-primary)] px-[clamp(14px,4vw,48px)] py-[clamp(18px,4vh,56px)]"}
     >
       <div
         ref={containerRef}
         id="papers-sheet"
-        role="dialog"
-        aria-modal="true"
+        role={embedded ? undefined : "dialog"}
+        aria-modal={embedded ? undefined : true}
         aria-labelledby="papers-sheet-title"
         tabIndex={-1}
-        onKeyDown={handleKeyDown}
+        onKeyDown={embedded ? undefined : handleKeyDown}
         data-testid="papers-sheet"
         className="mx-auto w-full max-w-[760px] border border-[var(--border-default)] bg-[var(--bg-primary)] p-[clamp(16px,3vw,32px)] focus-visible:outline-none"
       >

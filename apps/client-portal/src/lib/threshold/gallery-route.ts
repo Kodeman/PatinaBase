@@ -6,6 +6,7 @@ export type GalleryRoute =
   | { kind: 'menu' }
   | { kind: 'plan' }
   | { kind: 'documents' }
+  | { kind: 'pieces'; roomId: string }
   | { kind: 'page' };
 
 const INDEX_ROUTES = new Map<string, GalleryRoute>([
@@ -35,6 +36,7 @@ function isReceiptAnchor(anchor: string, returned: CheckoutReturn | null): boole
 export function galleryRoute(hash: string, returned: CheckoutReturn | null = null): GalleryRoute {
   const anchor = readAnchor(hash);
   if (!anchor) return { kind: 'page' };
+  if (anchor.startsWith('pieces-')) return { kind: 'pieces', roomId: anchor.slice(7) };
   if (isReceiptAnchor(anchor, returned)) return { kind: 'asks', anchor: 'letterbox', receipt: true };
   if (isAskAnchor(anchor)) return { kind: 'asks', anchor, receipt: false };
   return INDEX_ROUTES.get(anchor) ?? { kind: 'scroll', anchor };
