@@ -220,12 +220,16 @@ export interface HeroPreloadSource {
   media?: string;
 }
 
-/** The hero's preload, one per art-directed source: the crops and `sizes` `heroPicture` draws. */
-export function heroPreloadSources(scopeId: string, asset: EditorialAsset): HeroPreloadSource[] {
+export function galleryHeroPreloadSources(scopeId: string, asset: EditorialAsset): HeroPreloadSource[] {
   if (arrivalMode(asset) === 'contained') {
     const crop = arrivalRendition(asset, null);
     return crop ? [{ imageSrcSet: plateUrl(scopeId, asset.sha256, crop.key as PlateCropKey, crop.width, 'webp', asset.crops[crop.key as PlateCropKey]?.rev), imageSizes: '100vw' }] : [];
   }
+  return heroPreloadSources(scopeId, asset);
+}
+
+/** The hero's preload, one per art-directed source: the crops and `sizes` `heroPicture` draws. */
+export function heroPreloadSources(scopeId: string, asset: EditorialAsset): HeroPreloadSource[] {
   const hero = heroPicture(asset);
   const sources: Array<{ cropKey: PlateCropKey; sizes: string; media?: string }> = hero.phone
     ? [

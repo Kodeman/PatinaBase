@@ -3845,9 +3845,18 @@ describe('Threshold — The House Issue data', () => {
     expect(withUnapproved.container.querySelector('#key')).toBeNull();
   });
 
-  it('editorial data alone: the hero stands between the doorplate and the house, and every anchor stays', () => {
-    const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
-    expect(container.querySelector('.gallery-photo-frame img')).toBeInTheDocument();
+  it('editorial data alone: piece photographs open the house without reranking a hero, and every anchor stays', () => {
+    const editorial = { ...EDITORIAL, assets: EDITORIAL.assets.map(asset => ({ ...asset, crops: {
+      ...asset.crops, piece: { rect: [0, 0, 1600, 1600] as const, widths: [256, 512] },
+    } })), rooms: EDITORIAL.rooms.map((room, index) => ({ ...room, items: index === 0 ? [{
+      id: 'sideboard', nameAsSigned: 'Walnut sideboard', category: 'storage', status: null, material: null, finish: null,
+      dimensions: null, descriptionAsSigned: null, silhouetteKind: null, assetIds: ['plate-1'],
+    }] : [] })) };
+    const { container } = renderThreshold(MILESTONES, [], editorial);
+    expect(container.querySelector('.gallery-arrival-figure img')).toBeNull();
+    const still = screen.getByRole('list', { name: 'Photographs of the pieces' });
+    expect(within(still).getByRole('img')).toHaveAttribute('src', expect.stringContaining('/piece-512.webp'));
+    expect(within(still).getByText('Walnut sideboard')).toBeVisible();
     expect(container.querySelector('[data-standing-row]')).toBeNull();
     expect(container.querySelector('.ed-chapter-head')).toBeNull();
     expect(container.querySelector('.gallery-chapter')).toBeInTheDocument();

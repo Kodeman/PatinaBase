@@ -20,11 +20,15 @@ jest.mock('@/components/projects/ProjectsEmptyState', () => ({ ProjectsEmptyStat
 const rpc = jest.fn();
 const editorial = {
   project: { id: 'p1', name: 'The house', phase: 'procurement', targetDate: null, showMakers: false, studio: { name: 'Studio', town: null } },
-  rooms: [], boards: [], sheets: [], palette: [],
+  rooms: [{ id: 'library', name: 'Library', anchor: 'room-library', conceptAssetId: null, scanAssetIds: [], items: [{
+    id: 'sideboard', nameAsSigned: 'Sideboard', category: 'storage', status: null, material: null, finish: null,
+    dimensions: null, descriptionAsSigned: null, silhouetteKind: null, assetIds: ['plate-1'],
+  }] }], boards: [], sheets: [], palette: [],
   assets: [{
     id: 'plate-1', sha256: 'a'.repeat(64), sourceKind: 'upload', width: 2400, height: 1600,
     ground: 'scene', dominantHex: '#6B4F3A', lqip: null, focal: null, subjectBox: null,
     crops: {
+      piece: { rect: [0, 0, 1600, 1600], widths: [256, 512] },
       wide: { rect: [0, 0, 2400, 1500], widths: [1280, 1600, 2048] },
       cover_phone: { rect: [300, 0, 1720, 1500], widths: [640, 828, 1080] },
     },
@@ -58,13 +62,16 @@ const pages = [
   ['named project', () => ProjectPage({ params: Promise.resolve({ projectId: 'p1' }) })],
 ] as const;
 
-it.each(pages)('%s always reads editorial without analytics and preloads the fallback arrival', async (_name, page) => {
+it.each(pages)('%s always reads editorial without analytics and preloads piece photographs without an edition', async (_name, page) => {
   const analytics = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('analytics blocked'));
   render(await page());
   expectBothReads();
   expect(analytics).not.toHaveBeenCalled();
   const preloads = document.querySelectorAll('link[rel="preload"][as="image"]');
-  expect(preloads).toHaveLength(2);
+  expect(preloads).toHaveLength(1);
+  expect(preloads[0].getAttribute('imagesrcset')).toContain('/piece-');
+  expect(preloads[0].getAttribute('imagesrcset')).toContain('.avif');
+  expect(preloads[0].getAttribute('imagesizes')).toBe('(min-width: 601px) 282px, 171px');
   for (const link of preloads) expect(link.getAttribute('imagesrcset')).toContain('/plates/p1/');
   expect(screen.getByTestId('surface')).toHaveAttribute('data-editorial', 'present');
 });
