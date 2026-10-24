@@ -534,6 +534,12 @@ export interface HoldActionProps
   wrapperClassName?: string;
 }
 
+function pointerOutside(event: ReactPointerEvent<HTMLButtonElement>) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientX < rect.left || event.clientX > rect.right ||
+    event.clientY < rect.top || event.clientY > rect.bottom;
+}
+
 export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
   function HoldAction(
     {
@@ -569,6 +575,11 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const running = useRef(false);
     const heldRect = useRef<DOMRect | null>(null);
+    const heldPointer = useRef<number | null>(null);
+    const latestOnHold = useRef(onHold);
+    useLayoutEffect(() => {
+      latestOnHold.current = onHold;
+    }, [onHold]);
     const pointerAt = useRef(0);
     const shown = useRef(new Set<string>());
     const shownKey = `${actionKey}:${presentation}`;
@@ -610,6 +621,7 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       if (timer.current) clearTimeout(timer.current);
       timer.current = null;
       running.current = false;
+      heldPointer.current = null;
       ink(0);
       setHolding(false);
     }, [ink]);
@@ -645,12 +657,11 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
         variant,
         presentation,
       });
-      void Promise.resolve(onHold()).finally(() => {
+      void Promise.resolve(latestOnHold.current()).finally(() => {
         restoreFocus(restoreFocusRef);
       });
     }, [
       actionKey,
-      onHold,
       presentation,
       regionKey,
       restoreFocusRef,
@@ -658,13 +669,16 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       variant,
     ]);
 
-    // Revoke the old consent synchronously at commit, before its timer can
-    // complete with a callback or availability from the previous render.
-    useLayoutEffect(() => stop, [holdMs, stop, take, unavailable]);
+    // Consent changes revoke the hold at commit; callback churn alone does not.
+    useLayoutEffect(() => stop, [
+      actionKey, children, disabled, holdMs, loading, presentation, regionKey,
+      rest.id, stop, surfaceKey, variant, verb,
+    ]);
 
-    const start = useCallback(() => {
+    const start = useCallback((pointerId: number | null = null) => {
       if (unavailable || running.current) return;
       running.current = true;
+      heldPointer.current = pointerId;
       heldRect.current = control.current?.getBoundingClientRect() ?? null;
       setHolding(true);
       control.current?.style.setProperty('--hold-ms', `${holdMs}ms`);
@@ -675,6 +689,7 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       timer.current = setTimeout(() => {
         timer.current = null;
         running.current = false;
+        heldPointer.current = null;
         setHolding(false);
         ink(0);
         take();
@@ -746,21 +761,27 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
               if (event.button !== 0) return;
               if ((event.pointerType === 'touch' || event.pointerType === 'pen') && !event.isPrimary) return;
               markInkPoint(event);
-              start();
+              start(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (heldPointer.current === event.pointerId) {
+                if ((event.buttons & 1) === 0 || pointerOutside(event)) stop();
+              }
+              rest.onPointerMove?.(event);
             }}
             onPointerUp={(event) => {
               pointerAt.current = Date.now();
-              stop();
+              if (heldPointer.current === event.pointerId) stop();
               rest.onPointerUp?.(event);
             }}
             onPointerLeave={(event) => {
               pointerAt.current = Date.now();
-              stop();
+              if (heldPointer.current === event.pointerId) stop();
               rest.onPointerLeave?.(event);
             }}
             onPointerCancel={(event) => {
               pointerAt.current = Date.now();
-              stop();
+              if (heldPointer.current === event.pointerId) stop();
               rest.onPointerCancel?.(event);
             }}
             onKeyDown={onKeyDown}

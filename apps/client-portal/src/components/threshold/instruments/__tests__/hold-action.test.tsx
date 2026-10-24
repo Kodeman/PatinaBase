@@ -183,7 +183,7 @@ describe('HoldAction — the act, held', () => {
       expect(target).toHaveAttribute('data-hold-state', 'idle');
     });
 
-    it.each(['disabled', 'loading', 'actionKey', 'onHold'] as const)(
+    it.each(['disabled', 'loading', 'actionKey', 'verb', 'children'] as const)(
       'cancels when %s changes mid-hold without invoking either callback',
       (prop) => {
         const replacement = jest.fn();
@@ -194,12 +194,11 @@ describe('HoldAction — the act, held', () => {
           disabled: { disabled: true },
           loading: { loading: true },
           actionKey: { actionKey: 'different_consent' },
-          onHold: { onHold: replacement },
+          verb: { verb: 'approve' },
+          children: { children: 'Sign authorization · $200' },
         }[prop];
         rerender(
-          <HoldAction actionKey="gate_sign" verb="sign" onHold={onHold} {...changed}>
-            Sign authorization
-          </HoldAction>,
+          <HoldAction actionKey="gate_sign" verb="sign" onHold={onHold} children="Sign authorization" {...changed} />,
         );
         act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
         expect(onHold).not.toHaveBeenCalled();
@@ -258,7 +257,7 @@ describe('HoldAction — the act, held', () => {
     expect(onHold).not.toHaveBeenCalled();
   });
 
-  it('requires a fresh full hold after a callback changes', () => {
+  it('requires a fresh full hold after the consent amount changes', () => {
     const replacement = jest.fn();
     const { rerender } = draw();
     jest.useFakeTimers();
@@ -266,9 +265,10 @@ describe('HoldAction — the act, held', () => {
     act(() => { jest.advanceTimersByTime(400); });
     rerender(
       <HoldAction actionKey="gate_sign" verb="sign" onHold={replacement}>
-        Sign authorization
+        Sign authorization · $200
       </HoldAction>,
     );
+    expect(actWord()).toHaveAttribute('data-hold-state', 'idle');
     fireEvent.keyUp(actWord(), { key: 'Enter' });
     fireEvent.keyDown(actWord(), { key: 'Enter' });
     act(() => { jest.advanceTimersByTime(HOLD_MS - 1); });
@@ -276,6 +276,106 @@ describe('HoldAction — the act, held', () => {
     expect(replacement).not.toHaveBeenCalled();
     act(() => { jest.advanceTimersByTime(1); });
     expect(replacement).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['keyboard', 'pointer'])('R4 keeps a %s hold through callback churn and invokes only the latest handler', (input) => {
+    const first = jest.fn();
+    const latest = jest.fn();
+    function Parent({ record }: { record: () => void }) {
+      return (
+        <HoldAction actionKey="gate_sign" verb="sign" onHold={() => record()}>
+          Sign authorization
+        </HoldAction>
+      );
+    }
+    const { rerender } = render(<Parent record={first} />);
+    jest.useFakeTimers();
+    if (input === 'keyboard') fireEvent.keyDown(actWord(), { key: 'Enter' });
+    else fireEvent.pointerDown(actWord(), { pointerId: 7, buttons: 1 });
+    act(() => { jest.advanceTimersByTime(400); });
+    rerender(<Parent record={latest} />);
+    expect(actWord()).toHaveAttribute('data-hold-state', 'holding');
+    act(() => { jest.advanceTimersByTime(HOLD_MS - 401); });
+    expect(latest).not.toHaveBeenCalled();
+    act(() => { jest.advanceTimersByTime(1); });
+    expect(first).not.toHaveBeenCalled();
+    expect(latest).toHaveBeenCalledTimes(1);
+    act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+    expect(latest).toHaveBeenCalledTimes(1);
+  });
+
+  const pointerRect = { top: 0, left: 0, right: 100, bottom: 44, width: 100, height: 44 } as DOMRect;
+
+  it.each([[101, 20], [-1, 20], [50, -1], [50, 45]])(
+    'R1 cancels captured touch movement outside the control at (%s, %s) without pointerleave',
+    (clientX, clientY) => {
+      draw();
+      const target = actWord();
+      jest.spyOn(target, 'getBoundingClientRect').mockReturnValue(pointerRect);
+      jest.useFakeTimers();
+      fireEvent.pointerDown(target, { pointerId: 7, pointerType: 'touch', buttons: 1, clientX: 99, clientY: 20 });
+      act(() => { jest.advanceTimersByTime(400); });
+      fireEvent.pointerMove(target, { pointerId: 7, pointerType: 'touch', buttons: 1, clientX, clientY });
+      expect(target).toHaveAttribute('data-hold-state', 'idle');
+      act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+      expect(onHold).not.toHaveBeenCalled();
+    },
+  );
+
+  it('R2 cancels when a mouse chord loses its primary button via pointermove', () => {
+    draw();
+    const target = actWord();
+    jest.spyOn(target, 'getBoundingClientRect').mockReturnValue(pointerRect);
+    jest.useFakeTimers();
+    fireEvent.pointerDown(target, { pointerId: 7, button: 0, buttons: 1 });
+    fireEvent.pointerMove(target, { pointerId: 7, button: 2, buttons: 3, clientX: 50, clientY: 20 });
+    expect(target).toHaveAttribute('data-hold-state', 'holding');
+    fireEvent.pointerMove(target, { pointerId: 7, button: 0, buttons: 2, clientX: 50, clientY: 20 });
+    expect(target).toHaveAttribute('data-hold-state', 'idle');
+    act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+    expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it.each(['pointerUp', 'pointerCancel', 'pointerLeave'] as const)(
+    'R5 ignores secondary %s while the initiating pointer remains held',
+    (ending) => {
+      draw();
+      const target = actWord();
+      jest.useFakeTimers();
+      fireEvent.pointerDown(target, { pointerId: 7, pointerType: 'touch', buttons: 1 });
+      act(() => { jest.advanceTimersByTime(400); });
+      fireEvent.pointerDown(target, { pointerId: 8, pointerType: 'touch', isPrimary: false, buttons: 1 });
+      fireEvent.pointerMove(target, { pointerId: 8, pointerType: 'touch', isPrimary: false, buttons: 0, clientX: -100 });
+      fireEvent[ending](target, { pointerId: 8, pointerType: 'touch', isPrimary: false });
+      expect(target).toHaveAttribute('data-hold-state', 'holding');
+      act(() => { jest.advanceTimersByTime(HOLD_MS - 401); });
+      expect(onHold).not.toHaveBeenCalled();
+      act(() => { jest.advanceTimersByTime(1); });
+      expect(onHold).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['pointerUp', 'pointerCancel', 'pointerLeave'] as const)(
+    'still cancels on the initiating pointer’s %s',
+    (ending) => {
+      draw();
+      jest.useFakeTimers();
+      fireEvent.pointerDown(actWord(), { pointerId: 7, buttons: 1 });
+      fireEvent[ending](actWord(), { pointerId: 7 });
+      act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+      expect(onHold).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps an in-bounds primary pointer hold, including a chord with primary still down', () => {
+    draw();
+    jest.spyOn(actWord(), 'getBoundingClientRect').mockReturnValue(pointerRect);
+    jest.useFakeTimers();
+    fireEvent.pointerDown(actWord(), { pointerId: 7, buttons: 1 });
+    fireEvent.pointerMove(actWord(), { pointerId: 7, buttons: 1, clientX: 1, clientY: 20 });
+    fireEvent.pointerMove(actWord(), { pointerId: 7, buttons: 3, clientX: 99, clientY: 20 });
+    act(() => { jest.advanceTimersByTime(HOLD_MS); });
+    expect(onHold).toHaveBeenCalledTimes(1);
   });
 
   it('cancels when the pointer leaves the word', () => {
