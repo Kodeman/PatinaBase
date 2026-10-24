@@ -89,7 +89,7 @@ async function signIn(page: Page, email: string): Promise<void> {
   await page.goto('/auth/signin', { waitUntil: 'domcontentloaded' });
 
   const disclosure = page
-    .getByRole('button', { name: /sign in with email|use email and password instead/i })
+    .getByRole('button', { name: /sign in with email|use (?:email and )?password instead|use a password instead/i })
     .first();
   const password = page.getByLabel(/password/i).first();
   await expect(async () => {

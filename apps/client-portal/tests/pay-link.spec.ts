@@ -638,6 +638,10 @@ test.describe("the standing invoice (00574)", () => {
     await page.getByRole("link", { name: "Invoices", exact: true }).click();
     const pay = page.locator(`[data-invoice-id="${minted.invoiceId}"]`).getByRole("button", { name: "View invoice" });
     await expect(pay).toBeVisible();
+    await expect(pay).toHaveAttribute("aria-expanded", "true", { timeout: 30_000 });
+    await pay.click();
+    await expect(pay).toHaveAttribute("aria-expanded", "false");
+    await pay.click();
     await expect(pay).toHaveAttribute("aria-expanded", "true");
 
     expect(

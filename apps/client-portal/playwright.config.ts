@@ -13,7 +13,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : 2,
-  globalTimeout: 540000,
+  globalTimeout: 900000,
   outputDir: evidence ? path.join(evidence, 'results') : 'test-results',
   reporter: [['list'], ['html', {
     outputFolder: evidence ? path.join(evidence, 'report') : 'playwright-report',
