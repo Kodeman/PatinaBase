@@ -272,12 +272,16 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/, { timeout: 30_000 });
     await expect(finish).toHaveAttribute('aria-invalid', 'true');
+    const length = await page.evaluate(() => history.length);
 
     await pressBack(page);
     await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
       timeout: 30_000,
     });
     await expect(instrument(page)).toBeVisible();
+    await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/);
+    await expect(finish).toHaveAttribute('aria-invalid', 'true');
+    expect(await page.evaluate(() => history.length), 'a held Back grows no history').toBe(length);
     expect(unfoldParams(page).unfold).toBe('pieces');
     expect(new URL(page.url()).searchParams.get('line')).toBe(line);
     await expect(finish).toHaveValue(typed);
@@ -419,6 +423,9 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     });
     expect(new URL(page.url()).pathname, 'Back did not leave the document').toBe(`/doc/${JOB}`);
     expect(unfoldParams(page).unfold).toBe('pieces');
+    expect(new URL(page.url()).searchParams.get('line')).toBe(line);
+    await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/);
+    await expect(finish).toHaveAttribute('aria-invalid', 'true');
     await expect(finish).toHaveValue(typed);
     await expect(finish, 'Back focuses the unsaved field').toBeFocused();
     expect(await sameShell(page), 'Back held the unfold without a remount').toBe(true);
@@ -443,6 +450,8 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await pressBack(page);
     await expect(instrument(page)).toBeVisible();
     expect(new URL(page.url()).pathname, 'a pending save holds Back too').toBe(`/doc/${JOB}`);
+    expect(unfoldParams(page).unfold).toBe('pieces');
+    expect(await page.evaluate(() => history.length)).toBe(length);
     land();
     await expect(page).toHaveURL(/\/desk(\?|$)/, { timeout: 30_000 });
     await expect(studio).toBeVisible({ timeout: 30_000 });
