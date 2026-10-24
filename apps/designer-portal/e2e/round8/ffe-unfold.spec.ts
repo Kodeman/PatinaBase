@@ -378,7 +378,12 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
   // load, across which only the beforeunload guard can ask.)
   test('Back to the desk over a failed Spec save is held, then goes on once it lands', async ({
     authenticatedPage: page,
+    browserName,
   }) => {
+    test.skip(
+      browserName !== 'chromium',
+      'Story log #41: a cross-route Back is held only where its navigate event is cancelable (Chromium, with activation); this WebKit Back is not, an accepted residual.',
+    );
     const line = livingLineId('F01 Living Room selection 11');
     const typed = `Desk-held finish ${Date.now()}`;
     await openJob(page); // compiles /doc before the client navigation below
@@ -412,6 +417,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await finish.fill(typed, { force: true });
     // A real keystroke in the field: the activation a cancelable Back needs
     // (the field sits outside the viewport until SQ-1889, so no click).
+    // Story log #41 guarantees this cross-route hold only with activation.
     await finish.press('End');
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect(finish).toHaveAttribute('aria-invalid', 'true', { timeout: 30_000 });
@@ -443,7 +449,8 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       await landed;
       return route.continue();
     });
-    // A cancelled Back spends the activation; she is back in the field.
+    // A cancelled Back spends the activation; she is back in the field. A
+    // second Back without it is #41's named residual, so it is re-granted.
     await finish.press('End');
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect.poll(() => retried, { timeout: 30_000 }).toBe(1);
@@ -466,11 +473,19 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
 });
 
 /**
- * The browser's Back button. A Back the sheet cancels never commits, so
+ * The browser's Back button. A Back the sheet holds never commits, so
  * `page.goBack()` would wait on it until its timeout; this asks for the
- * previous entry the way the toolbar does and returns.
+ * previous entry and returns, and the caller asserts where it ends up.
+ * Chromium takes it the way the toolbar does (CDP); elsewhere, with no CDP,
+ * the page asks for it itself.
  */
 async function pressBack(page: Page) {
+  if (page.context().browser()?.browserType().name() !== 'chromium') {
+    await page.evaluate(() => {
+      history.back();
+    });
+    return;
+  }
   const cdp = await page.context().newCDPSession(page);
   const { currentIndex, entries } = await cdp.send('Page.getNavigationHistory');
   await cdp.send('Page.navigateToHistoryEntry', { entryId: entries[currentIndex - 1].id });

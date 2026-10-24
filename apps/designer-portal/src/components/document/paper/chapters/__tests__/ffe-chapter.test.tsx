@@ -630,10 +630,15 @@ describe("story #40: Back holds exactly like Return", () => {
       { wrapper },
     );
   }
-  /** A Back the sheet holds never reaches later listeners: wait for the put-back. */
-  async function heldBack(push: jest.SpyInstance, times: number) {
+  /**
+   * A Back the sheet holds never reaches later listeners: wait for it to go
+   * back to its entry (story #41: a traversal, never a push).
+   */
+  async function heldBack(go: jest.SpyInstance, times: number) {
+    const standing = window.location.href;
     act(() => window.history.back());
-    await waitFor(() => expect(push).toHaveBeenCalledTimes(times));
+    await waitFor(() => expect(go).toHaveBeenCalledTimes(times));
+    await waitFor(() => expect(window.location.href).toBe(standing));
   }
   async function blurWith(field: HTMLElement, value: string) {
     fireEvent.change(field, { target: { value } });
@@ -653,8 +658,9 @@ describe("story #40: Back holds exactly like Return", () => {
     await blurWith(field, "Pending finish");
     const length = window.history.length;
     const push = jest.spyOn(window.history, "pushState");
+    const go = jest.spyOn(window.history, "go");
 
-    await heldBack(push, 1);
+    await heldBack(go, 1);
     expect(window.location.href).toBe(`http://localhost${UNFOLD}`);
     expect(window.history.length).toBe(length);
     expect(field).toBeInTheDocument();
@@ -666,7 +672,8 @@ describe("story #40: Back holds exactly like Return", () => {
     })));
     await waitFor(() => expect(unfolded()).toBeNull());
     expect(window.location.pathname).toBe(`/doc/${DOC}`);
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(go.mock.calls).toEqual([[1], [-1]]);
+    expect(push).not.toHaveBeenCalled();
     expect(mockUpdateSpec).toHaveBeenCalledTimes(1);
   });
 
@@ -677,9 +684,9 @@ describe("story #40: Back holds exactly like Return", () => {
     const field = await finish();
     await waitFor(() => expect(field).toHaveValue("Old finish"));
     await blurWith(field, "Pending finish");
-    const push = jest.spyOn(window.history, "pushState");
+    const go = jest.spyOn(window.history, "go");
 
-    await heldBack(push, 1);
+    await heldBack(go, 1);
     await act(async () => write.reject(new Error("The field was not saved.")));
 
     await screen.findByText(UNFOLD_UNSAVED_MESSAGE);
@@ -707,8 +714,9 @@ describe("story #40: Back holds exactly like Return", () => {
     expect(held).toBeGreaterThan(0);
     const length = window.history.length;
     const push = jest.spyOn(window.history, "pushState");
+    const go = jest.spyOn(window.history, "go");
 
-    await heldBack(push, 1);
+    await heldBack(go, 1);
     await screen.findByText(UNFOLD_UNSAVED_MESSAGE);
     expect(window.location.pathname).toBe(`/doc/${DOC}`);
     expect(unfolded()).toBe("pieces");
@@ -730,7 +738,39 @@ describe("story #40: Back holds exactly like Return", () => {
       window.history.back();
     });
     await waitFor(() => expect(window.location.pathname).toBe("/desk"));
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(go.mock.calls).toEqual([[1]]);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("SQ-1901 F2: choosing another line while a Back is held drops it; the old line's late answer folds nothing", async () => {
+    const write = held();
+    mockUpdateSpec.mockImplementationOnce(() => write.promise);
+    openOver(`/doc/${DOC}`, true);
+    const field = await finish();
+    await waitFor(() => expect(field).toHaveValue("Old finish"));
+    await blurWith(field, "Pending finish");
+    const go = jest.spyOn(window.history, "go");
+    await heldBack(go, 1);
+    expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+
+    // The pane is keyed by its line: choosing another remounts it.
+    await act(async () => {
+      fireEvent.click(lineButton(FIRST)!);
+    });
+    expect(params().get("line")).toBe(FIRST);
+    const chosen = window.location.href;
+    expect(screen.queryByText(UNFOLD_SAVING_MESSAGE)).toBeNull();
+
+    await act(async () => write.resolve(await saved(2)({
+      specId: `spec-${SECOND}`,
+      changes: { finish: "Pending finish" },
+    })));
+    // Long enough for a stale `history.go` to have landed.
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    expect(window.location.href).toBe(chosen);
+    expect(unfolded()).toBe("pieces");
+    expect(lineButton(FIRST)).toHaveAttribute("aria-current", "true");
+    expect(go).toHaveBeenCalledTimes(1);
   });
 
   it("SQ-1899 F4: an answer never takes the lens's cached row back a version", async () => {

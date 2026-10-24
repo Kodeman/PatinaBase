@@ -217,11 +217,91 @@ function pendingBuffer() {
 
 /**
  * A Back the open sheet holds: the event never reaches later listeners, so
- * wait for the entry to be put back instead.
+ * wait for it to go back to its entry (story #41: a traversal, never a push).
  */
-async function heldBack(push: jest.SpyInstance, times: number) {
+async function heldBack(go: jest.SpyInstance, times: number) {
+  const standing = window.location.href;
   act(() => window.history.back());
-  await waitFor(() => expect(push).toHaveBeenCalledTimes(times));
+  await waitFor(() => expect(go).toHaveBeenCalledTimes(times));
+  await waitFor(() => expect(window.location.href).toBe(standing));
+}
+
+/**
+ * The Navigation API as Chromium and WebKit keep it, over jsdom's history:
+ * keyed, indexed entries; a traverse `navigate` event fired first, which is
+ * not cancelable (no user activation, so the popstate fallback runs); and
+ * the current entry already moved when popstate fires. A push drops the
+ * entries ahead of it; a replace keeps the key.
+ */
+function browserNavigation() {
+  const original = {
+    push: window.history.pushState.bind(window.history),
+    replace: window.history.replaceState.bind(window.history),
+    go: window.history.go.bind(window.history),
+  };
+  let made = 0;
+  const entry = (url: string) => ({ key: `k${(made += 1)}`, url, index: 0 });
+  let entries = [entry(window.location.href)];
+  let current = 0;
+  let pending: number | null = null;
+  const reindex = () => entries.forEach((e, index) => (e.index = index));
+  const navigation = Object.defineProperties(new EventTarget(), {
+    currentEntry: { get: () => entries[current] },
+    entries: { value: () => entries },
+  });
+  Object.defineProperty(window, "navigation", {
+    value: navigation,
+    configurable: true,
+  });
+  const resolve = (url?: string | URL | null) =>
+    url == null ? window.location.href : new URL(url, window.location.href).href;
+  jest
+    .spyOn(window.history, "pushState")
+    .mockImplementation((state, unused, url) => {
+      entries = [...entries.slice(0, current + 1), entry(resolve(url))];
+      current = entries.length - 1;
+      reindex();
+      original.push(state, unused, url);
+    });
+  jest
+    .spyOn(window.history, "replaceState")
+    .mockImplementation((state, unused, url) => {
+      entries[current] = { ...entries[current], url: resolve(url) };
+      original.replace(state, unused, url);
+    });
+  const traverse = (delta: number) => {
+    const target = entries[current + delta];
+    if (!target) return;
+    pending = current + delta;
+    navigation.dispatchEvent(
+      Object.assign(new Event("navigate", { cancelable: false }), {
+        navigationType: "traverse",
+        destination: { url: target.url, index: target.index, key: target.key },
+      }),
+    );
+    original.go(delta);
+  };
+  jest.spyOn(window.history, "go").mockImplementation((delta = 0) => traverse(delta));
+  jest.spyOn(window.history, "back").mockImplementation(() => traverse(-1));
+  jest.spyOn(window.history, "forward").mockImplementation(() => traverse(1));
+  // Registered before the sheet's listener, so the entry moves first. It
+  // counts every popstate, the ones the sheet stops included (jsdom moves the
+  // URL a task before it fires popstate, so the URL alone is no signal).
+  let pops = 0;
+  const onPop = () => {
+    if (pending !== null) current = pending;
+    pending = null;
+    pops += 1;
+  };
+  window.addEventListener("popstate", onPop, { capture: true });
+  return {
+    keys: () => entries.map((e) => e.key),
+    pops: () => pops,
+    restore() {
+      window.removeEventListener("popstate", onPop, { capture: true });
+      delete (window as { navigation?: unknown }).navigation;
+    },
+  };
 }
 
 /** The instrument's host (an embedded sheet names its own section too). */
@@ -494,19 +574,19 @@ describe("UnfoldInstrument", () => {
     fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
     expect(await screen.findByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
     const push = jest.spyOn(window.history, "pushState");
+    const go = jest.spyOn(window.history, "go");
 
-    // Held twice: the entry is put back, and history never grows.
-    await heldBack(push, 1);
+    // Held twice: it goes back to the entry, and history never grows.
+    await heldBack(go, 1);
     expect(window.location.href).toBe(unfolded);
     expect(window.history.length).toBe(length);
     expect(region()).toBeInTheDocument();
-    await heldBack(push, 2);
+    await heldBack(go, 2);
     expect(window.location.href).toBe(unfolded);
     expect(window.history.length).toBe(length);
     expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
 
     const backSpy = jest.spyOn(window.history, "back");
-    const goSpy = jest.spyOn(window.history, "go");
     const landed = popstate();
     await act(async () => finish());
     await act(async () => landed);
@@ -514,10 +594,9 @@ describe("UnfoldInstrument", () => {
 
     // One step back completes it; the earlier Return's answer adds none, and
     // the completing pop is not held again.
-    expect(goSpy).toHaveBeenCalledTimes(1);
-    expect(goSpy).toHaveBeenCalledWith(-1);
+    expect(go.mock.calls).toEqual([[1], [1], [-1]]);
     expect(backSpy).not.toHaveBeenCalled();
-    expect(push).toHaveBeenCalledTimes(2);
+    expect(push).not.toHaveBeenCalled();
     expect(window.location.search).toBe("?sheet=call");
     expect(region()).toBeNull();
     expect(document.activeElement).toBe(opener);
@@ -528,10 +607,10 @@ describe("UnfoldInstrument", () => {
     render(<Paper />);
     fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
     const unfolded = window.location.href;
-    const push = jest.spyOn(window.history, "pushState");
+    const go = jest.spyOn(window.history, "go");
     const backSpy = jest.spyOn(window.history, "back");
 
-    await heldBack(push, 1);
+    await heldBack(go, 1);
     expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
     await act(async () => fail());
 
@@ -544,7 +623,7 @@ describe("UnfoldInstrument", () => {
     expect(backSpy).toHaveBeenCalledTimes(1);
 
     // Still failed: the next Back holds too.
-    await heldBack(push, 2);
+    await heldBack(go, 2);
     expect(window.location.href).toBe(unfolded);
     expect(region()).toBeInTheDocument();
   });
@@ -558,8 +637,9 @@ describe("UnfoldInstrument", () => {
     expect(region()).toBeInTheDocument();
     const length = window.history.length;
     const push = jest.spyOn(window.history, "pushState");
+    const go = jest.spyOn(window.history, "go");
 
-    await heldBack(push, 1);
+    await heldBack(go, 1);
     expect(window.location.pathname).toBe(`/doc/${DOC}`);
     expect(window.history.length).toBe(length);
     expect(region()).toBeInTheDocument();
@@ -569,7 +649,8 @@ describe("UnfoldInstrument", () => {
     await act(async () => landed);
     await settle();
     expect(window.location.pathname).toBe("/desk");
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(go.mock.calls).toEqual([[1], [-1]]);
+    expect(push).not.toHaveBeenCalled();
     expect(region()).toBeNull();
   });
 
@@ -577,18 +658,151 @@ describe("UnfoldInstrument", () => {
     const { finish } = pendingBuffer();
     const { unmount } = render(<Paper />);
     fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
-    const push = jest.spyOn(window.history, "pushState");
-    await heldBack(push, 1);
+    const goSpy = jest.spyOn(window.history, "go");
+    await heldBack(goSpy, 1);
     const before = window.location.href;
     unmount();
     const backSpy = jest.spyOn(window.history, "back");
-    const goSpy = jest.spyOn(window.history, "go");
 
     await act(async () => finish());
     await settle();
     expect(backSpy).not.toHaveBeenCalled();
-    expect(goSpy).not.toHaveBeenCalled();
+    // Only the traversal back to the entry; nothing once unmounted.
+    expect(goSpy).toHaveBeenCalledTimes(1);
     expect(window.location.href).toBe(before);
+  });
+
+  // SQ-1901 F1 / story #41 (a): a held same-route traversal the browser will
+  // not let it cancel goes back to its entry, in whichever direction it went,
+  // and the history stack never changes.
+  it("SQ-1901 F1: a held Forward goes back to its entry, keeps the stack, and goes on Forward once", async () => {
+    const browser = browserNavigation();
+    try {
+      render(<Paper />);
+      fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+      const unfolded = window.location.href;
+      // A later entry, then Back to the sheet before an edit holds it.
+      window.history.pushState({}, "", `/doc/${DOC}?sheet=later`);
+      const later = window.location.href;
+      await back();
+      expect(window.location.href).toBe(unfolded);
+      const { finish } = pendingBuffer();
+      const stack = browser.keys();
+      const length = window.history.length;
+      const go = window.history.go as unknown as jest.Mock;
+      go.mockClear();
+
+      act(() => window.history.forward());
+      await waitFor(() => expect(go.mock.calls).toEqual([[-1]]));
+      await waitFor(() => expect(window.location.href).toBe(unfolded));
+      expect(browser.keys()).toEqual(stack);
+      expect(window.history.length).toBe(length);
+      expect(region()).toBeInTheDocument();
+      expect(screen.getByText(UNFOLD_SAVING_MESSAGE)).toBeInTheDocument();
+
+      const landed = popstate();
+      await act(async () => finish());
+      await act(async () => landed);
+      await settle();
+      expect(go.mock.calls).toEqual([[-1], [1]]);
+      expect(window.location.href).toBe(later);
+      expect(browser.keys()).toEqual(stack);
+      expect(region()).toBeNull();
+    } finally {
+      browser.restore();
+    }
+  });
+
+  it("SQ-1901 F1: with no Navigation API, a door-opened sheet still tells a held Forward from a Back", async () => {
+    // Next writes the closed paper's state, so the door can mark it.
+    window.history.replaceState({}, "", `/doc/${DOC}?sheet=call`);
+    render(<Paper />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const unfolded = window.location.href;
+    window.history.pushState({}, "", `/doc/${DOC}?sheet=later`);
+    const later = window.location.href;
+    await back();
+    const { finish } = pendingBuffer();
+    const length = window.history.length;
+    const push = jest.spyOn(window.history, "pushState");
+    const go = jest.spyOn(window.history, "go");
+
+    act(() => window.history.forward());
+    await waitFor(() => expect(go.mock.calls).toEqual([[-1]]));
+    await waitFor(() => expect(window.location.href).toBe(unfolded));
+    expect(window.history.length).toBe(length);
+    expect(region()).toBeInTheDocument();
+
+    const landed = popstate();
+    await act(async () => finish());
+    await act(async () => landed);
+    await settle();
+    expect(go.mock.calls).toEqual([[-1], [1]]);
+    expect(window.location.href).toBe(later);
+    expect(window.history.length).toBe(length);
+    expect(push).not.toHaveBeenCalled();
+    expect(region()).toBeNull();
+  });
+
+  it("SQ-1901 F1: a held Back with no activation goes forward to its entry and goes on Back once", async () => {
+    const browser = browserNavigation();
+    try {
+      render(<Paper />);
+      const opener = screen.getByRole("button", { name: "Open sofa" });
+      fireEvent.click(opener);
+      const unfolded = window.location.href;
+      const { finish } = pendingBuffer();
+      const stack = browser.keys();
+      const go = window.history.go as unknown as jest.Mock;
+
+      act(() => window.history.back());
+      await waitFor(() => expect(go.mock.calls).toEqual([[1]]));
+      await waitFor(() => expect(window.location.href).toBe(unfolded));
+      expect(browser.keys()).toEqual(stack);
+      expect(region()).toBeInTheDocument();
+
+      const landed = popstate();
+      await act(async () => finish());
+      await act(async () => landed);
+      await settle();
+      expect(go.mock.calls).toEqual([[1], [-1]]);
+      expect(window.location.search).toBe("?sheet=call");
+      expect(region()).toBeNull();
+      expect(document.activeElement).toBe(opener);
+    } finally {
+      browser.restore();
+    }
+  });
+
+  // SQ-1901 F2: a held traversal's distance is never reused across a push.
+  it("SQ-1901 F2: a push while a Back is held drops the hold; the late answer moves nowhere", async () => {
+    const browser = browserNavigation();
+    try {
+      render(<Paper />);
+      fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+      const unfolded = window.location.href;
+      const { finish } = pendingBuffer();
+      const go = window.history.go as unknown as jest.Mock;
+      act(() => window.history.back());
+      await waitFor(() => expect(go.mock.calls).toEqual([[1]]));
+      // The held Back's popstate, then the one back on the entry.
+      await waitFor(() => expect(browser.pops()).toBe(2));
+      expect(window.location.href).toBe(unfolded);
+
+      // Pushed over the standing entry at the same address (as a router may).
+      act(() => window.history.pushState({}, "", unfolded));
+      const pushed = browser.keys();
+
+      await act(async () => finish());
+      await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+      expect(go.mock.calls).toEqual([[1]]);
+      expect(window.location.href).toBe(unfolded);
+      expect(browser.keys()).toEqual(pushed);
+      expect(region()).toBeInTheDocument();
+      expect(screen.queryByText(UNFOLD_SAVING_MESSAGE)).toBeNull();
+    } finally {
+      browser.restore();
+    }
   });
 
   it("a Back the Navigation API can cancel never moves, then goes on once the save lands", async () => {
