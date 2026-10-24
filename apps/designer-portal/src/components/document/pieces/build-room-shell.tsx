@@ -459,6 +459,7 @@ export function BuildRoomShell({
     <div
       data-drafting-stock=""
       data-testid="build-room"
+      data-build-room-embedded={embedded}
       className={`flex ${sheetHeight(embedded)} flex-col bg-[var(--sheet)] pb-16 text-[var(--sheet-ink)] min-[1180px]:pb-[60px]`}
       // The Rough in key map's ⌘↓ (rough-in-keys.ts), read from the landing
       // target: the room's heading or the title goes down into the lines (T-60e, F12).
@@ -493,6 +494,7 @@ export function BuildRoomShell({
         </h1>
 
         <div
+          data-build-room-picker=""
           className="ml-auto md:hidden"
           data-holds-escape={pickerOpen ? "" : undefined}
         >

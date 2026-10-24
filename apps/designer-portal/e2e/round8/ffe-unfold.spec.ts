@@ -162,6 +162,42 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await expect(page.locator('[data-document-paper]')).toHaveCount(0);
     await expect(page.locator('[data-unfold-instrument]')).toHaveCount(0);
     await expect(page.locator(`main [data-room-heading="${LIVING}"]`)).toBeVisible({ timeout: 30_000 });
+    await page.screenshot({ path: test.info().outputPath(`legacy-pieces-${page.viewportSize()!.width}.png`) });
+  });
+
+  test('embedded Spec layout fits the paper column at 1180, 1440 and 1920', async ({
+    authenticatedPage: page,
+  }) => {
+    const line = livingLineId('F01 Living Room selection 07');
+    for (const width of [1180, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await openJob(page, `?unfold=pieces&lens=spec&room=${LIVING}&line=${line}`);
+      const sheet = instrument(page).getByTestId('build-room');
+      const pane = sheet.getByTestId('spec-fields-pane');
+      const finish = pane.getByRole('textbox', { name: 'Finish' });
+      await expect(pane).toBeVisible({ timeout: 30_000 });
+      await expect(finish).toBeVisible();
+      await finish.scrollIntoViewIfNeeded();
+      const geometry = await sheet.evaluate((root) => {
+        const bounds = root.getBoundingClientRect();
+        const field = root.querySelector<HTMLInputElement>('[aria-label="Finish"]')!;
+        const fieldBounds = field.getBoundingClientRect();
+        return {
+          containerType: getComputedStyle(root).containerType,
+          sheetWidth: bounds.width,
+          fieldWidth: fieldBounds.width,
+          fieldInside: fieldBounds.left >= bounds.left && fieldBounds.right <= bounds.right,
+          railVisible: getComputedStyle(root.querySelector('nav[aria-label="Rooms"]')!).display !== 'none',
+          headFits: root.querySelector('header')!.scrollWidth <= bounds.width + 1,
+        };
+      });
+      expect(geometry.containerType).toBe('inline-size');
+      expect(geometry.fieldWidth, `usable Finish field at viewport ${width}`).toBeGreaterThan(200);
+      expect(geometry.fieldInside, `Finish stays in the paper at viewport ${width}`).toBe(true);
+      expect(geometry.headFits, `schedule views wrap inside the paper at viewport ${width}`).toBe(true);
+      expect(geometry.railVisible).toBe(geometry.sheetWidth >= 1180);
+      await page.screenshot({ path: test.info().outputPath(`embedded-spec-${width}.png`) });
+    }
   });
 
   // SQ-1891 F1 — `line=` names a Spec line that is not the lens's first
@@ -191,10 +227,8 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     const pane = instrument(page).getByTestId('spec-fields-pane');
     await expect(pane).toContainText('F01 Living Room selection 09', { timeout: 30_000 });
     const finish = pane.getByRole('textbox', { name: 'Finish' });
-    // The Spec pane has no width in the unfold yet (its 520px + 1fr grid in a
-    // ~540px sheet; SQ-1889 owns that layout), so the field is driven without
-    // Playwright's visibility check and its pane is read, not looked at.
-    await expect(finish).toBeAttached({ timeout: 30_000 });
+    await expect(pane).toBeVisible({ timeout: 30_000 });
+    await expect(finish).toBeVisible({ timeout: 30_000 });
 
     const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
     let refused = 0;
@@ -208,7 +242,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       });
     });
 
-    await finish.fill(typed, { force: true });
+    await finish.fill(typed);
     const returnToRoom = instrument(page).getByRole('button', { name: /Return to the room/ });
     await returnToRoom.click();
 
@@ -251,11 +285,11 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       .getByRole('button', { name: 'Specifications' })
       .click();
     const row = instrument(page).locator(`[data-line-id="${line}"] button`);
-    await row.click({ force: true });
+    await row.click();
     const pane = instrument(page).getByTestId('spec-fields-pane');
     await expect(pane).toContainText('F01 Living Room selection 08', { timeout: 30_000 });
     const finish = pane.getByRole('textbox', { name: 'Finish' });
-    await expect(finish).toBeAttached({ timeout: 30_000 });
+    await expect(finish).toBeVisible({ timeout: 30_000 });
 
     const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
     let refused = 0;
@@ -268,7 +302,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
         body: JSON.stringify({ code: 'XX000', message: 'Forced failure (SQ-1897 e2e)' }),
       });
     });
-    await finish.fill(typed, { force: true });
+    await finish.fill(typed);
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/, { timeout: 30_000 });
     await expect(finish).toHaveAttribute('aria-invalid', 'true');
@@ -316,11 +350,11 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       .getByRole('group', { name: 'Schedule view' })
       .getByRole('button', { name: 'Specifications' })
       .click();
-    await instrument(page).locator(`[data-line-id="${line}"] button`).click({ force: true });
+    await instrument(page).locator(`[data-line-id="${line}"] button`).click();
     const pane = instrument(page).getByTestId('spec-fields-pane');
     await expect(pane).toContainText('F01 Living Room selection 10', { timeout: 30_000 });
     const finish = pane.getByRole('textbox', { name: 'Finish' });
-    await expect(finish).toBeAttached({ timeout: 30_000 });
+    await expect(finish).toBeVisible({ timeout: 30_000 });
 
     const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
     let sent = 0;
@@ -336,7 +370,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
         body: JSON.stringify({ code: 'XX000', message: 'Forced failure (SQ-1900 e2e)' }),
       });
     });
-    await finish.fill(typed, { force: true });
+    await finish.fill(typed);
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect.poll(() => sent, { timeout: 30_000 }).toBe(1);
     const length = await page.evaluate(() => history.length);
@@ -454,7 +488,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       const pane = instrument(page).getByTestId('spec-fields-pane');
       await expect(pane).toContainText('F01 Living Room selection 11', { timeout: 30_000 });
       const finish = pane.getByRole('textbox', { name: 'Finish' });
-      await expect(finish).toBeAttached({ timeout: 30_000 });
+      await expect(finish).toBeVisible({ timeout: 30_000 });
 
       const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
       let refused = 0;
@@ -467,9 +501,8 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
           body: JSON.stringify({ code: 'XX000', message: 'Forced failure (SQ-1900 e2e)' }),
         });
       });
-      await finish.fill(typed, { force: true });
-      // A real keystroke in the field: the activation a cancelable Back needs
-      // (the field sits outside the viewport until SQ-1889, so no click).
+      await finish.fill(typed);
+      // A real keystroke in the field: the activation a cancelable Back needs.
       // Story log #41 guarantees this cross-route hold only with activation.
       await finish.press('End');
       await finish.evaluate((el: HTMLElement) => el.blur());

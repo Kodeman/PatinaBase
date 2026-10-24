@@ -555,6 +555,16 @@ describe("BuildRoomShell — at 390 (a13)", () => {
 });
 
 describe("BuildRoomShell — embedded paper instrument", () => {
+  it.each([false, true])("opts into container layout only when embedded=%s", (embedded) => {
+    renderShell({ embedded });
+    expect(screen.getByTestId("build-room")).toHaveAttribute(
+      "data-build-room-embedded",
+      String(embedded),
+    );
+    expect(screen.getByRole("button", { name: "Living Room ▾" }).parentElement)
+      .toHaveAttribute("data-build-room-picker");
+  });
+
   it("renders as a named section instead of a nested main", () => {
     renderShell({ as: "section" });
     expect(screen.getByRole("region", { name: "FF&E schedule" }).tagName).toBe(
