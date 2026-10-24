@@ -216,21 +216,6 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
       'the reload did not mutate the row version',
     ).toBe(String(versionAfterRetry));
 
-    await instrument(page).getByRole('button', { name: /Return to the room/ }).focus();
-    await page.keyboard.press('Enter');
-    await expect(instrument(page)).toHaveCount(0, { timeout: 30_000 });
-    await expect(page.locator(`[data-paper-chapter="ffe"] [data-pieces-room="${LIVING}"]`)).toBeInViewport();
-    const after = psqlScalar(`
-      SELECT json_build_object('item', i.id, 'spec', s.id, 'version', s.row_version, 'finish', s.finish)::text
-      FROM public.project_ffe_items i JOIN public.project_ffe_specs s ON s.ffe_item_id = i.id
-      WHERE i.id = '${line}';
-    `);
-    const afterRow = JSON.parse(after) as typeof beforeRow;
-    expect(afterRow.item, 'the line identity is unchanged').toBe(beforeRow.item);
-    expect(afterRow.spec, 'the spec identity is unchanged').toBe(beforeRow.spec);
-    expect(afterRow.finish, 'the retried finish is persisted').toBe(failed);
-    expect(afterRow.version, 'the saved row version advances').toBeGreaterThan(beforeRow.version);
-
     const peer = await page.context().newPage();
     await openJob(peer, `?unfold=pieces&lens=spec&room=${LIVING}&line=${line}`);
     const peerFinish = instrument(peer).getByTestId('spec-fields-pane').getByRole('textbox', { name: 'Finish' });
@@ -260,6 +245,21 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
       timeout: 60_000,
     });
     await settled(page);
+
+    await instrument(page).getByRole('button', { name: /Return to the room/ }).focus();
+    await page.keyboard.press('Enter');
+    await expect(instrument(page)).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.locator(`[data-paper-chapter="ffe"] [data-pieces-room="${LIVING}"]`)).toBeInViewport();
+    const after = psqlScalar(`
+      SELECT json_build_object('item', i.id, 'spec', s.id, 'version', s.row_version, 'finish', s.finish)::text
+      FROM public.project_ffe_items i JOIN public.project_ffe_specs s ON s.ffe_item_id = i.id
+      WHERE i.id = '${line}';
+    `);
+    const afterRow = JSON.parse(after) as typeof beforeRow;
+    expect(afterRow.item, 'the line identity is unchanged').toBe(beforeRow.item);
+    expect(afterRow.spec, 'the spec identity is unchanged').toBe(beforeRow.spec);
+    expect(afterRow.finish, 'the second page value is persisted').toBe(peerValue);
+    expect(afterRow.version, 'the saved row version advances').toBeGreaterThan(beforeRow.version);
 
     // Return to the studio using the real job-head return authority, keyboard only.
     const studioReturn = page.getByRole('link', { name: /Studio/ }).first();
