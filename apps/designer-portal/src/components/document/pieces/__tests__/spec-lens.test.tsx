@@ -1246,3 +1246,36 @@ describe("spec-progress", () => {
     expect(linesForPlace(lines, placements, null, rooms)).toHaveLength(4);
   });
 });
+
+
+describe("fitted Spec editor (C03)", () => {
+  it("uses the rendered container stack to focus a chosen line even on a wide viewport", async () => {
+    renderLens();
+    await pane();
+    const list = screen.getByRole("list", { name: "Lines" }).parentElement!;
+    list.style.order = "3";
+    fireEvent.click(rowFor("Countertop for custom cabinets"));
+    await waitFor(() => expect(within(screen.getByTestId("spec-fields-pane")).getByRole("heading", { level: 2 })).toHaveFocus());
+  });
+
+  it("reports a missing addressed stable ID even when the room has no lines", async () => {
+    mockItems.data = [];
+    render(<SpecLens docId="d1" projectId="p1" room="living" canSeeMoney line="removed-id" />, { wrapper });
+    expect(await screen.findByRole("status")).toHaveTextContent("That line is no longer in this room.");
+    expect(screen.queryByTestId("spec-fields-pane")).not.toBeInTheDocument();
+    expect(mockUpdateSpec).not.toHaveBeenCalled();
+  });
+
+  it("keeps the same focused editor after its versioned save acknowledges", async () => {
+    renderLens();
+    const section = await pane();
+    const finish = within(section).getByRole("textbox", { name: "Finish" });
+    finish.focus();
+    fireEvent.change(finish, { target: { value: "Phone finish" } });
+    fireEvent.keyDown(finish, { key: "Enter" });
+    await waitFor(() => expect(mockUpdateSpec).toHaveBeenCalledTimes(1));
+    expect(within(section).getByRole("textbox", { name: "Finish" })).toBe(finish);
+    expect(finish).toHaveFocus();
+    expect(finish).toHaveValue("Phone finish");
+  });
+});
