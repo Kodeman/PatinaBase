@@ -1709,6 +1709,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }, []);
   const landedRef = useRef<{ seen: boolean; done: boolean } | null>(null);
   const landingEngagementId = row?.engagement_id ?? null;
+  const landingSection = row?.active_section;
   useEffect(() => {
     if (!landingEngagementId || arrivalLandingRef.current) return;
     if (!landedRef.current) {
@@ -1723,12 +1724,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       landing.done = true;
       if (!unplayed) return;
       const el = mainRef.current?.querySelector('[data-active-section]') ??
-        (paperRenderer.renderer === 'round8' && row ? sectionChapter(row.active_section, null) : null);
+        (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null);
       if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
         el.scrollIntoView({ block: 'start' });
       }
     });
-  }, [landingEngagementId, frameCommitted, paperRenderer.renderer, row?.active_section]);
+  }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.
   const lineage: SectionLineage | null = useMemo(() => {
