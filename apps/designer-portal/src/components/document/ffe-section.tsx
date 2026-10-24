@@ -1809,7 +1809,11 @@ function FFESectionBody({
   // unguarded effect would re-open the line under a reader who had folded it.
   const honouredRequestRef = useRef<string | null>(null);
   useEffect(() => {
-    if (mode !== 'project' || !requestedLineId) return;
+    if (!requestedLineId) {
+      honouredRequestRef.current = null;
+      return;
+    }
+    if (mode !== 'project') return;
     if (honouredRequestRef.current === requestedLineId) return;
     const requestedLineExists = (items ?? []).some(
       (item) => String(item.id) === requestedLineId,

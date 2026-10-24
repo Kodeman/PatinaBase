@@ -1973,6 +1973,7 @@ describe('DocumentPage guide activation', () => {
         publishedJumpToLine()('ffe-2');
       });
 
+      expect(mockFFESection.mock.calls.at(-1)?.[0].requestedLineId).toBe('ffe-2');
       expect(pressOrder).toEqual([
         'unfold:ffe',
         'promote:ffe',
