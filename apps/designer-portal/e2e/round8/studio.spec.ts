@@ -44,6 +44,8 @@ test.describe('F01 round-8 studio', () => {
   });
 
   test('masthead doors open the existing rooms and ledgers', async ({ authenticatedPage: page }) => {
+    // Compact widths use the existing mobile More / command access instead.
+    await page.setViewportSize({ width: 1440, height: 900 });
     const masthead = page.getByRole('navigation', { name: 'Studio', exact: true });
     const door = (key: string) => page.locator(`[data-studio-door="${key}"]`);
 
