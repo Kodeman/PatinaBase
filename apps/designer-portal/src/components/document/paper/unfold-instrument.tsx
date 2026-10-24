@@ -99,7 +99,45 @@ function subscribeLocation(listener: () => void): () => void {
   };
 }
 
-const readSearch = () => window.location.search;
+/**
+ * SQ-1897 F1 — an open sheet whose marked field holds a refused draft. A Back
+ * that leaves its entry within the document is read as still standing on it,
+ * so no render folds the sheet (Next renders the popped address eagerly,
+ * before any later popstate listener runs); the sheet's own listener then
+ * puts the entry back and asks to close.
+ */
+interface BackHold {
+  kind: UnfoldKind;
+  standing: () => { url: string; entry: UnfoldEntry | null } | null;
+  failed: () => boolean;
+}
+const backHolds = new Set<BackHold>();
+
+/** The standing entry a Back to `search` must not leave, or `null`. */
+function heldBack(
+  search: string,
+): { hold: BackHold; url: string; entry: UnfoldEntry | null } | null {
+  for (const hold of backHolds) {
+    const standing = hold.standing();
+    if (!standing) continue;
+    const at = new URL(standing.url);
+    if (at.search === search) continue;
+    if (at.pathname !== window.location.pathname) continue;
+    const now = parseUnfoldSearch(new URLSearchParams(search), {
+      canSeeMoney: true,
+    });
+    if (now?.kind === hold.kind) continue;
+    if (!hold.failed()) continue;
+    return { hold, ...standing };
+  }
+  return null;
+}
+
+const readSearch = () => {
+  const search = window.location.search;
+  const held = heldBack(search);
+  return held ? new URL(held.url).search : search;
+};
 const serverSearch = () => "";
 
 /**
@@ -331,10 +369,11 @@ export function UnfoldInstrument({
 
   // SQ-1897 F1 — Back over a field showing a draft its write refused holds
   // like Return. The entry the unfold stands on is kept; a Back that leaves
-  // it while a field is marked unsaved puts the entry back (a push, as the
-  // unfold made it) and asks to close: the marked field takes focus, and
-  // nothing is written again. Any other Back folds away as before, a save
-  // that is still out included (it lands on its own).
+  // it while a field is marked unsaved is read as still standing (see
+  // `heldBack`), then puts the entry back (a push, as the unfold made it) and
+  // asks to close: the marked field takes focus, and nothing is written
+  // again. Any other Back folds away as before, a save that is still out
+  // included (it lands on its own).
   const standing = useRef<{ url: string; entry: UnfoldEntry | null } | null>(
     null,
   );
@@ -346,23 +385,25 @@ export function UnfoldInstrument({
   useEffect(() => {
     if (!open || !ownerKind || !ownerId) return;
     const owner = { kind: ownerKind, id: ownerId };
+    const hold: BackHold = {
+      kind,
+      standing: () => standing.current,
+      failed: () => Boolean(getProposalAutosaveSnapshot(owner).error),
+    };
     const onPop = () => {
-      const held = standing.current;
-      if (!held) return;
-      const now = parseUnfoldSearch(new URLSearchParams(window.location.search), {
-        canSeeMoney,
-      });
-      if (now?.kind === kind) return;
-      // Only a Back within this document; leaving it is not the fold's.
-      if (new URL(held.url).pathname !== window.location.pathname) return;
-      if (!getProposalAutosaveSnapshot(owner).error) return;
+      const held = heldBack(window.location.search);
+      if (held?.hold !== hold) return;
       window.history.pushState(entryState(held.entry), "", held.url);
       locationChanged();
       closeRef.current();
     };
+    backHolds.add(hold);
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [open, ownerKind, ownerId, kind, canSeeMoney]);
+    return () => {
+      backHolds.delete(hold);
+      window.removeEventListener("popstate", onPop);
+    };
+  }, [open, ownerKind, ownerId, kind]);
 
   const navigate = useCallback(
     (next: UnfoldNavigation) => {
