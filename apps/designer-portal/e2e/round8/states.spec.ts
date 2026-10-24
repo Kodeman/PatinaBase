@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { SUPABASE_AUTH_STORAGE_KEY } from '@patina/supabase';
 import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures/auth';
 import { psqlScalar } from '../helpers/psql';
@@ -34,6 +35,7 @@ async function switchToOutsider(page: Page) {
   expect(new URL(api).hostname).toBe('127.0.0.1');
   const jar: Array<{ name: string; value: string }> = [];
   const client = createServerClient(api, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
     cookies: { getAll: () => [], setAll: (cookies) => { jar.push(...cookies); } },
   });
   const { error } = await client.auth.signInWithPassword({ email: 'f01-outsider@test.invalid', password: 'password123' });
