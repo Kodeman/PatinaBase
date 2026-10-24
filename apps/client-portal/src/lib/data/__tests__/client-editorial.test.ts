@@ -13,6 +13,9 @@ it.each(['contained', 'pieces'] as const)('preloads exactly the rendered arrival
   editorial.rooms = [{ id: 'room', name: 'Bedroom', anchor: 'room-bedroom', conceptAssetId: null, scanAssetIds: [], items: [{
     id: 'item', nameAsSigned: 'Bed', category: 'bed', status: null, material: null, finish: null, dimensions: null, descriptionAsSigned: null, silhouetteKind: null, assetIds: ['bed'],
   }] }];
+  if (mode === 'pieces') editorial.rooms[0].items.push(...Array.from({ length: 3 }, (_, index) => ({
+    ...editorial.rooms[0].items[0], id: 'repeated-photo-' + index,
+  })));
   const props = { projectName: 'Elm', ready: true, bands: [], issue: houseIssue(editorial), otherHouses: [], pieces: () => null, documents: () => null } as unknown as ComponentProps<typeof GalleryPage>;
   const { container } = render(createElement(GalleryPage, props));
   const frame = container.querySelector('.gallery-arrival')!;

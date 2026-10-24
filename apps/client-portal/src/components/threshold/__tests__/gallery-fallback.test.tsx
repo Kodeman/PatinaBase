@@ -41,4 +41,9 @@ it('uses piece-sized photographs in room/item order when the server vetoes the h
   expect(within(still).getAllByRole('img')).toHaveLength(4);
   expect([...still.querySelectorAll('.ed-piece__name')].map(node => node.textContent)).toEqual(['Bed 0', 'Bed 1', 'Bed 2', 'Bed 3']);
   expect(still.querySelector('img')).toHaveAttribute('src', expect.stringContaining('piece-768.webp'));
+  for (const piece of within(still).getAllByRole('listitem')) {
+    expect(within(piece).getByText(/^Bed \d$/)).toBeVisible();
+    expect(piece.querySelector('figcaption')).not.toBeEmptyDOMElement();
+    expect(within(piece).getByText(/not your piece/i)).toBeVisible();
+  }
 });

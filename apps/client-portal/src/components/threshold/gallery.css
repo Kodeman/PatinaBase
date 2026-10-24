@@ -96,7 +96,12 @@
 
 .gallery-concept-label { position: absolute; left: 16px; top: 16px; background: var(--gallery-stock); padding: 8px 12px; }
 
-.gallery-arrival-still-life { position: relative; height: calc(100svh - 48px); box-sizing: border-box; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--gallery-paper, #FAF7F2); padding: 64px 0 160px; }
-.gallery-arrival-still-life .gallery-chapter-pieces { justify-content: center; max-width: 1200px; }
-.gallery-arrival-still-life .gallery-chapter-pieces > li { width: min(282px, calc((100vw - 64px) / 2)); }
+.gallery-arrival:has(> .gallery-arrival-still-life) { min-height: calc(100svh - 48px); display: flex; flex-direction: column; }
+.gallery-arrival-still-life { position: relative; flex: 1; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: var(--gallery-paper, #FAF7F2); padding: 80px 0 24px; }
+.gallery-arrival-still-life ~ .gallery-band { position: static; }
+.gallery-arrival-still-life .gallery-chapter-pieces { justify-content: center; width: 100%; max-width: 1312px; box-sizing: border-box; }
+.gallery-arrival-still-life .gallery-chapter-pieces > li { width: min(282px, calc((100% - 16px) / 2)); }
 .gallery-arrival-still-life .ed-piece { width: 100%; }
+@media (min-width: 900px) {
+  .gallery-arrival-still-life .gallery-chapter-pieces > li { width: min(282px, calc((100% - 48px) / 4)); }
+}

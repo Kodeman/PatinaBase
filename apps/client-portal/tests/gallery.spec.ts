@@ -222,7 +222,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
       const db = admin();
       const fields = 'id,ground,width,height,crops,subject_box,focal,flags';
       const originals = await checked(db.from('client_plate_assets').select(fields).eq('project_id', ELM.id));
-      const edition = await checked(db.from('client_editions').select('composition,overrides').eq('id', ELM_EDITION.id).single());
+      const edition = await checked(db.from('client_editions').select('composition,overrides,facts').eq('id', ELM_EDITION.id).single());
       const heroId = edition!.overrides?.heroAssetId ?? edition!.composition?.hero?.assetId;
       expect(heroId).toBeTruthy();
       expect(originals!.length).toBeGreaterThan(0);
@@ -231,7 +231,17 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
           ground: 'white', width: 1600, height: 1600, subject_box: [0.12,0.27,0.7,0.4], focal: [0.45,0.48],
           crops: { pair: { rect: [0,197,1600,1143], widths: [768,1024,1600] }, piece: { rect: [0,0,1600,1600], widths: [256,512,768] } },
         }).eq('project_id', ELM.id));
-        if (mode === 'pieces') await checked(db.from('client_plate_assets').update({ flags: ['people'] }).eq('id', heroId));
+        if (mode === 'pieces') {
+          await checked(db.from('client_plate_assets').update({ flags: ['people'] }).eq('id', heroId));
+          const facts = structuredClone(edition!.facts);
+          const room = facts.rooms.find((room: { items: { assetIds: string[] }[] }) => room.items.some(item => item.assetIds.length));
+          const photographed = room.items.find((item: { assetIds: string[] }) => item.assetIds.length);
+          // Repeat a frozen piece's photograph; restore the edition facts in finally.
+          room.items.push(...Array.from({ length: 3 }, (_, index) => ({
+            ...photographed, id: 'gallery-stress-' + index, nameAsSigned: 'Walnut sideboard ' + (index + 2),
+          })));
+          await checked(db.from('client_editions').update({ facts }).eq('id', ELM_EDITION.id));
+        }
         await servePlates(page);
         await signInAsJune(page, `/projects/${ELM.id}`);
         await settled(page);
@@ -245,12 +255,16 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
           expect(image!.width).toBeLessThanOrEqual(1600 * 1.25);
         } else {
           const pictures = frame.locator('img');
-          expect(await pictures.count()).toBeGreaterThan(0);
-          expect(await pictures.count()).toBeLessThanOrEqual(4);
+          await expect(pictures).toHaveCount(4);
           const band = await page.locator('.gallery-band').boundingBox();
-          for (const picture of await pictures.all()) {
-            await expect(picture).toBeVisible();
-            const box = await picture.boundingBox();
+          if (viewport.width === 390) {
+            const stillLife = await frame.boundingBox();
+            expect(band!.y).toBeGreaterThanOrEqual(stillLife!.y + stillLife!.height);
+            expect(band!.y - (stillLife!.y + stillLife!.height)).toBeLessThanOrEqual(1);
+          }
+          for (const piece of await frame.locator('li').all()) {
+            await expect(piece.locator('img')).toBeVisible();
+            const box = await piece.boundingBox();
             expect(box!.width).toBeLessThanOrEqual(282);
             expect(box!.y).toBeGreaterThanOrEqual(0);
             expect(box!.y + box!.height).toBeLessThanOrEqual(band!.y);
@@ -259,8 +273,9 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
         }
         await expect(page.locator('.gallery-chapter .gallery-chapter-pieces img').first()).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
-        await page.screenshot({ path: process.env.PLAYWRIGHT_EVIDENCE_DIR + '/catalogue-' + mode + '-' + viewport.width + '.png', fullPage: false });
+        await page.locator('.gallery-arrival').screenshot({ path: process.env.PLAYWRIGHT_EVIDENCE_DIR + '/catalogue-' + mode + '-' + viewport.width + '.png' });
       } finally {
+        if (mode === 'pieces') await checked(db.from('client_editions').update({ facts: edition!.facts }).eq('id', ELM_EDITION.id));
         for (const original of originals!) {
           const { id, ...values } = original;
           await checked(db.from('client_plate_assets').update(values).eq('id', id));

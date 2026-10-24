@@ -33,8 +33,9 @@ export function heroPreloads(editorial: ClientProjectEditorial | null): HeroPrel
   if (!editorial) return [];
   const scope = plateScope(editorial);
   if (hero) return heroPreloadSources(scope, hero);
-  return arrivalPieces(editorial).flatMap(({ asset }) => {
+  const pieces = arrivalPieces(editorial).flatMap(({ asset }) => {
     const source = platePicture(scope, asset, 'piece', SIZES.piece)?.sources[0];
     return source ? [{ imageSrcSet: source.srcSet, imageSizes: source.sizes }] : [];
   });
+  return [...new Map(pieces.map(source => [source.imageSrcSet, source])).values()];
 }
