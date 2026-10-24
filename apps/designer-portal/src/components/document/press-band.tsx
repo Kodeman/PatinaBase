@@ -213,6 +213,7 @@ export function PressBand({
           {editorialCoverLine(name)}
         </h2>
       )}
+      <MissingEditionCover frozen={frozen} edition={pending || current} />
       <DeadPictureLinks projectId={projectId} />
       {!frozen && (
         <JobControls
@@ -234,6 +235,18 @@ export function PressBand({
       )}
     </section>
   );
+}
+
+function MissingEditionCover({ frozen, edition }: { frozen: boolean; edition: ClientEdition | null }) {
+  if (frozen || !edition || editionHeroId(edition)) return null;
+  return <div>
+    <p>The page opens on photographs of the pieces.</p>
+    <DocumentActionRow surfaceKey="open-document" regionKey="press-band" aria-label="Cover">
+      <DocumentAction actionKey="press-add-cover-photo" variant="secondary" href={`#${sectionAnchorId('project')}`}>
+        Add a photograph for the cover
+      </DocumentAction>
+    </DocumentActionRow>
+  </div>;
 }
 
 /** Before the first approved edition, when the page has a photograph to open on. */

@@ -197,7 +197,7 @@ describe('PressBand — the states', () => {
     ];
     renderBand([]);
     expect(
-      screen.getByRole('heading', { name: 'The page opens on the photograph of the house.' }),
+      screen.getByRole('heading', { name: 'The page opens on photographs of the pieces.' }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/drawing/i)).toBeNull();
     expect(screen.getByRole('link', { name: 'Add a photograph for the cover' })).toBeInTheDocument();
@@ -212,13 +212,20 @@ describe('PressBand — the states', () => {
     ];
     renderBand([]);
     expect(
-      screen.getByRole('heading', { name: 'The page opens on the photograph of the house.' }),
+      screen.getByRole('heading', { name: 'The page opens on photographs of the pieces.' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Add a photograph for the cover' })).toHaveAttribute(
       'href',
       '#doc-section-project',
     );
     expect(screen.queryByRole('list', { name: 'Published editions' })).toBeNull();
+  });
+
+  it('keeps the cover photograph act when an approved edition has no hero', () => {
+    renderBand([{ ...CURRENT_ROW, composition: { ...(CURRENT_ROW.composition as object), hero: null }, images: [] }]);
+    expect(screen.getByText('The page opens on photographs of the pieces.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Add a photograph for the cover' })).toHaveAttribute('href', '#doc-section-project');
+    expect(document.querySelector('[data-gallery-frame]')).toBeNull();
   });
 
   it('a draft that never reached review is still "no edition yet" (R11)', () => {

@@ -108,7 +108,7 @@ function coverDimensions(asset: ArrivalAsset): boolean {
   return Math.max(asset.width, asset.height) >= 2000 && Math.min(asset.width, asset.height) >= 1200;
 }
 function arrivalCover(asset: ArrivalAsset): boolean {
-  if (!['installed', 'upload', 'scan', 'maker'].includes(asset.sourceKind ?? '') || asset.ground !== 'scene') return false;
+  if (!['installed', 'upload', 'scan', 'maker'].some(kind => kind === asset.sourceKind) || asset.ground !== 'scene') return false;
   if (!coverDimensions(asset)) return false;
   return Boolean(arrivalRendition(asset, GALLERY_PHONE_ASPECT) && arrivalRendition(asset, GALLERY_DESKTOP_ASPECT));
 }

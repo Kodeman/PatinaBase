@@ -1276,11 +1276,11 @@ Deno.test("closing: missing or mismatched captured facts fail closed, never read
   }
 });
 
-Deno.test("Gallery hero eligibility excludes a qualifying board and uses the paint card", async () => {
+Deno.test("Gallery hero eligibility excludes a qualifying board and unservable photographs", async () => {
   const fixture = facts();
   fixture.assets = fixture.assets.map((a) => a.id === "a-board"
     ? { ...a, width: 2400, height: 1600, ground: "scene" }
-    : { ...a, ground: "white" });
+    : { ...a, ground: "white", crops: {} });
   const { db, called } = fakeDb({ facts: fixture });
   const { claude, calls } = claudeOf(respond());
   await composeRequest(REQUEST, deps(db, claude));
@@ -1303,7 +1303,7 @@ Deno.test("Gallery hero: scene, native dimensions and subject fit in both viewpo
 
 Deno.test("Gallery hero-less edition finishes with paint card, no image rows and no hero call", async () => {
   const fixture = facts();
-  fixture.assets = fixture.assets.map(a => ({ ...a, ground: "white" }));
+  fixture.assets = fixture.assets.map(a => ({ ...a, ground: "white", crops: {} }));
   const { db, called } = fakeDb({ facts: fixture });
   const { claude, calls } = claudeOf(respond());
   const outcome = await composeRequest(REQUEST, deps(db, claude));
@@ -1368,10 +1368,42 @@ Deno.test("Gallery fallback: a bed-only edition picks the bed without an A2 call
   assertEquals(composition(finishArgs(called)).hero?.assetId, "a-sofa-maker");
   assertEquals(calls.filter(c => c.role === "draft" && shown(c).length > 0).length, 0);
 });
+Deno.test("Gallery fallback: eligible hero wins over a higher-tier fallback", async () => {
+  const fixture = facts();
+  fixture.assets = [
+    asset("a-sofa", "upload", 5000, 4000, { ground: "white", perceivedPromptVersion: "e1" }),
+    asset("a-sofa-maker", "maker", 2400, 1600, { perceivedPromptVersion: "e1" }),
+  ];
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(composition(finishArgs(called)).hero?.assetId, "a-sofa-maker");
+});
+
+Deno.test("Gallery fallback: ranks by tier, pixels and sha independent of input order", async () => {
+  for (const reverse of [false, true]) {
+    const fixture = facts();
+    fixture.rooms[0].items[0].assetIds = ["a-sofa", "a-sofa-maker", "b", "c"];
+    fixture.assets = [
+      asset("a-sofa-maker", "maker", 5000, 5000, { ground: "white" }),
+      asset("a-sofa", "upload", 600, 600, { ground: "white" }),
+      asset("b", "upload", 1600, 1600, { ground: "white", sha256: "b" }),
+      asset("c", "upload", 1600, 1600, { ground: "white", sha256: "a" }),
+    ];
+    if (reverse) fixture.assets.reverse();
+    const { db, called } = fakeDb({ facts: fixture, rows: [...ROWS, row("b", "upload"), row("c", "upload")] });
+    const { claude } = claudeOf(respond());
+    await composeRequest(REQUEST, deps(db, claude));
+    assertEquals(composition(finishArgs(called)).hero?.assetId, "c");
+  }
+});
+
 Deno.test("Gallery fallback: flagged higher-tier photos, concepts, sheets and cut subjects are excluded", async () => {
   const fixture = facts();
   fixture.assets = [
     asset("a-sofa", "upload", 3000, 2000, { perceivedFlags: ["people"], perceivedPromptVersion: "e1" }),
+    asset("a-sofa", "upload", 2900, 1900, { perceivedFlags: ["watermark"], perceivedPromptVersion: "e1" }),
+    asset("a-sofa", "upload", 2800, 1800, { perceivedFlags: ["text_overlay"], perceivedPromptVersion: "e1" }),
     asset("a-concept", "concept", 3000, 2000),
     asset("a-sheet", "sheet", 3000, 2000),
     asset("a-table", "upload", 600, 600, { subjectBox: [0, 0, 1, 1], crops: { piece: { rect: [0, 0, 100, 100], widths: [512] } }, perceivedPromptVersion: "e1" }),

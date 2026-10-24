@@ -242,10 +242,7 @@ export function PressBandPreview({ edition, current, overrides, sourceUrls, delt
   return (
     <div className="flex flex-col gap-4" data-press-preview={edition.id}>
       {delta && <p className="text-[15px] leading-snug text-[var(--text-muted)]" data-press-delta>{editionDelta(edition, current, overrides)}</p>}
-      {asset && hero && sourceUrls[hero.assetId] && <div className="flex flex-wrap items-start gap-6" aria-label="Arrival previews">
-        {GALLERY_FRAMES.map((frame) => <GalleryArrival key={frame.key} frame={frame} hero={hero} asset={asset} mode={arrival.mode} url={hero ? sourceUrls[hero.assetId] : undefined} headline={headline} palette={colors} />)}
-      </div>}
-      {(!asset || !hero || !sourceUrls[hero.assetId]) && <p>{selected ? "The page opens on the cover photograph." : "The page opens on photographs of the pieces."}</p>}
+      <GalleryPreviewFrames hero={hero} asset={asset} mode={arrival.mode} url={hero ? sourceUrls[hero.assetId] : undefined} headline={headline} palette={colors} selected={Boolean(selected)} />
       {tooLong && <p className="text-[15px] text-[var(--text-muted)]">The cover headline is too long for the band, so the house name is shown instead.</p>}
       <p className="text-[15px] text-[var(--text-muted)]">The muted line is a sample; invoices and approvals supply the live words.</p>
       {chapters.some((chapter) => chapter.key !== 'cover') && <div>
@@ -267,13 +264,21 @@ export function PressBandPreview({ edition, current, overrides, sourceUrls, delt
   );
 }
 
+function GalleryPreviewFrames(props: Omit<Parameters<typeof GalleryArrival>[0], 'frame'> & { selected: boolean }) {
+  if (!props.asset || !props.hero || !props.url) return <p>{props.selected ? 'The page opens on the cover photograph.' : 'The page opens on photographs of the pieces.'}</p>;
+  return <div className="flex flex-wrap items-start gap-6" aria-label="Arrival previews">
+    {GALLERY_FRAMES.map(frame => <GalleryArrival key={frame.key} {...props} frame={frame} />)}
+  </div>;
+}
+
 function previewSelection(edition: ClientEdition, overrides: ClientEditionOverrides | null | undefined, assets: readonly ClientEditorialAsset[], _palette: readonly unknown[], focal: { assetId: string; point: PlatePoint } | null | undefined) {
   const heroId = editionHeroId(edition, overrides);
   const selected = edition.images.find(image => image.assetId === heroId);
   // Identity and dimensions bind live rendition geometry to the edition's source.
   const match = selected ? assets.find(asset => asset.id === heroId && asset.width === selected.width && asset.height === selected.height) : null;
   const asset = previewFocal(match ?? null, focal);
-  return { arrival: { mode: asset ? arrivalMode(asset) : null }, asset, selected };
+  const mode = asset ? arrivalMode(asset) : null;
+  return { arrival: { mode }, asset: mode ? asset : null, selected };
 }
 function previewFocal(asset: ClientEditorialAsset | null, focal: { assetId: string; point: PlatePoint } | null | undefined) {
   return asset && focal?.assetId === asset.id ? { ...asset, focal: focal.point } : asset;

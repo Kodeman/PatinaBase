@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { createRequire } from 'node:module';
-import { ELM, LAKE, servePlates, settled, signInAsJune, sideboardStatusWords } from './fixtures/house-issue';
+import { ELM, ELM_EDITION, LOCAL_SUPABASE, LAKE, servePlates, settled, signInAsJune, sideboardStatusWords } from './fixtures/house-issue';
 import { admin, checked, household, invoice, signIn, approval, row, targetSize } from './fixtures/homeowner';
 
 // Reuse the repo's installed axe runner; do not add a client dependency.
@@ -217,27 +217,49 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
 for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
   test.describe(`Catalogue-only arrival ${viewport.width}`, () => {
     test.use({ viewport });
-    test('contains a catalogue photograph and wraps room pieces without overflow', async ({ page }) => {
+    for (const mode of ['contained', 'pieces'] as const) test(`${mode}: uses the vetted edition hero or piece-size photographs without overflow`, async ({ page }) => {
+      expect(['127.0.0.1', 'localhost', '[::1]']).toContain(new URL(LOCAL_SUPABASE.url).hostname);
       const db = admin();
-      const fields = 'id,ground,width,height,crops,subject_box,focal';
+      const fields = 'id,ground,width,height,crops,subject_box,focal,flags';
       const originals = await checked(db.from('client_plate_assets').select(fields).eq('project_id', ELM.id));
+      const edition = await checked(db.from('client_editions').select('composition,overrides').eq('id', ELM_EDITION.id).single());
+      const heroId = edition!.overrides?.heroAssetId ?? edition!.composition?.hero?.assetId;
+      expect(heroId).toBeTruthy();
       expect(originals!.length).toBeGreaterThan(0);
       try {
         await checked(db.from('client_plate_assets').update({
           ground: 'white', width: 1600, height: 1600, subject_box: [0.12,0.27,0.7,0.4], focal: [0.45,0.48],
           crops: { pair: { rect: [0,197,1600,1143], widths: [768,1024,1600] }, piece: { rect: [0,0,1600,1600], widths: [256,512,768] } },
         }).eq('project_id', ELM.id));
+        if (mode === 'pieces') await checked(db.from('client_plate_assets').update({ flags: ['people'] }).eq('id', heroId));
         await servePlates(page);
         await signInAsJune(page, `/projects/${ELM.id}`);
         await settled(page);
-        const frame = page.locator('.gallery-arrival .gallery-photo-frame');
-        await expect(frame).toHaveAttribute('data-gallery-mode', 'contained');
-        await expect(frame).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-        await expect(frame.locator('img')).toBeVisible();
-        await expect(frame.locator('img')).toHaveAttribute('src', /pair-1600.webp/);
-        await expect(page.locator('.gallery-chapter-pieces img').first()).toBeVisible();
+        const frame = page.locator('.gallery-arrival [data-gallery-mode]').first();
+        await expect(frame).toHaveAttribute('data-gallery-mode', mode);
+        if (mode === 'contained') {
+          await expect(frame).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+          await expect(frame.locator('img')).toBeVisible();
+          await expect(frame.locator('img')).toHaveAttribute('src', /pair-1600.webp/);
+          const image = await frame.locator('img').boundingBox();
+          expect(image!.width).toBeLessThanOrEqual(1600 * 1.25);
+        } else {
+          const pictures = frame.locator('img');
+          expect(await pictures.count()).toBeGreaterThan(0);
+          expect(await pictures.count()).toBeLessThanOrEqual(4);
+          const band = await page.locator('.gallery-band').boundingBox();
+          for (const picture of await pictures.all()) {
+            await expect(picture).toBeVisible();
+            const box = await picture.boundingBox();
+            expect(box!.width).toBeLessThanOrEqual(282);
+            expect(box!.y).toBeGreaterThanOrEqual(0);
+            expect(box!.y + box!.height).toBeLessThanOrEqual(band!.y);
+          }
+          await expect(frame.locator('img').first()).toHaveAttribute('src', /piece-\d+.webp/);
+        }
+        await expect(page.locator('.gallery-chapter .gallery-chapter-pieces img').first()).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
-        await page.screenshot({ path: process.env.PLAYWRIGHT_EVIDENCE_DIR + '/catalogue-arrival-' + viewport.width + '.png', fullPage: false });
+        await page.screenshot({ path: process.env.PLAYWRIGHT_EVIDENCE_DIR + '/catalogue-' + mode + '-' + viewport.width + '.png', fullPage: false });
       } finally {
         for (const original of originals!) {
           const { id, ...values } = original;

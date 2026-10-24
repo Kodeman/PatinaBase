@@ -79,11 +79,11 @@ it('contains the photograph when its subject cannot fit both Gallery frames', ()
   expect(container.querySelectorAll('[data-press-cover]')).toHaveLength(2);
 });
 
-it.each(['missing', 'resized', 'higher-ranked'])('binds preview to the edition hero with a distinct live set: %s', (condition) => {
+it.each(['missing', 'resized', 'unservable', 'higher-ranked'])('binds preview to the edition hero with a distinct live set: %s', (condition) => {
   const row = edition('The living room', [imageRow('hero', { plateRole: 'hero', chapterKey: 'cover' })]);
   const original = assetsFor(row)[0];
   const extra = { ...original, id: 'new-installed', sourceKind: 'installed' as const, width: 6000, height: 4000 };
-  const live = condition === 'missing' ? [extra] : [extra, { ...original, width: condition === 'resized' ? original.width + 1 : original.width }];
+  const live = condition === 'missing' ? [extra] : [extra, { ...original, crops: condition === 'unservable' ? {} : original.crops, width: condition === 'resized' ? original.width + 1 : original.width }];
   const { container } = render(<PressBandPreview edition={row} assets={live} current={null} sourceUrls={{ hero: 'hero.jpg', 'new-installed': 'new.jpg' }} />);
   if (condition === 'higher-ranked') {
     expect(container.querySelectorAll('[data-press-cover]')).toHaveLength(2);
