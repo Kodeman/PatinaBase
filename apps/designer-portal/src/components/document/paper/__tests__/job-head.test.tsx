@@ -1,12 +1,12 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { JobHead } from '../job-head';
-import { readPaperOrigin, rememberPaperOrigin } from '@/lib/document/paper/paper-origin';
+import { readPaperOrigin, rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-origin';
 const mockBack = jest.fn();
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ back: mockBack, push: mockPush }) }));
 
-beforeEach(() => { window.sessionStorage.clear(); jest.clearAllMocks(); });
+beforeEach(() => { window.sessionStorage.clear(); jest.resetAllMocks(); });
 afterEach(() => { delete (window as unknown as { navigation?: unknown }).navigation; });
 
 
@@ -89,7 +89,7 @@ describe('Studio return history', () => {
       currentEntry: { key: 'desk-entry', index: 2 },
       entries: () => [{ key: previousKey, index: 2, url: previousUrl }],
     } });
-    rememberPaperOrigin('job', { path: '/desk', anchorId: 'held-control' });
+    rememberPaperOrigin('job', { path: '/desk', focusId: 'pressed-control', anchorId: 'held-control' });
     (window as unknown as { navigation: { currentEntry: unknown } }).navigation.currentEntry = { key: 'job-entry', index: 3 };
   }
   it('uses Back only for the exact remembered predecessor desk entry', async () => {
@@ -106,10 +106,42 @@ describe('Studio return history', () => {
     expect(mockPush).toHaveBeenCalledWith('/desk');
     expect(mockBack).not.toHaveBeenCalled();
   });
+  it.each(['desk-entry', 'unfold-entry'])('records the Desk return intent before navigating past %s', (key) => {
+    history(key);
+    const assertIntent = () => expect(takeDeskReturn()).toEqual({ docId: 'job', anchor: 'pressed-control', at: expect.any(Number) });
+    mockBack.mockImplementationOnce(assertIntent);
+    mockPush.mockImplementationOnce(assertIntent);
+    render(<JobHead returnTo={{ href: '/desk', label: 'Studio' }} origin={readPaperOrigin('job')} jobName="Job" />);
+    fireEvent.click(screen.getByRole('link', { name: 'Studio' }));
+    expect(key === 'desk-entry' ? mockBack : mockPush).toHaveBeenCalledTimes(1);
+    expect(takeDeskReturn()).toBeNull();
+    mockBack.mockReset();
+    mockPush.mockReset();
+  });
+
+  it.each([{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }])('does not record a Desk return for a modified click %j', (modifiers) => {
+    history();
+    render(<JobHead returnTo={{ href: '/desk', label: 'Studio' }} origin={readPaperOrigin('job')} jobName="Job" />);
+    fireEvent.click(screen.getByRole('link', { name: 'Studio' }), modifiers);
+    expect(takeDeskReturn()).toBeNull();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('does not record a Desk return for a non-desk origin', () => {
+    rememberPaperOrigin('job', { path: '/library', focusId: 'library-piece' });
+    render(<JobHead returnTo={{ href: '/library', label: 'Resource library' }} origin={readPaperOrigin('job')} jobName="Job" />);
+    fireEvent.click(screen.getByRole('link', { name: 'Resource library' }));
+    expect(takeDeskReturn()).toBeNull();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('pushes Studio for a deep link without remembered history', async () => {
     render(<JobHead returnTo={{ href: '/desk', label: 'Studio' }} origin={readPaperOrigin('job')} jobName="Job" />);
     await userEvent.click(screen.getByRole('link', { name: 'Studio' }));
     expect(mockPush).toHaveBeenCalledWith('/desk');
     expect(mockBack).not.toHaveBeenCalled();
+    expect(takeDeskReturn()).toBeNull();
   });
 });
