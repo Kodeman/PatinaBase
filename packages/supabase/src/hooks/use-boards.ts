@@ -435,7 +435,7 @@ function projectWorkingPath(projectId: unknown, value: unknown): value is string
  * `<projectId>/…`. A key the working bucket cannot resolve is left as-is so the
  * shared proposal-bucket signer downstream still gets its chance at it.
  */
-async function signProjectWorkingBoardRow(
+export async function signProjectWorkingBoardRow(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
