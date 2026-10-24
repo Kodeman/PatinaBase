@@ -57,6 +57,7 @@ import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FfeAssignmentScope, FFEStageKey } from '@patina/types';
 import {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -173,10 +174,12 @@ import { useRoomLens } from './room-lens-context';
 import { InstallManifest } from './buying/install-manifest';
 import { JobDestinationsDoor } from './destinations/job-destinations-sheet';
 import { PiecesOverview } from './pieces/pieces-overview';
+import { piecesRoomAnchorId } from '@/lib/document/pieces/build-room-url';
 import {
-  buildRoomHref,
-  piecesRoomAnchorId,
-} from '@/lib/document/pieces/build-room-url';
+  buildRoomDoor,
+  FfeWorkRoomContext,
+  type WorkRoom,
+} from './paper/chapters/ffe-work-room';
 import {
   deriveOverviewJob,
   overviewHeadStages,
@@ -455,6 +458,7 @@ function ffeReleaseStanding(release: {
 /** What the head's elected lead may open; every one is a destination that already exists. */
 interface FfeLeadActs {
   docId: string;
+  workRoom?: WorkRoom;
   release: RegionLedgerEntry;
   addItems: RegionLedgerEntry;
   land: (detail: FfeActLandingDetail) => boolean;
@@ -486,7 +490,7 @@ const FFE_LEAD_ENTRIES: Record<
   price: (count, acts) => ({
     key: 'ffe-lead-price',
     label: count === 1 ? 'Add the missing price' : 'Add the missing prices',
-    href: buildRoomHref(acts.docId, { lens: 'price', room: null }),
+    ...buildRoomDoor(acts.docId, { lens: 'price', room: null }, acts.workRoom),
     trailing: '→',
   }),
   bill: (count, acts) => ({ key: 'bill-project-ffe', label: `Bill ${count} uninvoiced`, onClick: acts.bill }),
@@ -1266,6 +1270,9 @@ interface FFESectionProps {
   /** US-19 FR3 F3-10 — the project's status. US-43 R4: a held (`on_hold`) or
    *  closed (`completed`) job elects no lead but a claim or an unanswered PO. */
   projectStatus?: string | null;
+  /** WP-01.6 — round 8 only: the Build room doors open the sheet in place.
+   *  Falls back to the hosting FF&E chapter's opener; absent both, they route. */
+  onWorkRoom?: WorkRoom;
 }
 
 // ── A need's act lands on its line (US-19 F3-2, P-2) ─────────────────────────
@@ -1368,8 +1375,11 @@ function FFESectionBody({
   needs = [],
   onReleaseOffered,
   projectStatus = null,
+  onWorkRoom: onWorkRoomProp,
   instruments,
 }: FFESectionProps & { instruments: NonNullable<ReturnType<typeof useProjectInstruments>["data"]> }) {
+  const chapterWorkRoom = useContext(FfeWorkRoomContext);
+  const onWorkRoom = onWorkRoomProp ?? chapterWorkRoom ?? undefined;
   const { heldRoomId, toggleRoom } = useRoomLens();
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   // US-43 R4 — the head's More disclosure and its toggle, where focus returns.
@@ -2349,6 +2359,7 @@ function FFESectionBody({
       : null;
   const ffeLeadEntry = ffeLeadEntryFor(ffeLeader, {
     docId,
+    workRoom: onWorkRoom,
     release: ffeReleaseEntry,
     addItems: ffeAddToProjectEntry,
     land: landFfeAct,
@@ -2365,7 +2376,7 @@ function FFESectionBody({
     editSelections: {
       key: 'work-the-pieces',
       label: 'Edit pieces & purchasing',
-      href: buildRoomHref(docId, { lens: 'rough', room: null }),
+      ...buildRoomDoor(docId, { lens: 'rough', room: null }, onWorkRoom),
       trailing: '→',
       variant: 'secondary',
     },
@@ -2866,6 +2877,7 @@ function FFESectionBody({
           allOpen={choosingPiece || installSelecting}
           returnedRoomId={returnedRoomId}
           heldRoomId={heldRoomId}
+          onWorkRoom={onWorkRoom}
           onRoomFolded={(lineIds) => {
             if (openLineId != null && lineIds.includes(String(openLineId))) {
               setOpenLineId(null);

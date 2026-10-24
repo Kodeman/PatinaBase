@@ -38,12 +38,15 @@ import {
   type VendorMatch,
 } from "@patina/supabase";
 import type {
+  BoardOwnerRef,
   FfeDesignDisposition,
   FfeAssignmentScope,
   FfeLineUnit,
   FfeRoomPlacement,
 } from "@patina/types";
 import { LeadTimeSelect } from "@/components/portal/ffe/lead-time-select";
+import { useBufferedAutosave } from "@/hooks/use-buffered-autosave";
+import { ffeSheetAutosaveOwner } from "../paper/chapters/ffe-work-room";
 import { ProductPickerModal } from "@/components/portal/proposals/product-picker-modal";
 import { leadTimeLabel } from "@/lib/scope/lead-time";
 import { writeErrorMessage } from "@/lib/document/write-error";
@@ -316,6 +319,8 @@ export interface SpecFieldsPaneProps {
   onAnnounce?: (message: string) => void;
   /** The line was filled; the lens keeps it, focuses its heading and says so. */
   onFilled?: (message: string) => void;
+  /** WP-01.6 — the unfold host's owner: spec saves land before it folds. */
+  autosaveOwner?: BoardOwnerRef | null;
 }
 
 export function SpecFieldsPane({
@@ -332,6 +337,7 @@ export function SpecFieldsPane({
   headingRef,
   onAnnounce,
   onFilled,
+  autosaveOwner = null,
 }: SpecFieldsPaneProps) {
   const updateSpec = useUpdateProjectFfeSpec();
   const commercials = useSetFfeLineCommercials({ errorSurface: "inline" });
@@ -392,8 +398,53 @@ export function SpecFieldsPane({
     ? (line.unit as FfeLineUnit)
     : "each";
 
+  // The latest saved row, so a queued save carries the row_version the last
+  // one answered with, not the one this render was given.
+  const latestSpec = useRef(spec);
+  useEffect(() => {
+    const held = latestSpec.current;
+    if (!spec) return;
+    if (!held || held.id !== spec.id || spec.row_version >= held.row_version) {
+      latestSpec.current = spec;
+    }
+  }, [spec]);
+
+  // WP-01.6 (F3) — in the unfolded sheet, a blur or Enter save is a buffer
+  // under the host's `autosaveOwner`: Return to the room waits for it, and a
+  // failed one holds the sheet open with the typed value and this pane's
+  // alert, retrying on the next Return. The `/pieces` route saves directly.
+  const specAutosave = useBufferedAutosave<string, SpecChanges>({
+    owner: autosaveOwner ?? ffeSheetAutosaveOwner(projectId),
+    save: async (specId, changes) => {
+      const held = latestSpec.current;
+      if (!held || held.id !== specId) {
+        throw new Error("The field was not saved.");
+      }
+      setError(null);
+      try {
+        const saved = await updateSpec.mutateAsync({
+          projectId,
+          specId,
+          expectedRowVersion: held.row_version,
+          changes,
+        });
+        latestSpec.current = { ...held, ...saved };
+        onSpecSaved(saved);
+      } catch (e) {
+        const message = errorText(e, "The field was not saved.");
+        setError(message);
+        throw new Error(message);
+      }
+    },
+  });
+
   const saveSpec = (changes: SpecChanges) => {
     if (!spec) return;
+    if (autosaveOwner) {
+      specAutosave.queue(spec.id, changes);
+      void specAutosave.flush(spec.id);
+      return;
+    }
     setError(null);
     updateSpec
       .mutateAsync({

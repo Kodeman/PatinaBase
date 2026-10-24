@@ -26,7 +26,7 @@ import {
   useProjectRoomPlacements,
   type ProjectFfeSpec,
 } from "@patina/supabase";
-import type { FfeRoomPlacement } from "@patina/types";
+import type { BoardOwnerRef, FfeRoomPlacement } from "@patina/types";
 import { useDocumentRooms } from "@/hooks/use-document-rooms";
 import {
   REMOVED_PLACE,
@@ -65,6 +65,10 @@ export interface SpecLensProps {
   projectId: string;
   room: BuildRoomPlace;
   canSeeMoney: boolean;
+  /** WP-01.6 — the line the address names (`?line=`): it opens first. */
+  line?: string | null;
+  /** WP-01.6 — the unfold host's owner, so its close waits for spec saves. */
+  autosaveOwner?: BoardOwnerRef | null;
 }
 
 interface SpecFieldRows {
@@ -135,13 +139,26 @@ function useSpecFieldRows(projectId: string, lines: readonly SpecLensLine[]) {
   });
 }
 
-export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
+export function SpecLens({
+  projectId,
+  room,
+  canSeeMoney,
+  line: addressedLine = null,
+  autosaveOwner = null,
+}: SpecLensProps) {
   const queryClient = useQueryClient();
   const { data: rawLines } = useProjectFFEItems(projectId);
   const { data: placements } = useProjectRoomPlacements(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
   const { data: groupData } = useProjectLineGroups(projectId);
-  const [chosenId, setChosenId] = useState<string | null>(null);
+  // The addressed line opens first; a later address (Back, Forward) opens its
+  // own. With none, the lens picks the first unfinished line as it always has.
+  const [chosenId, setChosenId] = useState<string | null>(addressedLine);
+  const [heldLine, setHeldLine] = useState(addressedLine);
+  if (heldLine !== addressedLine) {
+    setHeldLine(addressedLine);
+    if (addressedLine) setChosenId(addressedLine);
+  }
   const [announcement, setAnnouncement] = useState("");
   const [focusRequest, setFocusRequest] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -291,7 +308,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
         const labor = isLaborLine(line);
         const current = line.id === activeId;
         return (
-          <li key={line.id}>
+          <li key={line.id} data-line-id={line.id}>
             <button
               type="button"
               aria-current={current ? "true" : undefined}
@@ -374,6 +391,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
             placements={placementsOf(active.id)}
             rooms={rooms}
             onSpecSaved={onSpecSaved}
+            autosaveOwner={autosaveOwner}
             headingRef={headingRef}
             onAnnounce={setAnnouncement}
             onFilled={(message) => {
