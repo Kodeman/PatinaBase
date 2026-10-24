@@ -1,9 +1,14 @@
+'use client';
+
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { canReturnToPaperOrigin, type PaperOrigin } from '@/lib/document/paper/paper-origin';
 import type { ReactNode } from 'react';
 
 export interface JobHeadProps {
   /** Where "←" goes, labelled by the origin the job was opened from. */
   returnTo: { href: string; label: string };
+  origin?: PaperOrigin;
   jobName: string;
   /** One context line; hidden below 1180px. */
   context?: ReactNode;
@@ -13,7 +18,8 @@ export interface JobHeadProps {
  * The round-8 job head: the sticky band over the paper. The job name is the
  * band's title, not a heading; the paper's cover carries the h1.
  */
-export function JobHead({ returnTo, jobName, context }: JobHeadProps) {
+export function JobHead({ returnTo, origin, jobName, context }: JobHeadProps) {
+  const router = useRouter();
   return (
     <header
       data-job-head=""
@@ -21,6 +27,13 @@ export function JobHead({ returnTo, jobName, context }: JobHeadProps) {
     >
       <Link
         href={returnTo.href}
+        onClick={(event) => {
+          if (!origin || (origin.kind !== 'desk' && origin.kind !== 'deep-link') ||
+              event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          if (canReturnToPaperOrigin(origin)) router.back();
+          else router.push('/desk');
+        }}
         data-job-head-return=""
         className="t-body-sm inline-flex min-h-[44px] shrink-0 items-center gap-[6px] text-[var(--text-primary)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       >

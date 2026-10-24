@@ -13,12 +13,25 @@
  * (their bodies are other suites' subject), which is exactly the contract under
  * test: WHERE the page mounts them, not what they draw.
  */
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import DocumentPage from '../page';
 import { beginEntry } from '@/components/document/arrival/arrival-mount';
 import { PROJECT_PAPER_ORDER } from '@/lib/document/document-index';
 import { ROUND8_INDEX_KEYS, ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
+
+const mockWorkRoom = jest.fn();
+jest.mock('@/components/document/paper/unfold-instrument', () => ({
+  ...jest.requireActual('@/components/document/paper/unfold-instrument'),
+  openUnfold: (...args: unknown[]) => mockWorkRoom(...args),
+}));
+jest.mock('@/components/document/paper/chapters/design-chapter', () => ({
+  DesignChapter: ({ projectId, routeId, onWorkRoom }: { projectId: string; routeId: string; onWorkRoom: (id: string, opener: HTMLButtonElement) => void }) => (
+    <div data-design-chapter data-project-id={projectId} data-route-id={routeId}>
+      <button onClick={(event) => onWorkRoom('room-1', event.currentTarget)}>Work this room</button>
+    </div>
+  ),
+}));
 
 jest.mock('@portabletext/react', () => ({
   PortableText: () => null,
@@ -558,9 +571,9 @@ describe('the round-8 paper order', () => {
     const chapters = Array.from(container.querySelectorAll('[data-paper-chapter]')).map((el) =>
       el.getAttribute('data-paper-chapter'),
     );
-    // This job has no lead, no proposal, no Room File and no visit, and
-    // nothing backs Cabinetry yet: those chapters do not stand empty.
-    expect(chapters).toEqual(['approvals', 'schedule', 'ffe', 'financials', 'closeout', 'record']);
+    // Design owns room evidence/empty states even without generated Room Files.
+    // No lead/proposal, visit or Cabinetry content is invented.
+    expect(chapters).toEqual(['design', 'approvals', 'schedule', 'ffe', 'financials', 'closeout', 'record']);
     expect(chapters).toEqual(ROUND8_INDEX_KEYS.filter((key) => chapters.includes(key)));
   });
 
@@ -577,6 +590,21 @@ describe('the round-8 paper order', () => {
       expect(inner).toHaveLength(1);
       expect(root!.contains(inner[0])).toBe(true);
     }
+  });
+
+  it('wires the design room and exact opener to the existing FF&E unfold owner', async () => {
+    const { container } = await renderRound8();
+    const design = container.querySelector('[data-design-chapter]')!;
+    expect(design).not.toBeNull();
+    expect(design).toHaveAttribute('data-project-id', 'project-1');
+    expect(design).toHaveAttribute('data-route-id', 'project-1');
+    const opener = design.querySelector('button')!;
+    fireEvent.click(opener);
+    expect(mockWorkRoom).toHaveBeenCalledWith(
+      { kind: 'pieces', lens: 'spec', room: 'room-1', line: null },
+      { documentId: 'project-1', chapter: 'design', room: 'room-1', lens: 'spec' },
+      opener,
+    );
   });
 
   it('prints the accounts once, inside the Financials chapter', async () => {

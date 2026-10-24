@@ -3327,6 +3327,25 @@ describe('DocumentPage guide activation', () => {
       expect(props.needs?.map((need) => need.kind)).toEqual(['damage_claim']);
     });
 
+    it('hands a land line to the named spec control once, then clears the instruction', () => {
+      asProjectDocument();
+      const line = '0a9b8c7d-aaaa-4bbb-8ccc-ddddeeeeffff';
+      window.history.replaceState({}, '', '/doc/project-1?land=line:' + line);
+      const heard: unknown[] = [];
+      const onLand = (event: Event) => { heard.push((event as CustomEvent).detail); event.preventDefault(); };
+      window.addEventListener('document:land-ffe-act', onLand);
+      try {
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(heard).toEqual([{ act: 'spec', itemId: line }]);
+        expect(window.location.search).toBe('');
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(heard).toHaveLength(1);
+      } finally {
+        window.removeEventListener('document:land-ffe-act', onLand);
+        window.history.replaceState({}, '', '/');
+      }
+    });
+
     it('drops the ?ffeItemId= request once the schedule reports it honoured', () => {
       asProjectDocument();
       window.history.replaceState({}, '', '/doc/project-1?ffeItemId=line-1');

@@ -565,15 +565,19 @@ export default function DeskPage() {
   useLayoutEffect(() => {
     const place = placeToRestore;
     if (!arrivalRoot || !place) return;
-    const land = (): boolean => {
+    const land = (waitForAnchor = true): boolean => {
+      const anchor = place.anchor ? document.getElementById(place.anchor) : null;
       const room = document.documentElement.scrollHeight - window.innerHeight;
+      if (waitForAnchor && place.anchor && !anchor) return false;
+      if (anchor && !anchor.matches('a, button, input, select, textarea, [tabindex]')) anchor.tabIndex = -1;
       if (place.y <= room) {
         window.scrollTo({ top: place.y, behavior: 'auto' });
+        anchor?.focus({ preventScroll: true });
         return true;
       }
-      const row = place.anchor ? document.getElementById(place.anchor) : null;
-      if (!row) return false;
-      row.scrollIntoView({ block: 'start', behavior: 'auto' });
+      if (!anchor) return false;
+      anchor.scrollIntoView({ block: 'start', behavior: 'auto' });
+      anchor.focus({ preventScroll: true });
       return true;
     };
     if (land()) {
@@ -584,7 +588,7 @@ export default function DeskPage() {
     const grow = new ResizeObserver(() => {
       if (land()) settle();
     });
-    const wait = window.setTimeout(settle, 3000);
+    const wait = window.setTimeout(() => { land(false); settle(); }, 3000);
     // A cleanup only stops watching: a dev rehearsal remount tries again.
     function stop() {
       grow.disconnect();
