@@ -26,11 +26,13 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', testIgnore: /(house-issue|threshold)\.spec\.ts$/, use: { ...devices['Desktop Chrome'] } },
-    { name: 'edition', testMatch: /(house-issue|threshold)\.spec\.ts$/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'edition-390', testMatch: /(house-issue|threshold)\.spec\.ts$/, use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 } } },
+    // These suites undo shared editions; never run both viewports on them together.
+    { name: 'edition-1440', dependencies: ['edition-390'], testMatch: /(house-issue|threshold)\.spec\.ts$/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
   ],
   webServer: {
     command: 'pnpm dev',
-    url: 'http://localhost:3002',
+    url: 'http://localhost:3002/auth/signin',
     // A reused server could have different source, credentials or flags.
     reuseExistingServer: false,
     timeout: 180000,

@@ -418,7 +418,9 @@ test.describe("the standing invoice (00574)", () => {
     expect(freshToken).toMatch(/^[0-9a-f]{64}$/);
     expect(freshToken).not.toBe(minted.token);
 
-    await page.goto(`/pay/${minted.token}`);
+    // Leave the polling sheet before re-entering the freshly revoked address.
+    await page.goto("about:blank");
+    await page.goto(`/pay/${minted.token}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("pay-dead-link")).toBeVisible({
       timeout: 20000,
     });

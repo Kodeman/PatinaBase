@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { createRequire } from 'node:module';
-import { ELM, LAKE, servePlates, settled, signInAsJune } from './fixtures/house-issue';
+import { ELM, LAKE, servePlates, settled, signInAsJune, sideboardStatusWords } from './fixtures/house-issue';
 import { admin, checked, household, invoice, signIn, approval, row, targetSize } from './fixtures/homeowner';
 
 // Reuse the repo's installed axe runner; do not add a client dependency.
@@ -115,7 +115,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
         await expect(piece).toHaveCount(1);
         await expect(piece.getByText(name, { exact: true }).first()).toBeVisible();
       }
-      await expect(drawer.getByRole('listitem').filter({ hasText: ELM.sideboard })).toContainText('Released to maker');
+      await expect(drawer.getByRole('listitem').filter({ hasText: ELM.sideboard })).toContainText(await sideboardStatusWords());
     });
 
     test('Pay reaches the existing checkout seam without touching Stripe', async ({ page }) => {

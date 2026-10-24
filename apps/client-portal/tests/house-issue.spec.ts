@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import { ELM, ELM_EDITION, GARDEN, LAKE, LOCAL_SUPABASE, STUDIO, servePlates, settled, signInAsJune } from './fixtures/house-issue';
+import { ELM, ELM_EDITION, GARDEN, LAKE, LOCAL_SUPABASE, STUDIO, servePlates, settled, signInAsJune, sideboardStatusWords } from './fixtures/house-issue';
 
 test.describe.configure({ mode: 'default', timeout: 120000 });
 
@@ -88,7 +88,7 @@ test.describe('The House Issue in Gallery', { tag: '@edition' }, () => {
     await page.getByRole('link', { name: /Every piece in the Living room/i }).click();
     const drawer = page.getByRole('dialog', { name: /Every piece/i });
     await expect(drawer.getByRole('listitem').filter({ hasText: ELM.sofa }).getByText(ELM.sofa, { exact: true }).first()).toBeVisible();
-    await expect(drawer.getByRole('listitem').filter({ hasText: ELM.sideboard })).toContainText('Released to maker');
+    await expect(drawer.getByRole('listitem').filter({ hasText: ELM.sideboard })).toContainText(await sideboardStatusWords());
   });
 
   test('permanent addresses stay unique and resolve without a flag', async ({ page }) => {

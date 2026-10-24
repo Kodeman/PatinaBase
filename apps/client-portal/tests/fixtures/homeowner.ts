@@ -38,6 +38,28 @@ export async function household(withProject = false): Promise<Household> {
     status: 'active', current_phase: null, budget_cents: 0, design_fee_cents: 0, client_visibility_tier: 'milestone' }));
   return { id, email, studio, project, client: await actor(email) };
 }
+export async function composedAgreement(house: Household, templateId: string) {
+  const db = admin();
+  const template = await checked(db.from('proposals').select('description,total_amount,subtotal').eq('id', templateId).single());
+  const id = randomUUID();
+  const title = `Synthetic phase work ${id.slice(0, 8)}`;
+  const relationship = await checked(db.from('designer_clients').select('id').eq('designer_id', DESIGNER).eq('client_id', house.id).single());
+  await checked(db.from('proposals').insert({ ...template, id, title, project_id: house.project,
+    designer_client_id: relationship!.id, designer_id: DESIGNER, client_id: house.id, document_kind: 'design_services', status: 'draft', commercial_state: 'draft' }));
+  const terms = await checked(db.from('proposal_service_terms').select('scope,deliverables,exclusions,billing_ceiling_cents,retainer_amount_cents,retainer_activation_policy,billing_cadence,currency,terms,current_rate_version').eq('proposal_id', templateId).single());
+  await checked(db.from('proposal_service_terms').insert({ ...terms, proposal_id: id }));
+  const parts = await checked(db.from('proposal_agreement_parts').select('position,kind,variant,part_key,title,payload,required,client_visible').eq('proposal_id', templateId).order('position'));
+  await checked(db.from('proposal_agreement_parts').insert(parts!.map(part => ({ ...part, proposal_id: id }))));
+  const studio = await actor('designer@patina.dev');
+  try {
+    const snapshot = await checked(studio.rpc('get_commercial_document_send_snapshot', { p_proposal_id: id }));
+    await checked(studio.rpc('send_commercial_document', { p_proposal_id: id, p_expected_fingerprint: snapshot.documentFingerprint }));
+  } finally {
+    await studio.auth.signOut();
+  }
+  return { id, title };
+}
+
 export async function invoice(house: Household, cents: number, due: string | null, status = 'sent', currency = 'USD') {
   const db = admin();
   const id = randomUUID();

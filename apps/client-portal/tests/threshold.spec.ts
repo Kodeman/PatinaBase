@@ -1,6 +1,8 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { ELM, signInAsJune } from './fixtures/house-issue';
+import { checked, composedAgreement, household, signIn as signInHousehold } from './fixtures/homeowner';
+import { legalDate } from '../src/lib/threshold/dates';
 
 /**
  * The Threshold (spec §7) — the homeowner's project page as ONE chrome-less
@@ -53,30 +55,14 @@ const LIVE_WORKING_FIGURE = '$7,800';
 const MAKER = 'Marta Voss';
 const HELD_DRAW = '$2,980.00';
 const INVOICE_BALANCE = '$4,060.00';
-/**
- * The seed dates this invoice `CURRENT_DATE + 7` (the-client-page.sql:621), so
- * the day it falls due moves with the clock. A literal 'September 11' was true
- * only on the day it was written and turned the suite red the next morning —
- * read the day off the same rule the seed uses.
- */
-const INVOICE_DUE_DAY = (() => {
-  // Count the seven days on the calendar the SEED counts them on. Postgres runs
-  // in UTC, so `CURRENT_DATE + 7` rolls over at UTC midnight; counting from the
-  // runner's local clock instead names a different day for every evening west
-  // of Greenwich (19:38 CDT on 8 September asked for 15 September while the
-  // seeded invoice said 16 September, and the suite went red on the clock).
-  const now = new Date();
-  const due = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 7));
-  // en-GB, day first, and the year spelled out: PP-2 gave the house one date
-  // idiom and `lib/threshold/dates.ts` is the only place that composes it. A
-  // due date is a term of the invoice, so it is `legalDate`, never `dayMonth`.
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(due);
-})();
+async function invoiceDueDay(): Promise<string> {
+  // CURRENT_DATE was evaluated at seed time, not at this test's execution time.
+  const invoice = await checked(admin().from('invoices').select('due_date')
+    .eq('id', 'b0000000-0000-0000-0000-00000000cc01').single());
+  const due = legalDate(invoice.due_date);
+  expect(due, 'the seeded invoice must name its exact due day').not.toBeNull();
+  return due!;
+}
 
 const STANDING_NOTE_BODY =
   'The shelving is up and oiled. Look at it when you can, and if it reads right I will have Marta move on to the hall.';
@@ -127,14 +113,10 @@ const COMPOSED_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb01';
                           5 clause  Terms
      signatures           none — this test writes the client's
 
-   THE TEST SIGNS, so it consumes the fixture: it is written for the reset
-   stack the gate order in build-sheet §7 runs it on (`pnpm supabase:reset`
-   before the e2e), which is the same ground every SQL suite in that list
-   assumes. Run twice against one stack without a reset and the second run
-   finds a door already open — that is the fixture's nature, not a flake.
+   The test clones this template onto a disposable household, sends that draft
+   through the normal RPC, and leaves its immutable signature intact.
    ────────────────────────────────────────────────────────────────────────── */
 const PER_PHASE_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb04';
-const PER_PHASE_AGREEMENT_TITLE = 'Cedar Lane — Phase Work';
 const PER_PHASE_ACK_PART_KEY = 'patina.lead_paint_notice';
 const PER_PHASE_ACK_LINE = 'I received the lead-paint notice.';
 /**
@@ -327,7 +309,7 @@ test.describe('The Threshold — the client page', () => {
     await expect(body).toContainText(HELD_DRAW);
     // 4 · the balance, and the day it falls due
     await expect(page.getByTestId('letterbox')).toContainText(INVOICE_BALANCE);
-    await expect(page.getByTestId('letterbox')).toContainText(INVOICE_DUE_DAY);
+    await expect(page.getByTestId('letterbox')).toContainText(await invoiceDueDay());
     // 5 · the chapter the house stands in, named on the doorplate
     await expect(page.locator('#road')).not.toBeEmpty();
   });
@@ -674,17 +656,16 @@ test.describe('The Threshold — the client page', () => {
   test('signs a composed agreement at its door, and files what she agreed to', async ({
     page,
   }) => {
-    await signInAsClient(page);
-    await openTheHouse(page);
-
-    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
+    const house = await household(true);
+    const agreement = await composedAgreement(house, PER_PHASE_AGREEMENT_ID);
+    await signInHousehold(page, house, `/projects/${house.project}#door`);
     const doorway = page
       .getByTestId('door-way')
-      .filter({ hasText: PER_PHASE_AGREEMENT_TITLE })
+      .filter({ hasText: agreement.title })
       .first();
     await expect(
       doorway,
-      `the seed must leave ${PER_PHASE_AGREEMENT_TITLE} (${PER_PHASE_AGREEMENT_ID}) SENT — see the fixture note at the head of this file`,
+      `the disposable agreement ${agreement.id} must arrive SENT`,
     ).toBeVisible({ timeout: 90_000 });
 
     // 1 · The sentence is composed from the parts, and it is the database's.
@@ -723,7 +704,7 @@ test.describe('The Threshold — the client page', () => {
     // 4 · What the database filed. Both halves: the sentence she ticked, and
     //     the key of the attachment she said she received.
     await expect
-      .poll(async () => (await clientSignatureMetadata(PER_PHASE_AGREEMENT_ID))?.consentSentence, {
+      .poll(async () => (await clientSignatureMetadata(agreement.id))?.consentSentence, {
         timeout: 60_000,
         message: 'the signature must record the sentence the database composed',
       })
@@ -731,7 +712,7 @@ test.describe('The Threshold — the client page', () => {
     await expect
       .poll(
         async () =>
-          (await clientSignatureMetadata(PER_PHASE_AGREEMENT_ID))?.attachmentsAcknowledged,
+          (await clientSignatureMetadata(agreement.id))?.attachmentsAcknowledged,
         {
           timeout: 60_000,
           message: 'the signature must record the acknowledgment she gave',

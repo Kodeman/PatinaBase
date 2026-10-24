@@ -1,6 +1,14 @@
 import path from 'node:path';
 
 import { expect, type Page } from '@playwright/test';
+import { admin, checked } from './homeowner';
+import { GOODS_JOURNEY_STAGES, journeyStageIndexForStatus } from '../../src/components/commercial/journey-stepper';
+
+export async function sideboardStatusWords() {
+  const piece = await checked(admin().from('project_ffe_items').select('status')
+    .eq('id', 'b0000000-0000-0000-0000-0000000e1d01').single());
+  return GOODS_JOURNEY_STAGES[journeyStageIndexForStatus(piece!.status)];
+}
 
 /**
  * supabase/seed/client_house_issue_fixture.sql — June Brennan's three houses at
