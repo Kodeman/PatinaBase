@@ -3,6 +3,7 @@
 /** Gallery arrival and reading words, with the studio’s pending edits laid over them. */
 
 import { useProjectPalettes, useProjectV2 } from '@patina/supabase';
+import { galleryCropPosition, type GalleryPoint, type GalleryRect } from '@patina/utils';
 import type {
   ClientEdition,
   ClientEditionImage,
@@ -114,19 +115,25 @@ export const GALLERY_FRAMES = [
   { key: 'wide', label: 'Laptop', width: 1440, height: 852 },
 ] as const;
 
-/** The viewport's visible source window under object-fit: cover. */
+/** The same source-space cover crop used by the homeowner's full-source renditions. */
+export function gallerySourcePosition(image: ClientEditionImage, aspect: number, focal = image.focal): string | null {
+  return galleryCropPosition(image.width ?? 0, image.height ?? 0, aspect,
+    image.subjectBox as GalleryRect | null, focal as GalleryPoint | null);
+}
+
+/** Pointer coordinates must use the shared crop, not the unadjusted focal percentages. */
 export function galleryCropWindow(image: ClientEditionImage, aspect: number, focal = image.focal): PlateWindow {
   const ratio = (image.width ?? 1) / (image.height ?? 1);
   const vx = Math.min(1, aspect / ratio);
   const vy = Math.min(1, ratio / aspect);
-  const x = focal?.[0] ?? 0.5;
-  const y = focal?.[1] ?? 0.5;
+  const [x, y] = (gallerySourcePosition(image, aspect, focal) ?? '50% 50%').split(' ').map((value) => parseFloat(value) / 100);
   return { vx, vy, left: (1 - vx) * x, top: (1 - vy) * y };
 }
 
 function galleryDimensions(image: ClientEditionImage): boolean {
   const edges = [image.width ?? 0, image.height ?? 0];
-  return Math.max(...edges) >= 2000 && Math.min(...edges) >= 1200;
+  return Math.max(...edges) >= 2000 && Math.min(...edges) >= 1200
+    && GALLERY_FRAMES.every((frame) => gallerySourcePosition(image, frame.width / frame.height) !== null);
 }
 
 export function galleryHeroEligible(image: ClientEditionImage): boolean {
@@ -141,19 +148,14 @@ function GalleryPaintCard({ palette }: { palette: readonly { hex: string; name: 
   </div>;
 }
 
-function focalPosition(image: ClientEditionImage): string {
-  const [x = 0.5, y = 0.5] = image.focal ?? [];
-  return x * 100 + '% ' + y * 100 + '%';
-}
-
-function GalleryBackground({ hero, url, palette, width }: {
+function GalleryBackground({ hero, url, palette, frame }: {
   hero: ClientEditionImage | null;
   url?: string;
   palette: readonly { hex: string; name: string | null }[];
-  width: number;
+  frame: (typeof GALLERY_FRAMES)[number];
 }) {
   return hero && url ? (
-            <img src={getOptimizedImageUrl(url, { width })} alt={hero.alt || ''} className="h-full w-full object-cover" style={{ objectPosition: focalPosition(hero) }} data-press-cover />
+            <img src={getOptimizedImageUrl(url, { width: frame.width })} alt={hero.alt || ''} className="h-full w-full object-cover" style={{ objectPosition: gallerySourcePosition(hero, frame.width / frame.height) ?? undefined }} data-press-cover />
           ) : (
             <GalleryPaintCard palette={palette} />);
 }
@@ -172,7 +174,7 @@ function GalleryArrival({ hero, url, headline, palette, frame }: {
       <p className="m-0 text-[15px] text-[var(--text-muted)]">{frame.label} · {frame.width} × {frame.height}</p>
       <div className="relative h-[120px] overflow-hidden border border-[var(--border-subtle)]" style={{ width: frame.width * scale, maxWidth: '100%' }} data-gallery-frame={frame.key} aria-hidden={wide ? true : undefined}>
         <div className="absolute left-0 top-0 overflow-hidden" style={{ width: frame.width, height: frame.height, transform: 'scale(' + scale + ')', transformOrigin: 'top left' }}>
-          <GalleryBackground hero={hero} url={url} palette={palette} width={frame.width} />
+          <GalleryBackground hero={hero} url={url} palette={palette} frame={frame} />
           <div className="absolute inset-x-0 bottom-0 bg-[#2E2A26] text-[#F4EFE7]" style={{ display: wide ? 'flex' : 'block', alignItems: 'end', justifyContent: 'space-between', gap: 48, padding: wide ? '28px 52px' : '24px 22px' }} data-gallery-band>
             <p className="m-0 font-normal" style={{ fontFamily: 'var(--font-display, "Playfair Display"), serif', fontSize: wide ? 52 : 34, lineHeight: 1.08 }}>{headline}</p>
             <p className="mb-0 mt-3 text-[#D0C9BE]" style={{ fontFamily: 'Inter, var(--font-inter), sans-serif', fontSize: 16, lineHeight: 1.35 }}>The line about invoices and approvals goes here</p>

@@ -463,7 +463,7 @@ describe('PressBand — focal point', () => {
     fireEvent.pointerUp(frame, { clientX: 900, clientY: 50, pointerId: 1 });
 
     // Both frames' handles name the same point.
-    expect(within(tray).getAllByRole('button', { name: /^Focal point at 100 across, 2[0-9] down/ })).toHaveLength(2);
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 100 across, 19 down/ })).toHaveLength(2);
 
     fireEvent.click(useCrop);
     expect(mockSetFocal).toHaveBeenCalledTimes(1);
@@ -471,8 +471,7 @@ describe('PressBand — focal point', () => {
     expect({ projectId, assetId }).toEqual({ projectId: 'p-1', assetId: 'a-hero' });
     expect(subjectBox).toBeNull();
     expect(focal[0]).toBeCloseTo(1);
-    expect(focal[1]).toBeGreaterThan(0.2);
-    expect(focal[1]).toBeLessThan(0.3);
+    expect(focal[1]).toBeCloseTo(0.2 * (2000 / 1250) / (1440 / 852));
   });
 
   it('keeps the point inside the subject box, and saves that box', () => {
@@ -499,9 +498,8 @@ describe('PressBand — focal point', () => {
     const tray = openHeroFocal();
     const handles = within(tray).getAllByRole('button', { name: /^Focal point at/ });
     fireEvent.keyDown(handles[0], { key: 'ArrowRight' });
-    for (const image of document.querySelectorAll('[data-press-cover]')) {
-      expect((image as HTMLElement).style.objectPosition).toBe('52% 45%');
-    }
+    expect((document.querySelector('[data-gallery-frame="cover_phone"] [data-press-cover]') as HTMLElement).style.objectPosition).toBe('52.9% 50%');
+    expect((document.querySelector('[data-gallery-frame="wide"] [data-press-cover]') as HTMLElement).style.objectPosition).toBe('50% 0%');
     expect(mockSetFocal).not.toHaveBeenCalled();
     fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
     expect(mockSetFocal).toHaveBeenCalledWith(expect.objectContaining({ focal: [0.52, 0.45] }));

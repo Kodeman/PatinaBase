@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 
 import { captionText, captionTriplet, plateAlt } from '@/lib/editorial/caption';
-import { GALLERY_DESKTOP_ASPECT, GALLERY_PHONE_ASPECT } from '@/lib/editorial/gallery-crop';
+import { GALLERY_DESKTOP_ASPECT, GALLERY_PHONE_ASPECT } from '@patina/utils';
 import { galleryRendition } from '@/lib/editorial/gallery-picture';
 import type { EditorialAsset, PaletteSwatch } from '@/lib/editorial/types';
 

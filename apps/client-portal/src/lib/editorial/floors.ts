@@ -2,7 +2,7 @@
    crop; below a floor a plate drops one role; nothing is ever upscaled. */
 
 import type { PlateCropKey, Rect } from './types';
-import { galleryCropPosition, GALLERY_PHONE_ASPECT, GALLERY_DESKTOP_ASPECT } from './gallery-crop';
+import { galleryCropPosition, GALLERY_PHONE_ASPECT, GALLERY_DESKTOP_ASPECT } from '@patina/utils';
 
 export type PlateRole =
   | 'hero'
