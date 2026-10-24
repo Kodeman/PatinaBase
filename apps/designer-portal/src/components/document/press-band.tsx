@@ -59,7 +59,7 @@ import {
   editionHeroId,
   imageCaption,
 } from './press-band-preview';
-import { PressBandFocal } from './press-band-focal';
+import { PressBandFocal, type FocalEdit } from './press-band-focal';
 import { DEAD_PICTURE_COPY } from './line-unfold/item-pictures';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
 
@@ -292,6 +292,39 @@ function JobControls({
   );
 }
 
+function useEditionFocal(edition: ClientEdition, approving: boolean) {
+  const [focal, setFocal] = useState<FocalEdit | null>(null);
+  // Keep successful writes visible while the live edition read catches up.
+  const [savedFocals, setSavedFocals] = useState<Record<string, PlatePoint>>({});
+  const cropReasonId = useId();
+  return {
+    focal,
+    setFocal,
+    cropReasonId,
+    approvalDescriptionId: focal ? cropReasonId : undefined,
+    approvalDisabled: approving || focal !== null,
+    savingCrop: focal?.status === 'saving',
+    previewEdition: {
+      ...edition,
+      images: edition.images.map((image) => savedFocals[image.assetId]
+        ? { ...image, focal: savedFocals[image.assetId] }
+        : image),
+    },
+    onFocalChange: (edit: FocalEdit | null) => {
+      if (edit?.status === 'saved') {
+        setSavedFocals((saved) => ({ ...saved, [edit.assetId]: edit.point }));
+        setFocal(null);
+      } else setFocal(edit);
+    },
+  };
+}
+
+function CropApprovalReason({ edit, id }: { edit: FocalEdit | null; id: string }) {
+  return edit && <p id={id} role="status" className="text-[15px] text-[var(--text-muted)]">
+    {edit.status === 'saving' ? 'Saving this crop before approval' : 'Use this crop or cancel first'}
+  </p>;
+}
+
 function PendingEdition({
   headingId,
   projectId,
@@ -310,9 +343,9 @@ function PendingEdition({
   sourceUrls: Record<string, string>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [focal, setFocal] = useState<{ assetId: string; point: PlatePoint } | null>(null);
   const [overrides, setOverrides] = useState<ClientEditionOverrides>({});
   const approve = useApproveClientEdition();
+  const { focal, setFocal, previewEdition, savingCrop, cropReasonId, approvalDescriptionId, approvalDisabled, onFocalChange } = useEditionFocal(edition, approve.isPending);
   const hold = useHoldClientEdition();
   const trayId = useId();
 
@@ -336,7 +369,8 @@ function PendingEdition({
           <DocumentAction
             actionKey="press-approve"
             variant="primary"
-            disabled={approve.isPending}
+            disabled={approvalDisabled}
+            aria-describedby={approvalDescriptionId}
             loading={approve.isPending}
             loadingLabel="Approving…"
             onClick={() =>
@@ -369,17 +403,22 @@ function PendingEdition({
             variant="tertiary"
             aria-expanded={editing}
             aria-controls={trayId}
-            onClick={() => setEditing((open) => !open)}
+            disabled={savingCrop}
+            onClick={() => {
+              setFocal(null);
+              setEditing((open) => !open);
+            }}
           >
             Edit
           </DocumentAction>}
         </DocumentActionRow>
       </div>
+      <CropApprovalReason id={cropReasonId} edit={focal} />
       <ActFailLine error={approve.error ?? hold.error} />
       <ProjectGalleryPreview
         projectId={projectId}
         focal={focal}
-        edition={edition}
+        edition={previewEdition}
         current={current}
         overrides={overrides}
         sourceUrls={sourceUrls}
@@ -388,10 +427,14 @@ function PendingEdition({
         <EditTray
           id={trayId}
           projectId={projectId}
-          edition={edition}
+          edition={previewEdition}
           overrides={overrides}
-          onChange={setOverrides}
-          onFocalChange={(assetId, point) => setFocal({ assetId, point })}
+          savingCrop={savingCrop}
+          onChange={(next) => {
+            if (next.heroAssetId !== overrides.heroAssetId) setFocal(null);
+            setOverrides(next);
+          }}
+          onFocalChange={onFocalChange}
           sourceUrls={sourceUrls}
         />
       )}
@@ -436,6 +479,7 @@ function Counted({
 
 function EditTray({
   onFocalChange,
+  savingCrop,
   id,
   projectId,
   edition,
@@ -448,7 +492,8 @@ function EditTray({
   edition: ClientEdition;
   overrides: ClientEditionOverrides;
   onChange: (next: ClientEditionOverrides) => void;
-  onFocalChange: (assetId: string, point: PlatePoint) => void;
+  onFocalChange: (edit: FocalEdit | null) => void;
+  savingCrop: boolean;
   sourceUrls: Record<string, string>;
 }) {
   const heroId = editionHeroId(edition, overrides);
@@ -482,6 +527,7 @@ function EditTray({
                     type="button"
                     aria-pressed={image.assetId === heroId}
                     aria-label={label}
+                    disabled={savingCrop}
                     onClick={() => onChange({ ...overrides, heroAssetId: image.assetId })}
                     className={`block h-[75px] w-[120px] overflow-hidden rounded-[4px] bg-[var(--paper)] p-0 focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${
                       image.assetId === heroId

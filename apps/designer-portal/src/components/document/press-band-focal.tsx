@@ -16,6 +16,12 @@ import { DocumentAction, DocumentActionRow } from './document-action';
 
 import { GALLERY_FRAMES, galleryCropWindow } from './press-band-preview';
 
+export type FocalEdit = {
+  assetId: string;
+  point: PlatePoint;
+  status: 'dirty' | 'saving' | 'saved';
+};
+
 const FULL_FRAME: PlateBox = [0, 0, 1, 1];
 const KEY_STEP = 0.02;
 
@@ -44,9 +50,10 @@ export function PressBandFocal({
   projectId: string;
   image: ClientEditionImage;
   sourceUrl: string;
-  onFocalChange?: (assetId: string, point: PlatePoint) => void;
+  onFocalChange?: (edit: FocalEdit | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const label = image.captionWhat || image.alt || 'the photograph';
   return (
     <div className="flex flex-col gap-3" data-press-focal={image.assetId}>
@@ -56,12 +63,19 @@ export function PressBandFocal({
           variant="tertiary"
           aria-expanded={open}
           aria-label={`Set the focal point of ${label}`}
-          onClick={() => setOpen((was) => !was)}
+          disabled={saving}
+          onClick={() => {
+            onFocalChange?.(null);
+            setOpen((was) => !was);
+          }}
         >
           Set the focal point
         </DocumentAction>
       </DocumentActionRow>
-      {open && <FocalEditor projectId={projectId} image={image} sourceUrl={sourceUrl} onFocalChange={onFocalChange} />}
+      {open && <FocalEditor projectId={projectId} image={image} sourceUrl={sourceUrl} onFocalChange={(edit) => {
+        setSaving(edit?.status === 'saving');
+        onFocalChange?.(edit);
+      }} />}
     </div>
   );
 }
@@ -75,7 +89,7 @@ function FocalEditor({
   projectId: string;
   image: ClientEditionImage;
   sourceUrl: string;
-  onFocalChange?: (assetId: string, point: PlatePoint) => void;
+  onFocalChange?: (edit: FocalEdit | null) => void;
 }) {
   const box = subjectBoxOf(image);
   const hold = box ?? FULL_FRAME;
@@ -86,6 +100,7 @@ function FocalEditor({
         ? [box[0] + box[2] / 2, box[1] + box[3] / 2]
         : DEFAULT_CENTRE;
   const [focal, setFocal] = useState<PlatePoint>(initial);
+  const saved = useRef(initial);
   const [moved, setMoved] = useState(false);
   // While a drag runs the frames stand still on the point the drag began at,
   // so the picture never slides under the pointer; the handle moves instead.
@@ -93,10 +108,12 @@ function FocalEditor({
   const dragFrame = useRef<number | null>(null);
   const setPlateFocal = useSetPlateFocal();
   const moveTo = (next: PlatePoint) => {
+    if (setPlateFocal.isPending) return;
     const point = inBox(next, hold);
+    const dirty = point[0] !== saved.current[0] || point[1] !== saved.current[1];
     setFocal(point);
-    onFocalChange?.(image.assetId, point);
-    setMoved(true);
+    onFocalChange?.(dirty ? { assetId: image.assetId, point, status: 'dirty' } : null);
+    setMoved(dirty);
     setPlateFocal.reset();
   };
 
@@ -186,14 +203,28 @@ function FocalEditor({
           disabled={!moved}
           loading={setPlateFocal.isPending}
           loadingLabel="Saving…"
-          onClick={() =>
+          onClick={() => {
+            onFocalChange?.({ assetId: image.assetId, point: focal, status: 'saving' });
             setPlateFocal.mutate({
               projectId,
               assetId: image.assetId,
               subjectBox: box ? [...box] : null,
               focal: [...focal],
-            })
-          }
+            }, {
+              onSuccess: () => {
+                saved.current = focal;
+                setMoved(false);
+                onFocalChange?.({ assetId: image.assetId, point: focal, status: 'saved' });
+              },
+              onError: () => {
+                setFocal(saved.current);
+                setMoved(false);
+                setDragFrom(null);
+                dragFrame.current = null;
+                onFocalChange?.(null);
+              },
+            });
+          }}
         >
           Use this crop
         </DocumentAction>

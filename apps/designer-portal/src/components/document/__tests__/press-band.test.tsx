@@ -5,7 +5,7 @@
  * job, and never a word about how the edition was made. Editions are the
  * SQL's own rows (__fixtures__/client-editions) through the hook's normaliser.
  */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act as reactAct, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ClientEdition, ClientEditions, ClientEditorialAsset } from '@patina/supabase';
 import { PressBand, publishedLine } from '../press-band';
 import { editionDelta, PressBandPreview } from '../press-band-preview';
@@ -72,7 +72,29 @@ jest.mock('@patina/supabase', () => ({
   useApproveClientEdition: () => act(mockApprove),
   useHoldClientEdition: () => act(mockHold),
   useUndoClientEdition: () => act(mockUndo),
-  useSetPlateFocal: () => act(mockSetFocal),
+  useSetPlateFocal: () => {
+    const React = require('react');
+    const [state, setState] = React.useState({ isPending: false, isSuccess: false, error: null });
+    return {
+      ...state,
+      reset: () => setState({ isPending: false, isSuccess: false, error: null }),
+      mutate: (input: unknown, options?: { onSuccess?: () => void; onError?: () => void; onSettled?: () => void }) => {
+        setState({ isPending: true, isSuccess: false, error: null });
+        mockSetFocal(input, {
+          onSuccess: () => {
+            setState({ isPending: false, isSuccess: true, error: null });
+            options?.onSuccess?.();
+            options?.onSettled?.();
+          },
+          onError: () => {
+            setState({ isPending: false, isSuccess: false, error: new Error('Crop could not be saved') });
+            options?.onError?.();
+            options?.onSettled?.();
+          },
+        });
+      },
+    };
+  },
   useSetProjectShowMakers: () => act(mockShowMakers),
 }));
 
@@ -502,7 +524,76 @@ describe('PressBand — focal point', () => {
     expect((document.querySelector('[data-gallery-frame="wide"] [data-press-cover]') as HTMLElement).style.objectPosition).toBe('50% 0%');
     expect(mockSetFocal).not.toHaveBeenCalled();
     fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
-    expect(mockSetFocal).toHaveBeenCalledWith(expect.objectContaining({ focal: [0.52, 0.45] }));
+    expect(mockSetFocal).toHaveBeenCalledWith(expect.objectContaining({ focal: [0.52, 0.45] }), expect.any(Object));
+  });
+
+  const previewPosition = () => (document.querySelector('[data-gallery-frame="cover_phone"] [data-press-cover]') as HTMLElement).style.objectPosition;
+  const dragHero = (tray: HTMLElement) => {
+    const frame = tray.querySelector('[data-focal-frame="wide"]') as HTMLElement;
+    frameRect(frame);
+    fireEvent.pointerDown(frame, { clientX: 300, clientY: 50, pointerId: 1 });
+    fireEvent.pointerUp(frame, { pointerId: 1 });
+  };
+
+  it.each(['Edit', 'Set the focal point of What a-hero'])('drag then close %s restores the saved preview and reopening stays saved', (close) => {
+    renderBand([PENDING_ROW]);
+    const saved = previewPosition();
+    const tray = openHeroFocal();
+    dragHero(tray);
+    expect(previewPosition()).not.toBe(saved);
+    fireEvent.click(screen.getByRole('button', { name: close }));
+    expect(previewPosition()).toBe(saved);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: close }));
+    expect(previewPosition()).toBe(saved);
+    expect(mockSetFocal).not.toHaveBeenCalled();
+  });
+
+  it('drag disables Approve with a reason and does not auto-save', () => {
+    renderBand([PENDING_ROW]);
+    dragHero(openHeroFocal());
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    expect(approve).toBeDisabled();
+    expect(approve).toHaveAccessibleDescription('Use this crop or cancel first');
+    fireEvent.click(approve);
+    expect(mockApprove).not.toHaveBeenCalled();
+    expect(mockSetFocal).not.toHaveBeenCalled();
+  });
+
+  it('save blocks Approve while pending then preserves the saved focal and approves supported overrides', () => {
+    renderBand([PENDING_ROW]);
+    const tray = openHeroFocal();
+    fireEvent.change(within(tray).getAllByLabelText('Headline')[0], { target: { value: 'New chapter' } });
+    dragHero(tray);
+    const saved = previewPosition();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    expect(mockSetFocal.mock.calls[0][0]).toEqual(expect.objectContaining({ assetId: 'a-hero', focal: expect.any(Array) }));
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+    expect(within(tray).getByRole('button', { name: 'Set the focal point of What a-hero' })).toBeDisabled();
+    reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(previewPosition()).toBe(saved);
+    const reopened = openHeroFocal();
+    const point = mockSetFocal.mock.calls[0][0].focal;
+    expect(within(reopened).getAllByRole('button', { name: new RegExp(`^Focal point at ${Math.round(point[0] * 100)} across, ${Math.round(point[1] * 100)} down`) })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(mockApprove.mock.calls[0][0]).toEqual({ projectId: 'p-1', editionId: 'e-5', overrides: { chapters: { 'room-living': { headline: 'New chapter' } } } });
+  });
+
+  it('failed save resets the preview and editor while retaining the save error', () => {
+    renderBand([PENDING_ROW]);
+    const saved = previewPosition();
+    const tray = openHeroFocal();
+    dragHero(tray);
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    reactAct(() => mockSetFocal.mock.calls[0][1].onError());
+    expect(previewPosition()).toBe(saved);
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 50 across, 45 down/ })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Use this crop' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(screen.getByText(/Crop could not be saved/)).toBeInTheDocument();
   });
 });
 
