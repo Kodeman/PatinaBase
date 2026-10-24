@@ -1,6 +1,6 @@
 import { test, expect } from '../fixtures/auth';
 import type { Page } from '@playwright/test';
-import { psqlScalar } from '../helpers/psql';
+import { psqlRun, psqlScalar } from '../helpers/psql';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const LIVING = 'f0180000-0000-4000-8000-000000000011';
@@ -64,6 +64,21 @@ function captureDocumentOpen(page: Page) {
 
 test.describe('WP-01.9 first vertical slice (F01)', () => {
   test.setTimeout(240_000);
+
+  test.afterAll(() => {
+    // Remove only this fixture's project-owned rows. Keep the studio's last
+    // owner membership intact; deleting it triggers last_owner_protected.
+    psqlRun(`
+      BEGIN;
+      DELETE FROM public.room_scans WHERE id = '${SCAN}';
+      DELETE FROM public.projects WHERE id = '${JOB}';
+      COMMIT;
+    `);
+    expect(
+      psqlScalar(`SELECT count(*)::text FROM public.projects WHERE id = '${JOB}';`),
+      'F01 project teardown removes its owned job',
+    ).toBe('0');
+  });
 
   test('studio → exact living-room line → save and recover → room → studio', async ({ authenticatedPage: page }) => {
     const line = lineId();
@@ -175,7 +190,7 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
       return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'XX000', message: 'Forced failure (SQ-1829)' }) });
     });
     await finish.fill(failed);
-    await finish.press('Tab');
+    await finish.press('Enter');
     await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/, { timeout: 30_000 });
     await expect(finish).toHaveValue(failed);
     await expect(finish).toBeFocused();
@@ -294,7 +309,7 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     await expect(lineControl).toHaveAttribute('aria-current', 'true', {
       timeout: 30_000,
     });
-    await expect(lineControl).toBeFocused({ timeout: 30_000 });
+    await expect(instrument(page).getByTestId('spec-fields-pane').getByRole('heading').first()).toBeFocused({ timeout: 30_000 });
     await expect.poll(() => new URL(page.url()).searchParams.get('line')).toBe(line);
     const dimensions = await page.evaluate(() => ({
       viewport: document.documentElement.clientWidth,
