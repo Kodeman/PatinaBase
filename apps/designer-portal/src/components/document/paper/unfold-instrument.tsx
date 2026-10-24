@@ -135,10 +135,9 @@ const backHolds = new Set<BackHold>();
 
 /** Explicit paper departures use the mounted sheet's Return/Esc barrier too. */
 export function requestUnfoldDeparture(action: () => void): void {
-  const kind = parseUnfoldSearch(new URLSearchParams(window.location.search), {
-    canSeeMoney: true,
-  })?.kind;
-  const hold = [...backHolds].find((candidate) => candidate.kind === kind);
+  // The mounted owner remains authoritative while history restores its entry;
+  // the address bar may already show the folded destination.
+  const hold = backHolds.values().next().value;
   if (hold) hold.depart(action);
   else action();
 }
