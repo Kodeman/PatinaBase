@@ -1,6 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+
+import { urgentInvoice } from '@/lib/threshold/asks-line';
+import { galleryInvoiceReceipt } from '@/lib/threshold/gallery-invoices';
+import { GalleryInvoiceList } from './gallery-invoice-list';
 
 import { type Invoice } from '@patina/supabase';
 import { invoiceBalanceCents } from '@patina/shared';
@@ -71,6 +75,8 @@ export interface LetterboxProps {
   onHold?: (invoiceId: string, hold: InvoiceServerHold) => void;
   /** The house the list stands in: the eyebrow and the total's scope. */
   projectName?: string | null;
+  /** Gallery changes placement only; the invoice/payment owner stays here. */
+  gallery?: { approvals: ReactNode };
 }
 
 const EPOCH = new Date(0);
@@ -213,6 +219,78 @@ function WithheldTotal({ withheld }: { withheld: InvoiceFiguresWithheld | null }
   );
 }
 
+function PayableInvoices({ projection, state }: { projection: InvoiceProjection; state: InvoiceListState }) {
+  const { counts } = projection;
+  return <>      {projection.payable.length > 0 ? (
+        <InvoiceGroupList
+          testId="invoices-to-pay"
+          heading="Invoices to pay"
+          summary={countSentence(counts?.payable, 'soonest due first')}
+          rows={projection.payable}
+          state={state}
+        />
+      ) : (
+        projection.nothingToPay && (
+          <section data-testid="invoices-to-pay" aria-label="Invoices to pay" className="flex flex-col gap-1">
+            <h3 className="text-[18px] font-medium leading-[1.4] text-[var(--text-primary)]">
+              Invoices to pay
+            </h3>
+            <p data-testid="invoices-none" className="t-body text-[var(--text-primary)]">
+              No invoices to pay.
+            </p>
+          </section>
+        )
+      )}</>;
+}
+
+function InvoiceContents({ projection, state, gallery, mixedCurrency, scope }: {
+  projection: InvoiceProjection; state: InvoiceListState; gallery: LetterboxProps['gallery']; mixedCurrency: boolean; scope: string;
+}) {
+  if (gallery) return <GalleryInvoiceList projection={projection} state={state} approvals={gallery.approvals} />;
+  return <><PayableInvoices projection={projection} state={state} />
+
+      {projection.processing.length > 0 && (
+        <InvoiceGroupList
+          testId="invoices-in-progress"
+          heading="Payments in progress"
+          rows={projection.processing}
+          state={state}
+        />
+      )}
+
+      {projection.review.length > 0 && (
+        <InvoiceGroupList
+          testId="invoices-under-review"
+          heading="Payment needs review"
+          rows={projection.review}
+          state={state}
+        />
+      )}
+
+      <OutstandingTotal projection={projection} mixed={mixedCurrency} scope={scope} /></>;
+}
+
+function settledReceipt(invoice: Invoice | null, gallery: boolean): string {
+  const fact = gallery && invoice && galleryInvoiceReceipt(invoice);
+  return fact || `${invoice?.invoice_number ?? 'Your invoice'} · Payment confirmed — thank you. Your invoice has been updated.`;
+}
+
+function confirmationLine(confirm: string | null, invoice: Invoice | null, gallery: boolean): string {
+  if (confirm === 'confirmed') return settledReceipt(invoice, gallery);
+  return confirm === 'unconfirmed'
+    ? 'Checkout returned, but Patina has not confirmed a payment yet. Do not submit another payment until the status is known.'
+    : 'Confirming payment… This usually takes a few seconds.';
+}
+
+function InvoiceReturnReceipt({ outcome, confirm, invoice, gallery }: {
+  outcome: string; confirm: string | null; invoice: Invoice | null; gallery: boolean;
+}) {
+  return <p role="status" data-testid="letterbox-receipt" data-confirm={confirm ?? undefined}
+    className="cp-note max-w-[56ch] text-[16px] leading-[1.55]">
+    {outcome === 'settled' ? confirmationLine(confirm, invoice, gallery) : 'Nothing changed.'}
+  </p>;
+}
+
 export function Letterbox({
   projection: handed,
   invoices = NO_INVOICES,
@@ -221,6 +299,7 @@ export function Letterbox({
   today,
   onHold,
   projectName = null,
+  gallery,
 }: LetterboxProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -403,6 +482,15 @@ export function Letterbox({
   };
 
   const { counts } = projection;
+  const galleryOpened = useRef(false);
+  const urgentId = urgentInvoice(projection)?.invoice.id;
+  useEffect(() => {
+    if (!gallery || galleryOpened.current || !urgentId) return;
+    galleryOpened.current = true;
+    setOpenId((was) => was ?? urgentId);
+  }, [gallery, urgentId]);
+
+  const receipt = settlement && <InvoiceReturnReceipt outcome={settlement.outcome} confirm={confirm} invoice={returnedRow} gallery={Boolean(gallery)} />;
 
   return (
     <div
@@ -413,6 +501,7 @@ export function Letterbox({
       data-testid="letterbox"
       className="flex flex-col gap-6"
     >
+      {gallery && receipt}
       <div className="flex flex-col gap-1">
         {house && (
           <p data-testid="letterbox-eyebrow" className="text-[15px] leading-[1.5] text-[var(--text-body)]">
@@ -433,65 +522,11 @@ export function Letterbox({
         {announcement}
       </p>
 
-      {settlement && (
-        <p
-          role="status"
-          data-testid="letterbox-receipt"
-          data-confirm={confirm ?? undefined}
-          className="cp-note max-w-[56ch] text-[16px] leading-[1.55]"
-        >
-          {settlement.outcome !== 'settled'
-            ? 'Nothing changed.'
-            : confirm === 'confirmed'
-              ? `${returnedRow?.invoice_number ?? 'Your invoice'} · Payment confirmed — thank you. Your invoice has been updated.`
-              : confirm === 'unconfirmed'
-                ? 'Checkout returned, but Patina has not confirmed a payment yet. Do not submit another payment until the status is known.'
-                : 'Confirming payment… This usually takes a few seconds.'}
-        </p>
-      )}
+      {!gallery && receipt}
 
       <ReadNotice read={projection.read} withheld={projection.withheld} onRetry={onRefetch} />
 
-      {projection.payable.length > 0 ? (
-        <InvoiceGroupList
-          testId="invoices-to-pay"
-          heading="Invoices to pay"
-          summary={countSentence(counts?.payable, 'soonest due first')}
-          rows={projection.payable}
-          state={state}
-        />
-      ) : (
-        projection.nothingToPay && (
-          <section data-testid="invoices-to-pay" aria-label="Invoices to pay" className="flex flex-col gap-1">
-            <h3 className="text-[18px] font-medium leading-[1.4] text-[var(--text-primary)]">
-              Invoices to pay
-            </h3>
-            <p data-testid="invoices-none" className="t-body text-[var(--text-primary)]">
-              No invoices to pay.
-            </p>
-          </section>
-        )
-      )}
-
-      {projection.processing.length > 0 && (
-        <InvoiceGroupList
-          testId="invoices-in-progress"
-          heading="Payments in progress"
-          rows={projection.processing}
-          state={state}
-        />
-      )}
-
-      {projection.review.length > 0 && (
-        <InvoiceGroupList
-          testId="invoices-under-review"
-          heading="Payment needs review"
-          rows={projection.review}
-          state={state}
-        />
-      )}
-
-      <OutstandingTotal projection={projection} mixed={mixedCurrency} scope={scope} />
+      <InvoiceContents projection={projection} state={state} gallery={gallery} mixedCurrency={mixedCurrency} scope={scope} />
 
       <PaymentHistory
         rows={projection.history}
