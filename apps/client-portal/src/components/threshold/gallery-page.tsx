@@ -2,17 +2,19 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { formatCurrency } from '@patina/shared';
 
-import { GOODS_JOURNEY_STAGES, journeyStageIndexForStatus } from '@/components/commercial/journey-stepper';
+import { GOODS_JOURNEY_STAGES, journeyStageIndexForStatus, TRADE_JOURNEY_STAGES, tradeJourneyStageIndexForState } from '@/components/commercial/journey-stepper';
+import type { ClientSelection } from '@/lib/commercial-documents';
 import { galleryHeadline } from '@/lib/threshold/asks-line';
 import { waitingSentence, type OtherHouse } from '@/lib/threshold/other-houses';
 import type { RoomBandModel } from '@/lib/threshold/derive';
-import { plateAlt } from '@/lib/editorial/caption';
 import type { EditorialAsset } from '@/lib/editorial/types';
 import type { HouseIssue } from './editorial/house-issue';
 import { GalleryDrawer, useGalleryRoute } from './gallery-drawer';
 import { GalleryPhoto } from './gallery-photo';
 import { SilhouettePlate } from './editorial/silhouette-plate';
+import { ConceptRenderPlate, floorLine, stampDetail } from './room-band';
 
 interface GalleryChapter {
   key: string;
@@ -22,108 +24,200 @@ interface GalleryChapter {
   asset: EditorialAsset | null;
 }
 
-function galleryChapters(issue: HouseIssue | null, bands: RoomBandModel[]): GalleryChapter[] {
-  const editorial = issue?.editorial;
-  const keys = [...new Set([
-    ...(editorial?.composition?.chapters ?? []).map((chapter) => chapter.key).filter((key) => !['cover', 'progress'].includes(key)),
-    ...bands.map((band) => band.anchor),
-  ])];
-  return keys.flatMap((key) => {
-    const band = bands.find((candidate) => candidate.anchor === key) ?? null;
-    const words = editorial?.composition?.chapters.find((chapter) => chapter.key === key);
-    const image = [...(editorial?.images ?? [])].filter((image) => image.chapterKey === key && image.assetId !== issue?.hero?.id)
-      .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
-      .map((image) => editorial?.assets.find((asset) => asset.id === image.assetId))
-      .find((asset) => asset && asset.ground !== 'white' && asset.sourceKind !== 'concept');
-    const asset = image ?? (band ? issue?.rooms.get(band.roomId)?.chapter : null) ?? null;
-    if (!band && !asset) return [];
-    return [{ key, name: words?.headline || band?.name || 'The house', standing: words?.standing ?? null, band, asset }];
-  });
+function chapterAsset(issue: HouseIssue, key: string): EditorialAsset | null {
+  const images = issue.editorial.images ?? [];
+  const candidates = images.filter((image) => image.chapterKey === key && image.assetId !== issue.hero?.id)
+    .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+  for (const image of candidates) {
+    const asset = issue.editorial.assets.find((item) => item.id === image.assetId);
+    if (asset && asset.ground !== 'white') return asset;
+  }
+  return null;
 }
 
-function Chapter({ chapter, issue }: { chapter: GalleryChapter; issue: HouseIssue | null }) {
+function chapterWords(issue: HouseIssue | null, key: string) {
+  return issue?.editorial.composition?.chapters.find((chapter) => chapter.key === key);
+}
+
+function chapterName(words: ReturnType<typeof chapterWords>, band: RoomBandModel | null) { return words?.headline || band?.name || 'The house'; }
+function roomAsset(issue: HouseIssue | null, band: RoomBandModel | null) { return band ? issue?.rooms.get(band.roomId)?.chapter : null; }
+function chapterDetails(words: ReturnType<typeof chapterWords>, band: RoomBandModel | null) {
+  return { name: chapterName(words, band), standing: words?.standing ?? null };
+}
+function chapterBand(bands: RoomBandModel[], key: string) { return bands.find(band => band.anchor === key) ?? null; }
+function chosenAsset(issue: HouseIssue | null, key: string, band: RoomBandModel | null) {
+  return (issue ? chapterAsset(issue, key) : null) ?? roomAsset(issue, band) ?? null;
+}
+function makeChapter(issue: HouseIssue | null, bands: RoomBandModel[], key: string): GalleryChapter | null {
+  const band = chapterBand(bands, key);
+  const asset = chosenAsset(issue, key, band);
+  if (!band && !asset) return null;
+  return { key, ...chapterDetails(chapterWords(issue, key), band), band, asset };
+}
+
+function galleryChapters(issue: HouseIssue | null, bands: RoomBandModel[]): GalleryChapter[] {
+  const composed = issue?.editorial.composition?.chapters ?? [];
+  const keys = [...new Set([...composed.map((chapter) => chapter.key), ...bands.map((band) => band.anchor)])];
+  return keys.filter((key) => !['cover', 'progress'].includes(key))
+    .map((key) => makeChapter(issue, bands, key)).filter((chapter): chapter is GalleryChapter => chapter !== null);
+}
+
+function ChapterPicture({ chapter, issue, studioName }: { chapter: GalleryChapter; issue: HouseIssue | null; studioName: string | null }) {
+  if (chapter.asset) return <GalleryPhoto scope={issue!.scopeId} asset={chapter.asset} palette={issue!.editorial.palette} />;
+  if (chapter.band?.conceptRender) return <ConceptRenderPlate render={chapter.band.conceptRender} roomName={chapter.band.name} studioName={studioName} />;
   const piece = chapter.band?.pieces[0];
+  if (piece) return <SilhouettePlate name={piece.name} category={piece.itemType} className="gallery-silhouette" />;
+  return null;
+}
+
+function ChapterStanding({ chapter }: { chapter: GalleryChapter }) {
+  // Current movement wins over an edition's older snapshot of the room.
+  const live = chapter.band ? floorLine(chapter.band.pieces) : null;
+  const sentence = live ?? chapter.standing;
+  return sentence ? <p className="gallery-standing">{sentence}</p> : null;
+}
+
+function Chapter({ chapter, issue, studioName }: { chapter: GalleryChapter; issue: HouseIssue | null; studioName: string | null }) {
   return <section id={chapter.key} className="gallery-chapter" aria-label={chapter.name}
     data-threshold-unit={chapter.key} data-dimmable="">
-    {chapter.asset ? <GalleryPhoto scope={issue!.scopeId} asset={chapter.asset} palette={issue?.editorial.palette ?? []} />
-      : piece ? <SilhouettePlate name={piece.name} category={piece.itemType} className="gallery-silhouette" />
-      : <GalleryPhoto scope={issue?.scopeId ?? ''} asset={null} palette={issue?.editorial.palette ?? []} />}
-    {chapter.standing && <p className="gallery-standing">{chapter.standing}</p>}
+    <ChapterPicture chapter={chapter} issue={issue} studioName={studioName} />
+    <ChapterStanding chapter={chapter} />
     {chapter.band && <a className="gallery-pieces-link" href={`#pieces-${chapter.band.roomId}`}>
       Every piece in the {chapter.band.name}
     </a>}
   </section>;
 }
 
+function pieceStatus(piece: ClientSelection): string {
+  if (piece.kind === 'trade') return TRADE_JOURNEY_STAGES[tradeJourneyStageIndexForState(piece.tradeJourney ?? 'none')];
+  return GOODS_JOURNEY_STAGES[journeyStageIndexForStatus(piece.logisticsStatus)];
+}
+
+function PieceInstrument({ piece }: { piece: ClientSelection }) {
+  const detail = stampDetail(piece);
+  return <>{detail && <p>{detail}</p>}{piece.docCode && <p>{piece.docCode}</p>}</>;
+}
+function PieceImages({ piece }: { piece: ClientSelection }) {
+  const urls = [...new Set([piece.imageUrl, ...(piece.imageUrls ?? [])])].filter((url): url is string => !!url);
+  return <div>{urls.map(url =>
+    // eslint-disable-next-line @next/next/no-img-element -- existing client-visible selection images
+    <img key={url} src={url} alt="" width={64} height={64} loading="lazy" />)}</div>;
+}
+function PieceFacts({ piece }: { piece: ClientSelection }) {
+  return <div><p>{piece.name}</p><p>{pieceStatus(piece)}</p>
+    {piece.quantity > 1 && <p>{piece.quantity} of them</p>}
+    {piece.clientLineTotalCents > 0 && <p>{formatCurrency(piece.clientLineTotalCents)}</p>}
+    <PieceInstrument piece={piece} />
+  </div>;
+}
+
 export function GalleryPieces({ band, extras }: { band: RoomBandModel; extras?: ReactNode }) {
   return <>
     {band.varianceLine && <p>{band.varianceLine}</p>}
     <ul className="gallery-piece-list">
-      {band.pieces.map((piece) => <li key={piece.id}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- existing client-visible selection image */}
-        {piece.imageUrl && <img src={piece.imageUrl} alt="" width={64} height={64} loading="lazy" />}
-        <div><p>{piece.name}</p><p>{GOODS_JOURNEY_STAGES[journeyStageIndexForStatus(piece.logisticsStatus)]}</p></div>
+      {band.pieces.map((piece) => <li key={piece.id} data-threshold-piece={piece.id}>
+        <PieceImages piece={piece} />
+        <PieceFacts piece={piece} />
       </li>)}
     </ul>
     {extras}
   </>;
 }
 
-export function GalleryPage({ projectName, studioName, designerName, preparedFor, issue, ready, heldTooLong,
-  line, menuAsks, asks, plan, documents, bands, pieces, note, earlier, footer, roadSentence, otherHouses,
-}: {
+interface GalleryPageProps {
   projectName: string; studioName: string | null; designerName: string | null; preparedFor: string | null;
   issue: HouseIssue | null; ready: boolean; heldTooLong: boolean; line: string | null;
   menuAsks: ReactNode; asks: ReactNode; plan: ReactNode; documents: (dismiss: () => void) => ReactNode;
   otherHouses: OtherHouse[];
   bands: RoomBandModel[]; pieces: (band: RoomBandModel) => ReactNode;
   note: ReactNode; earlier: ReactNode; footer: ReactNode; roadSentence: ReactNode;
-}) {
+}
+
+function contactLabel(name: string | null) { return name ? `Call ${name}` : 'Contact your designer'; }
+function BandStatus({ ready, line, heldTooLong }: Pick<GalleryPageProps, 'ready' | 'line' | 'heldTooLong'>) {
+  if (ready) return <a className="gallery-asks-line" href="#doorstep"><span>{line ?? 'Your asks could not all be read. Please check them.'}</span><span aria-hidden="true">→</span></a>;
+  return <p role="status">{heldTooLong ? 'This is taking longer than it should. Please refresh.' : 'Reading your house…'}</p>;
+}
+
+function arrivalPhoto(issue: HouseIssue | null) {
+  return { scope: issue?.scopeId ?? '', asset: issue?.hero ?? null, palette: issue?.editorial.palette ?? [] };
+}
+function Arrival(props: GalleryPageProps) {
+  const { issue } = props;
+  return <header className="gallery-arrival">
+    <GalleryPhoto key={issue?.hero?.id ?? 'paint'} {...arrivalPhoto(issue)} arrival />
+    <div className="gallery-top"><span className="gallery-chip">{props.studioName ?? 'Your studio'}</span>
+      <a className="gallery-chip gallery-menu-control" href="#menu">Menu</a></div>
+    <div className="gallery-band"><h1>{galleryHeadline(issue?.editorial, props.projectName)}</h1><BandStatus {...props} /></div>
+  </header>;
+}
+
+function PageFooter(props: GalleryPageProps) {
+  return <footer className="gallery-footer" id="mat" data-testid="mat">
+    <p>{props.projectName}</p>{props.preparedFor && <p>Prepared for {props.preparedFor}</p>}
+    <ul><li><a href="#letterbox">Invoices</a></li><li><a href="#approvals">Approvals</a></li>
+      <li><a href="#mat-papers">Documents</a></li><li><a href="#previously">Earlier</a></li>
+      <li><a href="#contact">{contactLabel(props.designerName)}</a></li></ul>
+    {props.footer}<div className="gallery-earlier"><h2>Earlier</h2>{props.earlier}</div>
+  </footer>;
+}
+
+function otherHouseLine(house: OtherHouse) {
+  const sentence = waitingSentence(house);
+  return sentence ? `, ${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}` : '';
+}
+function GalleryIndex({ props, chapters }: { props: GalleryPageProps; chapters: GalleryChapter[] }) {
+  return <nav aria-label="Page index">
+    {props.preparedFor && <p>Prepared for {props.preparedFor}</p>}
+    <ul className="gallery-index">{props.ready && props.menuAsks}
+      {props.otherHouses.map((house) => <li key={house.id}><Link href={`/projects/${house.id}`}>{house.name}<small>{otherHouseLine(house)}</small></Link></li>)}
+      {chapters.map((chapter) => <li key={chapter.key}><a href={`#${chapter.key}`}>{chapter.name}</a></li>)}
+      <li><a href="#key">The house</a></li><li><a href="#letterbox">Invoices</a></li>
+      <li><a href="#mat-papers">Documents</a></li><li><a href="#contact">{contactLabel(props.designerName)}</a></li>
+    </ul>
+  </nav>;
+}
+
+const DRAWER_TITLES = { menu: '', plan: 'The house', documents: 'Documents', asks: 'Invoices and approvals', page: '', scroll: '', pieces: '' };
+
+function GalleryBody({ props, chapters }: { props: GalleryPageProps; chapters: GalleryChapter[] }) {
+  if (!props.ready) return <div data-testid="threshold-hold" className="gallery-hold" />;
+  return <><div id="road" className="gallery-road-sentence">{props.roadSentence}</div>
+    {chapters.map((chapter) => <Chapter key={chapter.key} chapter={chapter} issue={props.issue} studioName={props.studioName} />)}
+    <div className="gallery-note">{props.note}</div><PageFooter {...props} /></>;
+}
+
+function roomContents(roomId: string, props: GalleryPageProps) {
+  const room = props.bands.find(band => band.roomId === roomId);
+  return room ? props.pieces(room) : null;
+}
+function DrawerContents({ route, props, chapters, dismiss }: { route: ReturnType<typeof useGalleryRoute>['route']; props: GalleryPageProps; chapters: GalleryChapter[]; dismiss: () => void }) {
+  switch (route.kind) {
+    case 'menu': return <GalleryIndex props={props} chapters={chapters} />;
+    case 'plan': return props.plan;
+    case 'documents': return props.documents(dismiss);
+    case 'pieces': {
+      return roomContents(route.roomId, props);
+    }
+    default: return null;
+  }
+}
+function drawerTitle(route: ReturnType<typeof useGalleryRoute>['route'], props: GalleryPageProps) {
+  if (route.kind !== 'pieces') return DRAWER_TITLES[route.kind] || props.projectName;
+  const room = props.bands.find(band => band.roomId === route.roomId);
+  return room ? 'Every piece in the ' + room.name : props.projectName;
+}
+function askAnchor(route: ReturnType<typeof useGalleryRoute>['route']) { return route.kind === 'asks' ? route.anchor : undefined; }
+export function GalleryPage(props: GalleryPageProps) {
   const { route, active, dismiss } = useGalleryRoute();
-  const chapters = galleryChapters(issue, bands);
-  const room = route.kind === 'pieces' ? bands.find((band) => band.roomId === route.roomId) : null;
-  const title = route.kind === 'menu' ? projectName : route.kind === 'plan' ? 'The house'
-    : route.kind === 'documents' ? 'Documents' : room ? `Every piece in the ${room.name}` : 'Invoices and approvals';
+  const chapters = galleryChapters(props.issue, props.bands);
+  const title = drawerTitle(route, props);
   return <div className="gallery-page" data-testid="the-threshold">
-    <header className="gallery-arrival">
-      <GalleryPhoto key={issue?.hero?.id ?? 'paint'} scope={issue?.scopeId ?? ''} asset={issue?.hero ?? null}
-        palette={issue?.editorial.palette ?? []} arrival />
-      <div className="gallery-top"><span className="gallery-chip">{studioName ?? 'Your studio'}</span>
-        <a className="gallery-chip gallery-menu-control" href="#menu">Menu</a></div>
-      <div className="gallery-band"><h1>{galleryHeadline(issue?.editorial, projectName)}</h1>
-        {ready && line ? <a className="gallery-asks-line" href="#doorstep"><span>{line}</span><span aria-hidden="true">→</span></a>
-          : <p role="status">{heldTooLong ? 'This is taking longer than it should. Please refresh.' : 'Reading your house…'}</p>}
-      </div>
-    </header>
-    {ready ? <>
-      <div id="road" className="gallery-road-sentence">{roadSentence}</div>
-      {chapters.map((chapter) => <Chapter key={chapter.key} chapter={chapter} issue={issue} />)}
-      <div className="gallery-note">{note}</div>
-      <footer className="gallery-footer" id="mat" data-testid="mat">
-        <p>{projectName}</p>{preparedFor && <p>Prepared for {preparedFor}</p>}
-        <ul><li><a href="#letterbox">Invoices</a></li><li><a href="#approvals">Approvals</a></li>
-          <li><a href="#mat-papers">Documents</a></li><li><a href="#previously">Earlier</a></li>
-          <li><a href="#contact">{designerName ? `Call ${designerName}` : 'Contact your designer'}</a></li></ul>
-        {footer}
-        <div className="gallery-earlier"><h2>Earlier</h2>{earlier}</div>
-      </footer>
-    </> : <div data-testid="threshold-hold" className="gallery-hold" />}
-    <GalleryDrawer open={active} title={title} onDismiss={dismiss} anchor={route.kind === 'asks' ? route.anchor : undefined}>
+    <Arrival {...props} /><GalleryBody props={props} chapters={chapters} />
+    <GalleryDrawer open={active} title={title} onDismiss={dismiss} anchor={askAnchor(route)}>
       {/* Payment and consent owners remain mounted while the index is open or closed. */}
-      <div hidden={route.kind !== 'asks'}>{ready && asks}</div>
-      {route.kind === 'menu' && <nav aria-label="Page index">
-        {preparedFor && <p>Prepared for {preparedFor}</p>}
-        <ul className="gallery-index">{ready && menuAsks}
-          {otherHouses.map((house) => <li key={house.id}><Link href={`/projects/${house.id}`}>{house.name}<small>{waitingSentence(house)}</small></Link></li>)}
-          {chapters.map((chapter) => <li key={chapter.key}><a href={`#${chapter.key}`}>{chapter.name}</a></li>)}
-          <li><a href="#key">The house</a></li><li><a href="#letterbox">Invoices</a></li>
-          <li><a href="#mat-papers">Documents</a></li><li><a href="#note">A note from {designerName ?? 'your designer'}</a></li>
-          <li><a href="#contact">{designerName ? `Call ${designerName}` : 'Contact your designer'}</a></li>
-        </ul>
-      </nav>}
-      {route.kind === 'plan' && plan}
-      {route.kind === 'documents' && documents(dismiss)}
-      {room && pieces(room)}
+      <div hidden={route.kind !== 'asks'}>{props.ready && props.asks}</div>
+      <DrawerContents route={route} props={props} chapters={chapters} dismiss={dismiss} />
     </GalleryDrawer>
   </div>;
 }

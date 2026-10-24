@@ -68,6 +68,7 @@ jest.mock('../papers-sheet', () => ({
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useDirectOrders: jest.fn(),
+  useStartDirectOrderCheckout: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProjectInvoices: jest.fn(),
   useClientInvoices: jest.fn(),
   useClientSafeProposals: jest.fn(),
@@ -555,6 +556,13 @@ function renderThreshold(
 }
 
 beforeEach(() => {
+  window.history.replaceState({}, '', '/#doorstep');
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function() { this.setAttribute('open', ''); } });
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function() { this.removeAttribute('open'); } });
+  Element.prototype.scrollIntoView = jest.fn();
+  (useInvoicePaymentOptions as jest.Mock).mockReturnValue({ data: { card_surcharge_resolved: true, card_surcharge_bps: 0 }, isPending: false, isError: false });
+  (useStartCheckout as jest.Mock).mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+  (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
   approvalsMock.mockReturnValue({ data: [], isLoading: false, isError: false });
   authMock.mockReturnValue({
     user: { id: 'client-1', name: 'Harper Vale' },

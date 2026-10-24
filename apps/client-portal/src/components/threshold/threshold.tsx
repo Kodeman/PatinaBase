@@ -89,6 +89,8 @@ import { Letterbox } from './letterbox';
 import { OtherHouses, type OtherHouse } from './other-houses';
 import type { MatPerson } from './mat';
 import { GalleryPage, GalleryPieces } from './gallery-page';
+import { SinceYesterday } from './since-yesterday';
+import { readingMarkLine } from '@/lib/threshold/standing';
 import { RoadOrders } from './road-orders';
 import { formatCurrency } from '@patina/shared';
 import { PapersSheet } from './papers-sheet';
@@ -101,7 +103,7 @@ import {
   useReviewEditionId,
   useSelectionEditionPending,
 } from './review-ask';
-import { RoomCapture } from './room-capture';
+import { RoomCapture, StrayCaptures } from './room-capture';
 import {
   MyScopeChangeRequestsAsk,
   PendingScopeChangeAsk,
@@ -109,7 +111,8 @@ import {
   ResolvedScopeChangesPrevious,
 } from './scope-change-ask';
 import { TheNote, type NoteEnclosure } from './the-note';
-import type { ProgressAsk } from './the-road';
+import { ProjectProgress, type ProjectProgressProps, type ProgressAsk } from './the-road';
+import { HouseLedger } from './house-ledger';
 import { WallGate } from './wall-gate';
 
 /* ── THE THRESHOLD ──────────────────────────────────────────────────────────
@@ -554,6 +557,7 @@ export function Threshold({
   // Fired ONCE per project, after hydration. `mark_project_read` returns the
   // PREVIOUS read_at and then advances the mark, so the only chance to learn
   // what "since" means is the first call — a second would return this visit.
+  const [sinceActive, setSinceActive] = useState(false);
   const markedProject = useRef<string | null>(null);
   useEffect(() => {
     if (!hydrated || !projectId) return;
@@ -1124,8 +1128,10 @@ export function Threshold({
   ];
 
   const footer = <>
+    {previousReadAt && <div><button type="button" aria-pressed={sinceActive} onClick={() => setSinceActive(was => !was)}>What changed since yesterday</button><p data-testid="doorstep-reading-mark">{readingMarkLine(parseSourceDate(previousReadAt))}</p></div>}
     <p>{openChapter.label}</p>
     <OtherHouses houses={otherHouses} />
+    {user?.id && <StrayCaptures projectId={projectId} userId={user.id} rooms={model.bands} standsUnfiled={adopted} />}
     <details><summary>People on the project</summary><ul>{people.map((person, index) => <li key={index}>{person.name} · {person.role}{person.where ? ` · ${person.where}` : ''}</li>)}</ul></details>
     <a href="#mat-papers">The papers</a>
     <button type="button" onClick={() => setDetailsOpen(true)}>Project details</button>
@@ -1133,7 +1139,7 @@ export function Threshold({
     <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
     {!presentationQuery.isPending && <ContactDesigner identity={presentationQuery.data} writeAnchor={correspondence.threadId ? WRITE_BACK_ANCHOR : null} />}
     <PresentedBy identity={presentationQuery.data} />
-    <Colophon studioName={words(presentationQuery.data?.firmName) ?? studioName} />
+    <Colophon studioName={words(presentationQuery.data?.firmName)} />
     <button type="button" onClick={() => void signOut()}>Sign out</button>
   </>;
 
@@ -1159,6 +1165,42 @@ export function Threshold({
     { enabled: hasProject, query: selectionsQuery }, { enabled: hasUser, query: pendingReviewQuery },
     { enabled: hasProject, query: scopeChangesQuery }, { enabled: !!editionId, query: editionQuery },
   ].filter((read) => read.enabled && read.query.isError);
+  const waitingWall = wallMarks.find((mark) => mark.id === firstWallId);
+  const waitingDoor = drawnDoors.find((mark) => openDoorIds.has(mark.id));
+  const waitingAsk = [
+    waitingGate(waitingWall, gateAnchor),
+    waitingGate(waitingDoor, gateAnchor),
+    waitingApproval(doorstepAsks),
+    waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks),
+    waitingEdition(editionId, editionQuery.data),
+    waitingScopeChange(scopeChangesQuery.data),
+  ].find(Boolean);
+  const progress: ProjectProgressProps = {
+    now: openChapter.label ?? null,
+    nextMilestone: project.nextMilestone ?? null,
+    projectedCompletionDate: project.projectedCompletionDate ?? null,
+    waiting: unreadAsks.length > 0
+      ? {
+          status: 'error',
+          onRetry: () => {
+            for (const read of unreadAsks) void read.query.refetch();
+          },
+        }
+      : projectApprovalsLoading || proposalsQuery.isPending
+        ? { status: 'loading' }
+        : { status: 'ready', value: waitingAsk ?? null },
+    update: notesQuery.isError
+      ? { status: 'error', onRetry: () => void notesQuery.refetch() }
+      : holds(hasProject, notesQuery.isPending)
+        ? { status: 'loading' }
+        : { status: 'ready', value: model.note ? { sentAt: model.note.sentAt } : null },
+    pastUpdatesAnchor:
+      model.previously.length > 0 ||
+      correspondence.letters.length > 0 ||
+      correspondence.notices.length > 0
+        ? 'previously'
+        : null,
+  };
   const road = <div data-testid="gallery-direct-orders">
     {ordersUnread && <p role="alert">Couldn’t read your orders. <button type="button" onClick={() => void ordersQuery.refetch()}>Try again</button></p>}
     <RoadOrders orders={roadOrders} closed={closedOrders} onRefetch={ordersQuery.refetch} today={today} />
@@ -1336,6 +1378,9 @@ export function Threshold({
     {openDoorMarks.map((mark) => <li key={mark.id}><a href={`#${gateAnchor(mark)}`}>{mark.label}<small>{formatCurrency(mark.amountCents)}</small></a></li>)}
     {wallMarks.map((mark) => <li key={mark.id}><a href={`#${gateAnchor(mark)}`}>{mark.label}<small>{formatCurrency(mark.amountCents)}</small></a></li>)}
     {doorstepAsks.filter(isClientActionableProjectApproval).map((ask) => <li key={ask.decisionId}><a href={`#approval-${ask.decisionId}`}>{ask.artifactTitle}<small>{formatCurrency(ask.costCentsDelta)}</small></a></li>)}
+    {waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks) && <li><a href="#approvals">{waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks)!.label}</a></li>}
+    {waitingEdition(editionId, editionQuery.data) && <li><a href="#approvals">{waitingEdition(editionId, editionQuery.data)!.label}</a></li>}
+    {waitingScopeChange(scopeChangesQuery.data) && <li><a href="#approvals">{waitingScopeChange(scopeChangesQuery.data)!.label}</a></li>}
     <li><a href="#approvals">All asks and approvals</a></li>
   </>;
   const letterbox = <Letterbox projection={model.invoices} onHold={onInvoiceHold}
@@ -1343,22 +1388,22 @@ export function Threshold({
     designerName={studioName} onRefetch={refetchInvoices} today={today}
     gallery={{ approvals: <>{asks}{road}<a className="gallery-question" href={`#${WRITE_BACK_ANCHOR}`}>Ask {designerGivenName ?? 'your designer'} a question</a></> }} />;
 
-  return <div style={ACCENT_STYLE}>
+  return <div style={ACCENT_STYLE}><SinceYesterday active={sinceActive} changed={model.changed}>
     <GalleryPage projectName={project.name} studioName={studioName}
       designerName={words(presentationQuery.data?.designerName) ?? leadDesignerName}
       preparedFor={preparedFor} issue={issue} ready={houseHasSpoken} heldTooLong={heldTooLong}
       line={asksLine(model.invoices, waitingNames, designerGivenName, unreadAsks.length === 0)}
       menuAsks={menuAsks} asks={letterbox} otherHouses={otherHouses}
-      plan={roomsUnread ? <p>Couldn’t load your rooms. Please refresh.</p> : <PlanKey
+      plan={<><HouseLedger ledger={model.ledger} today={today} /><ProjectProgress {...progress} />{roomsUnread ? <p data-testid="threshold-rooms-error">Couldn’t load your rooms. Please refresh.</p> : <PlanKey
         geometry={planKeyGeometry(rooms ?? [], model.marks)} marks={model.marks}
-        keySentence={keySentence(model.drawnMarkCount)} />}
+        keySentence={keySentence(model.drawnMarkCount)} />}</>}
       documents={(dismiss) => <PapersSheet projectId={projectId} open embedded onDismiss={dismiss} />}
       bands={model.bands} pieces={(band) => <GalleryPieces band={band} extras={<>
         <RoomCapture projectId={projectId} roomId={band.roomId} roomName={band.name} />
         <RequestChangeAct projectId={projectId} roomId={band.roomId} roomName={band.name} projectStatus={project.status} />
       </>} />}
-      roadSentence={<p>{project.nextMilestone?.title ?? openChapter.label}{project.projectedCompletionDate ? ` · ${project.projectedCompletionDate}` : ''}</p>}
+      roadSentence={<><p>{project.nextMilestone?.title ?? openChapter.label}</p>{roomsUnread && <p>Couldn’t load your rooms. Please refresh.</p>}</>}
       note={note} earlier={previouslySection} footer={footer} />
-    <DetailsSheet open={detailsOpen} onClose={() => setDetailsOpen(false)} />
+    </SinceYesterday><DetailsSheet open={detailsOpen} onClose={() => setDetailsOpen(false)} />
   </div>;
 }

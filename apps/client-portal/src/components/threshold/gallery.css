@@ -32,7 +32,7 @@
 }
 .gallery-arrival { position: relative; margin-bottom: 72px; }
 .gallery-arrival-figure { margin: 0; }
-.gallery-photo-frame { overflow: hidden; background: var(--gallery-paper); }
+.gallery-photo-frame { position: relative; overflow: hidden; background: var(--gallery-paper); }
 .gallery-arrival .gallery-photo-frame { height: calc(100vh - 48px); height: calc(100svh - 48px); }
 .gallery-photo-frame :is(picture, img) { display: block; width: 100%; height: 100%; }
 .gallery-photo-frame img { object-fit: cover; object-position: var(--gallery-phone-position, 50% 50%); }
@@ -66,6 +66,11 @@
 .gallery-piece-list img { width: 64px; height: 64px; object-fit: contain; }
 .gallery-road-sentence { margin: 0 var(--gallery-gutter); }
 .gallery-hold { min-height: 60vh; }
+.gallery-page :is(a, button, summary), .gallery-drawer :is(a, button, summary) {
+  display: inline-flex; align-items: center; min-width: 44px; min-height: 48px;
+}
+.gallery-drawer input:not([type="hidden"]) { min-width: 44px; min-height: 44px; }
+.gallery-footer > ul a, .gallery-index a { display: flex; }
 .gallery-page :is(a, button, summary):focus-visible { outline: 2px solid var(--gallery-ink); outline-offset: 3px; }
 .gallery-page :is(a, button, p, li), .gallery-drawer :is(a, button, p, li) { overflow-wrap: anywhere; }
 .gallery-drawer :is(.t-meta, .t-caption, [class*="text-[11px]"], [class*="text-[12px]"], [class*="text-[13px]"], [class*="text-[14px]"]) { font-size: 15px; }
@@ -82,3 +87,5 @@
 @media (prefers-reduced-motion: reduce) {
   .gallery-page, .gallery-page * { scroll-behavior: auto; animation: none; transition: none; }
 }
+
+.gallery-concept-label { position: absolute; left: 16px; top: 16px; background: var(--gallery-stock); padding: 8px 12px; }

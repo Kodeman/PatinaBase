@@ -34,10 +34,25 @@ function syncDialog(node: HTMLDialogElement | null, open: boolean) {
   else node.close();
 }
 
-function revealAnchor(node: HTMLDialogElement | null, anchor?: string) {
-  if (!node || !anchor) return;
+function containedAnchor(node: HTMLDialogElement, anchor: string) {
   const target = document.getElementById(anchor);
-  if (target && node.contains(target)) target.scrollIntoView({ block: 'start' });
+  return target && node.contains(target) ? target : null;
+}
+function revealAnchor(node: HTMLDialogElement, anchor: string) {
+  const target = containedAnchor(node, ['doorstep', 'ledger'].includes(anchor) ? 'letterbox' : anchor);
+  if (!target) return false;
+  if (['doorstep', 'ledger', 'letterbox'].includes(anchor)) node.scrollTop = 0;
+  else target.scrollIntoView({ block: 'start' });
+  return true;
+}
+
+function observeAnchor(node: HTMLDialogElement, anchor: string) {
+  if (revealAnchor(node, anchor)) return;
+  const observer = new MutationObserver(() => {
+    if (revealAnchor(node, anchor)) observer.disconnect();
+  });
+  observer.observe(node, { childList: true, subtree: true });
+  return () => observer.disconnect();
 }
 
 /** One history entry for an overlay, including navigation between its contents. */
@@ -79,9 +94,10 @@ export function useGalleryRoute() {
 
   useEffect(() => {
     const read = () => {
-      const next = galleryRoute(window.location.hash, consumeCheckoutReturn());
+      const returned = consumeCheckoutReturn();
+      const next = galleryRoute(window.location.hash, returned);
       setRoute(next);
-      if (!overlayRoute(next)) restoreFocus();
+      if (!overlayRoute(next)) { restoreFocus(); scrollRoute(next); }
     };
     read();
     window.addEventListener('hashchange', read);
@@ -121,7 +137,8 @@ export function GalleryDrawer({ open, title, onDismiss, anchor, children }: {
   useLayoutEffect(() => {
     const node = dialog.current;
     syncDialog(node, open);
-    if (open) revealAnchor(node, anchor);
+    if (!open || !node || !anchor) return;
+    return observeAnchor(node, anchor);
   }, [open, anchor]);
   return <dialog ref={dialog} aria-labelledby={heading} className="gallery-drawer"
     onCancel={(event) => { event.preventDefault(); onDismiss(); }}
