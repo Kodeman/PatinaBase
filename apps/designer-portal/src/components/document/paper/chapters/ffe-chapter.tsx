@@ -221,7 +221,8 @@ const POINTER_END_EVENTS = ['pointerup', 'pointercancel', 'pointermove'] as cons
  * - It yields to the reader (F7): once she has moved focus or scrolled since
  *   the unfold opened, it neither moves focus nor scrolls. A scroll under a
  *   held pointer (a scrollbar drag) is hers (F8); focus her own press or key
- *   brings, the title's included, is hers (F9).
+ *   brings, the title's included, is hers (F9); so is any press in the
+ *   sheet, focus moved or not.
  * - The line is read as a landing starts: choosing a line re-addresses the
  *   unfold, and that is the reader's own move, not a landing.
  *
@@ -394,7 +395,15 @@ function useSheetLanding(
       if (SCROLL_KEYS.has(event.key)) onReaderScroll();
     }
     function onInput(event: Event) {
-      if (event.type === 'pointerdown') pressing = true;
+      if (event.type === 'pointerdown') {
+        pressing = true;
+        // A press in the sheet is hers whether or not focus moves: pressing
+        // the title that already holds the landing's focus brings no focusin.
+        if (event.target instanceof Node && host.contains(event.target)) {
+          readerMoved = true;
+          return stop();
+        }
+      }
       readerInput = true;
       window.setTimeout(() => {
         readerInput = false;

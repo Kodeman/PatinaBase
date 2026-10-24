@@ -1029,6 +1029,39 @@ describe("F6–F7: the landing waits for the reads, then yields to the reader", 
     expect(document.activeElement).toBe(title);
   });
 
+  it("SQ-1908 F1: a press on the title already holding the landing's focus yields; nothing moves or scrolls", async () => {
+    const answer = delayLines();
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const title = await screen.findByText("Sheet title");
+    await waitFor(() => expect(document.activeElement).toBe(title));
+
+    // Her press on the focused title: no focus change, so no focusin.
+    const focusins = jest.fn();
+    document.addEventListener("focusin", focusins);
+    fireEvent.pointerDown(title);
+    fireEvent.pointerUp(title);
+    document.removeEventListener("focusin", focusins);
+    expect(focusins).not.toHaveBeenCalled();
+
+    await answer(mockLines);
+    await waitFor(() => expect(lineButton(SECOND)).not.toBeNull());
+    expect(document.activeElement).toBe(title);
+    expect(scrolled()).not.toHaveBeenCalled();
+  });
+
+  it("SQ-1908 F1 control: with no press, the late landing still takes the line", async () => {
+    const answer = delayLines();
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const title = await screen.findByText("Sheet title");
+    await waitFor(() => expect(document.activeElement).toBe(title));
+
+    // A press outside the sheet that moves no focus keeps today's rule.
+    fireEvent.pointerDown(document.body);
+    fireEvent.pointerUp(document.body);
+    await answer(mockLines);
+    await waitFor(() => expect(document.activeElement).toBe(lineButton(SECOND)));
+  });
+
   it("F10: a read elsewhere on the paper never holds the landing's deadline", async () => {
     const timers = jest.spyOn(window, "setTimeout");
     const clears = jest.spyOn(window, "clearTimeout");
