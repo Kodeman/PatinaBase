@@ -65,7 +65,7 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
   test('studio → exact living-room line → save and recover → room → studio', async ({ authenticatedPage: page }) => {
     const line = lineId();
     const before = psqlScalar(`
-      SELECT json_build_object('item', id, 'spec', s.id, 'version', s.row_version, 'finish', s.finish)::text
+      SELECT json_build_object('item', i.id, 'spec', s.id, 'version', s.row_version, 'finish', s.finish)::text
       FROM public.project_ffe_items i JOIN public.project_ffe_specs s ON s.ffe_item_id = i.id
       WHERE i.id = '${line}';
     `);
@@ -101,7 +101,7 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
 
     const evidence = page.locator(`[data-survey-scan="${SCAN}"]`);
     await expect(evidence, 'the linked F01 living-room scan is shown in Design').toBeAttached({ timeout: 30_000 });
-    await expect(evidence).toContainText('survey evidence, not installed condition');
+    await expect(evidence).toContainText('Survey, not installed');
     await evidence.scrollIntoViewIfNeeded();
 
     // Keep an object reference to the shell: identity, not selector count, proves no remount.
@@ -250,7 +250,7 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     await settled(page);
     const evidence = page.locator(`[data-survey-scan="${SCAN}"]`);
     await expect(evidence).toBeAttached({ timeout: 30_000 });
-    await expect(evidence).toContainText('survey evidence, not installed condition');
+    await expect(evidence).toContainText('Survey, not installed');
     const room = page.locator(`[data-paper-chapter="ffe"] [data-pieces-room="${LIVING}"]`);
     await expect(room).toBeAttached({ timeout: 30_000 });
     await room.scrollIntoViewIfNeeded();
