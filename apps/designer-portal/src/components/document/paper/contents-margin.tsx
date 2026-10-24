@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 export interface ContentsEntry<K extends string = string> {
   key: K;
   /** Printed folio, e.g. "01". Omitted for the cover row. */
@@ -16,6 +18,7 @@ export interface ContentsMarginProps<K extends string = string> {
   onSelect: (key: K) => void;
   /** Accessible name of the contents navigation. */
   label?: string;
+  children?: ReactNode;
 }
 
 /**
@@ -29,9 +32,10 @@ export function ContentsMargin<K extends string>({
   activeKey,
   onSelect,
   label = 'Job contents',
+  children,
 }: ContentsMarginProps<K>) {
   const listed = entries.filter((entry) => mountedKeys.includes(entry.key));
-  if (listed.length === 0) return null;
+  if (listed.length === 0 && !children) return null;
 
   return (
     <aside
@@ -80,6 +84,7 @@ export function ContentsMargin<K extends string>({
           })}
         </ol>
       </nav>
+      {children}
     </aside>
   );
 }

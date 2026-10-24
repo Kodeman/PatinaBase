@@ -41,7 +41,7 @@
 }
 
 /* ── type (§H-2) · computed px at the 18px root, never a reference rem ───── */
-[data-paper-renderer="round8"] .r8-d0 {
+[data-paper-renderer="round8"] :is(.r8-d0, [data-paper-cover] h1) {
   font-family: var(--font-display);
   font-size: clamp(36px, 4.8vw, 68px);
   line-height: 1.15;
@@ -73,7 +73,7 @@
 }
 
 @media (max-width: 599px) {
-  [data-paper-renderer="round8"] .r8-d0 {
+  [data-paper-renderer="round8"] :is(.r8-d0, [data-paper-cover] h1) {
     font-size: 40px;
     line-height: 1.12;
   }

@@ -10,10 +10,12 @@ export function Round8DocumentState({ state, onRetry }: {
 }) {
   if (state === 'loading') {
     return (
-      <main aria-label="Loading document" aria-busy="true" className="min-h-screen bg-[var(--paper)]">
+      <>
         <p role="status" className="sr-only">Picking up the document…</p>
-        <DocumentSkeleton />
-      </main>
+        <main aria-label="Loading document" aria-busy="true" className="min-h-screen bg-[var(--paper)]">
+          <DocumentSkeleton />
+        </main>
+      </>
     );
   }
   const failed = state === 'error';
@@ -22,11 +24,11 @@ export function Round8DocumentState({ state, onRetry }: {
       <div className="mx-auto max-w-[720px] border-t border-[var(--hairline-strong)] pt-8">
         <div role={failed ? 'alert' : undefined}>
           <h1 id="document-state-title" className="font-heading text-[28px]">
-            {failed ? 'This document could not be picked up.' : 'This document is not available.'}
+            {failed ? 'This document could not be loaded.' : 'This document is not available.'}
           </h1>
           <p className="t-body-sm mt-4 max-w-[480px]">
             {failed
-              ? 'The read failed. Try again; no changes have been saved.'
+              ? 'The read failed. Try again.'
               : 'The link may have changed, or you may no longer have access. Ask the studio to check the link and your access.'}
           </p>
         </div>
