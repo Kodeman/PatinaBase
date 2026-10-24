@@ -13,12 +13,12 @@
  * by the designer's explicit choice, which is a later ticket's act. A job
  * with neither source has no plate, and the studio sets its name instead.
  *
- * Read-only, RLS-scoped, one round trip per source.
+ * Read-only and RLS-scoped, under each source owner’s native invalidation.
  */
 
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient, signBoardMediaValue, signProjectWorkingBoardRow } from '@patina/supabase';
+import { useQueries } from '@tanstack/react-query';
+import type { BoardOwnerRef } from '@patina/types';
+import { boardOwnerQueryKeys, createBrowserClient, signBoardMediaValue, signProjectWorkingBoardRow } from '@patina/supabase';
 
 export interface CommissionJob {
   /** The studio's job key: `project_id ?? engagement_id`. */
@@ -83,56 +83,50 @@ export function pickCommissionPlates(
 const uniq = (ids: ReadonlyArray<string | null>): string[] =>
   [...new Set(ids.filter((id): id is string => !!id))].sort();
 
-interface PlateSources {
-  boards: PlateBoardRow[];
-  proposals: PlateProposalRow[];
-}
-
-const NO_SOURCES: PlateSources = { boards: [], proposals: [] };
-
-/** `plates` stays empty until the read answers, and on a failed read: a plate
- *  is the job's picture, never its content, so the studio sets the name. */
+/** Optional cover reads share the native board/proposal invalidation prefixes.
+ * They never replace those queries' row shapes or raise global error chrome. */
 export function useCommissionPlates(jobs: readonly CommissionJob[]) {
-  const projectIds = uniq(jobs.map((job) => job.projectId));
-  const proposalIds = uniq(jobs.map((job) => job.proposalId));
-  const read = useQuery({
-    queryKey: ['commission-plates', projectIds, proposalIds],
-    enabled: projectIds.length + proposalIds.length > 0,
-    queryFn: async (): Promise<PlateSources> => {
-      const supabase = createBrowserClient() as any;
-      const owners = [
-        projectIds.length ? `project_id.in.(${projectIds.join(',')})` : null,
-        proposalIds.length ? `proposal_id.in.(${proposalIds.join(',')})` : null,
-      ].filter(Boolean);
-      const [boardsRead, proposalsRead] = await Promise.all([
-        supabase
+  const owners: BoardOwnerRef[] = [
+    ...uniq(jobs.map((job) => job.projectId)).map((id) => ({ kind: 'project' as const, id })),
+    ...uniq(jobs.map((job) => job.proposalId)).map((id) => ({ kind: 'proposal' as const, id })),
+  ];
+  const boardReads = useQueries({
+    queries: owners.map((owner) => ({
+      queryKey: [...boardOwnerQueryKeys.list(owner), 'commission-plates'],
+      meta: { errorSurface: 'silent' as const },
+      queryFn: async (): Promise<PlateBoardRow[]> => {
+        const supabase = createBrowserClient() as any;
+        const { data, error } = await supabase
           .from('proposal_boards')
           .select('project_id, proposal_id, cover_image_url, updated_at')
+          .eq(owner.kind === 'project' ? 'project_id' : 'proposal_id', owner.id)
           .eq('status', 'active')
-          .not('cover_image_url', 'is', null)
-          .or(owners.join(',')),
-        proposalIds.length
-          ? supabase
-              .from('proposals')
-              .select('id, cover_image')
-              .in('id', proposalIds)
-              .not('cover_image', 'is', null)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-      if (boardsRead.error) throw boardsRead.error;
-      if (proposalsRead.error) throw proposalsRead.error;
-      // A board cover may be a private storage reference; a signing miss
-      // becomes null, so the job falls through to its next source.
-      const workingRows = await Promise.all((boardsRead.data ?? []).map((row: PlateBoardRow) =>
-        signProjectWorkingBoardRow(supabase, row)));
-      const boards = (await signBoardMediaValue(supabase, workingRows)) as PlateBoardRow[];
-      return { boards, proposals: (proposalsRead.data ?? []) as PlateProposalRow[] };
-    },
+          .not('cover_image_url', 'is', null);
+        if (error) throw error;
+        const workingRows = await Promise.all((data ?? []).map((row: PlateBoardRow) =>
+          signProjectWorkingBoardRow(supabase, row)));
+        return await signBoardMediaValue(supabase, workingRows) as PlateBoardRow[];
+      },
+    })),
   });
-  const sources = read.data ?? NO_SOURCES;
-  const plates = useMemo(
-    () => pickCommissionPlates(jobs, sources.boards, sources.proposals),
-    [jobs, sources],
-  );
-  return { plates, isPending: read.isPending && read.fetchStatus !== 'idle' };
+  const proposalReads = useQueries({
+    queries: uniq(jobs.map((job) => job.proposalId)).map((id) => ({
+      queryKey: ['proposal', id, 'commission-plates'],
+      meta: { errorSurface: 'silent' as const },
+      queryFn: async (): Promise<PlateProposalRow[]> => {
+        const { data, error } = await (createBrowserClient() as any)
+          .from('proposals')
+          .select('id, cover_image')
+          .eq('id', id)
+          .not('cover_image', 'is', null);
+        if (error) throw error;
+        return data ?? [];
+      },
+    })),
+  });
+  const boards = boardReads.flatMap((read) => read.isError ? [] : read.data ?? []);
+  const proposals = proposalReads.flatMap((read) => read.isError ? [] : read.data ?? []);
+  const isPending = [...boardReads, ...proposalReads].some((read) =>
+    read.isPending && read.fetchStatus !== 'idle');
+  return { plates: pickCommissionPlates(jobs, boards, proposals), isPending };
 }
