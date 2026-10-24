@@ -16,6 +16,7 @@ import {
   useDuplicateBoard,
   useUpsertBoard,
 } from '../use-boards';
+import { useMaterializeBoardTemplate } from '../use-board-templates';
 
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { staleTime: 300_000 } } });
@@ -40,6 +41,10 @@ describe('native board cover projection invalidation', () => {
     ...[proposal, project].map((owner) => ({ name: owner.kind + ' room cover command', owner, complete: async () => {
       const mutation = useApplyBoardRoomState() as any;
       await mutation.onSettled(null, null, { owner, boardId: 'b1' });
+    } })),
+    ...[proposal, project].map((owner) => ({ name: owner.kind + ' template materialization', owner, complete: async () => {
+      const mutation = useMaterializeBoardTemplate() as any;
+      await mutation.onSuccess('b1', { templateId: 't1', owner });
     } })),
     { name: 'continue project cover', owner: project, complete: async () => {
       const mutation = useContinueBoardInProject() as any;

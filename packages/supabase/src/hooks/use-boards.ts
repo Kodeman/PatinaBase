@@ -61,7 +61,7 @@ export const commissionPlateQueryKeys = {
     ['boards', 'commission-plates', projectIds, proposalIds] as const,
 };
 
-function invalidateCommissionPlates(queryClient: QueryClient, owner: BoardOwnerRef | null) {
+export function invalidateCommissionPlates(queryClient: QueryClient, owner: BoardOwnerRef | null) {
   return queryClient.invalidateQueries({
     queryKey: commissionPlateQueryKeys.all,
     predicate: (query) => {

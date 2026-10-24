@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BoardOwnerRef, MoodBoardItemSnapshot, MoodBoardSection } from '@patina/types';
 import { createBrowserClient } from '../client';
+import { invalidateCommissionPlates } from './use-boards';
 
 const getSupabase = () => createBrowserClient();
 
@@ -102,6 +103,7 @@ export function useMaterializeBoardTemplate() {
     },
     onSuccess: (boardId, input) => {
       queryClient.invalidateQueries({ queryKey: ['board', boardId] });
+      invalidateCommissionPlates(queryClient, input.owner);
       if (input.owner.kind === 'proposal') {
         queryClient.invalidateQueries({ queryKey: ['boards', input.owner.id] });
         queryClient.invalidateQueries({ queryKey: ['boards-with-items', input.owner.id] });
