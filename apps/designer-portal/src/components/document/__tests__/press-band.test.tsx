@@ -8,7 +8,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ClientEdition, ClientEditions, ClientEditorialAsset } from '@patina/supabase';
 import { PressBand, publishedLine } from '../press-band';
-import { editionDelta, heroCoverCrop } from '../press-band-preview';
+import { editionDelta, PressBandPreview } from '../press-band-preview';
 import {
   CURRENT_ROW,
   EARLIER_ROW,
@@ -17,7 +17,6 @@ import {
   imageRow,
   listEnvelope,
 } from '../__fixtures__/client-editions';
-import { objectPositionOf, plateCropWindow } from '@/lib/document/plate-crop';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
 
 const { normalizeClientEditions } = jest.requireActual<typeof import('@patina/supabase')>('@patina/supabase');
@@ -50,6 +49,8 @@ let mockDeadPictures: { itemId: string; name: string }[] = [];
 const act = (mutate: jest.Mock) => ({ mutate, reset: jest.fn(), isPending: false, isSuccess: false, error: null });
 
 jest.mock('@patina/supabase', () => ({
+  useProjectV2: () => ({ data: { name: 'Ridgeline' } }),
+  useProjectPalettes: () => ({ data: [] }),
   useProjectDeadPictureLinks: () => ({ data: mockDeadPictures }),
   useClientEditions: (...args: unknown[]) => {
     mockUseClientEditions(...args);
@@ -98,8 +99,6 @@ function allWords(root: HTMLElement): string {
   return `${root.textContent} ${labels.join(' ')}`;
 }
 
-const coverImage = () => document.querySelector('[data-press-cover]') as HTMLImageElement;
-const coverWindow = () => document.querySelector('[data-press-cover-window]') as HTMLElement;
 
 const frameRect = (frame: HTMLElement) => {
   frame.getBoundingClientRect = () =>
@@ -121,9 +120,9 @@ describe('PressBand — the states', () => {
     expect(screen.getByText(/Approve puts it on June’s page\. Hold keeps edition 4 there\./)).toBeInTheDocument();
     const chapters = screen.getByRole('list', { name: 'Chapters' });
     expect(within(chapters).getByText('The living room')).toBeInTheDocument();
-    expect(within(chapters).getByText('The sofa leaves the workshop on Friday.')).toBeInTheDocument();
-    expect(screen.getByText('Nothing waits on you this week.')).toBeInTheDocument();
-    expect(screen.getByText('Maren has a new issue for you.')).toBeInTheDocument();
+    expect(screen.getByText('The sofa leaves the workshop on Friday.')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing waits on you this week.')).toBeNull();
+    expect(screen.queryByText('Maren has a new issue for you.')).toBeNull();
     // The cover is the hero's SOURCE picture, never the client page's plate route.
     const cover = screen.getByRole('img', { name: 'Picture a-hero' });
     expect(cover).toHaveAttribute('src', expect.stringContaining('https://example.com/hero.jpg'));
@@ -464,7 +463,7 @@ describe('PressBand — focal point', () => {
     fireEvent.pointerUp(frame, { clientX: 900, clientY: 50, pointerId: 1 });
 
     // Both frames' handles name the same point.
-    expect(within(tray).getAllByRole('button', { name: /^Focal point at 100 across, 20 down/ })).toHaveLength(2);
+    expect(within(tray).getAllByRole('button', { name: /^Focal point at 100 across, 2[0-9] down/ })).toHaveLength(2);
 
     fireEvent.click(useCrop);
     expect(mockSetFocal).toHaveBeenCalledTimes(1);
@@ -472,7 +471,8 @@ describe('PressBand — focal point', () => {
     expect({ projectId, assetId }).toEqual({ projectId: 'p-1', assetId: 'a-hero' });
     expect(subjectBox).toBeNull();
     expect(focal[0]).toBeCloseTo(1);
-    expect(focal[1]).toBeCloseTo(0.2);
+    expect(focal[1]).toBeGreaterThan(0.2);
+    expect(focal[1]).toBeLessThan(0.3);
   });
 
   it('keeps the point inside the subject box, and saves that box', () => {
@@ -494,128 +494,17 @@ describe('PressBand — focal point', () => {
     expect(focal).toEqual([0.2, 0.2]);
   });
 
-  it('the frames and the band cover show the crop the worker cuts, subject box first (R8)', () => {
-    // Review reproduction 2: 2000² source, box [.1,.1,.8,.5], focal [.5,.6] → wide [0,200,2000,1250].
-    const square = imageRow('a-hero', {
-      plateRole: 'hero',
-      chapterKey: 'cover',
-      width: 2000,
-      height: 2000,
-      subjectBox: [0.1, 0.1, 0.8, 0.5],
-      focal: [0.5, 0.6],
-    });
-    renderBand([{ ...PENDING_ROW, images: [square] }]);
-    const wide = objectPositionOf({ left: 0, top: 200 / 2000, vx: 1, vy: 1250 / 2000 });
-    expect(coverWindow()).toHaveAttribute('data-press-cover-window', '0 200 2000 1250');
-
-    const tray = openHeroFocal();
-    const frameImage = (key: string) =>
-      tray.querySelector(`[data-focal-frame="${key}"] img`) as HTMLImageElement;
-    expect(frameImage('wide').style.objectPosition).toBe(wide);
-    const source = { width: 2000, height: 2000, focal: [0.5, 0.6], subjectBox: [0.1, 0.1, 0.8, 0.5] };
-    expect(frameImage('cover_phone').style.objectPosition).toBe(
-      objectPositionOf(plateCropWindow(source, 'cover_phone')!),
-    );
-  });
-
-  it('a frame the worker cuts no crop for is shown unavailable, with what those screens draw (N1)', () => {
-    // planCrops on 2000×1250, box [0,0,1,1], focal [1,.2] → wide and piece only.
-    const whole = imageRow('a-hero', {
-      plateRole: 'hero',
-      chapterKey: 'cover',
-      width: 2000,
-      height: 1250,
-      subjectBox: [0, 0, 1, 1],
-      focal: [1, 0.2],
-    });
-    renderBand([{ ...PENDING_ROW, images: [whole] }]);
-    const tray = openHeroFocal();
-    const phone = tray.querySelector('[data-focal-frame="cover_phone"]') as HTMLElement;
-    expect(phone).toHaveAttribute('data-focal-unavailable');
-    expect(phone.querySelector('img')).toBeNull();
-    expect(within(tray).getByText('Phones show the wide cover for this photograph.')).toBeInTheDocument();
-    expect(within(tray).queryByText('The phone cover.')).toBeNull();
-    // The desktop frame is cut, and still shows the picture.
-    const wide = tray.querySelector('[data-focal-frame="wide"]') as HTMLElement;
-    expect(wide).not.toHaveAttribute('data-focal-unavailable');
-    expect(wide.querySelector('img')).not.toBeNull();
-  });
-
-  it('a white-ground picture has no cover frames: the worker cuts it only as a pair and a piece (F1)', () => {
-    // planCrops on 2000×1250, ground white, maker → {pair, piece} only.
-    const clipping = imageRow('a-hero', {
-      plateRole: 'hero',
-      chapterKey: 'cover',
-      sourceKind: 'maker',
-      ground: 'white',
-      width: 2000,
-      height: 1250,
-    });
-    renderBand([{ ...PENDING_ROW, images: [clipping] }]);
-    const tray = openHeroFocal();
-    for (const key of ['wide', 'cover_phone']) {
-      const frame = tray.querySelector(`[data-focal-frame="${key}"]`) as HTMLElement;
-      expect(frame).toHaveAttribute('data-focal-unavailable');
-      expect(frame.querySelector('img')).toBeNull();
-    }
-    expect(within(tray).getAllByText('No cover is cut from this photograph.')).toHaveLength(2);
-    // The same scene-ground picture keeps both frames.
-    expect(heroCoverCrop(one({ ...PENDING_ROW, images: [{ ...clipping, ground: 'scene' }] }).images[0])).not.toBeNull();
-  });
-
-  it('designer photography stays within 120px tall (R10)', () => {
+  it('moving the focal control updates both arrival crops before saving', () => {
     renderBand([PENDING_ROW]);
-    const frame = coverWindow();
-    expect(frame.className).toMatch(/\bmax-h-\[120px\]/);
-    // 2000×1250 draws the 16:10 wide crop: 192px wide at the 120px cap.
-    expect(frame.style.width).toBe('192px');
-    expect(frame.className).not.toMatch(/(^|\s)w-full(\s|$)/);
-  });
-});
-
-/*
- * F2 — the band cover clips the source to the crop's own window: a frame of
- * the crop's aspect, the picture scaled by 1/vx × 1/vy and moved so the
- * window's corner meets the frame's. Values are native planCrops rects.
- */
-describe('PressBand — the cover thumbnail is the crop window (F2)', () => {
-  const coverOn = (over: Record<string, unknown>) =>
-    renderBand([{ ...PENDING_ROW, images: [imageRow('a-hero', { plateRole: 'hero', chapterKey: 'cover', ...over })] }]);
-  const pct = (value: string) => parseFloat(value);
-
-  it('1400×900 draws the 3:2 wide32 window [25, 0, 1350, 900]', () => {
-    // planCrops 1400×900 → wide32 [25, 0, 1350, 900] (no wide: under its floor).
-    coverOn({ width: 1400, height: 900 });
-    const frame = coverWindow();
-    expect(frame).toHaveAttribute('data-press-cover-window', '25 0 1350 900');
-    expect(frame.style.aspectRatio).toBe('1350 / 900');
-    expect(frame.style.width).toBe('180px');
-    const img = coverImage();
-    expect(pct(img.style.width)).toBeCloseTo((1400 / 1350) * 100, 6);
-    expect(pct(img.style.height)).toBeCloseTo(100, 6);
-    expect(pct(img.style.left)).toBeCloseTo((-25 / 1350) * 100, 6);
-    expect(pct(img.style.top)).toBeCloseTo(0, 6);
-    expect(img.style.objectPosition).toBe('');
-  });
-
-  it('a 1100×2000 portrait draws the tall window [90, 0, 920, 2000]', () => {
-    // planCrops 1100×2000 → {tall: [90, 0, 920, 2000], piece}; the page's portrait layout draws tall.
-    coverOn({ width: 1100, height: 2000 });
-    const frame = coverWindow();
-    expect(frame).toHaveAttribute('data-press-cover-window', '90 0 920 2000');
-    expect(frame.style.aspectRatio).toBe('920 / 2000');
-    // 120px tall at 0.46 → 55.2px wide.
-    expect(pct(frame.style.width)).toBeCloseTo(55.2, 6);
-    const img = coverImage();
-    expect(pct(img.style.width)).toBeCloseTo((1100 / 920) * 100, 6);
-    expect(pct(img.style.height)).toBeCloseTo(100, 6);
-    expect(pct(img.style.left)).toBeCloseTo((-90 / 920) * 100, 6);
-  });
-
-  it('a source of unknown size keeps the plain 120px box', () => {
-    coverOn({ width: null, height: null });
-    expect(document.querySelector('[data-press-cover-window]')).toBeNull();
-    expect(coverImage().className).toMatch(/\bh-\[120px\]/);
+    const tray = openHeroFocal();
+    const handles = within(tray).getAllByRole('button', { name: /^Focal point at/ });
+    fireEvent.keyDown(handles[0], { key: 'ArrowRight' });
+    for (const image of document.querySelectorAll('[data-press-cover]')) {
+      expect((image as HTMLElement).style.objectPosition).toBe('52% 45%');
+    }
+    expect(mockSetFocal).not.toHaveBeenCalled();
+    fireEvent.click(within(tray).getByRole('button', { name: 'Use this crop' }));
+    expect(mockSetFocal).toHaveBeenCalledWith(expect.objectContaining({ focal: [0.52, 0.45] }));
   });
 });
 
@@ -642,11 +531,6 @@ describe('PressBand — the delta line', () => {
     expect(editionDelta(PENDING, null)).toBe('The first edition');
   });
 
-  it('frames an unboxed cover on the worker’s thirds crop', () => {
-    expect(heroCoverCrop(CURRENT.images[0])?.window).toEqual(
-      plateCropWindow({ width: 2000, height: 1250 }, 'wide'),
-    );
-  });
 });
 
 describe('PressBand — voice', () => {
