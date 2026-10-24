@@ -40,6 +40,7 @@ import {
   useClientPlan,
   useClientProjectReviewBundle,
   useClientSelections,
+  useProjectWorkingBudget,
 } from '@/hooks/use-commercial-client';
 import { useEditionIssue } from '@/components/threshold/editorial/house-issue';
 import { useHoldCeiling } from '@/hooks/use-hold-ceiling';
@@ -84,7 +85,7 @@ import { PapersUnread } from './letterbox-door';
 import { Letters, MuteLetters, WRITE_BACK_ANCHOR, WriteBack } from './correspondence';
 import { DetailsSheet } from './details-sheet';
 import { DoorGate, type DoorProposal } from './door-gate';
-import { BudgetCheckpointReview } from './budget-checkpoint-review';
+import { BudgetCheckpointReview, BudgetCheckpointMenuAsk, budgetCheckpointProjection } from './budget-checkpoint-review';
 import { Letterbox } from './letterbox';
 import { OtherHouses, type OtherHouse } from './other-houses';
 import type { MatPerson } from './mat';
@@ -370,6 +371,7 @@ export function Threshold({
   // `insufficient_privilege` for a homeowner, so every client got a failed read
   // and no approval ask at all. Filter it to this house here.
   const approvalsQuery = useMyProjectApprovalReviews();
+  const budgetQuery = useProjectWorkingBudget(projectId);
   const projectApprovals: ProjectApprovalReview[] = useMemo(
     () =>
       (approvalsQuery.data ?? []).filter(
@@ -1161,6 +1163,7 @@ export function Threshold({
   const roadOrders = ordersSettled ? toRoadOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
   const closedOrders = ordersSettled ? toClosedOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
   const unreadAsks = [
+    { enabled: hasProject, query: budgetQuery },
     { enabled: true, query: approvalsQuery }, { enabled: true, query: proposalsQuery },
     { enabled: hasProject, query: selectionsQuery }, { enabled: hasUser, query: pendingReviewQuery },
     { enabled: hasProject, query: scopeChangesQuery }, { enabled: !!editionId, query: editionQuery },
@@ -1280,7 +1283,6 @@ export function Threshold({
     <>
       {doorMarks.map(renderDoor)}
       {wallMarks.map(renderWall)}
-      <BudgetCheckpointReview projectId={projectId} />
       {/* A failed read, in the ink every other failed read on this surface
           uses (the papers registers, the captures). Not red: the house has no
           red, and this is not a refusal of an act — it is the page saying it
@@ -1316,6 +1318,7 @@ export function Threshold({
           studioName={studioName}
         />
       ))}
+      <BudgetCheckpointReview projectId={projectId} query={budgetQuery} />
       <StudioReviewAsk projectId={projectId} standsUnfiled={standsUnfiledAsks} />
       <SelectionEditionAsk projectId={projectId} />
       <PendingScopeChangeAsk projectId={projectId} />
@@ -1364,6 +1367,8 @@ export function Threshold({
 
 
   const houseHasSpoken = hydrated && !loading && !model.pending;
+  const { ready: budgetReady, ask: budgetAsk, showInMenu: budgetInMenu } = budgetCheckpointProjection(projectId, budgetQuery);
+  const openApprovalIds = doorstepAsks.map((approval) => approval.decisionId);
   const waitingNames = [
     ...openDoorMarks.map((mark) => mark.label),
     ...wallMarks.map((mark) => mark.label),
@@ -1381,6 +1386,7 @@ export function Threshold({
     {waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks) && <li><a href="#approvals">{waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks)!.label}</a></li>}
     {waitingEdition(editionId, editionQuery.data) && <li><a href="#approvals">{waitingEdition(editionId, editionQuery.data)!.label}</a></li>}
     {waitingScopeChange(scopeChangesQuery.data) && <li><a href="#approvals">{waitingScopeChange(scopeChangesQuery.data)!.label}</a></li>}
+    <BudgetCheckpointMenuAsk show={budgetInMenu} />
     <li><a href="#approvals">All asks and approvals</a></li>
   </>;
   const letterbox = <Letterbox projection={model.invoices} onHold={onInvoiceHold}
@@ -1392,7 +1398,9 @@ export function Threshold({
     <GalleryPage projectName={project.name} studioName={studioName}
       designerName={words(presentationQuery.data?.designerName) ?? leadDesignerName}
       preparedFor={preparedFor} issue={issue} ready={houseHasSpoken} heldTooLong={heldTooLong}
-      line={asksLine(model.invoices, waitingNames, designerGivenName, unreadAsks.length === 0)}
+      line={asksLine(model.invoices, waitingNames, designerGivenName, [unreadAsks.length === 0, budgetReady].every(Boolean), budgetAsk)}
+      openApprovalIds={openApprovalIds}
+      approvalReadPending={[approvalsQuery.isPending, projectApprovalsLoading, projectApprovalsError].some(Boolean)}
       menuAsks={menuAsks} asks={letterbox} otherHouses={otherHouses}
       plan={<><HouseLedger ledger={model.ledger} today={today} /><ProjectProgress {...progress} />{roomsUnread ? <p data-testid="threshold-rooms-error">Couldn’t load your rooms. Please refresh.</p> : <PlanKey
         geometry={planKeyGeometry(rooms ?? [], model.marks)} marks={model.marks}

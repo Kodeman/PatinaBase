@@ -3936,3 +3936,77 @@ describe('Threshold — The House Issue data', () => {
     });
   });
 });
+
+describe('Gallery review F1 budget checkpoint asks', () => {
+  function checkpoint() {
+    invoicesMock.mockReturnValue(settled([]));
+    proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [] }));
+    const data = adaptProjectCommercialSummary({ workingBudget: {
+      version: { id: 'v-review', projectId: PROJECT_ID, version: 3, status: 'published', lowTotalCents: 10000, targetTotalCents: 20000, highTotalCents: 30000 },
+      lines: [{ roomName: 'Library', category: 'Seating', lowCents: 10000, targetCents: 20000, highCents: 30000 }],
+      checkpoint: { id: 'cp-review', projectId: PROJECT_ID, versionId: 'v-review', checkpointCode: 'BC-003', status: 'open', snapshotFingerprint: 'fp', publishedAt: '2026-10-19T10:00:00Z' },
+    } }).workingBudget!;
+    (useProjectWorkingBudget as jest.Mock).mockReturnValue(settled(data));
+    return data;
+  }
+  it('checkpoint-only names the spending plan instead of all-clear, and lists it in Menu', () => {
+    checkpoint();
+    renderWithApprovals([]);
+    expect(document.querySelector('.gallery-asks-line')).toHaveTextContent('The published spending plan.');
+    expect(document.querySelector('.gallery-asks-line')).not.toHaveTextContent('Nothing from');
+    openGallery('#menu');
+    const link = within(screen.getByRole('navigation', { name: 'Page index' })).getByRole('link', { name: 'Published spending plan' });
+    expect(link).toHaveAttribute('href', '#budget-checkpoint');
+    fireEvent.click(link);
+    expect(screen.getByRole('dialog')).toContainElement(screen.getByRole('region', { name: 'Published spending plan' }));
+  });
+  it('keeps the past-due amount before the approval and checkpoint', () => {
+    checkpoint();
+    invoicesMock.mockReturnValue(settled([{ ...INVOICE, status: 'sent', currency: 'USD', total_cents: 60000, amount_paid_cents: 0, due_date: '2020-01-01', payments: [] }]));
+    renderWithApprovals([PHASE_APPROVAL]);
+    expect(document.querySelector('.gallery-asks-line')).toHaveTextContent('$600.00 past due, and Library elevations, and the published spending plan.');
+  });
+  it.each(['loading', 'fetching', 'error'])('never prints all-clear while the checkpoint is %s', (state) => {
+    const data = checkpoint();
+    (useProjectWorkingBudget as jest.Mock).mockReturnValue({ ...settled(data), isPending: state === 'loading', isFetching: state === 'fetching', isError: state === 'error' });
+    renderWithApprovals([]);
+    expect(document.querySelector('.gallery-asks-line')).not.toHaveTextContent('Nothing from');
+    expect(document.querySelector('.gallery-asks-line')).toHaveTextContent('Your asks could not all be read.');
+  });
+  it('does not count an acknowledged checkpoint as an ask', () => {
+    const data = checkpoint();
+    data.checkpoint!.state = 'acknowledged';
+    renderWithApprovals([]);
+    expect(document.querySelector('.gallery-asks-line')).toHaveTextContent('Nothing from Nora today');
+  });
+});
+
+describe('Gallery review F3 settled approval mail', () => {
+  const records = () => Array.from({ length: 5 }, (_, index) => ({
+    ...PHASE_APPROVAL, decisionId: 'settled-' + index, artifactTitle: 'Recorded edition ' + index,
+    outcome: 'approved', respondedAt: '2026-08-0' + (9 - index) + 'T10:00:00Z',
+  } as ProjectApprovalReview));
+  it('expands the addressed Earlier receipt beyond the first three without a dialog', async () => {
+    window.history.replaceState({}, '', '/?decision=settled-4#approval-settled-4');
+    renderWithApprovals([PHASE_APPROVAL, ...records()]);
+    await waitFor(() => expect(document.getElementById('approval-settled-4')).toBeInTheDocument());
+    expect(screen.getByTestId('approval-records')).toContainElement(document.getElementById('approval-settled-4'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+  it('closes Menu and expands the named Earlier receipt on in-page navigation', async () => {
+    renderWithApprovals(records());
+    expect(document.getElementById('approval-settled-4')).not.toBeInTheDocument();
+    openGallery('#menu');
+    const link = document.createElement('a');
+    link.href = '#approval-settled-4';
+    link.textContent = 'Read old decision';
+    screen.getByRole('dialog').append(link);
+    fireEvent.click(link);
+    await waitFor(() => expect(document.getElementById('approval-settled-4')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    link.remove();
+  });
+});

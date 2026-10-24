@@ -201,3 +201,45 @@ it('replaces an arrival image that already failed before hydration with paint', 
   expect(container.querySelector('img')).toBeNull();
   complete.mockRestore(); naturalWidth.mockRestore();
 });
+
+it.each(['note', 'road', 'previously', 'mat'])('Gallery review F2 scrolls delayed #%s exactly once without moving focus', async (anchor) => {
+  window.history.replaceState({}, '', '/#' + anchor);
+  const { rerender } = render(page(false, { openApprovalIds: null }));
+  const menu = screen.getByRole('link', { name: 'Menu' });
+  menu.focus();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  rerender(page(true, { openApprovalIds: [] }));
+  await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1));
+  expect((Element.prototype.scrollIntoView as jest.Mock).mock.instances[0]).toBe(document.getElementById(anchor));
+  expect(menu).toHaveFocus();
+  rerender(page(true, { roadSentence: 'A later update.' }));
+  expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+});
+
+it.each(['wheel', 'touchstart', 'keydown'])('Gallery review F2 stops waiting for a late page anchor after %s input', async (event) => {
+  window.history.replaceState({}, '', '/#note');
+  const { rerender } = render(page(false, { openApprovalIds: null }));
+  fireEvent(window, event === 'keydown' ? new KeyboardEvent(event, { key: 'PageDown' }) : new Event(event));
+  rerender(page(true, { openApprovalIds: [] }));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+});
+
+it('Gallery review F3 waits for open approval IDs before opening the matching ask', async () => {
+  window.history.replaceState({}, '', '/?decision=open#approval-open');
+  const asks = <div id="approval-open">Open approval</div>;
+  const { rerender } = render(page(false, { asks, openApprovalIds: null }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  rerender(page(true, { asks, openApprovalIds: ['open'] }));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Open approval');
+  await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' }));
+  expect((Element.prototype.scrollIntoView as jest.Mock).mock.instances.at(-1)).toBe(document.getElementById('approval-open'));
+});
+
+it('Gallery review F3 keeps an unknown approval on the page instead of opening an empty drawer', () => {
+  window.history.replaceState({}, '', '/?decision=unknown#approval-unknown');
+  render(page(true, { openApprovalIds: [] }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(document.body.style.overflow).not.toBe('hidden');
+});

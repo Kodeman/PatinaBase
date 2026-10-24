@@ -3,7 +3,7 @@ import { galleryRoute } from '../gallery-route';
 describe('Gallery permanent addresses', () => {
   it.each(['doorstep', 'ledger', 'letterbox', 'approvals', 'door', 'wall', 'approval-decision-1', 'door-paper-1', 'review-r1', 'scope-change-s1', 'invoice-inv-1-toggle'])(
     'opens the asks drawer for #%s', (anchor) => {
-      expect(galleryRoute(`#${anchor}`)).toEqual({ kind: 'asks', anchor, receipt: false });
+      expect(galleryRoute(`#${anchor}`, null, ['decision-1'])).toEqual({ kind: 'asks', anchor, receipt: false });
     },
   );
   it.each(['letterbox', 'road'])('opens a checkout return at #%s with a receipt, never a scroll', (anchor) => {
@@ -25,3 +25,10 @@ describe('Gallery permanent addresses', () => {
     expect(galleryRoute('')).toEqual({ kind: 'page' });
   });
 });
+
+  it('Gallery review F3 resolves approval addresses only after the ask read settles', () => {
+    expect(galleryRoute('#approval-open')).toEqual({ kind: 'page' });
+    expect(galleryRoute('#approval-open', null, ['open'])).toEqual({ kind: 'asks', anchor: 'approval-open', receipt: false });
+    expect(galleryRoute('#approval-settled', null, ['open'])).toEqual({ kind: 'scroll', anchor: 'approval-settled' });
+    expect(galleryRoute('#approval-unknown', null, [])).toEqual({ kind: 'scroll', anchor: 'approval-unknown' });
+  });

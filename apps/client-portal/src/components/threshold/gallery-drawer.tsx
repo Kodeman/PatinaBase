@@ -23,11 +23,6 @@ function localAnchor(event: MouseEvent): string | null {
   return link.getAttribute('href');
 }
 
-function scrollRoute(route: GalleryRoute) {
-  if (route.kind !== 'scroll') return;
-  requestAnimationFrame(() => document.getElementById(route.anchor)?.scrollIntoView());
-}
-
 function syncDialog(node: HTMLDialogElement | null, open: boolean) {
   if (!node || node.open === open) return;
   if (open) node.showModal();
@@ -46,13 +41,23 @@ function revealAnchor(node: HTMLDialogElement, anchor: string) {
   return true;
 }
 
-function observeAnchor(node: HTMLDialogElement, anchor: string) {
-  if (revealAnchor(node, anchor)) return;
-  const observer = new MutationObserver(() => {
-    if (revealAnchor(node, anchor)) observer.disconnect();
-  });
+function observeAnchor(node: HTMLElement, reveal: () => boolean) {
+  if (reveal()) return;
+  const stop = () => {
+    observer.disconnect();
+    window.removeEventListener('wheel', stop);
+    window.removeEventListener('touchstart', stop);
+    window.removeEventListener('keydown', keyScroll);
+  };
+  const keyScroll = (event: KeyboardEvent) => {
+    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) stop();
+  };
+  const observer = new MutationObserver(() => { if (reveal()) stop(); });
   observer.observe(node, { childList: true, subtree: true });
-  return () => observer.disconnect();
+  window.addEventListener('wheel', stop, { passive: true });
+  window.addEventListener('touchstart', stop, { passive: true });
+  window.addEventListener('keydown', keyScroll);
+  return stop;
 }
 
 function overlayHistoryKey(active: boolean, key: string) {
@@ -60,7 +65,8 @@ function overlayHistoryKey(active: boolean, key: string) {
 }
 
 /** One history entry for an overlay, including navigation between its contents. */
-export function useGalleryRoute() {
+export function useGalleryRoute(openApprovalIds: readonly string[] | null = null) {
+  const approvalKey = openApprovalIds === null ? null : JSON.stringify(openApprovalIds);
   const [route, setRoute] = useState<GalleryRoute>({ kind: 'page' });
   const opener = useRef<HTMLElement | null>(null);
   const historyKey = useId();
@@ -73,7 +79,7 @@ export function useGalleryRoute() {
   }, []);
 
   const navigate = useCallback((hash: string) => {
-    const next = galleryRoute(hash, consumeCheckoutReturn());
+    const next = galleryRoute(hash, consumeCheckoutReturn(), openApprovalIds);
     const open = overlayRoute(next);
     if (!active) opener.current = document.activeElement as HTMLElement;
     const url = `${window.location.pathname}${window.location.search}${hash}`;
@@ -83,9 +89,9 @@ export function useGalleryRoute() {
     setRoute(next);
     if (!open) {
       restoreFocus();
-      scrollRoute(next);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
     }
-  }, [active, historyKey, restoreFocus]);
+  }, [active, historyKey, restoreFocus, approvalKey]);
 
   const dismiss = useCallback(() => {
     if (window.history.state?.gallery === historyKey) window.history.back();
@@ -99,9 +105,9 @@ export function useGalleryRoute() {
   useEffect(() => {
     const read = () => {
       const returned = consumeCheckoutReturn();
-      const next = galleryRoute(window.location.hash, returned);
-      setRoute(next);
-      if (!overlayRoute(next)) { restoreFocus(); scrollRoute(next); }
+      const next = galleryRoute(window.location.hash, returned, openApprovalIds);
+      setRoute((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+      if (!overlayRoute(next)) restoreFocus();
     };
     read();
     window.addEventListener('hashchange', read);
@@ -110,13 +116,23 @@ export function useGalleryRoute() {
       window.removeEventListener('hashchange', read);
       window.removeEventListener('popstate', read);
     };
-  }, [restoreFocus]);
+  }, [restoreFocus, approvalKey]);
+
+  useEffect(() => {
+    if (route.kind !== 'scroll') return;
+    return observeAnchor(document.body, () => {
+      const target = document.getElementById(route.anchor);
+      if (!target) return false;
+      target.scrollIntoView({ block: 'start' });
+      return true;
+    });
+  }, [route]);
 
   useEffect(() => {
     const follow = (event: MouseEvent) => {
       const hash = localAnchor(event);
       if (!hash) return;
-      if (!active && !overlayRoute(galleryRoute(hash))) return;
+      if (!active && !overlayRoute(galleryRoute(hash, null, openApprovalIds))) return;
       event.preventDefault();
       navigate(hash);
     };
@@ -142,7 +158,7 @@ export function GalleryDrawer({ open, title, onDismiss, anchor, children }: {
     const node = dialog.current;
     syncDialog(node, open);
     if (!open || !node || !anchor) return;
-    return observeAnchor(node, anchor);
+    return observeAnchor(node, () => revealAnchor(node, anchor));
   }, [open, anchor]);
   return <dialog ref={dialog} aria-labelledby={heading} className="gallery-drawer"
     onCancel={(event) => { event.preventDefault(); onDismiss(); }}

@@ -47,10 +47,12 @@ export function asksLine(
   asks: readonly string[],
   designerGivenName: string | null,
   asksReady = true,
+  checkpoint: string | null = null,
 ): string | null {
   if (invoices.read === 'loading' || !asksReady) return null;
   if (invoices.withheld || invoices.read !== 'complete') return 'Please check your invoices and asks.';
-  return joinAsks(moneyPhrase(invoices), askPhrase(asks), noAsksLine(invoices, designerGivenName));
+  const waiting = [askPhrase(asks), checkpoint].filter(Boolean).join(', and ');
+  return joinAsks(moneyPhrase(invoices), waiting, noAsksLine(invoices, designerGivenName));
 }
 
 export function urgentInvoice(invoices: InvoiceProjection): InvoiceRow | null {

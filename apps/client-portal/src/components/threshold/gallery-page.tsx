@@ -130,6 +130,8 @@ interface GalleryPageProps {
   issue: HouseIssue | null; ready: boolean; heldTooLong: boolean; line: string | null;
   menuAsks: ReactNode; asks: ReactNode; plan: ReactNode; documents: (dismiss: () => void) => ReactNode;
   otherHouses: OtherHouse[];
+  openApprovalIds?: readonly string[] | null;
+  approvalReadPending?: boolean;
   bands: RoomBandModel[]; pieces: (band: RoomBandModel) => ReactNode;
   note: ReactNode; earlier: ReactNode; footer: ReactNode; roadSentence: ReactNode;
 }
@@ -210,7 +212,7 @@ function drawerTitle(route: ReturnType<typeof useGalleryRoute>['route'], props: 
 }
 function askAnchor(route: ReturnType<typeof useGalleryRoute>['route']) { return route.kind === 'asks' ? route.anchor : undefined; }
 export function GalleryPage(props: GalleryPageProps) {
-  const { route, active, dismiss } = useGalleryRoute();
+  const { route, active, dismiss } = useGalleryRoute(props.approvalReadPending ? null : props.openApprovalIds);
   const chapters = galleryChapters(props.issue, props.bands);
   const title = drawerTitle(route, props);
   return <div className="gallery-page" data-testid="the-threshold">

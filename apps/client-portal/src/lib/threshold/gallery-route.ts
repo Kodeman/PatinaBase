@@ -24,8 +24,8 @@ function readAnchor(hash: string): string | null {
 }
 
 function isAskAnchor(anchor: string): boolean {
-  return ['doorstep', 'ledger', 'letterbox', 'approvals', 'door', 'wall'].includes(anchor)
-    || /^(approval-|door-|wall-|review-|scope-change-|invoice-)/.test(anchor);
+  return ['doorstep', 'ledger', 'letterbox', 'approvals', 'door', 'wall', 'budget-checkpoint'].includes(anchor)
+    || /^(door-|wall-|review-|scope-change-|invoice-)/.test(anchor);
 }
 
 function isReceiptAnchor(anchor: string, returned: CheckoutReturn | null): boolean {
@@ -33,11 +33,22 @@ function isReceiptAnchor(anchor: string, returned: CheckoutReturn | null): boole
 }
 
 /** Permanent mail and till addresses, resolved without changing any URL producer. */
-export function galleryRoute(hash: string, returned: CheckoutReturn | null = null): GalleryRoute {
+export function galleryRoute(hash: string, returned: CheckoutReturn | null = null, openApprovalIds: readonly string[] | null = null): GalleryRoute {
   const anchor = readAnchor(hash);
   if (!anchor) return { kind: 'page' };
   if (anchor.startsWith('pieces-')) return { kind: 'pieces', roomId: anchor.slice(7) };
   if (isReceiptAnchor(anchor, returned)) return { kind: 'asks', anchor: 'letterbox', receipt: true };
+  return addressRoute(anchor, openApprovalIds);
+}
+
+function approvalRoute(anchor: string, openApprovalIds: readonly string[] | null): GalleryRoute {
+  if (openApprovalIds === null) return { kind: 'page' };
+  return openApprovalIds.includes(anchor.slice(9))
+    ? { kind: 'asks', anchor, receipt: false } : { kind: 'scroll', anchor };
+}
+
+function addressRoute(anchor: string, openApprovalIds: readonly string[] | null): GalleryRoute {
+  if (anchor.startsWith('approval-')) return approvalRoute(anchor, openApprovalIds);
   if (isAskAnchor(anchor)) return { kind: 'asks', anchor, receipt: false };
   return INDEX_ROUTES.get(anchor) ?? { kind: 'scroll', anchor };
 }
