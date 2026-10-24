@@ -20,10 +20,8 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 // place; this is the LOCAL stack, and `supabase db reset` is the broom.
 
 const LOCAL_URL = 'http://127.0.0.1:54321';
-// Well-known supabase-demo service-role + anon JWTs (LOCAL only) — same
-// constants share-link.spec.ts / field-link.spec.ts already use.
-const SERVICE_JWT =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+// Supplied from the local CLI status, never a committed credential.
+const SERVICE_JWT = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 const ANON_JWT =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 
@@ -51,8 +49,15 @@ async function mintTransmittal(): Promise<MintedSet> {
   const suffix = randomUUID().slice(0, 8);
   const projectId = randomUUID();
   const projectName = `Plans E2E ${suffix}`;
+  const { data: identity, error: identityError } = await admin.rpc('resolve_studio_identity', {
+    p_designer_id: DESIGNER_ID,
+  });
+  if (identityError) throw identityError;
+  const studioId = (Array.isArray(identity) ? identity[0] : identity)?.studio_id;
+  expect(studioId, 'the seeded designer has an active studio').toBeTruthy();
 
   const { error: projectErr } = await admin.from('projects').insert({
+    studio_id: studioId,
     id: projectId,
     name: projectName,
     status: 'active',

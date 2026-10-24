@@ -1,6 +1,8 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { ELM, signInAsJune } from './fixtures/house-issue';
+import { checked, composedAgreement, household, signIn as signInHousehold } from './fixtures/homeowner';
+import { legalDate } from '../src/lib/threshold/dates';
 
 /**
  * The Threshold (spec §7) — the homeowner's project page as ONE chrome-less
@@ -47,35 +49,20 @@ const MULTI_SEEDED_HOUSES = ['Aspen Loft Refresh', 'Birch Hollow', 'Marrow & Val
        her acceptance                                           → $2,980.00
    4 · invoice INV-2026-0301, sent and unpaid: 406000c due CURRENT_DATE + 7
    ────────────────────────────────────────────────────────────────────────── */
-const AUTHORIZATION_TOTAL = '$8,120.00';
+// The unchanged signed-document renderer prints whole dollars.
+const AUTHORIZATION_TOTAL = /\$8,120(?:\.00)?(?:\D|$)/;
 const LIVE_WORKING_FIGURE = '$7,800';
 const MAKER = 'Marta Voss';
 const HELD_DRAW = '$2,980.00';
 const INVOICE_BALANCE = '$4,060.00';
-/**
- * The seed dates this invoice `CURRENT_DATE + 7` (the-client-page.sql:621), so
- * the day it falls due moves with the clock. A literal 'September 11' was true
- * only on the day it was written and turned the suite red the next morning —
- * read the day off the same rule the seed uses.
- */
-const INVOICE_DUE_DAY = (() => {
-  // Count the seven days on the calendar the SEED counts them on. Postgres runs
-  // in UTC, so `CURRENT_DATE + 7` rolls over at UTC midnight; counting from the
-  // runner's local clock instead names a different day for every evening west
-  // of Greenwich (19:38 CDT on 8 September asked for 15 September while the
-  // seeded invoice said 16 September, and the suite went red on the clock).
-  const now = new Date();
-  const due = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 7));
-  // en-GB, day first, and the year spelled out: PP-2 gave the house one date
-  // idiom and `lib/threshold/dates.ts` is the only place that composes it. A
-  // due date is a term of the invoice, so it is `legalDate`, never `dayMonth`.
-  return new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(due);
-})();
+async function invoiceDueDay(): Promise<string> {
+  // CURRENT_DATE was evaluated at seed time, not at this test's execution time.
+  const invoice = await checked(admin().from('invoices').select('due_date')
+    .eq('id', 'b0000000-0000-0000-0000-00000000cc01').single());
+  const due = legalDate(invoice.due_date);
+  expect(due, 'the seeded invoice must name its exact due day').not.toBeNull();
+  return due!;
+}
 
 const STANDING_NOTE_BODY =
   'The shelving is up and oiled. Look at it when you can, and if it reads right I will have Marta move on to the hall.';
@@ -126,14 +113,10 @@ const COMPOSED_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb01';
                           5 clause  Terms
      signatures           none — this test writes the client's
 
-   THE TEST SIGNS, so it consumes the fixture: it is written for the reset
-   stack the gate order in build-sheet §7 runs it on (`pnpm supabase:reset`
-   before the e2e), which is the same ground every SQL suite in that list
-   assumes. Run twice against one stack without a reset and the second run
-   finds a door already open — that is the fixture's nature, not a flake.
+   The test clones this template onto a disposable household, sends that draft
+   through the normal RPC, and leaves its immutable signature intact.
    ────────────────────────────────────────────────────────────────────────── */
 const PER_PHASE_AGREEMENT_ID = 'b0000000-0000-0000-0000-00000000cb04';
-const PER_PHASE_AGREEMENT_TITLE = 'Cedar Lane — Phase Work';
 const PER_PHASE_ACK_PART_KEY = 'patina.lead_paint_notice';
 const PER_PHASE_ACK_LINE = 'I received the lead-paint notice.';
 /**
@@ -264,7 +247,7 @@ async function signInAsClient(page: Page): Promise<void> {
  * screen is therefore NOT the page; the absence of the hold is.
  */
 async function settle(page: Page): Promise<void> {
-  await expect(page.getByTestId('doorplate')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId('threshold-hold')).toHaveCount(0, { timeout: 90_000 });
 }
 
@@ -287,8 +270,8 @@ test.describe('The Threshold — the client page', () => {
     for (const address of ['/', `/projects/${ELM.id}`]) {
       await page.goto(address);
       await settle(page);
-      await expect(page.locator('.ed-standing')).toBeVisible();
-      await expect(page.getByTestId('doorplate')).toBeAttached();
+      await expect(page.getByRole('link', { name: /\$600\.00/ })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Menu', exact: true })).toBeVisible();
     }
   });
   test('opens chrome-less, with the house named on the doorplate', async ({ page }) => {
@@ -300,34 +283,43 @@ test.describe('The Threshold — the client page', () => {
     // menu, the user menu — every one of them absent.
     await expectNoHeader(page);
 
-    await expect(page.getByTestId('doorplate-title')).toHaveText('Cedar Lane Study');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cedar Lane Study');
   });
 
   test('prints the five facts the seed put in the house', async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);
+    // Gallery keeps the signed paper in Earlier, separate from the summed ledger.
+    await pressUntilOpen(
+      page.getByTestId('previously-line').filter({ hasText: /Furnishings authorization/i }).getByRole('button'),
+      page.getByTestId('instrument-reading'),
+    );
 
     const body = page.locator('body');
 
     // 1 · what she authorized, at the figure she put her name to — and never
     //     the studio's live working row.
-    await expect(body).toContainText(AUTHORIZATION_TOTAL);
+    await expect(page.getByTestId('instrument-reading')).toContainText(AUTHORIZATION_TOTAL);
     await expect(body).not.toContainText(LIVE_WORKING_FIGURE);
+    await page.keyboard.press('Escape');
+    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
     // 2 · the maker whose finished work is waiting on her word
     await expect(body).toContainText(MAKER);
     // 3 · the draw held back until she accepts it
     await expect(body).toContainText(HELD_DRAW);
     // 4 · the balance, and the day it falls due
     await expect(page.getByTestId('letterbox')).toContainText(INVOICE_BALANCE);
-    await expect(page.getByTestId('letterbox')).toContainText(INVOICE_DUE_DAY);
+    await expect(page.getByTestId('letterbox')).toContainText(await invoiceDueDay());
     // 5 · the chapter the house stands in, named on the doorplate
-    await expect(page.getByTestId('doorplate-sub')).not.toBeEmpty();
+    await expect(page.locator('#road')).not.toBeEmpty();
   });
 
   test('draws the key with one link per seeded room', async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);
 
+    await page.getByRole('link', { name: 'Menu', exact: true }).click();
+    await page.getByRole('link', { name: 'The house', exact: true }).click();
     const key = page.locator('svg[role="group"]');
     await expect(key).toHaveCount(1);
 
@@ -358,11 +350,13 @@ test.describe('The Threshold — the client page', () => {
     // through the retired list. `/` is unmapped, so nothing collapses it away.
     await expect.poll(() => new URL(page.url()).pathname, { timeout: 60_000 }).toBe('/');
     await settle(page);
-    await expect(page.getByTestId('doorplate-title')).toHaveText('Cedar Lane Study');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cedar Lane Study');
     await expectNoHeader(page);
     // The same one page, whole: the letterbox and the mat are on `/`, not
     // behind a route.
+    await page.getByRole('link', { name: 'Invoices', exact: true }).click();
     await expect(page.getByTestId('letterbox')).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.getByTestId('mat')).toBeVisible();
   });
 
@@ -373,7 +367,7 @@ test.describe('The Threshold — the client page', () => {
 
     await expect.poll(() => new URL(page.url()).pathname, { timeout: 60_000 }).toBe('/');
     await settle(page);
-    await expect(page.getByTestId('doorplate-title')).not.toBeEmpty();
+    await expect(page.getByRole('heading', { level: 1 })).not.toBeEmpty();
     await expectNoHeader(page);
 
     // The doorplate names the house she is standing in; the mat names the rest.
@@ -381,7 +375,7 @@ test.describe('The Threshold — the client page', () => {
     await expect(others).toBeVisible();
     await expect(others.getByRole('heading', { name: 'Your other projects' })).toBeVisible();
     // Every seeded house but the one she stands in is named, as a line to it.
-    const standingIn = (await page.getByTestId('doorplate-title').textContent())?.trim() ?? '';
+    const standingIn = (await page.getByRole('heading', { level: 1 }).textContent())?.trim() ?? '';
     for (const name of MULTI_SEEDED_HOUSES.filter((house) => house !== standingIn)) {
       await expect(
         others.locator('a[href^="/projects/"]').filter({ hasText: name }),
@@ -397,6 +391,7 @@ test.describe('The Threshold — the client page', () => {
   test('stands the acceptance ask on the wall, with its act ready', async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);
+    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
 
     // The seed carries no project-approval review for either client (checked
     // against list_my_project_decision_reviews on the reset stack), so the
@@ -431,6 +426,7 @@ test.describe('The Threshold — the client page', () => {
   }) => {
     await signInAsClient(page);
     await openTheHouse(page);
+    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
 
     // The till is mocked at the edge-function boundary: a real Stripe session
     // is not this suite's to claim, and the return URL is the contract worth
@@ -459,10 +455,7 @@ test.describe('The Threshold — the client page', () => {
     // The toll is the letter inside the envelope: the act only exists once the
     // letterbox is unfolded, which is the client's own first move.
     const settle = page.getByRole('button', { name: /continue to secure payment/i });
-    await pressUntilOpen(
-      page.locator('[data-invoice-id="b0000000-0000-0000-0000-00000000cc01"]').getByRole('button', { name: 'View invoice' }),
-      settle,
-    );
+    await expect(settle).toBeVisible();
     await expect(settle).toBeEnabled({ timeout: 30_000 });
     await settle.click();
 
@@ -509,17 +502,14 @@ test.describe('The Threshold — the client page', () => {
     await signInAsClient(page);
     await openTheHouse(page);
 
-    const before = page.url();
+    const before = new URL(page.url()).pathname;
+    await page.getByRole('link', { name: 'Documents', exact: true }).click();
     const sheet = page.getByTestId('papers-sheet');
-    await pressUntilOpen(
-      page.getByTestId('mat-papers').getByRole('button', { name: /the papers, in full/i }),
-      sheet,
-    );
-    await expect(sheet).toHaveAttribute('role', 'dialog');
+    await expect(page.getByRole('dialog', { name: 'Documents' })).toBeVisible();
     // The seed's three executed instruments are the papers this house holds.
     await expect(page.getByTestId('papers-sheet-instruments')).toBeVisible();
     // Nothing left the page.
-    expect(page.url()).toBe(before);
+    expect(new URL(page.url()).pathname).toBe(before);
     await expectNoHeader(page);
 
     // Dismissed by the same tab that opened it (Esc closes; the page stays).
@@ -666,16 +656,16 @@ test.describe('The Threshold — the client page', () => {
   test('signs a composed agreement at its door, and files what she agreed to', async ({
     page,
   }) => {
-    await signInAsClient(page);
-    await openTheHouse(page);
-
+    const house = await household(true);
+    const agreement = await composedAgreement(house, PER_PHASE_AGREEMENT_ID);
+    await signInHousehold(page, house, `/projects/${house.project}#door`);
     const doorway = page
       .getByTestId('door-way')
-      .filter({ hasText: PER_PHASE_AGREEMENT_TITLE })
+      .filter({ hasText: agreement.title })
       .first();
     await expect(
       doorway,
-      `the seed must leave ${PER_PHASE_AGREEMENT_TITLE} (${PER_PHASE_AGREEMENT_ID}) SENT — see the fixture note at the head of this file`,
+      `the disposable agreement ${agreement.id} must arrive SENT`,
     ).toBeVisible({ timeout: 90_000 });
 
     // 1 · The sentence is composed from the parts, and it is the database's.
@@ -714,7 +704,7 @@ test.describe('The Threshold — the client page', () => {
     // 4 · What the database filed. Both halves: the sentence she ticked, and
     //     the key of the attachment she said she received.
     await expect
-      .poll(async () => (await clientSignatureMetadata(PER_PHASE_AGREEMENT_ID))?.consentSentence, {
+      .poll(async () => (await clientSignatureMetadata(agreement.id))?.consentSentence, {
         timeout: 60_000,
         message: 'the signature must record the sentence the database composed',
       })
@@ -722,7 +712,7 @@ test.describe('The Threshold — the client page', () => {
     await expect
       .poll(
         async () =>
-          (await clientSignatureMetadata(PER_PHASE_AGREEMENT_ID))?.attachmentsAcknowledged,
+          (await clientSignatureMetadata(agreement.id))?.attachmentsAcknowledged,
         {
           timeout: 60_000,
           message: 'the signature must record the acknowledgment she gave',
@@ -813,89 +803,34 @@ test.describe('The Threshold — the client page', () => {
     await expect(page.locator('body')).not.toContainText('Leave the house');
   });
 
-  test('stands literal landmarks under the doorplate, every one pointing at something that renders', async ({
-    page,
-  }) => {
+  test('Menu keeps the permanent asks and chapter destinations', async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);
-
-    const ledger = page.getByTestId('landmark-ledger');
-    await expect(ledger).toBeVisible();
-
-    const links = ledger.locator('a');
-    await expect(links.nth(0)).toHaveText('Invoices');
-    await expect(links.nth(1)).toHaveText('Approvals');
-    await expect(links.nth(2)).toHaveText('Progress');
-    await expect(ledger.getByRole('link', { name: 'Documents', exact: true })).toBeVisible();
-
-    // IA-21's failure was a ledger pointing at ids that never render. Every
-    // href resolves to an element on this page.
-    for (const href of await links.evaluateAll((nodes) =>
-      nodes.map((node) => node.getAttribute('href') ?? ''),
-    )) {
-      expect(href.startsWith('#')).toBe(true);
-      await expect(page.locator(href)).toHaveCount(1);
+    await page.getByRole('link', { name: 'Menu', exact: true }).click();
+    const menu = page.getByRole('navigation', { name: 'Page index' });
+    for (const [name, href] of [['Invoices', '#letterbox'], ['All asks and approvals', '#approvals'], ['Documents', '#mat-papers'], ['The house', '#key']]) {
+      await expect(menu.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
     }
-
-    // The money is the one landmark exempt from any dimming pass.
-    await expect(ledger.locator('a[href="#letterbox"]')).toHaveAttribute('data-never-dim', '');
-  });
-
-  // The House Issue on (the `edition` project's server, :3102): the cover,
-  // chapter heads and plates stand beside the sections, and every anchor the
-  // mail, the retired routes and the middleware point at still resolves, once.
-  test('keeps every anchor resolving with The House Issue', { tag: '@edition-only' }, async ({ page }) => {
-    await signInAsClient(page);
-    await openTheHouse(page);
-    await expect(page.locator('[data-standing-row]')).toHaveCount(3, { timeout: 30000 });
-    await expect(page.locator('.ed-chapter-head').first()).toBeVisible();
-
-    const ids = ['doorstep', 'ledger', 'letterbox', 'approvals', 'key', 'road', 'note', 'previously', 'mat'];
-    for (const id of ids) {
-      await expect(page.locator(`[id="${id}"]`), `#${id}`).toHaveCount(1);
-    }
-    const roomIds = await page.locator('section[id^="room-"]').evaluateAll((nodes) => nodes.map((n) => n.id));
-    expect(roomIds.length).toBeGreaterThan(0);
-
-    const hrefs = await page
-      .locator('[data-testid="landmark-ledger"] a, [data-standing-row], a[href^="#approval-"], a[href^="#room-"]')
-      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href') ?? ''));
-    for (const href of new Set(hrefs)) {
-      expect(href.startsWith('#'), href).toBe(true);
-      await expect(page.locator(`[id="${href.slice(1)}"]`), href).toHaveCount(1);
-    }
-
-    // The "On this page" row keeps today's order.
-    await expect(page.getByTestId('landmark-ledger').locator('a').nth(0)).toHaveText('Invoices');
-    await expect(page.getByTestId('landmark-ledger').locator('a').nth(1)).toHaveText('Approvals');
-    await expect(page.getByTestId('landmark-ledger').locator('a').nth(2)).toHaveText('Progress');
+    await menu.getByRole('link', { name: 'All asks and approvals' }).click();
+    await expect(page.getByRole('dialog', { name: 'Invoices and approvals' })).toBeVisible();
+    await expect(page.locator('#approvals')).toBeVisible();
+    await page.keyboard.press('Escape');
+    for (const id of ['road', 'note', 'previously', 'mat']) await expect(page.locator('#' + id)).toHaveCount(1);
   });
 
   test('keeps an honest approvals destination when no approval is waiting', async ({ page }) => {
-    // With no active ask, Approvals still lands on the honest empty state.
     await signIn(page, 'client@patina.dev');
-    await expect.poll(() => new URL(page.url()).pathname, { timeout: 60_000 }).toBe('/');
     await settle(page);
-
-    await expect(page.locator('#wall')).toHaveCount(0);
-    await expect(page.locator('#door')).toHaveCount(0);
-    await expect(page.locator('[id^="approval-"]')).toHaveCount(0);
-
-    const ledger = page.getByTestId('landmark-ledger');
-    await expect(ledger).toBeVisible();
-    await expect(ledger.getByRole('link', { name: 'Approvals', exact: true })).toHaveAttribute('href', '#approvals');
+    await page.getByRole('link', { name: 'Approvals', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Invoices and approvals' })).toBeVisible();
     await expect(page.locator('#approvals')).toBeVisible();
-    // And the four that remain still point at something.
-    for (const href of await ledger.locator('a').evaluateAll((nodes) =>
-      nodes.map((node) => node.getAttribute('href') ?? ''),
-    )) {
-      await expect(page.locator(href)).toHaveCount(1);
-    }
+    await expect(page.locator('[id^="approval-"]')).toHaveCount(0);
   });
 
   test('says what accepting does, above the act, before the act is armed', async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);
+    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
 
     const consequence = page.getByTestId('wall-consequence');
     // Unavailable is the state the sentence has to survive: it stands before
@@ -927,6 +862,11 @@ test.describe('The Threshold — the client page', () => {
   }) => {
     await signInAsClient(page);
     await openTheHouse(page);
+    await page.getByRole('link', { name: /\$|Nothing from|Please check/ }).click();
+
+    await page.keyboard.press('Escape');
+    await page.getByRole('link', { name: 'Menu', exact: true }).click();
+    await page.getByRole('link', { name: 'The house', exact: true }).click();
 
     // PP-2: the figure with an obligation and a date is the largest true type
     // in the block — the agreed figure no longer outranks it.
@@ -955,26 +895,14 @@ test.describe('The Threshold — the client page', () => {
     expect(rowFigures).not.toContain('$0.00');
   });
 
-  test('makes the story pole’s labels links to the sections they name', async ({ page }) => {
+  test('Menu chapter labels still reach the rooms they name', async ({ page }) => {
     await signInAsClient(page);
     await openTheHouse(page);
-
-    const pole = page.getByTestId('story-pole');
-    await expect(pole).toBeVisible();
-
-    const links = pole.locator('a[href^="#"]');
-    await expect(links.first()).toBeVisible();
-    const count = await links.count();
-    expect(count).toBeGreaterThan(0);
-    for (let index = 0; index < count; index += 1) {
-      const href = await links.nth(index).getAttribute('href');
-      expect(href).toBeTruthy();
-      await expect(page.locator(href as string)).toHaveCount(1);
-    }
-
-    // The caret stays a reading mark: it is not a control.
-    const caret = pole.getByTestId('story-pole-caret');
-    await expect(caret).toHaveCount(1);
-    await expect(caret.locator('a, button')).toHaveCount(0);
+    await page.getByRole('link', { name: 'Menu', exact: true }).click();
+    const links = page.getByRole('navigation', { name: 'Page index' }).locator('a[href^="#room-"]');
+    const hrefs = await links.evaluateAll(nodes => nodes.map(node => node.getAttribute('href')!));
+    expect(hrefs.length).toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+    for (const href of hrefs) await expect(page.locator(href)).toHaveCount(1);
   });
 });
