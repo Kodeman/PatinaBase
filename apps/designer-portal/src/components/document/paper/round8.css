@@ -114,4 +114,144 @@
   box-shadow: var(--r8-stack-edge);
 }
 
+/* The embedded schedule owns only the paper column, not the viewport.
+   Keep the route's Tailwind media rules intact; only this shell opts in. */
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] {
+  container: ffe-sheet / inline-size;
+  min-width: 0;
+  padding-bottom: 64px;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] > header {
+  min-height: auto;
+  flex-wrap: wrap;
+  padding: 0 16px;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] > header > a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] > header > a > span:nth-child(2),
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-build-room-picker] {
+  display: block;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] > header > a > span:last-child,
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="build-room-place"],
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] nav[aria-label="Rooms"] {
+  display: none;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] nav[aria-label="Choose a room"] {
+  display: block;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-build-room-title] {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [aria-label="Schedule view"] {
+  order: 1;
+  flex: 0 0 100%;
+  width: 100%;
+  margin: 0;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  border-top-width: 1px;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] > p,
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] > div > section {
+  min-width: 0;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] {
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 24px;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] > div {
+  min-width: 0;
+  grid-area: auto;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] > div:nth-of-type(1) { order: 3; }
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] > div:nth-of-type(2) { order: 2; }
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] > div:nth-of-type(3) { order: 1; }
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-fields-pane"] > .grid {
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 24px;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-fields-pane"] > .grid > * {
+  grid-column: auto;
+}
+
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-rough-in-lens] > .sticky,
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] button[aria-label^="Elevation,"] {
+  display: none;
+}
+
+/* Tables keep their native editing/keyboard model and scroll inside the body. */
+[data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-rough-in-lens] > div:first-child {
+  overflow-x: auto;
+}
+
+@container ffe-sheet (min-width: 600px) {
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] > header,
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] > p,
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] > div > section {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-fields-pane"] > .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-fields-pane"] > .grid > [class~="md:col-span-2"] {
+    grid-column: span 2 / span 2;
+  }
+}
+
+@container ffe-sheet (min-width: 1180px) {
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-build-room-picker] { display: none; }
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] nav[aria-label="Rooms"] { display: flex; }
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="build-room-place"] { display: block; }
+
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] {
+    grid-template-columns: 520px minmax(0, 1fr);
+    column-gap: 48px;
+  }
+
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-fields-pane"] > .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-fields-pane"] > .grid > [class~="md:col-span-2"] {
+    grid-column: auto;
+  }
+
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] > div { order: 0; }
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] > div:nth-of-type(1) { grid-area: 1 / 1; }
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] > div:nth-of-type(2) { grid-area: 2 / 1; }
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-testid="spec-lens"] > div:nth-of-type(3) { grid-area: 1 / 2 / span 2; }
+}
+
+@container ffe-sheet (min-width: 1440px) {
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] [data-rough-in-lens] > .sticky { display: block; }
+  [data-paper-renderer="round8"] [data-build-room-embedded="true"] button[aria-label^="Elevation,"] { display: inline-flex; }
+}
+
 /* end Round 8 paper renderer */
