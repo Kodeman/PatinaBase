@@ -13,6 +13,7 @@ import type { EditorialAsset } from '@/lib/editorial/types';
 import { Pieces as EditorialPieces, type HouseIssue } from './editorial/house-issue';
 import { GalleryDrawer, useGalleryRoute } from './gallery-drawer';
 import { GalleryPhoto } from './gallery-photo';
+import { arrivalPieces } from '@/lib/editorial/rank';
 import { SilhouettePlate } from './editorial/silhouette-plate';
 import { PiecePlate } from './editorial/piece-plate';
 import { ConceptRenderPlate, floorLine, stampDetail } from './room-band';
@@ -156,10 +157,20 @@ function BandStatus({ ready, line, heldTooLong }: Pick<GalleryPageProps, 'ready'
 function arrivalPhoto(issue: HouseIssue | null) {
   return { scope: issue?.scopeId ?? '', asset: issue?.hero ?? null, palette: issue?.editorial.palette ?? [] };
 }
+function ArrivalVisual({ issue }: { issue: HouseIssue | null }) {
+  const pieces = issue && !issue.hero ? arrivalPieces(issue.editorial) : [];
+  if (!pieces.length) return <GalleryPhoto key={issue?.hero?.id ?? 'paint'} {...arrivalPhoto(issue)} arrival />;
+  return <div className="gallery-arrival-still-life" data-gallery-mode="pieces">
+    <ul className="gallery-chapter-pieces" aria-label="Photographs of the pieces">
+      {pieces.map(({ item, asset }) => <li key={item.id}><PiecePlate scopeId={issue!.scopeId}
+        showMakers={issue!.editorial.project.showMakers} item={item} asset={asset} statusWords="" /></li>)}
+    </ul>
+  </div>;
+}
 function Arrival(props: GalleryPageProps) {
   const { issue } = props;
   return <header className="gallery-arrival">
-    <GalleryPhoto key={issue?.hero?.id ?? 'paint'} {...arrivalPhoto(issue)} arrival />
+    <ArrivalVisual issue={issue} />
     <div className="gallery-top"><span className="gallery-chip">{props.studioName ?? 'Your studio'}</span>
       <a className="gallery-chip gallery-menu-control" href="#menu">Menu</a></div>
     <div className="gallery-band"><h1>{galleryHeadline(issue?.editorial, props.projectName)}</h1><BandStatus {...props} /></div>

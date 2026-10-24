@@ -17,7 +17,7 @@
  * `coverCropShown` is the crop the page then draws (crop.ts heroPicture).
  */
 
-export { arrivalMode, arrivalRendition, selectArrival, type ArrivalAsset } from '@patina/utils';
+export { arrivalMode, arrivalMode, arrivalRendition, selectArrival, type ArrivalAsset } from '@patina/utils';
 
 export type PlatePoint = [number, number];
 export type PlateBox = [number, number, number, number];
@@ -246,5 +246,3 @@ export function heroEligible(asset: {
   if (!asset.sourceKind || !PHOTOGRAPH_KINDS.has(asset.sourceKind) || asset.ground === 'white') return false;
   return meetsHero(asset.width, asset.height, asset.subjectBox);
 }
-
-

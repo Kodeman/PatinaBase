@@ -1,6 +1,7 @@
 /* Crop geometry the page needs: object-position from a crop rectangle and the
    `<picture>` sources built from an asset's stored crops. */
 
+import { arrivalMode, arrivalRendition } from '@patina/utils';
 import { plateSrcSet, plateUrl, type PlateFormat } from '@/lib/plates';
 
 import { heroDesktopLayout, type HeroDesktopLayout } from './floors';
@@ -221,6 +222,10 @@ export interface HeroPreloadSource {
 
 /** The hero's preload, one per art-directed source: the crops and `sizes` `heroPicture` draws. */
 export function heroPreloadSources(scopeId: string, asset: EditorialAsset): HeroPreloadSource[] {
+  if (arrivalMode(asset) === 'contained') {
+    const crop = arrivalRendition(asset, null);
+    return crop ? [{ imageSrcSet: plateUrl(scopeId, asset.sha256, crop.key as PlateCropKey, crop.width, 'webp', asset.crops[crop.key as PlateCropKey]?.rev), imageSizes: '100vw' }] : [];
+  }
   const hero = heroPicture(asset);
   const sources: Array<{ cropKey: PlateCropKey; sizes: string; media?: string }> = hero.phone
     ? [

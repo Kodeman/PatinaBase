@@ -609,7 +609,7 @@ function heroEligible(ctx: Ctx, asset: FactsAsset): boolean {
  */
 async function pickHero(ctx: Ctx): Promise<HeroChoice | null> {
   const eligible = ctx.facts.assets.filter((asset) => heroEligible(ctx, asset)).sort(compareAssets);
-  if (!eligible.length) return null;
+  if (!eligible.length) return fallbackHero(ctx);
   const code: HeroChoice = { asset: eligible[0], why: null, held: [] };
   const top = tierOf(eligible[0]);
   const candidates = eligible.filter((asset) => tierOf(asset) === top && sendable(ctx, asset)).slice(0, A2_CANDIDATES);
@@ -619,6 +619,26 @@ async function pickHero(ctx: Ctx): Promise<HeroChoice | null> {
   if (!chosen) return code;
   const held = chosen.held.map((i) => pool[i].asset).filter((asset) => meetsHeld(framed(ctx, asset)));
   return { asset: pool[chosen.index].asset, why: chosen.why, held };
+}
+
+function fallbackHero(ctx: Ctx): HeroChoice | null {
+  const asset = ctx.facts.assets.filter(asset => fallbackEligible(ctx, asset)).sort(compareAssets)[0];
+  return asset ? { asset, why: null, held: [] } : null;
+}
+
+function fallbackEligible(ctx: Ctx, asset: FactsAsset): boolean {
+  const kinds = provenance(ctx, asset);
+  if (!kinds || kinds.some(kind => !HERO_SOURCE_KINDS.has(kind)) || flagged(ctx, asset)) return false;
+  const source = framed(ctx, asset);
+  const box = source.subjectBox;
+  const crops = source.crops as Record<string, { rect?: readonly number[]; widths?: readonly number[] } | null> | undefined;
+  return Object.values(crops ?? {}).some(crop => {
+    if (!crop?.widths?.length || crop.rect?.length !== 4) return false;
+    const rect = crop.rect.every(n => n >= 0 && n <= 1) ? crop.rect
+      : [crop.rect[0] / source.width, crop.rect[1] / source.height, crop.rect[2] / source.width, crop.rect[3] / source.height];
+    return !box || [0, 1].every(axis => rect[axis] <= box[axis] + 1e-6
+      && rect[axis] + rect[axis + 2] >= box[axis] + box[axis + 2] - 1e-6);
+  });
 }
 
 /** Call A2 over the pool; null when it fails or the validator rejects the answer. */

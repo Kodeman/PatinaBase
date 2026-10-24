@@ -103,16 +103,13 @@ export function arrivalRendition(asset: ArrivalAsset, aspect: number | null) {
   });
   return candidates.sort((a,b) => b.width-a.width)[0] ?? null;
 }
-function fullHeightCrops(asset: ArrivalAsset): boolean {
-  return Boolean(asset.crops.cover_phone?.widths.length
-    && (asset.crops.wide?.widths.length || asset.crops.wide32?.widths.length));
-}
+
 function coverDimensions(asset: ArrivalAsset): boolean {
   return Math.max(asset.width, asset.height) >= 2000 && Math.min(asset.width, asset.height) >= 1200;
 }
 function arrivalCover(asset: ArrivalAsset): boolean {
-  if (asset.ground !== 'scene') return false;
-  if (!coverDimensions(asset) && !fullHeightCrops(asset)) return false;
+  if (!['installed', 'upload', 'scan', 'maker'].includes(asset.sourceKind ?? '') || asset.ground !== 'scene') return false;
+  if (!coverDimensions(asset)) return false;
   return Boolean(arrivalRendition(asset, GALLERY_PHONE_ASPECT) && arrivalRendition(asset, GALLERY_DESKTOP_ASPECT));
 }
 export function arrivalMode(asset: ArrivalAsset): 'cover' | 'contained' | null {
@@ -126,8 +123,7 @@ export function selectArrival<T extends ArrivalAsset>(editorial: {
 }) {
   const chosenId = chosenArrivalId(editorial);
   const chosen = editorial.assets.find(asset => asset.id === chosenId);
-  const ranked = [...editorial.assets].filter(asset => arrivalMode(asset) !== null).sort(compareArrivalAssets);
-  const asset = chosen && arrivalMode(chosen) ? chosen : ranked[0];
+  const asset = chosen && arrivalMode(chosen) ? chosen : null;
   if (asset) return { kind: 'photo' as const, asset, mode: arrivalMode(asset)! };
   return { kind: editorial.palette.length ? 'paint' as const : 'empty' as const, asset: null, mode: null };
 }

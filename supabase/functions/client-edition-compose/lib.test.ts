@@ -1358,3 +1358,27 @@ Deno.test("Gallery prompt e2 states the new limits while retaining the voice rul
     assert(system.includes(text), text);
   }
 });
+
+Deno.test("Gallery fallback: a bed-only edition picks the bed without an A2 call", async () => {
+  const fixture = facts();
+  fixture.assets = [asset("a-sofa-maker", "maker", 1600, 1600, { ground: "white", subjectBox: [0.1, 0.2, 0.8, 0.5], perceivedPromptVersion: "e1" })];
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude, calls } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(composition(finishArgs(called)).hero?.assetId, "a-sofa-maker");
+  assertEquals(calls.filter(c => c.role === "draft" && shown(c).length > 0).length, 0);
+});
+Deno.test("Gallery fallback: flagged higher-tier photos, concepts, sheets and cut subjects are excluded", async () => {
+  const fixture = facts();
+  fixture.assets = [
+    asset("a-sofa", "upload", 3000, 2000, { perceivedFlags: ["people"], perceivedPromptVersion: "e1" }),
+    asset("a-concept", "concept", 3000, 2000),
+    asset("a-sheet", "sheet", 3000, 2000),
+    asset("a-table", "upload", 600, 600, { subjectBox: [0, 0, 1, 1], crops: { piece: { rect: [0, 0, 100, 100], widths: [512] } }, perceivedPromptVersion: "e1" }),
+    asset("a-sofa-maker", "maker", 1600, 1600, { ground: "white", perceivedPromptVersion: "e1" }),
+  ];
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  assertEquals(composition(finishArgs(called)).hero?.assetId, "a-sofa-maker");
+});

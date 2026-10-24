@@ -23,5 +23,5 @@ export const arrivalCases = [
   { name: 'empty job', editorial: arrivalFixture([], null), kind: 'empty', id: null, mode: null },
   { name: 'paint only', editorial: { ...arrivalFixture([], null), palette: [{ hex: '#aabbcc', name: 'Oat', brand: null }] }, kind: 'paint', id: null, mode: null },
   { name: 'eligible hero', editorial: arrivalFixture([eligibleScene, bed], 'hero'), kind: 'photo', id: 'hero', mode: 'cover' },
-  { name: 'no approved edition', editorial: { ...arrivalFixture(), edition: undefined }, kind: 'photo', id: 'scene', mode: 'contained' },
+  { name: 'no approved edition', editorial: { ...arrivalFixture(), edition: undefined }, kind: 'empty', id: null, mode: null },
 ] as const;

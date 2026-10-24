@@ -20,7 +20,7 @@ const catalogue: ArrivalAsset = {
 it('contains the complete catalogue subject using the largest served rendition', () => {
   expect(arrivalRendition(catalogue, null)).toMatchObject({ key: 'pair', width: 1600 });
   expect(arrivalMode(catalogue)).toBe('contained');
-  expect(selectArrival({ assets: [catalogue], palette: [] }).asset).toBe(catalogue);
+  expect(selectArrival({ assets: [catalogue], palette: [], edition: {}, composition: { hero: { assetId: 'bed' } } }).asset).toBe(catalogue);
 });
 it('excludes concept and sheet arrivals and rejects crops that cut the subject', () => {
   for (const sourceKind of ['concept','sheet']) expect(arrivalMode({ ...catalogue, sourceKind })).toBeNull();
@@ -29,7 +29,7 @@ it('excludes concept and sheet arrivals and rejects crops that cut the subject',
 });
 it('ranks photographs before catalogue clippings and breaks ties by pixels then digest', () => {
   const scene = { ...catalogue, id: 'scene', ground: 'scene', width: 400, height: 400, subjectBox: null, crops: { piece: { rect: [0,0,400,400], widths: [256] } } };
-  expect(selectArrival({ assets: [catalogue,scene], palette: ['paint'] }).asset).toBe(scene);
+  expect(selectArrival({ assets: [catalogue,scene], palette: ['paint'], edition: {}, composition: { hero: null } }).asset).toBeNull();
   expect(compareArrivalAssets(catalogue, { ...catalogue, width: 800 })).toBeLessThan(0);
   expect(compareArrivalAssets(catalogue, { ...catalogue, sha256: 'a' })).toBeGreaterThan(0);
 });

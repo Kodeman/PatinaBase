@@ -51,7 +51,7 @@ import {
   pendingEdition,
   wasPublished,
 } from '@/lib/document/client-editions';
-import { selectArrival } from '@/lib/document/plate-crop';
+
 import { DocumentAction, DocumentActionRow } from './document-action';
 import {
   ProjectGalleryPreview,
@@ -196,7 +196,7 @@ export function PressBand({
       ) : editorialAssets ? (
         <div className="flex flex-col gap-1">
           <h2 id={headingId} className={HEADING}>
-            {arrivalHeading(editorialAssets)}
+            The page opens on photographs of the pieces.
           </h2>
           <DocumentActionRow surfaceKey="open-document" regionKey="press-band" aria-label="Cover">
             <DocumentAction
@@ -752,12 +752,4 @@ function PublishedEditions({
       </AlertDialog>
     </div>
   );
-}
-
-function arrivalHeading(assets: readonly import('@patina/supabase').ClientEditorialAsset[]) {
-  const arrival = selectArrival({ assets, palette: [] });
-  if (!arrival.asset) return COVER_IS_A_DRAWING;
-  const kind = arrival.asset.ground === 'white' ? 'catalogue photograph' : 'photograph';
-  const asset = arrival.asset;
-  return `The page opens on the ${kind} of ${asset.caption.what || 'the house'}.`;
 }

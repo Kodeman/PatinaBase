@@ -18,7 +18,8 @@ const assetsFor = (row: ClientEdition): ClientEditorialAsset[] => row.images.map
 } as ClientEditorialAsset));
 
 it.each(['One two three four five six seven', 'A beautifully proportioned sideboard in walnut'])('falls back to the house name for an overlong headline: %s', (headline) => {
-  const { container } = render(<PressBandPreview edition={edition(headline)} current={null} sourceUrls={{}} houseName="Elm Street House" />);
+  const row = edition(headline, [imageRow('hero', { plateRole: 'hero', chapterKey: 'cover' })]);
+  const { container } = render(<PressBandPreview edition={row} assets={assetsFor(row)} current={null} sourceUrls={{ hero: 'hero.jpg' }} houseName="Elm Street House" />);
   const bands = container.querySelectorAll('[data-gallery-band]');
   expect(bands).toHaveLength(2);
   for (const band of bands) {
@@ -28,18 +29,11 @@ it.each(['One two three four five six seven', 'A beautifully proportioned sidebo
   expect(screen.getByText('The cover headline is too long for the band, so the house name is shown instead.')).toBeInTheDocument();
 });
 
-it('uses full-height palette stripes when no photograph has a servable rendition', () => {
-  const { container } = render(<PressBandPreview edition={edition('Your sideboard, on the bench', [imageRow('hero', { width: 1999 })])} current={null} sourceUrls={{ hero: 'https://example.com/hero.jpg' }} palette={[{ hex: '#E6DCC8', name: 'Morning Oat' }, { hex: '#6E7458', name: 'Bur Oak' }]} />);
+it('uses words only when the edition has no matching served crop geometry', () => {
+  const { container } = render(<PressBandPreview edition={edition('The living room', [imageRow('hero')])} current={null} sourceUrls={{ hero: 'hero.jpg' }} palette={[{ hex: '#E6DCC8', name: 'Morning Oat' }]} />);
   expect(container.querySelector('[data-press-cover]')).toBeNull();
-  const cards = container.querySelectorAll('[data-gallery-paint]');
-  expect(cards).toHaveLength(2);
-  for (const card of cards) {
-    expect(card).toHaveAccessibleName('The house palette: Morning Oat, Bur Oak');
-    expect(card.children).toHaveLength(2);
-    expect(card.children[0]).toHaveStyle({ backgroundColor: '#E6DCC8' });
-    expect(card.children[1]).toHaveStyle({ backgroundColor: '#6E7458' });
-  }
-  expect(screen.queryByText(/The cover is a drawing/)).toBeNull();
+  expect(container.querySelector('[data-gallery-frame]')).toBeNull();
+  expect(screen.getByText('The page opens on the cover photograph.')).toBeInTheDocument();
 });
 
 it('shows eligible source crops at both arrival aspects with the focal point and the sample asks line', () => {
@@ -83,4 +77,26 @@ it('contains the photograph when its subject cannot fit both Gallery frames', ()
   expect(container.querySelectorAll('[data-gallery-paint]')).toHaveLength(0);
   expect(container.querySelectorAll('[data-gallery-mode="contained"]')).toHaveLength(2);
   expect(container.querySelectorAll('[data-press-cover]')).toHaveLength(2);
+});
+
+it.each(['missing', 'resized', 'higher-ranked'])('binds preview to the edition hero with a distinct live set: %s', (condition) => {
+  const row = edition('The living room', [imageRow('hero', { plateRole: 'hero', chapterKey: 'cover' })]);
+  const original = assetsFor(row)[0];
+  const extra = { ...original, id: 'new-installed', sourceKind: 'installed' as const, width: 6000, height: 4000 };
+  const live = condition === 'missing' ? [extra] : [extra, { ...original, width: condition === 'resized' ? original.width + 1 : original.width }];
+  const { container } = render(<PressBandPreview edition={row} assets={live} current={null} sourceUrls={{ hero: 'hero.jpg', 'new-installed': 'new.jpg' }} />);
+  if (condition === 'higher-ranked') {
+    expect(container.querySelectorAll('[data-press-cover]')).toHaveLength(2);
+    for (const image of container.querySelectorAll('[data-press-cover]')) expect(image).toHaveAttribute('src', expect.stringContaining('hero.jpg'));
+  } else {
+    expect(container.querySelector('[data-press-cover]')).toBeNull();
+    expect(screen.getByText('The page opens on the cover photograph.')).toBeInTheDocument();
+  }
+});
+it('names the pieces without predicting an arrival from live assets when no edition hero exists', () => {
+  const row = edition('The living room');
+  row.composition!.hero = null;
+  const { container } = render(<PressBandPreview edition={row} assets={[]} current={null} sourceUrls={{}} />);
+  expect(container.querySelector('[data-gallery-frame]')).toBeNull();
+  expect(screen.getByText('The page opens on photographs of the pieces.')).toBeInTheDocument();
 });

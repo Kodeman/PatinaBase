@@ -3,7 +3,8 @@ import 'server-only';
 import { createServerClient } from '@patina/supabase/server';
 
 import { editionHero, editorialRpc, plateScope, readClientEditorial } from '@/hooks/use-client-editorial';
-import { heroPreloadSources, type HeroPreloadSource } from '@/lib/editorial/crop';
+import { arrivalPieces } from '@/lib/editorial/rank';
+import { platePicture, SIZES, heroPreloadSources, type HeroPreloadSource } from '@/lib/editorial/crop';
 import type { ClientProjectEditorial } from '@/lib/editorial/types';
 
 /**
@@ -29,6 +30,11 @@ export type HeroPreload = HeroPreloadSource;
  */
 export function heroPreloads(editorial: ClientProjectEditorial | null): HeroPreload[] {
   const hero = editorial ? editionHero(editorial) : null;
-  if (!editorial || !hero) return [];
-  return heroPreloadSources(plateScope(editorial), hero);
+  if (!editorial) return [];
+  const scope = plateScope(editorial);
+  if (hero) return heroPreloadSources(scope, hero);
+  return arrivalPieces(editorial).flatMap(({ asset }) => {
+    const source = platePicture(scope, asset, 'piece', SIZES.piece)?.sources[0];
+    return source ? [{ imageSrcSet: source.srcSet, imageSizes: source.sizes }] : [];
+  });
 }

@@ -28,3 +28,17 @@ it('shows room piece photographs at piece size instead of only a room silhouette
   expect(container.querySelector('.gallery-silhouette')).toBeNull();
   expect(within(chapter).getAllByText('Chair').length).toBeGreaterThan(0);
 });
+
+it('uses piece-sized photographs in room/item order when the server vetoes the hero', () => {
+  const editorial = arrivalFixture([bed, smallScene], null);
+  editorial.rooms = [{ id: 'room', name: 'Bedroom', anchor: 'room-bedroom', conceptAssetId: null, scanAssetIds: [], items: Array.from({ length: 5 }, (_, index) => ({
+    id: 'piece-' + index, nameAsSigned: 'Bed ' + index, category: 'bed', status: null, material: null, finish: null, dimensions: null, descriptionAsSigned: null, silhouetteKind: null, assetIds: ['bed'],
+  })) }];
+  const props = { projectName: 'Elm', ready: true, bands: [], issue: houseIssue(editorial), otherHouses: [], pieces: () => null, documents: () => null } as unknown as ComponentProps<typeof GalleryPage>;
+  const { container } = render(<GalleryPage {...props} />);
+  expect(container.querySelector('.gallery-arrival-figure img')).toBeNull();
+  const still = screen.getByRole('list', { name: 'Photographs of the pieces' });
+  expect(within(still).getAllByRole('img')).toHaveLength(4);
+  expect([...still.querySelectorAll('.ed-piece__name')].map(node => node.textContent)).toEqual(['Bed 0', 'Bed 1', 'Bed 2', 'Bed 3']);
+  expect(still.querySelector('img')).toHaveAttribute('src', expect.stringContaining('piece-768.webp'));
+});

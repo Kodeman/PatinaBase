@@ -100,3 +100,12 @@ export function roomPlates(
     };
   });
 }
+
+/** Piece photographs in room/item order; the same piece choices as room chapters. */
+export function arrivalPieces(editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms'>) {
+  const choices = new Map(roomPlates(editorial).map(room => [room.roomId, room.pieces]));
+  return editorial.rooms.flatMap(room => room.items.flatMap(item => {
+    const asset = choices.get(room.id)?.find(piece => piece.itemId === item.id)?.asset;
+    return asset?.crops.piece?.widths.length ? [{ item, asset }] : [];
+  })).slice(0, 4);
+}

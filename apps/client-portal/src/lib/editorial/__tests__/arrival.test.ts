@@ -14,11 +14,11 @@ it('rejects concept, sheet and unservable chosen assets, ranking photographs bef
   const editorial = arrivalFixture([{ ...bed, crops: {} }, { ...smallScene, sourceKind: 'concept' }, { ...smallScene, id: 'sheet', sourceKind: 'sheet' }]);
   expect(selectArrival(editorial).kind).toBe('empty');
   editorial.assets.push(smallScene);
-  expect(selectArrival(editorial).asset?.id).toBe('scene');
+  expect(selectArrival(editorial).asset).toBeNull();
 });
-it('contains a small scene but covers one with both full-height crops', () => {
+it('contains a below-floor scene even with both full-height crops', () => {
   expect(arrivalMode(smallScene)).toBe('contained');
-  expect(arrivalMode({ ...smallScene, crops: { cover_phone: { rect: [0, 0, 400, 400], widths: [256] }, wide: { rect: [0, 0, 400, 400], widths: [256] } } })).toBe('cover');
+  expect(arrivalMode({ ...smallScene, crops: { cover_phone: { rect: [0, 0, 400, 400], widths: [256] }, wide: { rect: [0, 0, 400, 400], widths: [256] } } })).toBe('contained');
 });
 it('skips a crop that cuts through the subject', () => {
   expect(containedRendition('', { ...bed, crops: { pair: { rect: [0, 0, 0.5, 0.5], widths: [1600] }, piece: bed.crops.piece } })).toMatchObject({ key: 'piece', width: 768 });

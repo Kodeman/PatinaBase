@@ -86,7 +86,7 @@ function PhotoContent({ contained, pair, asset, palette, arrival, onError }: {
   contained: ReturnType<typeof containedRendition>; pair: ReturnType<typeof picturePair>; asset: EditorialAsset | null;
   palette: readonly PaletteSwatch[]; arrival: boolean; onError: () => void;
 }) {
-  if (contained) return <img src={contained.src} alt={plateAlt(asset!)} loading="eager" fetchPriority="high" onError={onError} />;
+  if (contained) return <img sizes="100vw" src={contained.src} alt={plateAlt(asset!)} loading="eager" fetchPriority="high" onError={onError} />;
   return pair ? <ResponsivePhoto {...pair} arrival={arrival} onError={onError} /> : <GalleryPaint palette={palette} />;
 }
 

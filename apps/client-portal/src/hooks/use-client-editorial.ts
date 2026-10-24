@@ -133,7 +133,7 @@ export function plateScope(editorial: ClientProjectEditorial): string {
   return editorial.edition?.id ?? editorial.project.id;
 }
 
-/** The edition's photograph first, then a servable picture before paint. */
+/** Only the approved reader's vetted hero may open at arrival-photo size. */
 export function editionHero(editorial: ClientProjectEditorial): EditorialAsset | null {
   return selectArrival(editorial).asset;
 }
