@@ -55,6 +55,10 @@ function observeAnchor(node: HTMLDialogElement, anchor: string) {
   return () => observer.disconnect();
 }
 
+function overlayHistoryKey(active: boolean, key: string) {
+  return !active || window.history.state?.gallery === key ? key : null;
+}
+
 /** One history entry for an overlay, including navigation between its contents. */
 export function useGalleryRoute() {
   const [route, setRoute] = useState<GalleryRoute>({ kind: 'page' });
@@ -73,7 +77,7 @@ export function useGalleryRoute() {
     const open = overlayRoute(next);
     if (!active) opener.current = document.activeElement as HTMLElement;
     const url = `${window.location.pathname}${window.location.search}${hash}`;
-    const state = { ...window.history.state, gallery: open ? historyKey : null };
+    const state = { ...window.history.state, gallery: open ? overlayHistoryKey(active, historyKey) : null };
     if (active) window.history.replaceState(state, '', url);
     else window.history.pushState(state, '', url);
     setRoute(next);

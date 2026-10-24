@@ -4,7 +4,8 @@ import type { ClientSelection } from '@/lib/commercial-documents';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import type { EditorialAsset } from '@/lib/editorial/types';
+import { houseIssue } from '../editorial/house-issue';
+import type { ClientProjectEditorial, EditorialAsset } from '@/lib/editorial/types';
 import { galleryRendition } from '@/lib/editorial/gallery-picture';
 import { galleryRoute } from '@/lib/threshold/gallery-route';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
@@ -151,4 +152,52 @@ it('keeps trade words, price, quantity, instrument and every record photograph w
 it('labels a concept chapter photograph as not installed', () => {
   render(<GalleryPhoto scope="edition" asset={{ ...asset, sourceKind: 'concept' }} palette={palette} />);
   expect(screen.getByText('Concept · not installed')).toBeVisible();
+});
+
+it.each([
+  [{ approvalsPending: 0, unreadMessages: 0 }, 'Lake Cottage, Nothing waiting there.'],
+  [{ approvalsPending: 1, unreadMessages: 0 }, 'Lake Cottage, a paper is waiting there.'],
+  [{}, 'Lake Cottage'],
+  [{ approvalsPending: 0 }, 'Lake Cottage'],
+])('keeps loaded, waiting, and unknown other-house facts honest in one Menu link', (counts, name) => {
+  window.history.replaceState({}, '', '/#menu');
+  render(page(true, { otherHouses: [{ id: 'lake', name: 'Lake Cottage', ...counts }] }));
+  const link = within(screen.getByRole('navigation', { name: 'Page index' })).getByRole('link', { name, exact: true });
+  expect(link).toHaveTextContent(name);
+  expect(link).toHaveAttribute('href', '/projects/lake');
+});
+
+it('keeps existing editorial room items in Every piece when the commercial projection is empty', async () => {
+  const band = { roomId: 'living', anchor: 'room-living', name: 'Living room', pieces: [] } as unknown as RoomBandModel;
+  const editorial = {
+    project: { id: 'elm', name: 'Elm', showMakers: false },
+    rooms: [{ id: 'living', name: 'Living room', anchor: 'room-living', conceptAssetId: null, scanAssetIds: [], items: [
+      { id: 'sideboard', nameAsSigned: 'Walnut sideboard', status: 'production', category: 'furniture', assetIds: [] },
+      { id: 'sofa', nameAsSigned: 'Linen sofa', status: 'ordered', category: 'furniture', assetIds: [] },
+    ] }], assets: [], images: [], palette: [], boards: [], sheets: [],
+  } as unknown as ClientProjectEditorial;
+  const issue = houseIssue(editorial);
+  render(page(true, { issue, bands: [band], pieces: (room) => <GalleryPieces band={room} issue={issue} /> }));
+  await userEvent.click(screen.getByRole('link', { name: 'Every piece in the Living room' }));
+  const drawer = within(screen.getByRole('dialog', { name: 'Every piece in the Living room' }));
+  expect(drawer.getAllByText('Walnut sideboard', { exact: true })[0]).toBeVisible();
+  expect(drawer.getAllByText('Linen sofa', { exact: true })[0]).toBeVisible();
+  expect(drawer.getByText('Released to maker', { exact: true })).toBeVisible();
+  expect(drawer.queryByText(/\$/)).not.toBeInTheDocument();
+});
+
+it('replaces a failed arrival picture source with paint', () => {
+  const { container } = render(<GalleryPhoto scope="edition" asset={asset} palette={palette} arrival />);
+  fireEvent.error(container.querySelector('source')!);
+  expect(screen.getByRole('img', { name: /Paint for the house: Oat/ })).toBeVisible();
+  expect(container.querySelector('picture')).toBeNull();
+});
+
+it('replaces an arrival image that already failed before hydration with paint', () => {
+  const complete = jest.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+  const naturalWidth = jest.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(0);
+  const { container } = render(<GalleryPhoto scope="edition" asset={asset} palette={palette} arrival />);
+  expect(screen.getByRole('img', { name: /Paint for the house: Oat/ })).toBeVisible();
+  expect(container.querySelector('img')).toBeNull();
+  complete.mockRestore(); naturalWidth.mockRestore();
 });

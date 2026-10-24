@@ -1398,7 +1398,7 @@ export function Threshold({
         geometry={planKeyGeometry(rooms ?? [], model.marks)} marks={model.marks}
         keySentence={keySentence(model.drawnMarkCount)} />}</>}
       documents={(dismiss) => <PapersSheet projectId={projectId} open embedded onDismiss={dismiss} />}
-      bands={model.bands} pieces={(band) => <GalleryPieces band={band} extras={<>
+      bands={model.bands} pieces={(band) => <GalleryPieces band={band} issue={issue} extras={<>
         <RoomCapture projectId={projectId} roomId={band.roomId} roomName={band.name} />
         <RequestChangeAct projectId={projectId} roomId={band.roomId} roomName={band.name} projectStatus={project.status} />
       </>} />}

@@ -85,3 +85,17 @@ it('a note link closes the overlay and scrolls to the existing note anchor', asy
   expect(window.location.hash).toBe('#note');
   await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
 });
+
+it('replacing a deep-linked overlay does not acquire ownership of its history entry', async () => {
+  window.history.replaceState({}, '', '/#letterbox');
+  render(<Harness />);
+  await userEvent.click(screen.getByRole('link', { name: 'Go to approval' }));
+  expect(window.location.hash).toBe('#approvals');
+  const back = jest.spyOn(window.history, 'back');
+  await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(back).not.toHaveBeenCalled();
+  expect(window.location.pathname).toBe('/');
+  expect(window.location.hash).toBe('');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  back.mockRestore();
+});

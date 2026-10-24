@@ -3,6 +3,8 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Invoice } from '@patina/supabase';
 
+import { asksLine } from '@/lib/threshold/asks-line';
+import { galleryInvoiceReceipt } from '@/lib/threshold/gallery-invoices';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
 import {
   invoiceProjection,
@@ -244,6 +246,20 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
     expect(receipt).toHaveTextContent('Paid $600.00 on 24 October. Thank you.');
     expect(screen.getByTestId('letterbox').firstElementChild).toBe(receipt);
     expect(rowIds('invoices-to-pay')).toEqual(['inv-f']);
+  });
+
+  // Run with TZ=America/Chicago to catch UTC-midnight date-only drift.
+  it('G05 · Gallery keeps a 31 October date-only due date and receipt on 31 October', () => {
+    const invoice = invoiceRow({ id: 'inv-calendar', due_date: '2026-10-31' });
+    const today = new Date(2026, 9, 31, 12);
+    render(<Letterbox invoices={[invoice]} today={today} gallery={{ approvals: null }} />);
+    expect(row('inv-calendar')).toHaveTextContent('Due today · 31 October 2026');
+    expect(row('inv-calendar')).not.toHaveTextContent('30 October');
+    const projection = invoiceProjection([invoice], { read: 'complete', today });
+    expect(asksLine(projection, [], 'Nora')).toBe('$300.00 due today.');
+    const paid = invoiceRow({ status: 'paid', payments: [{ id: 'calendar-payment', status: 'succeeded',
+      amount_cents: 30_000, received_at: '2026-10-31' }] as Invoice['payments'] });
+    expect(galleryInvoiceReceipt(paid)).toBe('Paid $300.00 on 31 October. Thank you.');
   });
 
   it('G04 · Gallery never fabricates a receipt from success params for an unpaid invoice', () => {

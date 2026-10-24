@@ -7,10 +7,10 @@ import { formatCurrency } from '@patina/shared';
 import { GOODS_JOURNEY_STAGES, journeyStageIndexForStatus, TRADE_JOURNEY_STAGES, tradeJourneyStageIndexForState } from '@/components/commercial/journey-stepper';
 import type { ClientSelection } from '@/lib/commercial-documents';
 import { galleryHeadline } from '@/lib/threshold/asks-line';
-import { waitingSentence, type OtherHouse } from '@/lib/threshold/other-houses';
+import { menuWaitingSentence, type OtherHouse } from '@/lib/threshold/other-houses';
 import type { RoomBandModel } from '@/lib/threshold/derive';
 import type { EditorialAsset } from '@/lib/editorial/types';
-import type { HouseIssue } from './editorial/house-issue';
+import { Pieces as EditorialPieces, type HouseIssue } from './editorial/house-issue';
 import { GalleryDrawer, useGalleryRoute } from './gallery-drawer';
 import { GalleryPhoto } from './gallery-photo';
 import { SilhouettePlate } from './editorial/silhouette-plate';
@@ -57,7 +57,7 @@ function makeChapter(issue: HouseIssue | null, bands: RoomBandModel[], key: stri
 
 function galleryChapters(issue: HouseIssue | null, bands: RoomBandModel[]): GalleryChapter[] {
   const composed = issue?.editorial.composition?.chapters ?? [];
-  const keys = [...new Set([...composed.map((chapter) => chapter.key), ...bands.map((band) => band.anchor)])];
+  const keys = [...new Set([...composed.map((chapter) => chapter.key), ...(issue?.heldHouseAsset ? ['house'] : []), ...bands.map((band) => band.anchor)])];
   return keys.filter((key) => !['cover', 'progress'].includes(key))
     .map((key) => makeChapter(issue, bands, key)).filter((chapter): chapter is GalleryChapter => chapter !== null);
 }
@@ -111,7 +111,7 @@ function PieceFacts({ piece }: { piece: ClientSelection }) {
   </div>;
 }
 
-export function GalleryPieces({ band, extras }: { band: RoomBandModel; extras?: ReactNode }) {
+export function GalleryPieces({ band, issue, extras }: { band: RoomBandModel; issue?: HouseIssue | null; extras?: ReactNode }) {
   return <>
     {band.varianceLine && <p>{band.varianceLine}</p>}
     <ul className="gallery-piece-list">
@@ -120,6 +120,7 @@ export function GalleryPieces({ band, extras }: { band: RoomBandModel; extras?: 
         <PieceFacts piece={piece} />
       </li>)}
     </ul>
+    {band.pieces.length === 0 && issue?.rooms.get(band.roomId) && <EditorialPieces issue={issue} choice={issue.rooms.get(band.roomId)!} />}
     {extras}
   </>;
 }
@@ -163,14 +164,14 @@ function PageFooter(props: GalleryPageProps) {
 }
 
 function otherHouseLine(house: OtherHouse) {
-  const sentence = waitingSentence(house);
-  return sentence ? `, ${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}` : '';
+  const sentence = menuWaitingSentence(house);
+  return sentence ? `, ${(sentence.startsWith('Nothing') ? 'N' : sentence.charAt(0).toLowerCase())}${sentence.slice(1)}` : '';
 }
 function GalleryIndex({ props, chapters }: { props: GalleryPageProps; chapters: GalleryChapter[] }) {
   return <nav aria-label="Page index">
     {props.preparedFor && <p>Prepared for {props.preparedFor}</p>}
     <ul className="gallery-index">{props.ready && props.menuAsks}
-      {props.otherHouses.map((house) => <li key={house.id}><Link href={`/projects/${house.id}`}>{house.name}<small>{otherHouseLine(house)}</small></Link></li>)}
+      {props.otherHouses.map((house) => <li key={house.id}><Link href={`/projects/${house.id}`}>{house.name + otherHouseLine(house)}</Link></li>)}
       {chapters.map((chapter) => <li key={chapter.key}><a href={`#${chapter.key}`}>{chapter.name}</a></li>)}
       <li><a href="#key">The house</a></li><li><a href="#letterbox">Invoices</a></li>
       <li><a href="#mat-papers">Documents</a></li><li><a href="#contact">{contactLabel(props.designerName)}</a></li>

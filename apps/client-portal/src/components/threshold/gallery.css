@@ -56,10 +56,10 @@
 .gallery-silhouette { margin: 0 var(--gallery-gutter); }
 .gallery-note { padding: 80px var(--gallery-gutter); max-width: 44rem; margin: auto; }
 .gallery-footer { border-top: 1px solid var(--gallery-hair); padding: 48px var(--gallery-gutter); color: var(--gallery-oak); }
+.gallery-footer a { text-decoration: underline; text-underline-offset: 4px; }
 .gallery-footer > ul, .gallery-index, .gallery-piece-list { margin: 0; padding: 0; list-style: none; }
 .gallery-footer > ul a, .gallery-index a { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; min-height: 48px; padding: 12px 0; border-bottom: 1px solid var(--gallery-hair); text-decoration: none; }
 .gallery-index a { font: 400 24px/1.3 var(--font-playfair), Georgia, serif; }
-.gallery-index small { margin-left: auto; font: 400 16px/1.4 var(--font-inter), sans-serif; }
 .gallery-footer :is(button, summary), .gallery-question { display: inline-flex; align-items: center; min-height: 44px; }
 .gallery-earlier { margin-top: 40px; }
 .gallery-piece-list li { display: flex; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--gallery-hair); }

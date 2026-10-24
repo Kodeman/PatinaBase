@@ -34,12 +34,16 @@ type Rendition = NonNullable<ReturnType<typeof galleryRendition>>;
 function ResponsivePhoto({ phone, desktop, asset, arrival, onError }: {
   phone: Rendition; desktop: Rendition; asset: EditorialAsset; arrival: boolean; onError: () => void;
 }) {
-  return <picture>
+  const image = useRef<HTMLImageElement>(null);
+  useLayoutEffect(() => {
+    if (image.current?.complete && image.current.naturalWidth === 0) onError();
+  }, [onError]);
+  return <picture onErrorCapture={onError}>
     {phone.picture.sources.map((source) => <source key={`phone-${source.type}`} {...source} media="(max-width: 899px)" />)}
     {desktop.picture.sources.map((source) => <source key={`wide-${source.type}`} {...source} media="(min-width: 900px)" />)}
     {/* eslint-disable-next-line @next/next/no-img-element -- authenticated plate renditions, no image optimizer */}
-    <img src={desktop.picture.src} alt={plateAlt(asset)} width={asset.width} height={asset.height}
-      loading={arrival ? 'eager' : 'lazy'} fetchPriority={arrival ? 'high' : undefined} onError={onError} />
+    <img ref={image} src={desktop.picture.src} alt={plateAlt(asset)} width={asset.width} height={asset.height}
+      loading={arrival ? 'eager' : 'lazy'} fetchPriority={arrival ? 'high' : undefined} />
   </picture>;
 }
 
