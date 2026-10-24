@@ -886,8 +886,12 @@ describe("F6–F7: the landing waits for the reads, then yields to the reader", 
     const answered = new Promise((resolve) => {
       answer = resolve;
     });
+    // A landing read: the lines' own key family (F10).
     mockLinesHook.mockImplementation(() =>
-      useQuery({ queryKey: ["delayed-lines"], queryFn: () => answered }),
+      useQuery({
+        queryKey: ["project-ffe-items", "delayed"],
+        queryFn: () => answered,
+      }),
     );
     return (lines: unknown) => act(async () => answer(lines));
   }
@@ -973,5 +977,128 @@ describe("F6–F7: the landing waits for the reads, then yields to the reader", 
     await waitFor(() => expect(lineButton(SECOND)).not.toBeNull());
     expect(document.activeElement).toBe(title);
     expect(scrolled()).not.toHaveBeenCalled();
+  });
+
+  it("F8: a scrollbar drag (a scroll under a held pointer) yields the late landing", async () => {
+    const answer = delayLines();
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const title = await screen.findByText("Sheet title");
+    await waitFor(() => expect(document.activeElement).toBe(title));
+
+    // Anchoring or a restored position: no pointer is held, so not hers.
+    fireEvent.scroll(document);
+    fireEvent.pointerDown(document.documentElement);
+    fireEvent.scroll(document);
+    fireEvent.pointerUp(document.documentElement);
+    await answer(mockLines);
+    await waitFor(() => expect(lineButton(SECOND)).not.toBeNull());
+    expect(document.activeElement).toBe(title);
+    expect(scrolled()).not.toHaveBeenCalled();
+  });
+
+  it("F8: a scroll with no pointer held leaves the late landing to land", async () => {
+    const answer = delayLines();
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const title = await screen.findByText("Sheet title");
+    await waitFor(() => expect(document.activeElement).toBe(title));
+
+    fireEvent.pointerDown(document.documentElement);
+    fireEvent.pointerUp(document.documentElement);
+    fireEvent.scroll(document);
+    await answer(mockLines);
+    await waitFor(() => expect(document.activeElement).toBe(lineButton(SECOND)));
+  });
+
+  it("F9: the reader's own press on the title keeps it there; the sheet's own retake does not", async () => {
+    renderChapter(`unfold=pieces&lens=rough&room=${ROOM}`);
+    const title = await screen.findByText("Sheet title");
+    const heading = () => document.querySelector(`[data-room-heading="${ROOM}"]`);
+    await waitFor(() => expect(document.activeElement).toBe(heading()));
+
+    // The sheet's own focusing, with no press or key: landed again.
+    act(() => title.focus());
+    expect(document.activeElement).toBe(heading());
+
+    // Her press brings focus to the title: it stays, and the landing yields.
+    act(() => {
+      fireEvent.pointerDown(title);
+      title.focus();
+    });
+    expect(document.activeElement).toBe(title);
+    act(() => title.focus());
+    expect(document.activeElement).toBe(title);
+  });
+
+  it("SQ-1908 F1: a press on the title already holding the landing's focus yields; nothing moves or scrolls", async () => {
+    const answer = delayLines();
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const title = await screen.findByText("Sheet title");
+    await waitFor(() => expect(document.activeElement).toBe(title));
+
+    // Her press on the focused title: no focus change, so no focusin.
+    const focusins = jest.fn();
+    document.addEventListener("focusin", focusins);
+    fireEvent.pointerDown(title);
+    fireEvent.pointerUp(title);
+    document.removeEventListener("focusin", focusins);
+    expect(focusins).not.toHaveBeenCalled();
+
+    await answer(mockLines);
+    await waitFor(() => expect(lineButton(SECOND)).not.toBeNull());
+    expect(document.activeElement).toBe(title);
+    expect(scrolled()).not.toHaveBeenCalled();
+  });
+
+  it("SQ-1908 F1 control: with no press, the late landing still takes the line", async () => {
+    const answer = delayLines();
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const title = await screen.findByText("Sheet title");
+    await waitFor(() => expect(document.activeElement).toBe(title));
+
+    // A press outside the sheet that moves no focus keeps today's rule.
+    fireEvent.pointerDown(document.body);
+    fireEvent.pointerUp(document.body);
+    await answer(mockLines);
+    await waitFor(() => expect(document.activeElement).toBe(lineButton(SECOND)));
+  });
+
+  it("F10: a read elsewhere on the paper never holds the landing's deadline", async () => {
+    const timers = jest.spyOn(window, "setTimeout");
+    const clears = jest.spyOn(window, "clearTimeout");
+    // A chapter read that never answers, on the paper beside the sheet.
+    function OtherChapter() {
+      useQuery({
+        queryKey: ["project-financials", "p1"],
+        queryFn: () => new Promise(() => {}),
+      });
+      return null;
+    }
+    window.history.replaceState(
+      {},
+      "",
+      `/doc/${DOC}?unfold=pieces&lens=rough&room=${ROOM}&line=${SECOND}`,
+    );
+    render(
+      <>
+        <OtherChapter />
+        <FfeChapter docId={DOC}>
+          <p>The chapter body</p>
+        </FfeChapter>
+      </>,
+      { wrapper },
+    );
+    const title = await screen.findByText("Sheet title");
+    await waitFor(() => expect(document.activeElement).toBe(title));
+    await waitFor(() => expect(client.isFetching()).toBeGreaterThan(0));
+    // The deadline runs (set, never cleared) while that read is still out.
+    await waitFor(() => expect(runningDeadlines(timers, clears)).toHaveLength(1));
+    expect(client.isFetching()).toBeGreaterThan(0);
+
+    await act(async () => {
+      runningDeadlines(timers, clears)[0]();
+    });
+    expect(document.activeElement).toBe(
+      document.querySelector(`[data-room-heading="${ROOM}"]`),
+    );
   });
 });
