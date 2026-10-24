@@ -19,49 +19,26 @@ async function noPageOverflow(page: Page) {
 
 async function unobscured(page: Page, control: Locator) {
   await control.scrollIntoViewIfNeeded();
-  await page.keyboard.press('Tab');
   await control.focus();
+  // Safari's full-control tab order uses Option+Tab. Plain Tab skips links,
+  // and a later programmatic focus does not inherit :focus-visible there.
+  const option = page.context().browser()?.browserType().name() === 'webkit' ? 'Alt+' : '';
+  await page.keyboard.press(`${option}Shift+Tab`);
+  await page.keyboard.press(`${option}Tab`);
   await expect(control).toBeFocused();
-  try {
-    await expect.poll(() => control.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      const hit = document.elementFromPoint(x, y);
-      return {
-        withinViewport: rect.left >= 0 && rect.right <= innerWidth + 1 && y > 0 && y < innerHeight,
-        uncovered: !!hit && (element === hit || element.contains(hit)),
-        ringPainted: getComputedStyle(element).outlineStyle !== 'none',
-      };
-    }), { message: 'keyboard focus is painted and not covered by the head or bottom edge' }).toEqual({
-      withinViewport: true, uncovered: true, ringPainted: true,
-    });
-  } catch (error) {
-    await test.info().attach('focus-geometry', {
-      contentType: 'application/json',
-      body: JSON.stringify(await control.evaluate((element) => {
-        const rect = element.getBoundingClientRect();
-        const describe = (node: Element | null) => node && ({
-          tag: node.tagName, id: node.id, classes: node.className,
-        });
-        const style = getComputedStyle(element);
-        return {
-          control: describe(element), rect: rect.toJSON(),
-          viewport: { width: innerWidth, height: innerHeight },
-          visualViewport: window.visualViewport && {
-            width: window.visualViewport.width, height: window.visualViewport.height,
-            offsetTop: window.visualViewport.offsetTop, offsetLeft: window.visualViewport.offsetLeft,
-            scale: window.visualViewport.scale,
-          },
-          hit: describe(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)),
-          active: describe(document.activeElement), focusVisible: element.matches(':focus-visible'),
-          outline: { style: style.outlineStyle, width: style.outlineWidth, color: style.outlineColor },
-        };
-      }), null, 2),
-    });
-    await test.info().attach('focus-viewport', { body: await page.screenshot(), contentType: 'image/png' });
-    throw error;
-  }
+  await expect.poll(() => control.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      withinViewport: rect.left >= 0 && rect.right <= innerWidth + 1 && y > 0 && y < innerHeight,
+      uncovered: !!hit && (element === hit || element.contains(hit)),
+      ringPainted: getComputedStyle(element).outlineStyle !== 'none',
+    };
+  }), { message: 'keyboard focus is painted and not covered by the head or bottom edge' }).toEqual({
+    withinViewport: true, uncovered: true, ringPainted: true,
+  });
 }
 
 async function selectFfe(page: Page, width: number) {
