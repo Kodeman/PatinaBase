@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { useFfePairLines, useLinkFfePair } from "@patina/supabase";
 import { readPair, useAddComFabricLine } from "../buying/com-piece";
+import type { PaneWriteHold } from "./spec-fields-pane";
 
 /**
  * T-30 (D4, a4): `This piece takes COM` on the line, as a checkbox. It reuses
@@ -24,10 +25,13 @@ export function ComToggle({
   projectId,
   item,
   canEdit,
+  hold,
 }: {
   projectId: string;
   item: ComPieceRow;
   canEdit: boolean;
+  /** WP-01.6 — the unfolded sheet's hold; its writes and refusals reach it. */
+  hold?: PaneWriteHold;
 }) {
   const { data: lines } = useFfePairLines(projectId);
   const addFabric = useAddComFabricLine();
@@ -54,6 +58,8 @@ export function ComToggle({
           ),
         )
       : addFabric.add(projectId, item);
+    // No draft is left on screen: a refusal holds a waiting fold once.
+    hold?.track(work);
     work.catch((e: Error) =>
       setError(
         e.message ||

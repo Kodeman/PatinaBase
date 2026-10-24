@@ -12,6 +12,10 @@
  * - SQ-1893 F4–F7: a missing line is said and falls back visibly; the address
  *   follows the chosen line; the landing waits for the reads, then yields to
  *   the reader.
+ * - SQ-1897 (story #38): one writer per row, so a put-back value lands last
+ *   on the answered version (F4); Back with an unsaved field puts the unfold
+ *   back and focuses the field (F1); a Fill answered after another line was
+ *   chosen leaves that line and its address alone (F7).
  */
 
 import type { ReactNode } from "react";
@@ -74,6 +78,7 @@ const mockSpecs = mockLines.map((l) => ({
 }));
 const mockUpdateSpec = jest.fn();
 const mockBuildFields = jest.fn();
+const mockPlace = jest.fn();
 const mockLinesHook = jest.fn((): { data: unknown } => ({ data: mockLines }));
 const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
@@ -95,7 +100,7 @@ jest.mock("@patina/supabase", () => ({
   useSetFfeLineCommercials: () => mutation(jest.fn()),
   useSetFfeLineBuildFields: () => mutation(mockBuildFields),
   useSetLaborLinePrice: () => mutation(jest.fn()),
-  usePlaceProductInProjectV2: () => mutation(jest.fn()),
+  usePlaceProductInProjectV2: () => mutation(mockPlace),
   useSetLinePlacements: () => mutation(jest.fn()),
   useAddLaborLine: () => mutation(jest.fn()),
   useFfePairLines: () => ({ data: [] }),
@@ -122,7 +127,16 @@ jest.mock("@/components/document/line-unfold/the-buy-cell", () => ({
   }),
 }));
 jest.mock("@/components/document/pieces/library-inline-search", () => ({
-  LibraryInlineSearch: () => null,
+  LibraryInlineSearch: (props: {
+    onChoose: (row: { id: string; name: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => props.onChoose({ id: "product-1", name: "Walnut chair" })}
+    >
+      choose product
+    </button>
+  ),
 }));
 jest.mock("@/components/portal/proposals/product-picker-modal", () => ({
   ProductPickerModal: () => null,
@@ -236,6 +250,7 @@ beforeEach(() => {
   resetProposalAutosaveRegistryForTests();
   mockUpdateSpec.mockReset();
   mockBuildFields.mockReset();
+  mockPlace.mockReset();
   mockLinesHook.mockReset();
   mockLinesHook.mockImplementation(() => ({ data: mockLines }));
   scrolled().mockClear();
@@ -419,11 +434,38 @@ describe("the close barrier holds, never replays", () => {
     });
   });
 
-  it("F2: put back while a write is out, the shown value is written too, last", async () => {
-    const first = held();
-    mockUpdateSpec
-      .mockImplementationOnce(() => first.promise)
-      .mockImplementationOnce(saved(3));
+  /**
+   * A spec row that checks row_version as the table does. Writes wait for the
+   * test to answer them; a write on an older version is refused.
+   */
+  function specServer() {
+    const row = { ...mockSpecs[1] };
+    const calls: {
+      input: { expectedRowVersion: number; changes: object };
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+    }[] = [];
+    mockUpdateSpec.mockImplementation(
+      (input: { expectedRowVersion: number; changes: object }) =>
+        new Promise((resolve, reject) => calls.push({ input, resolve, reject })),
+    );
+    const answer = (i: number) =>
+      act(async () => {
+        const call = calls[i];
+        if (call.input.expectedRowVersion !== row.row_version) {
+          call.reject(new Error("This selection changed in another session."));
+          return;
+        }
+        Object.assign(row, call.input.changes, { row_version: row.row_version + 1 });
+        call.resolve({ ...row });
+      });
+    const refuse = (i: number, message: string) =>
+      act(async () => calls[i].reject(new Error(message)));
+    return { row, calls, answer, refuse };
+  }
+
+  it("F4: put back while a write is out, the shown value lands last, on the answered version", async () => {
+    const server = specServer();
     renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
     const field = await finish();
     await waitFor(() => expect(field).toHaveValue("Old finish"));
@@ -435,15 +477,49 @@ describe("the close barrier holds, never replays", () => {
     await act(async () => {
       fireEvent.blur(field);
     });
-    await act(async () => {
-      first.resolve({ ...mockSpecs[1], finish: "Abandoned draft", row_version: 2 });
-    });
+    // One write of the row at a time: the put-back value waits.
+    expect(server.calls).toHaveLength(1);
 
+    await server.answer(0);
+    expect(server.calls).toHaveLength(2);
+    expect(server.calls[1].input).toEqual(
+      expect.objectContaining({
+        expectedRowVersion: 2,
+        changes: { finish: "Old finish" },
+      }),
+    );
+    // Out while the second write is: Return waits on it.
+    await clickReturn();
+    expect(unfolded()).toBe("pieces");
+    await server.answer(1);
+
+    await waitFor(() => expect(unfolded()).toBeNull());
+    expect(server.row).toMatchObject({ finish: "Old finish", row_version: 3 });
+    expect(server.calls).toHaveLength(2);
+  });
+
+  it("F4: put back while a refused write is out, nothing more is written and nothing holds", async () => {
+    const server = specServer();
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const field = await finish();
+    await waitFor(() => expect(field).toHaveValue("Old finish"));
+    fireEvent.change(field, { target: { value: "Abandoned draft" } });
+    await act(async () => {
+      fireEvent.blur(field);
+    });
+    fireEvent.change(field, { target: { value: "Old finish" } });
+    await act(async () => {
+      fireEvent.blur(field);
+    });
+    await server.refuse(0, "The field was not saved.");
+
+    // The shown value is the answered row's: clean, and no write follows.
+    expect(server.calls).toHaveLength(1);
+    expect(server.row).toMatchObject({ finish: "Old finish", row_version: 1 });
+    expect(field).toHaveValue("Old finish");
+    expect(field).not.toHaveAttribute("aria-invalid");
     await clickReturn();
     await waitFor(() => expect(unfolded()).toBeNull());
-    expect(mockUpdateSpec.mock.calls.at(-1)![0].changes).toEqual({
-      finish: "Old finish",
-    });
   });
 
   it("F3: a pending Unit write holds Return; its failure holds once, on the Unit", async () => {
@@ -479,6 +555,85 @@ describe("the close barrier holds, never replays", () => {
     await clickReturn();
     await waitFor(() => expect(unfolded()).toBeNull());
     expect(mockBuildFields).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SQ-1897 F1: Back holds like Return", () => {
+  it("Back with a failed field puts the unfold back and focuses the field; nothing is replayed", async () => {
+    mockUpdateSpec.mockRejectedValueOnce(new Error("The field was not saved."));
+    // The unfold as a door opens it: a pushed entry over the closed paper.
+    window.history.replaceState({}, "", `/doc/${DOC}`);
+    window.history.pushState(
+      { __patinaUnfold: { pushed: true, context: null } },
+      "",
+      `/doc/${DOC}?unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`,
+    );
+    render(
+      <FfeChapter docId={DOC}>
+        <p>The chapter body</p>
+      </FfeChapter>,
+      { wrapper },
+    );
+    const field = await finish();
+    await waitFor(() => expect(field).toHaveValue("Old finish"));
+    fireEvent.change(field, { target: { value: "Typed finish" } });
+    await act(async () => {
+      fireEvent.blur(field);
+    });
+    await screen.findByText("The field was not saved.");
+    field.blur();
+
+    await act(async () => {
+      window.history.back();
+    });
+    await screen.findByText(UNFOLD_UNSAVED_MESSAGE);
+    expect(unfolded()).toBe("pieces");
+    expect(params().get("line")).toBe(SECOND);
+    expect(field).toBeInTheDocument();
+    expect(field).toHaveValue("Typed finish");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(document.activeElement).toBe(field);
+    expect(mockUpdateSpec).toHaveBeenCalledTimes(1);
+
+    // Saved, the next Back folds away.
+    mockUpdateSpec.mockImplementationOnce(saved(2));
+    await act(async () => {
+      field.blur();
+    });
+    expect(field).not.toHaveAttribute("aria-invalid");
+    await act(async () => {
+      window.history.back();
+    });
+    await waitFor(() => expect(unfolded()).toBeNull());
+    expect(mockUpdateSpec).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("SQ-1897 F7: a stale Fill answer", () => {
+  it("leaves the line chosen since, and its address, alone", async () => {
+    const fillWrite = held();
+    mockPlace.mockImplementationOnce(() => fillWrite.promise);
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${FIRST}`);
+    await waitFor(() =>
+      expect(lineButton(FIRST)).toHaveAttribute("aria-current", "true"),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "FILL WITH A PRODUCT" }));
+    fireEvent.click(screen.getByRole("button", { name: "choose product" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "FILL THIS LINE" }));
+    });
+    await act(async () => {
+      fireEvent.click(lineButton(SECOND)!);
+    });
+    expect(params().get("line")).toBe(SECOND);
+
+    await act(async () => fillWrite.resolve({}));
+    expect(lineButton(SECOND)).toHaveAttribute("aria-current", "true");
+    expect(lineButton(FIRST)?.getAttribute("aria-current")).toBeNull();
+    expect(params().get("line")).toBe(SECOND);
+    expect(document.activeElement).not.toBe(
+      screen.getByTestId("spec-fields-pane").querySelector("h2"),
+    );
   });
 });
 

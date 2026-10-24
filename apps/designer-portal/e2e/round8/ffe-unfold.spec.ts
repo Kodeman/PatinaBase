@@ -233,6 +233,68 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       'the retry wrote the typed value',
     ).toBe(typed);
   });
+
+  // SQ-1897 F1 — Back holds like Return: with a failed Spec save, Back puts
+  // the unfold's address back, says why and focuses the field. Nothing is
+  // replayed; once a save lands, Return folds the sheet away.
+  test('Back with a failed Spec save keeps the sheet open on the field', async ({
+    authenticatedPage: page,
+  }) => {
+    const line = livingLineId('F01 Living Room selection 08');
+    const typed = `Back-held finish ${Date.now()}`;
+    await openJob(page);
+    await holdShell(page);
+    await (await livingRoomDoor(page)).click();
+    await expect(instrument(page)).toBeVisible({ timeout: 30_000 });
+    await instrument(page)
+      .getByRole('group', { name: 'Schedule view' })
+      .getByRole('button', { name: 'Specifications' })
+      .click();
+    const row = instrument(page).locator(`[data-line-id="${line}"] button`);
+    await row.click({ force: true });
+    const pane = instrument(page).getByTestId('spec-fields-pane');
+    await expect(pane).toContainText('F01 Living Room selection 08', { timeout: 30_000 });
+    const finish = pane.getByRole('textbox', { name: 'Finish' });
+    await expect(finish).toBeAttached({ timeout: 30_000 });
+
+    const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
+    let refused = 0;
+    await page.route(specWrite, (route) => {
+      if (route.request().method() !== 'PATCH') return route.continue();
+      refused += 1;
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'XX000', message: 'Forced failure (SQ-1897 e2e)' }),
+      });
+    });
+    await finish.fill(typed, { force: true });
+    await finish.evaluate((el: HTMLElement) => el.blur());
+    await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/, { timeout: 30_000 });
+    await expect(finish).toHaveAttribute('aria-invalid', 'true');
+
+    await page.goBack();
+    await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(instrument(page)).toBeVisible();
+    expect(unfoldParams(page).unfold).toBe('pieces');
+    expect(new URL(page.url()).searchParams.get('line')).toBe(line);
+    await expect(finish).toHaveValue(typed);
+    await expect(finish, 'Back focuses the unsaved field').toBeFocused();
+    expect(refused, 'Back wrote nothing; only the blur save reached the server').toBe(1);
+    expect(await sameShell(page), 'Back held the unfold without a remount').toBe(true);
+    await test.info().attach('spec-back-held', { body: await page.screenshot(), contentType: 'image/png' });
+
+    await page.unroute(specWrite);
+    await instrument(page).getByRole('button', { name: /Return to the room/ }).click();
+    await expect(instrument(page)).toHaveCount(0, { timeout: 30_000 });
+    expect(unfoldParams(page).unfold).toBeNull();
+    expect(
+      psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
+      'the retry wrote the typed value',
+    ).toBe(typed);
+  });
 });
 
 /** RPC-made line ids are not stable (f01-fixture.sql): read one by name. */

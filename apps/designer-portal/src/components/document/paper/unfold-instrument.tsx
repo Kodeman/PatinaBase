@@ -326,6 +326,43 @@ export function UnfoldInstrument({
       },
     );
   }, [closing, ownerKind, ownerId, snapshot]);
+  const closeRef = useRef(close);
+  closeRef.current = close;
+
+  // SQ-1897 F1 — Back over a field showing a draft its write refused holds
+  // like Return. The entry the unfold stands on is kept; a Back that leaves
+  // it while a field is marked unsaved puts the entry back (a push, as the
+  // unfold made it) and asks to close: the marked field takes focus, and
+  // nothing is written again. Any other Back folds away as before, a save
+  // that is still out included (it lands on its own).
+  const standing = useRef<{ url: string; entry: UnfoldEntry | null } | null>(
+    null,
+  );
+  useLayoutEffect(() => {
+    standing.current = address
+      ? { url: window.location.href, entry: readEntry() }
+      : null;
+  }, [address]);
+  useEffect(() => {
+    if (!open || !ownerKind || !ownerId) return;
+    const owner = { kind: ownerKind, id: ownerId };
+    const onPop = () => {
+      const held = standing.current;
+      if (!held) return;
+      const now = parseUnfoldSearch(new URLSearchParams(window.location.search), {
+        canSeeMoney,
+      });
+      if (now?.kind === kind) return;
+      // Only a Back within this document; leaving it is not the fold's.
+      if (new URL(held.url).pathname !== window.location.pathname) return;
+      if (!getProposalAutosaveSnapshot(owner).error) return;
+      window.history.pushState(entryState(held.entry), "", held.url);
+      locationChanged();
+      closeRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [open, ownerKind, ownerId, kind, canSeeMoney]);
 
   const navigate = useCallback(
     (next: UnfoldNavigation) => {

@@ -44,6 +44,9 @@ export interface DimensionFieldsProps {
   /** Disables the inputs without switching to the static readOnly render
    *  (e.g. while a save is in flight). */
   disabled?: boolean;
+  /** Its last write failed and the draft still shows: each input is marked
+   *  invalid, as an unsaved text field is (WP-01.6). */
+  invalid?: boolean;
 }
 
 function stringField(value: Record<string, unknown> | null, key: string): string {
@@ -63,10 +66,10 @@ function unknownKeys(value: Record<string, unknown> | null): string[] {
 }
 
 const FIELD_CLS =
-  "w-full rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-2 text-center text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:bg-white focus:outline-none disabled:opacity-50";
+  "w-full rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-2 text-center text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:bg-white focus:outline-none disabled:opacity-50 aria-[invalid=true]:border-[color:var(--color-terracotta-ink)]";
 
 const UNIT_CLS =
-  "rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-50";
+  "rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-50 aria-[invalid=true]:border-[color:var(--color-terracotta-ink)]";
 
 const MINI_LABEL_CLS =
   "mb-1 block text-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text-muted)]";
@@ -85,6 +88,7 @@ export function DimensionFields({
   onChange,
   readOnly,
   disabled,
+  invalid,
 }: DimensionFieldsProps) {
   const width = stringField(value, "width");
   const depth = stringField(value, "depth");
@@ -145,6 +149,7 @@ export function DimensionFields({
               value={fieldValue(key)}
               placeholder={DIMENSION_PLACEHOLDERS[key]}
               disabled={disabled}
+              aria-invalid={invalid || undefined}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 emit({ [key]: event.target.value })
               }
@@ -158,6 +163,7 @@ export function DimensionFields({
             aria-label="unit"
             value={unit}
             disabled={disabled}
+            aria-invalid={invalid || undefined}
             onChange={(event) => emit({ unit: event.target.value })}
             className={UNIT_CLS}
           >

@@ -238,42 +238,33 @@ function Field({
   );
 }
 
-/**
- * Decides whether a field's draft is a change worth writing. The base is the
- * server's value, or, while a write of this field is out, the value that write
- * sends: a draft put back to the server's value then is still a change, and
- * is written too. Put back with nothing out, the field is clean again.
- */
-function useFieldCommit<T>(
-  value: T,
-  same: (a: T, b: T) => boolean,
-  onSave: (next: T) => Promise<unknown>,
-  onRevert: (() => void) | undefined,
-) {
-  const sending = useRef<{ value: T } | null>(null);
-  return (next: T) => {
-    const out = sending.current;
-    if (same(next, out ? out.value : value)) {
-      if (!out) onRevert?.();
-      return;
-    }
-    const sent = { value: next };
-    sending.current = sent;
-    void onSave(next).finally(() => {
-      if (sending.current === sent) sending.current = null;
-    });
-  };
+type SpecColumn = keyof SpecChanges;
+const TEXT_COLUMNS: ReadonlySet<SpecColumn> = new Set([
+  "finish",
+  "material",
+  "color_fabric",
+  "exact_location",
+  "trade_notes",
+]);
+
+/** True when every column `changes` names already holds that value in `row`. */
+function sameColumns(changes: SpecChanges, row: SpecChanges): boolean {
+  return (Object.keys(changes) as SpecColumn[]).every((column) =>
+    TEXT_COLUMNS.has(column)
+      ? String(changes[column] ?? "").trim() === String(row[column] ?? "").trim()
+      : JSON.stringify(changes[column] ?? null) ===
+        JSON.stringify(row[column] ?? null),
+  );
 }
 
-/** A text field written on blur or Enter, only when it changed. */
+/** A text field written on blur or Enter; the pane decides if it changed. */
 function SpecText({
   label,
   value,
   placeholder,
   multiline,
   unsaved,
-  onSave,
-  onRevert,
+  onCommit,
 }: {
   label: string;
   value: string | null | undefined;
@@ -281,20 +272,13 @@ function SpecText({
   multiline?: boolean;
   /** WP-01.6 — its last write failed and the draft still shows. */
   unsaved?: boolean;
-  onSave: (next: string | null) => Promise<unknown>;
-  /** The draft is the server's value again: nothing is written. */
-  onRevert?: () => void;
+  /** The value the field shows now, handed over on blur or Enter. */
+  onCommit: (next: string | null) => void;
 }) {
   const [draft, setDraft] = useState(value ?? "");
-  const write = useFieldCommit<string | null>(
-    value ?? null,
-    (a, b) => (a ?? "").trim() === (b ?? "").trim(),
-    onSave,
-    onRevert,
-  );
   const commit = () => {
     const next = draft.trim();
-    write(next === "" ? null : next);
+    onCommit(next === "" ? null : next);
   };
   const common = {
     "aria-label": label,
@@ -335,15 +319,40 @@ interface HeldField {
 }
 
 /**
+ * WP-01.6 — how a child editor (item label, rooms, labor, COM) tells the
+ * unfolded sheet's hold about its writes. Only the unfold hands one over.
+ */
+export interface PaneWriteHold {
+  /** A write is out: the fold waits; its refusal holds a waiting close once. */
+  track: (write: Promise<unknown>) => void;
+  /** Its refused draft still shows (the refusal), or no longer does (null). */
+  mark: (message: string | null) => void;
+}
+
+const CONTROL = "input, select, textarea, button";
+
+/** The control a held field's name points at: the field itself, or its first. */
+function fieldControl(
+  pane: HTMLElement | null,
+  field: string,
+): HTMLElement | null {
+  const named = pane?.querySelector<HTMLElement>(`[aria-label="${field}"]`);
+  if (!named) return null;
+  return named.matches(CONTROL)
+    ? named
+    : named.querySelector<HTMLElement>(CONTROL);
+}
+
+/**
  * WP-01.6 — the unfolded sheet's close barrier for this pane. It HOLDS the
- * fold; it never replays a write. Return, Esc and the sheet's back link wait
- * while any write from this pane is out, and stay open while a field shows a
- * failed draft (`unsaved`). Held, it puts the field's alert back and focuses
- * the first such field: the retry is that field's own save of the value it
- * shows. A write that fails while a close waits on it holds that close once,
- * so its alert is seen. Unmounting (a line switch, a lens change) drops the
- * registration: nothing detached can hold a later Return. Without an owner
- * (the `/pieces` route) nothing registers, and each write saves at once.
+ * fold; it never replays a write. Return, Esc, Back and the sheet's back link
+ * wait while any write from this pane is out, and stay open while a field
+ * shows a failed draft (`mark`). Held, it puts the field's alert back and
+ * focuses the first such field: the retry is that field's own save of the
+ * value it shows. A write that fails while a close waits on it holds that
+ * close once, so its alert is seen. Unmounting (a line switch, a lens change)
+ * drops the registration: nothing detached can hold a later Return. Without
+ * an owner (the `/pieces` route) nothing registers.
  */
 function usePaneCloseHold(
   owner: BoardOwnerRef | null,
@@ -366,27 +375,12 @@ function usePaneCloseHold(
     notify.current();
   };
 
-  /**
-   * Tracks a write. `write` rejects with the message its alert shows; a
-   * `sticky` field (its draft stays on screen) holds until it saves or is put
-   * back. The returned promise never rejects.
-   */
-  const track = (
-    field: string,
-    sticky: boolean,
-    write: Promise<unknown>,
-  ): Promise<void> => {
+  /** A waiting close waits until `write` settles. Never rejects. */
+  const busy = (write: Promise<unknown>): Promise<void> => {
     const settled: Promise<void> = write
       .then(
-        () => {
-          if (sticky) unsavedRef.current.delete(field);
-        },
-        (error: unknown) => {
-          const message = errorText(error, "The field was not saved.");
-          failures.current += 1;
-          lastFailure.current = { field, message };
-          if (sticky) unsavedRef.current.set(field, message);
-        },
+        () => undefined,
+        () => undefined,
       )
       .finally(() => {
         inFlight.current.delete(settled);
@@ -395,6 +389,26 @@ function usePaneCloseHold(
     inFlight.current.add(settled);
     publish();
     return settled;
+  };
+
+  /** A refusal a close that was waiting stops on once, so its alert is seen. */
+  const failed = (field: string, message: string) => {
+    failures.current += 1;
+    lastFailure.current = { field, message };
+  };
+
+  /** A write whose refusal (the message its alert shows) holds a close once. */
+  const track = (field: string, write: Promise<unknown>): Promise<void> =>
+    busy(
+      write.catch((error: unknown) => {
+        failed(field, errorText(error, "The field was not saved."));
+      }),
+    );
+
+  /** The field shows a refused draft: it holds until saved or put back. */
+  const mark = (field: string, message: string) => {
+    unsavedRef.current.set(field, message);
+    publish();
   };
 
   /** The field's draft is the server's value again: it no longer holds. */
@@ -413,10 +427,10 @@ function usePaneCloseHold(
     const firstHeld = (): HeldField | null => {
       const held = unsavedRef.current;
       // The first in reading order, not the first to fail.
-      for (const group of paneRef.current?.querySelectorAll<HTMLElement>(
-        '[role="group"][aria-label]',
+      for (const named of paneRef.current?.querySelectorAll<HTMLElement>(
+        "[aria-label]",
       ) ?? []) {
-        const field = group.getAttribute("aria-label")!;
+        const field = named.getAttribute("aria-label")!;
         const message = held.get(field);
         if (message !== undefined) return { field, message };
       }
@@ -441,12 +455,7 @@ function usePaneCloseHold(
             (failures.current !== seen ? lastFailure.current : null);
           if (!held) return;
           showErrorRef.current(held.message);
-          paneRef.current
-            ?.querySelector<HTMLElement>(
-              `[role="group"][aria-label="${held.field}"]`,
-            )
-            ?.querySelector<HTMLElement>("input, select, textarea, button")
-            ?.focus();
+          fieldControl(paneRef.current, held.field)?.focus();
           throw new Error(held.message);
         },
       },
@@ -458,7 +467,7 @@ function usePaneCloseHold(
     };
   }, [ownerKind, ownerId, paneRef]);
 
-  return { track, clear, unsaved };
+  return { busy, failed, track, mark, clear, unsaved };
 }
 
 type FillPick = {
@@ -579,42 +588,156 @@ export function SpecFieldsPane({
     throw new Error(message);
   };
 
-  /**
-   * Writes spec columns now, as typed. `field` is the field's label; a field
-   * whose draft stays on screen (`sticky`) holds the unfolded sheet open
-   * until it saves or is put back (WP-01.6).
-   */
-  const saveSpec = (
-    field: string,
-    changes: SpecChanges,
-    sticky = true,
-  ): Promise<void> => {
-    if (!spec) return Promise.resolve();
-    setError(null);
-    return hold.track(
-      field,
-      sticky,
-      updateSpec
-        .mutateAsync({
-          projectId,
-          specId: spec.id,
-          expectedRowVersion: spec.row_version,
-          changes,
-        })
-        .then(onSpecSaved)
-        .catch(refused("The field was not saved.")),
-    );
-  };
+  // A write that answers after the pane has gone (a line switch, a lens
+  // change, the fold) changes nothing on screen: no alert, selection or focus,
+  // and nothing that was waiting to be written is sent.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   /** A field put back to its saved value: its failure no longer holds. */
   const revert = (field: string) => {
     const message = hold.clear(field);
     if (message !== null) setError((shown) => (shown === message ? null : shown));
   };
+
+  // SQ-1897 (story #38) — one writer per spec row. At most one write of the
+  // row is out at a time; a field committed meanwhile waits, then the fields
+  // still waiting send what they show against the row_version last answered.
+  // A failed write is never sent again by itself: the field stays marked
+  // until it saves or is put back. Every field carries a number for its
+  // latest commit, so an answer to an older one cannot clear, mark or alert
+  // over a newer one, whichever order the answers come in.
+  const acked = useRef<SpecLensSpec | null>(spec);
+  if (
+    spec &&
+    (!acked.current ||
+      acked.current.id !== spec.id ||
+      spec.row_version >= acked.current.row_version)
+  ) {
+    acked.current = spec;
+  }
+  const latestSpec = useRef(new Map<string, number>());
+  const pendingSpec = useRef(
+    new Map<string, { changes: SpecChanges; sticky: boolean }>(),
+  );
+  const sendingSpec = useRef<{
+    changes: SpecChanges;
+    fields: Map<string, { seq: number; sticky: boolean }>;
+  } | null>(null);
+
+  const sendSpec = () => {
+    const row = acked.current;
+    if (sendingSpec.current || !alive.current || !row) return;
+    const changes: SpecChanges = {};
+    const fields = new Map<string, { seq: number; sticky: boolean }>();
+    for (const [field, entry] of pendingSpec.current) {
+      // What it shows is what the row now holds: nothing to write.
+      if (sameColumns(entry.changes, row)) revert(field);
+      else {
+        Object.assign(changes, entry.changes);
+        fields.set(field, {
+          seq: latestSpec.current.get(field) ?? 0,
+          sticky: entry.sticky,
+        });
+      }
+    }
+    pendingSpec.current.clear();
+    if (fields.size === 0) return;
+    const sending = { changes, fields };
+    sendingSpec.current = sending;
+    const latest = () =>
+      [...fields].filter(
+        ([field, sent]) => latestSpec.current.get(field) === sent.seq,
+      );
+    void hold.busy(
+      updateSpec
+        .mutateAsync({
+          projectId,
+          specId: row.id,
+          expectedRowVersion: row.row_version,
+          changes,
+        })
+        .then(
+          (saved) => {
+            acked.current = saved;
+            onSpecSaved(saved);
+            if (alive.current) for (const [field] of latest()) revert(field);
+          },
+          (e: unknown) => {
+            const current = latest();
+            if (!alive.current || current.length === 0) return;
+            const message = errorText(e, "The field was not saved.");
+            setError(message);
+            hold.failed(current[0][0], message);
+            for (const [field, sent] of current) {
+              if (sent.sticky) hold.mark(field, message);
+            }
+          },
+        )
+        .finally(() => {
+          sendingSpec.current = null;
+          sendSpec();
+        }),
+    );
+  };
+
+  /**
+   * A field hands over the spec columns it shows. `field` is its label; a
+   * field whose draft stays on screen (`sticky`) holds the unfolded sheet
+   * open until it saves or is put back (WP-01.6).
+   */
+  const writeSpec = (field: string, changes: SpecChanges, sticky = true) => {
+    if (!acked.current) return;
+    const out = sendingSpec.current;
+    const outSeq = out?.fields.get(field)?.seq;
+    if (out && outSeq !== undefined) {
+      // The write that is out already sends this value: it decides.
+      if (sameColumns(changes, out.changes)) {
+        pendingSpec.current.delete(field);
+        latestSpec.current.set(field, outSeq);
+        return;
+      }
+    } else if (sameColumns(changes, acked.current)) {
+      pendingSpec.current.delete(field);
+      latestSpec.current.set(field, (latestSpec.current.get(field) ?? 0) + 1);
+      revert(field);
+      return;
+    }
+    latestSpec.current.set(field, (latestSpec.current.get(field) ?? 0) + 1);
+    pendingSpec.current.set(field, { changes, sticky });
+    setError(null);
+    sendSpec();
+  };
+
   const specField = (field: string) => ({
     unsaved: autosaveOwner != null && hold.unsaved.has(field),
-    onRevert: () => revert(field),
   });
+
+  /** A child editor's link to the hold: the unfold only (WP-01.6, F12). */
+  const childHold = (field: string): PaneWriteHold | undefined =>
+    autosaveOwner
+      ? {
+          track: (write) => void hold.track(field, write),
+          mark: (message) => {
+            if (message === null) hold.clear(field);
+            else hold.mark(field, message);
+          },
+        }
+      : undefined;
+
+  // The product the fill preview shows; a fill's answer reads it to know
+  // whether its own preview is still the one on screen.
+  const pickRef = useRef<FillPick | null>(null);
+  const showPick = (next: FillPick | null) => {
+    pickRef.current = next;
+    setPick(next);
+    revert("Product");
+  };
 
   const leadTimeOverride = line.lead_time_weeks ?? null;
   const leadTimeSuggestion = suggestedLeadTimeText(
@@ -641,7 +764,7 @@ export function SpecFieldsPane({
           );
         },
       );
-    void hold.track("Lead time", false, write);
+    void hold.track("Lead time", write);
     return write
       .then(
         () => true,
@@ -680,7 +803,6 @@ export function SpecFieldsPane({
     setError(null);
     void hold.track(
       "Maker",
-      false,
       commercials
         .mutateAsync({ projectId, itemId: line.id, vendorId })
         .then(() => {
@@ -698,7 +820,6 @@ export function SpecFieldsPane({
     }
     void hold.track(
       "Maker",
-      false,
       addMaker
         .add(option.name)
         .catch(refused("The maker was not added."))
@@ -713,7 +834,7 @@ export function SpecFieldsPane({
     name: string;
     detail: string;
   }) => {
-    setPick({ ...next, idempotencyKey: newIdempotencyKey() });
+    showPick({ ...next, idempotencyKey: newIdempotencyKey() });
     setFilling(false);
     onAnnounce?.(`${next.name} chosen. Fill this line, or put it back.`);
   };
@@ -721,6 +842,7 @@ export function SpecFieldsPane({
   const fill = () => {
     if (!pick || place.isPending) return;
     setError(null);
+    const filled = pick;
     const scope = (line.assignment_scope ?? "unassigned") as FfeAssignmentScope;
     const disposition = DISPOSITIONS.has(line.design_disposition ?? "")
       ? (line.design_disposition as Exclude<FfeDesignDisposition, "superseded">)
@@ -750,12 +872,24 @@ export function SpecFieldsPane({
         roleConfigurationIdentity: line.role_identity ?? "default",
         idempotencyKey: pick.idempotencyKey,
       })
-      .then(() => {
-        setPick(null);
-        onFilled?.(`${needLabel} filled with ${pick.name}.`);
-      })
-      .catch(refused("The line was not filled."));
-    void hold.track("Product", false, write);
+      .then(
+        () => {
+          // Gone (another line was chosen): its selection and focus stay.
+          if (!alive.current) return;
+          if (pickRef.current === filled) showPick(null);
+          onFilled?.(`${needLabel} filled with ${filled.name}.`);
+        },
+        (e: unknown) => {
+          if (!alive.current) return;
+          const message = errorText(e, "The line was not filled.");
+          setError(message);
+          hold.failed("Product", message);
+          // The preview still shows the product: it holds until filled,
+          // put back or replaced (F2).
+          if (pickRef.current === filled) hold.mark("Product", message);
+        },
+      );
+    void hold.busy(write);
   };
 
   const saveLink = (raw: string) => {
@@ -767,7 +901,7 @@ export function SpecFieldsPane({
     setImageNote(null);
     setLink("");
     // The link field empties as it sends, so a refusal leaves no draft.
-    void saveSpec("Image", { selected_media: [{ url }] }, false);
+    writeSpec("Image", { selected_media: [{ url }] }, false);
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -828,6 +962,7 @@ export function SpecFieldsPane({
           docCode={line.doc_code}
           className="flex min-w-0 flex-col gap-2"
           captionClassName={LABEL_CLS}
+          hold={childHold("Item label")}
         />
         <Field label="Maker">
           {makerName ? (
@@ -907,7 +1042,7 @@ export function SpecFieldsPane({
                 <button
                   type="button"
                   className={ACT_CLS}
-                  onClick={() => setPick(null)}
+                  onClick={() => showPick(null)}
                 >
                   PUT BACK
                 </button>
@@ -1014,21 +1149,21 @@ export function SpecFieldsPane({
               label="Finish"
               value={spec.finish}
               {...specField("Finish")}
-              onSave={(finish) => saveSpec("Finish", { finish })}
+              onCommit={(finish) => writeSpec("Finish", { finish })}
             />
             <SpecText
               key={`material-${spec.id}`}
               label="Material"
               value={spec.material}
               {...specField("Material")}
-              onSave={(material) => saveSpec("Material", { material })}
+              onCommit={(material) => writeSpec("Material", { material })}
             />
             <SpecText
               key={`color-${spec.id}`}
               label="Color"
               value={spec.color_fabric}
               {...specField("Color")}
-              onSave={(color_fabric) => saveSpec("Color", { color_fabric })}
+              onCommit={(color_fabric) => writeSpec("Color", { color_fabric })}
             />
             <Field label="Dimensions">
               <DimensionsField
@@ -1040,8 +1175,8 @@ export function SpecFieldsPane({
                   > | null) ?? null
                 }
                 {...specField("Dimensions")}
-                onSave={(selected_dimensions) =>
-                  saveSpec("Dimensions", {
+                onCommit={(selected_dimensions) =>
+                  writeSpec("Dimensions", {
                     selected_dimensions: selected_dimensions as never,
                   })
                 }
@@ -1053,7 +1188,7 @@ export function SpecFieldsPane({
               value={spec.exact_location}
               placeholder="See drawings"
               {...specField("Exact location")}
-              onSave={(exact_location) => saveSpec("Exact location", { exact_location })}
+              onCommit={(exact_location) => writeSpec("Exact location", { exact_location })}
             />
             <SpecText
               key={`notes-${spec.id}`}
@@ -1061,7 +1196,7 @@ export function SpecFieldsPane({
               value={spec.trade_notes}
               multiline
               {...specField("Notes")}
-              onSave={(trade_notes) => saveSpec("Notes", { trade_notes })}
+              onCommit={(trade_notes) => writeSpec("Notes", { trade_notes })}
             />
           </>
         ) : (
@@ -1084,6 +1219,7 @@ export function SpecFieldsPane({
             placements={placements}
             rooms={rooms}
             canEdit={!locked}
+            hold={childHold("Rooms")}
           />
           {locked && <span className={REASON_CLS}>{lockReason}</span>}
         </Field>
@@ -1099,7 +1235,6 @@ export function SpecFieldsPane({
               setError(null);
               void hold.track(
                 "Unit",
-                false,
                 buildFields
                   .mutateAsync({
                     projectId,
@@ -1170,11 +1305,17 @@ export function SpecFieldsPane({
                 piece={line}
                 laborLines={laborLines}
                 canEdit={!locked}
+                hold={childHold("Labor")}
               />
               {locked && <span className={REASON_CLS}>{lockReason}</span>}
             </Field>
             <Field label="COM">
-              <ComToggle projectId={projectId} item={line} canEdit={!locked} />
+              <ComToggle
+                projectId={projectId}
+                item={line}
+                canEdit={!locked}
+                hold={childHold("COM")}
+              />
               {locked && <span className={REASON_CLS}>{lockReason}</span>}
             </Field>
           </>
@@ -1226,35 +1367,26 @@ export function SpecFieldsPane({
   );
 }
 
-/** W × D × H, written when focus leaves the three fields. */
+/** W × D × H, handed over when focus leaves the three fields. */
 function DimensionsField({
   value,
   unsaved,
-  onSave,
-  onRevert,
+  onCommit,
 }: {
   value: Record<string, unknown> | null;
   /** WP-01.6 — its last write failed and the draft still shows. */
   unsaved?: boolean;
-  onSave: (next: Record<string, unknown> | null) => Promise<unknown>;
-  onRevert?: () => void;
+  onCommit: (next: Record<string, unknown> | null) => void;
 }) {
   const [draft, setDraft] = useState(value);
-  const write = useFieldCommit(
-    value,
-    (a, b) => JSON.stringify(a) === JSON.stringify(b),
-    onSave,
-    onRevert,
-  );
   return (
     <div
-      data-unsaved={unsaved || undefined}
       onBlur={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        write(draft);
+        onCommit(draft);
       }}
     >
-      <DimensionFields value={draft} onChange={setDraft} />
+      <DimensionFields value={draft} onChange={setDraft} invalid={unsaved} />
     </div>
   );
 }

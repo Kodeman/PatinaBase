@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useAddLaborLine } from "@patina/supabase";
 import type { FfeLineUnit } from "@patina/types";
+import type { PaneWriteHold } from "./spec-fields-pane";
 import {
   LABOR_STAMP_LABEL,
   isLaborLine,
@@ -149,12 +150,15 @@ export function LaborAct({
   piece,
   laborLines,
   canEdit,
+  hold,
 }: {
   projectId: string;
   piece: LaborPieceRow;
   /** The piece's labor lines, already in hand (`parent_ffe_item_id` = piece, `line_kind` labor). */
   laborLines: readonly LaborLineRow[];
   canEdit: boolean;
+  /** WP-01.6 — the unfolded sheet's hold; its writes and refusals reach it. */
+  hold?: PaneWriteHold;
 }) {
   const addLabor = useAddLaborLine();
   const [open, setOpen] = useState(false);
@@ -213,12 +217,14 @@ export function LaborAct({
     setUnit(pieceUnit);
     setRough("");
     setError(null);
+    hold?.mark(null);
     setOpen(true);
   };
 
   const close = () => {
     setOpen(false);
     setError(null);
+    hold?.mark(null);
     setFocusAfter({ lineId: null, at: Date.now() });
   };
 
@@ -241,22 +247,27 @@ export function LaborAct({
       return;
     }
     setError(null);
-    addLabor
-      .mutateAsync({
-        projectId,
-        parentItemId: piece.id,
-        name: trimmed,
-        quantity: count,
-        unit,
-        roughCents,
-      })
+    const sent = addLabor.mutateAsync({
+      projectId,
+      parentItemId: piece.id,
+      name: trimmed,
+      quantity: count,
+      unit,
+      roughCents,
+    });
+    hold?.track(sent);
+    sent
       .then((added) => {
         setOpen(false);
         setFocusAfter({ lineId: added?.selectionId ?? null, at: Date.now() });
+        hold?.mark(null);
       })
-      .catch((e: Error) =>
-        setError(e.message || "The labor line was not added."),
-      );
+      .catch((e: Error) => {
+        // The form stays open with what was typed: it holds the fold.
+        const message = e.message || "The labor line was not added.";
+        setError(message);
+        hold?.mark(message);
+      });
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
