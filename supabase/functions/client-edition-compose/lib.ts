@@ -471,9 +471,9 @@ function answered(ctx: Ctx, role: ClaudeRole, result: CallClaudeResult): Answer 
 
 const ALWAYS_SENT = new Set(["upload", "maker", "concept"]);
 const HER_HOME = new Set(["scan", "installed"]);
-const NEVER_HERO = new Set(["sheet", "concept"]);
+const HERO_SOURCE_KINDS = new Set(["installed", "upload", "scan", "maker"]);
 
-/** Sheets, boards and any kind not named here never; her home only once the privacy page is live. */
+/** Only installed, upload, scan and maker sources can be Gallery heroes. */
 function kindSendable(kind: string, privacyLive: boolean): boolean {
   return HER_HOME.has(kind) ? privacyLive : ALWAYS_SENT.has(kind);
 }
@@ -596,10 +596,10 @@ export interface HeroChoice {
   held: FactsAsset[];
 }
 
-/** Known provenance with no sheet or concept behind it, unflagged, ranked, and meeting the hero floors. */
+/** Known provenance from hero-allowed sources, unflagged, ranked, and meeting the hero floors. */
 function heroEligible(ctx: Ctx, asset: FactsAsset): boolean {
   const kinds = provenance(ctx, asset);
-  if (!kinds || kinds.some((kind) => NEVER_HERO.has(kind)) || flagged(ctx, asset)) return false;
+  if (!kinds || kinds.some((kind) => !HERO_SOURCE_KINDS.has(kind)) || flagged(ctx, asset)) return false;
   return tierOf(asset) !== null && meetsHero(framed(ctx, asset));
 }
 

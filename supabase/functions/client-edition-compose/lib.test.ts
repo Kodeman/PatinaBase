@@ -1276,6 +1276,19 @@ Deno.test("closing: missing or mismatched captured facts fail closed, never read
   }
 });
 
+Deno.test("Gallery hero eligibility excludes a qualifying board and uses the paint card", async () => {
+  const fixture = facts();
+  fixture.assets = fixture.assets.map((a) => a.id === "a-board"
+    ? { ...a, width: 2400, height: 1600, ground: "scene" }
+    : { ...a, ground: "white" });
+  const { db, called } = fakeDb({ facts: fixture });
+  const { claude, calls } = claudeOf(respond());
+  await composeRequest(REQUEST, deps(db, claude));
+  const args = finishArgs(called);
+  assertEquals(composition(args).hero, null, "the qualifying board cannot become the hero");
+  assertEquals(wordsBody(calls).opening.now, "the paint card", "no eligible client hero yields the paint card");
+});
+
 Deno.test("Gallery hero: scene, native dimensions and subject fit in both viewport crops", () => {
   const photo = asset("gallery", "upload", 2000, 1200, { subjectBox: [0.4, 0.35, 0.2, 0.3] });
   assert(meetsHero(photo), "boundary landscape with a phone-safe subject qualifies despite discarding over half the frame");
