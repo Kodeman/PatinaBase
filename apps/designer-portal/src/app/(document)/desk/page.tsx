@@ -610,10 +610,10 @@ export default function DeskPage() {
       placeToRestore = null;
       stop();
     }
-    function onFocusIn(event: FocusEvent) {
+    const onFocusIn = (event: FocusEvent) => {
       const anchor = place.anchor ? document.getElementById(place.anchor) : null;
       if (!anchor?.contains(event.target as Node)) settle();
-    }
+    };
     document.addEventListener('focusin', onFocusIn);
     // The Desk's own root grows as the roster fills in; the body does not.
     grow.observe(deskRoot.current ?? document.body);
