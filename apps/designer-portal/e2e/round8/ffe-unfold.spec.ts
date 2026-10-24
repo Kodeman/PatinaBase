@@ -273,7 +273,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/, { timeout: 30_000 });
     await expect(finish).toHaveAttribute('aria-invalid', 'true');
 
-    await page.goBack();
+    await pressBack(page);
     await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
       timeout: 30_000,
     });
@@ -337,7 +337,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await expect.poll(() => sent, { timeout: 30_000 }).toBe(1);
     const length = await page.evaluate(() => history.length);
 
-    await page.goBack();
+    await pressBack(page);
     await expect(instrument(page)).toBeVisible();
     expect(unfoldParams(page).unfold, 'a pending save holds Back').toBe('pieces');
     answer();
