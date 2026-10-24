@@ -105,7 +105,7 @@ function piecesUrl(lens: string, room?: string): string {
 }
 
 async function openSheet(page: Page, lens: string, room?: string): Promise<void> {
-  await page.goto(piecesUrl(lens, room), { waitUntil: 'domcontentloaded' });
+  await expect(page.goto(piecesUrl(lens, room), { waitUntil: 'domcontentloaded' })).resolves.toBeTruthy();
   await expect(page.getByTestId('build-room')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('group', { name: 'Schedule view' }).getByRole('button', { pressed: true })).toBeVisible();
 }
