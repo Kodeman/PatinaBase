@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -613,8 +614,6 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       setHolding(false);
     }, [ink]);
 
-    useEffect(() => stop, [stop]);
-
     /* Scroll events can arrive after focus has already settled the drawer,
        or from another container. Only movement under the held control cancels. */
     useEffect(() => {
@@ -624,8 +623,17 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
         const now = control.current?.getBoundingClientRect();
         if (before && now && (before.top !== now.top || before.left !== now.left)) stop();
       };
+      const stopIfHidden = () => {
+        if (document.visibilityState === 'hidden') stop();
+      };
       window.addEventListener('scroll', stopIfMoved, true);
-      return () => window.removeEventListener('scroll', stopIfMoved, true);
+      window.addEventListener('blur', stop);
+      document.addEventListener('visibilitychange', stopIfHidden);
+      return () => {
+        window.removeEventListener('scroll', stopIfMoved, true);
+        window.removeEventListener('blur', stop);
+        document.removeEventListener('visibilitychange', stopIfHidden);
+      };
     }, [holding, stop]);
 
     /** The act itself, reported once and always the same way. */
@@ -649,6 +657,10 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
       surfaceKey,
       variant,
     ]);
+
+    // Revoke the old consent synchronously at commit, before its timer can
+    // complete with a callback or availability from the previous render.
+    useLayoutEffect(() => stop, [holdMs, stop, take, unavailable]);
 
     const start = useCallback(() => {
       if (unavailable || running.current) return;
@@ -731,6 +743,8 @@ export const HoldAction = forwardRef<HTMLButtonElement, HoldActionProps>(
             ].join(' ')}
             onPointerDown={(event) => {
               pointerAt.current = Date.now();
+              if (event.button !== 0) return;
+              if ((event.pointerType === 'touch' || event.pointerType === 'pen') && !event.isPrimary) return;
               markInkPoint(event);
               start();
             }}

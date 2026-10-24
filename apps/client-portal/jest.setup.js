@@ -11,6 +11,18 @@ import '@testing-library/jest-dom'
 // setupFilesAfterEnv either way, so guard on `window` existing rather than
 // hard-crashing those suites.
 if (typeof window !== 'undefined') {
+  // jsdom has no PointerEvent; retain real button and primary-pointer fields.
+  if (typeof window.PointerEvent === 'undefined') {
+    window.PointerEvent = class PointerEvent extends MouseEvent {
+      constructor(type, init = {}) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 1;
+        this.pointerType = init.pointerType ?? 'mouse';
+        this.isPrimary = init.isPrimary ?? true;
+      }
+    };
+  }
+
   // Mock window.matchMedia
   Object.defineProperty(window, 'matchMedia', {
     writable: true,

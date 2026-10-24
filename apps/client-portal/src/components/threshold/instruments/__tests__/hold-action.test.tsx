@@ -154,6 +154,130 @@ describe('HoldAction — the act, held', () => {
     expect(onHold).not.toHaveBeenCalled();
   });
 
+  describe.each(['keyboard', 'pointer'])('%s consent guards', (input) => {
+    function begin(target: HTMLElement) {
+      jest.useFakeTimers();
+      if (input === 'keyboard') fireEvent.keyDown(target, { key: 'Enter' });
+      else fireEvent.pointerDown(target);
+      act(() => { jest.advanceTimersByTime(400); });
+    }
+
+    it('cancels on window blur', () => {
+      draw();
+      const target = actWord();
+      begin(target);
+      fireEvent.blur(window);
+      act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+      expect(onHold).not.toHaveBeenCalled();
+      expect(target).toHaveAttribute('data-hold-state', 'idle');
+    });
+
+    it('cancels when the document becomes hidden', () => {
+      draw();
+      const target = actWord();
+      begin(target);
+      jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+      fireEvent(document, new Event('visibilitychange'));
+      act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+      expect(onHold).not.toHaveBeenCalled();
+      expect(target).toHaveAttribute('data-hold-state', 'idle');
+    });
+
+    it.each(['disabled', 'loading', 'actionKey', 'onHold'] as const)(
+      'cancels when %s changes mid-hold without invoking either callback',
+      (prop) => {
+        const replacement = jest.fn();
+        const { rerender } = draw();
+        const target = actWord();
+        begin(target);
+        const changed = {
+          disabled: { disabled: true },
+          loading: { loading: true },
+          actionKey: { actionKey: 'different_consent' },
+          onHold: { onHold: replacement },
+        }[prop];
+        rerender(
+          <HoldAction actionKey="gate_sign" verb="sign" onHold={onHold} {...changed}>
+            Sign authorization
+          </HoldAction>,
+        );
+        act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+        expect(onHold).not.toHaveBeenCalled();
+        expect(replacement).not.toHaveBeenCalled();
+        expect(target).toHaveAttribute('data-hold-state', 'idle');
+      },
+    );
+  });
+
+  it.each([
+    ['right mouse button', 'mouse', 2, true],
+    ['middle mouse button', 'mouse', 1, true],
+    ['secondary touch', 'touch', 0, false],
+    ['secondary pen', 'pen', 0, false],
+  ])('does not start a hold for %s', (_name, pointerType, button, isPrimary) => {
+    draw();
+    const target = actWord();
+    jest.useFakeTimers();
+    fireEvent.pointerDown(target, { pointerType, button, isPrimary });
+    act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+    expect(onHold).not.toHaveBeenCalled();
+    expect(target).toHaveAttribute('data-hold-state', 'idle');
+  });
+
+  it.each(['mouse', 'touch', 'pen'])('keeps a primary %s hold through visible visibility events', (pointerType) => {
+    draw();
+    const target = actWord();
+    jest.useFakeTimers();
+    fireEvent.pointerDown(target, { button: 0, pointerType, isPrimary: true });
+    jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    fireEvent(document, new Event('visibilitychange'));
+    act(() => { jest.advanceTimersByTime(HOLD_MS); });
+    expect(onHold).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes lifecycle listeners after release and unmount', () => {
+    const addWindow = jest.spyOn(window, 'addEventListener');
+    const removeWindow = jest.spyOn(window, 'removeEventListener');
+    const addDocument = jest.spyOn(document, 'addEventListener');
+    const removeDocument = jest.spyOn(document, 'removeEventListener');
+    const { unmount } = draw();
+    expect(addWindow).not.toHaveBeenCalledWith('blur', expect.any(Function));
+    expect(addDocument).not.toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+    jest.useFakeTimers();
+    fireEvent.keyDown(actWord(), { key: 'Enter' });
+    const blur = addWindow.mock.calls.find(([type]) => type === 'blur')![1];
+    const hidden = addDocument.mock.calls.find(([type]) => type === 'visibilitychange')![1];
+    fireEvent.keyUp(actWord(), { key: 'Enter' });
+    expect(removeWindow).toHaveBeenCalledWith('blur', blur);
+    expect(removeDocument).toHaveBeenCalledWith('visibilitychange', hidden);
+    fireEvent.keyDown(actWord(), { key: 'Enter' });
+    const nextHidden = addDocument.mock.calls.filter(([type]) => type === 'visibilitychange')[1][1];
+    unmount();
+    expect(removeDocument).toHaveBeenCalledWith('visibilitychange', nextHidden);
+    act(() => { jest.advanceTimersByTime(HOLD_MS * 2); });
+    expect(onHold).not.toHaveBeenCalled();
+  });
+
+  it('requires a fresh full hold after a callback changes', () => {
+    const replacement = jest.fn();
+    const { rerender } = draw();
+    jest.useFakeTimers();
+    fireEvent.keyDown(actWord(), { key: 'Enter' });
+    act(() => { jest.advanceTimersByTime(400); });
+    rerender(
+      <HoldAction actionKey="gate_sign" verb="sign" onHold={replacement}>
+        Sign authorization
+      </HoldAction>,
+    );
+    fireEvent.keyUp(actWord(), { key: 'Enter' });
+    fireEvent.keyDown(actWord(), { key: 'Enter' });
+    act(() => { jest.advanceTimersByTime(HOLD_MS - 1); });
+    expect(onHold).not.toHaveBeenCalled();
+    expect(replacement).not.toHaveBeenCalled();
+    act(() => { jest.advanceTimersByTime(1); });
+    expect(replacement).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels when the pointer leaves the word', () => {
     draw();
     const target = actWord();
