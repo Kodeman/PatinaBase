@@ -185,16 +185,27 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
 
     await page.unroute(specWrite);
     const returnToRoom = instrument(page).getByRole('button', { name: /Return to the room/ });
+    const retryResponse = page.waitForResponse(
+      (response) => {
+        const request = response.request();
+        const status = response.status();
+        return request.method() === 'PATCH' && specWrite(new URL(response.url())) && status >= 200 && status < 300;
+      },
+      { timeout: 30_000 },
+    );
     await returnToRoom.focus();
+    const successfulRetry = await retryResponse;
+    expect(successfulRetry.ok(), 'the retry receives a successful response').toBe(true);
     await expect.poll(
       () => psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
-      { message: 'the retry persists when the failed field is committed' },
+      { message: 'the retry persists the failed field value' },
     ).toBe(failed);
+    const versionAfterRetry = Number(psqlScalar(
+      `SELECT row_version::text FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`,
+    ));
+    expect(versionAfterRetry, 'the successful retry advances the row version').toBeGreaterThan(beforeRow.version);
     expect(new URL(page.url()).searchParams.get('unfold'), 'reload starts while the sheet is open').toBe('pieces');
     const writesBeforeReload = writeRequests;
-    const versionBeforeReload = psqlScalar(
-      `SELECT row_version::text FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`,
-    );
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
     await expect(instrument(page), 'reload reopens the unfolding address').toBeVisible({ timeout: 60_000 });
     await settled(page);
@@ -203,7 +214,7 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     expect(
       psqlScalar(`SELECT row_version::text FROM public.project_ffe_specs WHERE ffe_item_id = '${line}';`),
       'the reload did not mutate the row version',
-    ).toBe(versionBeforeReload);
+    ).toBe(String(versionAfterRetry));
 
     await instrument(page).getByRole('button', { name: /Return to the room/ }).focus();
     await page.keyboard.press('Enter');
