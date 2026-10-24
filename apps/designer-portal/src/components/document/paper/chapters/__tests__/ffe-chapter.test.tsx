@@ -1,3 +1,4 @@
+import { browserNavigation } from "../../__tests__/browser-navigation";
 /**
  * SQ-1891, repaired by SQ-1894 (WP-01.6): the round-8 FF&E chapter hosting
  * the real UnfoldInstrument, SpecLens and SpecFieldsPane. Only the Build room
@@ -260,7 +261,10 @@ beforeEach(() => {
   scrolled().mockClear();
 });
 
+let restoreNavigation: (() => void) | undefined;
 afterEach(() => {
+  restoreNavigation?.();
+  restoreNavigation = undefined;
   jest.restoreAllMocks();
   window.history.replaceState({}, "", "/");
 });
@@ -564,6 +568,7 @@ describe("the close barrier holds, never replays", () => {
 
 describe("SQ-1897 F1: Back holds like Return", () => {
   it("Back with a failed field puts the unfold back and focuses the field; nothing is replayed", async () => {
+    restoreNavigation = browserNavigation().restore;
     mockUpdateSpec.mockRejectedValueOnce(new Error("The field was not saved."));
     // The unfold as a door opens it: a pushed entry over the closed paper.
     window.history.replaceState({}, "", `/doc/${DOC}`);
@@ -650,6 +655,7 @@ describe("story #40: Back holds exactly like Return", () => {
     getProposalAutosaveSnapshot(ffeSheetAutosaveOwner(DOC)).registeredBuffers;
 
   it("a Back while a save is out holds, then folds once it lands, with no loop", async () => {
+    restoreNavigation = browserNavigation().restore;
     const write = held();
     mockUpdateSpec.mockImplementationOnce(() => write.promise);
     openOver(`/doc/${DOC}`, true);
@@ -657,7 +663,7 @@ describe("story #40: Back holds exactly like Return", () => {
     await waitFor(() => expect(field).toHaveValue("Old finish"));
     await blurWith(field, "Pending finish");
     const length = window.history.length;
-    const push = jest.spyOn(window.history, "pushState");
+    const push = jest.spyOn(window.history, "pushState").mockClear();
     const go = jest.spyOn(window.history, "go");
 
     await heldBack(go, 1);
@@ -678,6 +684,7 @@ describe("story #40: Back holds exactly like Return", () => {
   });
 
   it("a Back while a save is out holds; its refusal keeps the sheet open on the marked field", async () => {
+    restoreNavigation = browserNavigation().restore;
     const write = held();
     mockUpdateSpec.mockImplementationOnce(() => write.promise);
     openOver(`/doc/${DOC}`, true);
@@ -703,6 +710,7 @@ describe("story #40: Back holds exactly like Return", () => {
   });
 
   it("a Back to another document over a marked field is held: the draft and its registration stay", async () => {
+    restoreNavigation = browserNavigation().restore;
     mockUpdateSpec.mockRejectedValueOnce(new Error("The field was not saved."));
     openOver("/desk", false);
     const field = await finish();
@@ -713,7 +721,7 @@ describe("story #40: Back holds exactly like Return", () => {
     const held = registrations();
     expect(held).toBeGreaterThan(0);
     const length = window.history.length;
-    const push = jest.spyOn(window.history, "pushState");
+    const push = jest.spyOn(window.history, "pushState").mockClear();
     const go = jest.spyOn(window.history, "go");
 
     await heldBack(go, 1);
@@ -743,6 +751,7 @@ describe("story #40: Back holds exactly like Return", () => {
   });
 
   it("SQ-1901 F2: choosing another line while a Back is held drops it; the old line's late answer folds nothing", async () => {
+    restoreNavigation = browserNavigation().restore;
     const write = held();
     mockUpdateSpec.mockImplementationOnce(() => write.promise);
     openOver(`/doc/${DOC}`, true);
