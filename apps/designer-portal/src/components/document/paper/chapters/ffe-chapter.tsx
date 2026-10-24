@@ -225,6 +225,10 @@ function useSheetLanding(
     const opener = document.activeElement;
     let readerMoved = false;
     let landing = false;
+    // Where the landing put focus. The sheet can take it back to its title
+    // (its own landing effect re-runs, as React does in development); until
+    // the wait is over, the title taking it again lands here again.
+    let landedOn: Element | null = null;
     let timer: number | undefined;
     let done = false;
     const observer = new MutationObserver(() => attempt());
@@ -240,8 +244,13 @@ function useSheetLanding(
         (active === opener && active !== title())
       );
     };
-    const yielded = () =>
-      readerMoved || (!waiting() && document.activeElement !== title());
+    const yielded = () => {
+      const active = document.activeElement;
+      return (
+        readerMoved ||
+        (!waiting() && active !== title() && active !== landedOn)
+      );
+    };
 
     const landOnLine = (id: string) => {
       const row = host.querySelector<HTMLElement>(
@@ -265,7 +274,9 @@ function useSheetLanding(
     const land = (fallback: boolean): boolean => {
       landing = true;
       try {
-        return landAt(fallback);
+        const landed = landAt(fallback);
+        if (landed) landedOn = document.activeElement;
+        return landed;
       } finally {
         landing = false;
       }
@@ -301,13 +312,14 @@ function useSheetLanding(
       pokeRef.current = () => {};
     }
     function expire() {
-      if (!done && !yielded()) land(true);
+      if (!done && !landedOn && !yielded()) land(true);
       stop();
     }
     function attempt() {
       if (done || !title()) return;
       if (yielded()) return stop();
-      if (!waiting() && land(false)) return stop();
+      const holding = landedOn != null && document.activeElement === landedOn;
+      if (!holding && !waiting()) land(false);
       // The sheet's code is here; the wait starts once its reads answer.
       if (timer === undefined && settledRef.current) {
         timer = window.setTimeout(expire, LANDING_WAIT_MS);
@@ -323,7 +335,9 @@ function useSheetLanding(
     // Focus going anywhere but the sheet's title (or this landing's target)
     // is the reader's own move.
     function onFocusIn(event: FocusEvent) {
-      if (!landing && event.target !== title() && event.target !== opener) {
+      // This landing's own focus move is not heard as a new one.
+      if (landing) return;
+      if (event.target !== title() && event.target !== opener) {
         readerMoved = true;
       }
       attempt();

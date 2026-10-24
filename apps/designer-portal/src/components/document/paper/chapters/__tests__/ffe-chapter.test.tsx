@@ -554,7 +554,21 @@ describe("F6–F7: the landing waits for the reads, then yields to the reader", 
 
     await answer(mockLines);
     await waitFor(() => expect(document.activeElement).toBe(lineButton(SECOND)));
-    expect(runningDeadlines(timers, clears)).toHaveLength(0);
+  });
+
+  it("lands again when the sheet retakes its title focus after landing, until the reader moves", async () => {
+    renderChapter(`unfold=pieces&lens=rough&room=${ROOM}`);
+    const title = await screen.findByText("Sheet title");
+    const heading = () => document.querySelector(`[data-room-heading="${ROOM}"]`);
+    await waitFor(() => expect(document.activeElement).toBe(heading()));
+
+    // The sheet's own landing effect runs again (React does in development).
+    act(() => title.focus());
+    expect(document.activeElement).toBe(heading());
+
+    fireEvent.wheel(window);
+    act(() => title.focus());
+    expect(document.activeElement).toBe(title);
   });
 
   it("F6: when the deadline passes, the sheet lands on the room's heading, not its title", async () => {
