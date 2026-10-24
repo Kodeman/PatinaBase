@@ -3812,10 +3812,10 @@ describe('Threshold — The House Issue data', () => {
     return {
       ...EDITORIAL,
       rooms: [],
-      assets: [board],
+      assets: [EDITORIAL.assets[0], board],
       boards: [{ id: 'board-1', name: 'The direction', assetId: board.id }],
       edition: { id: 'approved-edition', seq: 2, approvedAt: '2026-10-21T10:00:00Z', approvedBy: 'studio', notice: null },
-      composition: { hero: null, held: held ? [board.id] : [], chapters: [] },
+      composition: { hero: { assetId: EDITORIAL.assets[0].id }, held: held ? [board.id] : [], chapters: [] },
       images: [{ assetId: board.id, plateRole: 'held', rank: 1, chapterKey: 'house' }],
     };
   }
@@ -3847,7 +3847,7 @@ describe('Threshold — The House Issue data', () => {
 
   it('editorial data alone: the hero stands between the doorplate and the house, and every anchor stays', () => {
     const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
-    expect(container.querySelector('.gallery-paint')).toBeInTheDocument();
+    expect(container.querySelector('.gallery-photo-frame img')).toBeInTheDocument();
     expect(container.querySelector('[data-standing-row]')).toBeNull();
     expect(container.querySelector('.ed-chapter-head')).toBeNull();
     expect(container.querySelector('.gallery-chapter')).toBeInTheDocument();

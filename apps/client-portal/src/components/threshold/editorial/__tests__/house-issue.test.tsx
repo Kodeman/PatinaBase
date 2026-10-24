@@ -182,7 +182,7 @@ describe("the hero preload", () => {
   });
 
   it("preloads nothing for a drawn cover", () => {
-    expect(heroPreloads(editorial([WHITE]))).toEqual([]);
+    expect(heroPreloads(editorial([{ ...WHITE, crops: {} }]))).toEqual([]);
     expect(heroPreloads(null)).toEqual([]);
   });
 
@@ -316,7 +316,7 @@ describe("the issue", () => {
     expect(screen.queryByTestId("house-issue-cover")).toBeNull();
     unmount();
 
-    render(head(houseIssue(editorial([WHITE]))));
+    render(head(houseIssue(editorial([{ ...WHITE, crops: {} }]))));
     expect(screen.queryByTestId("house-issue-hero")).toBeNull();
     expect(screen.getByTestId("house-issue-cover")).toHaveTextContent(
       "Elm Street House",
@@ -601,13 +601,13 @@ describe("the approved edition", () => {
     );
   }
 
-  it("rejects an approved white-ground catalogue hero rather than substituting another photo", () => {
-    expect(houseIssue(editorial([CATALOGUE])).hero).toBeNull();
+  it("contains an approved white-ground catalogue hero rather than substituting another photo", () => {
+    expect(houseIssue(editorial([CATALOGUE])).hero?.id).toBe(CATALOGUE.id);
     const issue = houseIssue(edition([CATALOGUE, SCENE], { hero: { assetId: CATALOGUE.id } }));
-    expect(issue.hero).toBeNull();
+    expect(issue.hero?.id).toBe(CATALOGUE.id);
     cover(issue);
-    expect(screen.queryByTestId("house-issue-hero")).toBeNull();
-    expect(screen.getByTestId("house-issue-cover")).toBeInTheDocument();
+    expect(screen.getByTestId("house-issue-hero").querySelector(".ed-hero--contained")).toBeInTheDocument();
+    expect(screen.queryByTestId("house-issue-cover")).toBeNull();
   });
 
   it("marks a hero headline past LONG_HEADLINE for the smaller step, whole, and leaves a short one alone", () => {
@@ -630,7 +630,7 @@ describe("the approved edition", () => {
     }
   });
 
-  it("draws the cover, never another photograph, when the edition names no hero, a concept, or one under the floor", () => {
+  it("uses a servable fallback when the edition names no hero, a concept, or one under the floor", () => {
     for (const [assets, hero] of [
       [[SCENE], null],
       [[asset("concept1", { sourceKind: "concept" }), SCENE], { assetId: "concept1" }],
@@ -638,10 +638,10 @@ describe("the approved edition", () => {
       [[SCENE], { assetId: "not-in-the-envelope" }],
     ] as const) {
       const issue = houseIssue(edition([...assets], { hero }));
-      expect(issue.hero).toBeNull();
+      expect(issue.hero?.id).toBe(hero?.assetId === WHITE.id ? WHITE.id : SCENE.id);
       const { unmount } = cover(issue);
-      expect(screen.queryByTestId("house-issue-hero")).toBeNull();
-      expect(screen.getByTestId("house-issue-cover")).toBeInTheDocument();
+      expect(screen.getByTestId("house-issue-hero")).toBeInTheDocument();
+      expect(screen.queryByTestId("house-issue-cover")).toBeNull();
       unmount();
     }
   });
@@ -696,7 +696,7 @@ describe("the approved edition", () => {
     const loose = { ...editorial([SCENE]), composition: { hero: null, held: [], chapters: [{ key: "cover", headline: "Loose", standing: null }] } };
     const chapters = editionChapters(houseIssue(loose), [])!;
     expect(chapters.get("cover")?.headline).not.toBe("Loose");
-    expect(houseIssue(loose).hero).toBeNull();
+    expect(houseIssue(loose).hero?.id).toBe(SCENE.id);
   });
 
   it("prints a chapter's standing sentence under its head, inside one revealed child", () => {
@@ -749,7 +749,7 @@ describe("the approved edition", () => {
 
   function placed(held: string[], images: NonNullable<ClientProjectEditorial["images"]>): ClientProjectEditorial {
     const house = twoScans();
-    return { ...edition([...house.assets], { hero: null, held }), rooms: house.rooms, images };
+    return { ...edition([SCENE, ...house.assets], { hero: { assetId: SCENE.id }, held }), rooms: house.rooms, images };
   }
 
   function heldIn(issue: HouseIssue, roomId: string) {
@@ -988,14 +988,14 @@ describe("the approved edition", () => {
 
 
 describe('approved catalogue cover', () => {
-  it('withholds the approved catalogue hero and keeps its phase-free chapter address', () => {
+  it('contains the approved catalogue hero and keeps its phase-free chapter address', () => {
     const photo = asset('bed', { width: 1600, height: 1600, ground: 'white', subjectBox: [0.12, 0.27, 0.7, 0.4], crops: { pair: { rect: [0, 197, 1600, 1143], widths: [768, 1024, 1600] }, piece: CROPS.piece } });
     const data = editorial([photo]);
     data.project.phase = null;
     data.edition = { id: 'approved', seq: 1, approvedAt: '2026-10-23', approvedBy: 'studio', notice: null };
     data.composition = { hero: { assetId: photo.id }, held: [], chapters: [{ key: 'cover', headline: 'Your bed is on the way to the house', standing: null }] };
     const issue = houseIssue(data)!;
-    expect(issue.hero).toBeNull();
+    expect(issue.hero?.id).toBe(photo.id);
     const { container } = render(
       <HouseIssueHead
         issue={issue}
@@ -1008,10 +1008,10 @@ describe('approved catalogue cover', () => {
         plan={{ unread: true, rooms: null, marks: [] }}
       />,
     );
-    expect(container.querySelector('[data-testid="house-issue-hero"]')).toBeNull();
-    expect(screen.getByTestId('house-issue-cover')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="house-issue-hero"] .ed-hero--contained')).toBeInTheDocument();
+    expect(screen.queryByTestId('house-issue-cover')).toBeNull();
     const chapters = editionChapters(issue, ['doorstep'])!;
     expect(chapters.get('cover')!.eyebrow).toBe('01 · Elm Street House');
-    expect(heroPreloads(data)).toEqual([]);
+    expect(heroPreloads(data)).toEqual(preloadLink(issue.scopeId, photo).map(({ imageSrcSet, imageSizes, media }) => ({ imageSrcSet, imageSizes, ...(media ? { media } : {}) })));
   });
 });
