@@ -2284,6 +2284,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // `scrollToRegion` uses, for the same reason.
   const landOnFfeAnchor = useCallback(
     (elementId: string) => {
+      const lineId = /^ffe-selection-(.+)$/.exec(elementId)?.[1];
+      if (lineId) setRequestedFfeItemId(lineId);
       requestRegionUnfold('ffe');
       lens.forceFullThrough('ffe');
       const reduceMotion = window.matchMedia?.(

@@ -24,14 +24,14 @@
 import { test, expect, type AuthenticatedPage } from '../fixtures/auth';
 import { settle } from '../helpers/lens';
 import { LONG_PAPER_ID, assertLongPaper } from './lens-fixtures';
-import { psqlRun } from '../helpers/psql';
+import { psqlRun, psqlScalar } from '../helpers/psql';
 
 test.skip(
   ({ browserName }) => browserName === 'firefox',
   'the lens specs run chromium + webkit (test-impact, "Browser ruling"); Firefox is not a shipped target for this portal',
 );
 
-/** THE WHOLE JOB (4, letterhead-anchored) then BESIDE PIECES (3, line-
+/** THE WHOLE JOB (4, letterhead-anchored) then BESIDE PIECES & PURCHASING (3, line-
  *  anchored) — the seed's own §9 comment, in the rail's print order. */
 const WHOLE_JOB_TITLES = [
   'Primary bedroom — rug and nightstands',
@@ -47,6 +47,10 @@ const BESIDE_PIECES_TITLES = [
 const ALL_TITLES = [...WHOLE_JOB_TITLES, ...BESIDE_PIECES_TITLES] as const;
 
 async function openPaperAt390(page: AuthenticatedPage): Promise<void> {
+  // Auth lands on the Desk before its first client read has settled. Leaving
+  // immediately can abort WebKit's session initialization on that landing.
+  await expect(page.locator('[data-arrival-ready]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/doc/${LONG_PAPER_ID}`, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('[data-document-shell]')).toBeVisible({
@@ -104,7 +108,7 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
     expect(first?.replace('→', '')).toBe('Margin · 7');
   });
 
-  test('opens the Margin sheet grouped THE WHOLE JOB above BESIDE PIECES, all seven rows, each with one inline act', async ({
+  test('opens the Margin sheet grouped THE WHOLE JOB above BESIDE PIECES & PURCHASING, all seven rows, each with one inline act', async ({
     authenticatedPage: page,
   }) => {
     await openPaperAt390(page);
@@ -117,7 +121,7 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
     await expect(sheet.getByText('2 overdue')).toBeVisible();
 
     const wholeJobHeading = sheet.getByText('THE WHOLE JOB · 4');
-    const besidePiecesHeading = sheet.getByText('BESIDE PIECES · 3');
+    const besidePiecesHeading = sheet.getByText('BESIDE PIECES & PURCHASING · 3');
     await expect(wholeJobHeading).toBeVisible();
     await expect(besidePiecesHeading).toBeVisible();
     const wholeJobBox = await wholeJobHeading.boundingBox();
@@ -171,18 +175,24 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
     // reduce register, so the offset arrives over several frames — and at 390
     // the press now mounts FF&E's 62 lines first, which is exactly the work
     // that used to make a single read win this race by accident.
-    await expect
-      .poll(
-        async () =>
-          page.evaluate(
-            () => document.querySelector('[id^="ffe-selection-"]') !== null,
-          ),
-        { timeout: 15_000 },
-      )
-      .toBe(true);
+    const lineId = psqlScalar(
+      `select id from project_ffe_items where project_id = '${LONG_PAPER_ID}' and name = 'Reading Chair — COM Fabric Pending'`,
+    );
+    expect(lineId).toBeTruthy();
+    const line = page.locator(`[id="ffe-selection-${lineId}"]`);
+    await expect(line).toBeVisible({ timeout: 15_000 });
     await expect
       .poll(() => page.evaluate(() => window.scrollY), { timeout: 10_000 })
       .not.toBe(scrollYBefore);
+
+    // Consumption must not strand a second request for the same line.
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Living Room', exact: true }).click();
+    await expect(line).toHaveCount(0);
+    const reopened = await openMargin(page);
+    await reopened.getByText('Living room — fabric for the reading chair', { exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Margin item' })).toBeVisible();
+    await expect(line).toBeVisible();
   });
 
   test('Escape returns focus to the More door', async ({
@@ -294,13 +304,13 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       await expect(back.getByText('· 8')).toBeVisible();
       await expect(back.getByText('2 overdue')).toBeVisible();
       // D-B44 — captured while reading Pieces, filed under THE WHOLE JOB, and
-      // BESIDE PIECES gains nothing.
+      // BESIDE PIECES & PURCHASING gains nothing.
       const wholeJob = back.locator('[data-margin-group="whole-job"]');
       await expect(wholeJob.getByText(BODY)).toBeVisible();
       await expect(wholeJob).toContainText('THE WHOLE JOB · 5');
       await expect(
         back.locator('[data-margin-group="ffe"]'),
-      ).toContainText('BESIDE PIECES · 3');
+      ).toContainText('BESIDE PIECES & PURCHASING · 3');
       await expect(
         back.locator('[data-margin-group="ffe"]').getByText(BODY),
       ).toHaveCount(0);
@@ -326,7 +336,7 @@ test.describe('the Margin sheet at 390 — the whole margin (D-B30 / W5-R1)', ()
       await expect(wholeJobAfter).toContainText('THE WHOLE JOB · 5');
       await expect(
         reopened.locator('[data-margin-group="ffe"]'),
-      ).toContainText('BESIDE PIECES · 3');
+      ).toContainText('BESIDE PIECES & PURCHASING · 3');
     });
   });
 });

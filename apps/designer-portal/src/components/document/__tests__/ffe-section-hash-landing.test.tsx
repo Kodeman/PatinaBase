@@ -204,6 +204,33 @@ afterEach(() => {
 });
 
 describe('Pieces — #line-<id> landing (US-21 fix-now #8)', () => {
+  it('opens the requested line in a folded overview room and honours it again after consumption', () => {
+    window.localStorage.setItem('patina:pieces-open-room:project-1', 'null');
+    const consumed = jest.fn();
+    const requested = (id: string | null) => (
+      <FFESection projectId="project-1" projectName="Ellsworth" mode="project"
+        requestedLineId={id} onRequestedLineConsumed={consumed} />
+    );
+    const view = render(requested(null));
+    paint();
+    expect(rowToggle('ffe-2')).toBeNull();
+
+    view.rerender(requested('ffe-2'));
+    paint();
+    expect(rowToggle('ffe-2')).toHaveAttribute('aria-expanded', 'true');
+    expect(consumed).toHaveBeenCalledTimes(1);
+    view.rerender(requested(null));
+    act(() => {
+      document.querySelector<HTMLButtonElement>('[data-pieces-room] h3 button')!.click();
+    });
+    expect(rowToggle('ffe-2')).toBeNull();
+
+    view.rerender(requested('ffe-2'));
+    paint();
+    expect(rowToggle('ffe-2')).toHaveAttribute('aria-expanded', 'true');
+    expect(consumed).toHaveBeenCalledTimes(2);
+  });
+
   it('resolves #line-<id> to the ffe-selection row, unfolds it and scrolls it into view', () => {
     window.history.replaceState(null, '', '/doc/project-1#line-ffe-2');
     renderProject();
