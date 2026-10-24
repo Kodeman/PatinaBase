@@ -1,8 +1,15 @@
 "use client";
 
-import { useId, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useSetLinePlacements } from "@patina/supabase";
 import type { FfeLineUnit, FfeRoomPlacement } from "@patina/types";
+import type { PaneWriteHold } from "./spec-fields-pane";
 
 /**
  * T-30 (S2, D7 phase 1, a5): one line in several rooms. The chips carry each
@@ -226,6 +233,7 @@ export function PlacementChips({
   placements,
   rooms,
   canEdit,
+  hold,
 }: {
   projectId: string;
   line: PlacedLine;
@@ -234,6 +242,8 @@ export function PlacementChips({
   /** The project's rooms, in the job's order. */
   rooms: readonly PieceRoom[];
   canEdit: boolean;
+  /** WP-01.6 — the unfolded sheet's hold; its writes and refusals reach it. */
+  hold?: PaneWriteHold;
 }) {
   const setPlacements = useSetLinePlacements();
   const [editing, setEditing] = useState<Editing>(null);
@@ -268,9 +278,18 @@ export function PlacementChips({
   const placed = shares.reduce((sum, s) => sum + s.quantity, 0);
   const pending = setPlacements.isPending;
 
+  /**
+   * The open room form's attempt. PUT BACK and opening another form end it,
+   * so a late answer for an ended attempt marks nothing and closes nothing; a
+   * waiting close still stops once on its refusal (`hold.track`).
+   */
+  const attempt = useRef(0);
+
   const close = () => {
+    attempt.current += 1;
     setEditing(null);
     setError(null);
+    hold?.mark(null);
   };
 
   const write = (next: Share[]) => {
@@ -282,29 +301,46 @@ export function PlacementChips({
       return;
     }
     setError(null);
-    setPlacements
-      .mutateAsync({
-        projectId,
-        itemId: line.id,
-        placements: next.map((s) => ({
-          roomId: s.roomId,
-          quantity: s.quantity,
-          areaNote: s.areaNote,
-        })),
+    // An open room form keeps its typed share on screen when refused.
+    const drafting = editing !== null;
+    const sent = setPlacements.mutateAsync({
+      projectId,
+      itemId: line.id,
+      placements: next.map((s) => ({
+        roomId: s.roomId,
+        quantity: s.quantity,
+        areaNote: s.areaNote,
+      })),
+    });
+    hold?.track(sent);
+    const mine = attempt.current;
+    sent
+      .then(() => {
+        if (attempt.current !== mine) return;
+        setEditing(null);
+        hold?.mark(null);
       })
-      .then(() => setEditing(null))
-      .catch((e: Error) => setError(e.message || "The rooms were not saved."));
+      .catch((e: Error) => {
+        if (attempt.current !== mine) return;
+        const message = e.message || "The rooms were not saved.";
+        setError(message);
+        if (drafting) hold?.mark(message);
+      });
   };
 
   const openRoom = (share: Share) => {
+    attempt.current += 1;
     setError(null);
+    hold?.mark(null);
     setDraftQuantity(String(share.quantity));
     setEditing({ kind: "room", roomId: share.roomId });
   };
 
   const openNew = () => {
     if (free.length === 0) return;
+    attempt.current += 1;
     setError(null);
+    hold?.mark(null);
     setDraftRoom(free[0].id);
     const left = line.quantity - placed;
     setDraftQuantity(left > 0 ? String(left) : "");

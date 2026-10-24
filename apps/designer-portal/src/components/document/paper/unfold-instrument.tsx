@@ -15,8 +15,11 @@
  *   the unfold parameters away. Focus then returns through `return-context`.
  * - Buffered edits registered under `autosaveOwner` hold the close with a
  *   visible "Saving…" until they persist; a failed save keeps the sheet open.
- *   Back is never blocked: a save that finishes after Back, a reopen or an
- *   unmount still lands, but no longer closes anything.
+ *   Back (and Forward) is held exactly like Return (story #40/#41/#44): it is
+ *   cancelled, or the sheet traverses back to its entry, and it completes
+ *   once the save lands. A save that finishes after a re-address, a push or
+ *   an unmount navigates nowhere. Without the Navigation API, traversal
+ *   is not held (legacy parity); Return/Esc and beforeunload still hold.
  *
  * The host is never `role="dialog"` or `aria-modal`: an embedded Build room
  * reads any rendered dialog as holding Esc (SQ-1819 review).
@@ -71,9 +74,14 @@ interface UnfoldEntry {
   context: ReturnContext | null;
 }
 
-function readEntry(): UnfoldEntry | null {
-  const state = window.history.state as Record<string, unknown> | null;
-  const held = state?.[UNFOLD_HISTORY_KEY];
+function stateRecord(state: unknown): Record<string, unknown> | null {
+  return state && typeof state === "object"
+    ? (state as Record<string, unknown>)
+    : null;
+}
+
+function readEntry(state: unknown = window.history.state): UnfoldEntry | null {
+  const held = stateRecord(state)?.[UNFOLD_HISTORY_KEY];
   if (!held || typeof held !== "object") return null;
   const entry = held as Partial<UnfoldEntry>;
   return {
@@ -99,7 +107,109 @@ function subscribeLocation(listener: () => void): () => void {
   };
 }
 
-const readSearch = () => window.location.search;
+/** The entry an open sheet stands on: its address and Navigation API key. */
+interface Standing {
+  url: string;
+  /** Its Navigation API key, which survives a replace but not a push. */
+  key: string | null;
+}
+
+/**
+ * Story #40/#41 — an open sheet whose pane has a write out or a field marked
+ * unsaved. A Back (or Forward) that leaves its entry, to this document or
+ * another, is cancelled before it happens where the Navigation API allows
+ * (a traverse `navigate` event, which fires ahead of Next's popstate
+ * listener). Elsewhere it is read as still standing on its entry, so no
+ * render folds the sheet, and the sheet's own popstate listener traverses
+ * back to the entry; that path cannot outrun Next's listener on a Back to
+ * another route (#41's named residual). Either way it is held like Return.
+ */
+interface BackHold {
+  kind: UnfoldKind;
+  standing: () => Standing | null;
+  /** Whether a traversal to `to` is held (it is not the one releasing). */
+  holds: (to: string) => boolean;
+}
+const backHolds = new Set<BackHold>();
+
+/** The slice of the Navigation API a held traversal needs. */
+interface TraverseNavigateEvent extends Event {
+  navigationType: string;
+  destination: { url: string; index: number; key?: string };
+}
+interface NavigationEntryLike {
+  key?: string;
+  index: number;
+}
+interface NavigationLike extends EventTarget {
+  currentEntry: NavigationEntryLike | null;
+  entries?: () => NavigationEntryLike[];
+}
+function navigationApi(): NavigationLike | null {
+  return (
+    (window as unknown as { navigation?: NavigationLike }).navigation ?? null
+  );
+}
+
+/** The session-history entry keyed `key`, where the Navigation API lists it. */
+function keyedEntry(key: string | null): NavigationEntryLike | null {
+  const navigation = navigationApi();
+  if (!key || typeof navigation?.entries !== "function") return null;
+  return navigation.entries().find((entry) => entry.key === key) ?? null;
+}
+
+/** A traversal the sheet holds, and where it goes once the save lands. */
+interface HeldTraversal {
+  url: string;
+  /** The destination entry's key: its distance is measured on resuming. */
+  key: string | null;
+}
+
+/**
+ * How far to go from the standing entry to `target` now, or `null` when the
+ * hold is stale: a push since replaced the standing entry or dropped the
+ * destination. A relative distance is never reused across a push.
+ */
+function resumeDistance(
+  standingKey: string | null,
+  target: HeldTraversal,
+): number | null {
+  const here = navigationApi()?.currentEntry;
+  if (!target.key || !standingKey || !here?.key) return null;
+  const there = keyedEntry(target.key);
+  if (here.key !== standingKey || !there) return null;
+  return there.index - here.index;
+}
+
+/**
+ * The standing entry a traversal to `to` (by default, the address it has
+ * already reached) must not leave, or `null`.
+ */
+function heldBack(
+  to: string = window.location.href,
+): ({ hold: BackHold } & Standing) | null {
+  const { href, pathname, search } = new URL(to);
+  for (const hold of backHolds) {
+    const standing = hold.standing();
+    if (!standing || standing.url === href) continue;
+    // Still unfolded on the same document: a re-address, not a leave.
+    if (
+      new URL(standing.url).pathname === pathname &&
+      parseUnfoldSearch(new URLSearchParams(search), { canSeeMoney: true })
+        ?.kind === hold.kind
+    ) {
+      continue;
+    }
+    if (!hold.holds(href)) continue;
+    return { hold, ...standing };
+  }
+  return null;
+}
+
+const readSearch = () => {
+  const held = heldBack();
+  return held ? new URL(held.url).search : window.location.search;
+};
 const serverSearch = () => "";
 
 /**
@@ -256,15 +366,24 @@ export function UnfoldInstrument({
   const contextRef = useRef<ReturnContext | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
-  // Moves on every open, close and unmount, so a save that finishes later can
-  // tell whether the spell that asked to close is still the current one.
+  // Story #41 — the traversal a held Back or Forward goes on to, and whether
+  // the sheet is still traversing back to its entry.
+  const destination = useRef<HeldTraversal | null>(null);
+  const restoring = useRef(false);
+  const resumeOnArrival = useRef(false);
+  // Moves on every open, close, re-address (another line remounts the pane)
+  // and unmount, so a save that finishes later can tell whether the spell
+  // that asked to close or held a Back is still the current one.
   const generation = useRef(0);
   useLayoutEffect(() => {
     generation.current += 1;
+    destination.current = null;
+    resumeOnArrival.current = false;
+    setClosing(false);
     return () => {
       generation.current += 1;
     };
-  }, [open]);
+  }, [address]);
 
   // While open, hold the entry's return context: Back leaves the entry
   // before the close is seen, and a reload brings the context back with it.
@@ -326,6 +445,158 @@ export function UnfoldInstrument({
       },
     );
   }, [closing, ownerKind, ownerId, snapshot]);
+  // Story #40/#41 — Back (or Forward) is held exactly like Return while the
+  // pane has a write out or a field marked unsaved, whether it leads within
+  // this document or to another one. Where the traversal's `navigate` event
+  // is cancelable it is cancelled, so nothing moves; otherwise the popstate
+  // listener stops the event and traverses back to the standing entry, so
+  // the history stack never changes. Once the save lands, one `history.go`
+  // completes the traversal it remembered, measured from the standing entry
+  // then, and both listeners let exactly that one through. A re-address, a
+  // push or an unmount in between drops it. A refusal keeps the sheet open
+  // on the marked field; nothing is written again.
+  const standing = useRef<Standing | null>(null);
+  const releasing = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    standing.current = address
+      ? {
+          url: window.location.href,
+          key: navigationApi()?.currentEntry?.key ?? null,
+        }
+      : null;
+  }, [address]);
+
+  const resume = useCallback(() => {
+    const target = destination.current;
+    if (!target) return;
+    if (restoring.current) {
+      resumeOnArrival.current = true;
+      return;
+    }
+    destination.current = null;
+    const delta = resumeDistance(standing.current?.key ?? null, target);
+    if (!delta) return;
+    releasing.current = target.url;
+    window.history.go(delta);
+  }, []);
+
+  const holdBack = useCallback(() => {
+    if (!ownerKind || !ownerId) return;
+    // The held Back takes over any close already waiting: one navigation.
+    const asked = (generation.current += 1);
+    setClosing(true);
+    setCloseError(null);
+    flushBoardOwnerAutosaves({ kind: ownerKind, id: ownerId }).then(
+      () => {
+        if (generation.current !== asked) return;
+        setClosing(false);
+        resume();
+      },
+      () => {
+        if (generation.current !== asked) return;
+        setClosing(false);
+        setCloseError(UNFOLD_UNSAVED_MESSAGE);
+      },
+    );
+  }, [ownerKind, ownerId, resume]);
+  const holdBackRef = useRef(holdBack);
+  holdBackRef.current = holdBack;
+
+  useEffect(() => {
+    if (!open || !ownerKind || !ownerId) return;
+    const owner = { kind: ownerKind, id: ownerId };
+    const hold: BackHold = {
+      kind,
+      standing: () => standing.current,
+      holds: (to) =>
+        releasing.current !== to &&
+        !isProposalAutosaveSnapshotClean(getProposalAutosaveSnapshot(owner)),
+    };
+    // Ahead of Next's popstate listener, which on a Back to another route
+    // unmounts this sheet (and its popstate listener) before that runs.
+    const navigation = navigationApi();
+    const onNavigate = (event: Event) => {
+      const { navigationType, destination: to } =
+        event as TraverseNavigateEvent;
+      const from = navigation?.currentEntry?.index;
+      if (navigationType !== "traverse" || !event.cancelable || from == null) {
+        return;
+      }
+      if (heldBack(to.url)?.hold !== hold) return;
+      event.preventDefault();
+      destination.current = {
+        url: to.url,
+        key: to.key ?? null,
+      };
+      holdBackRef.current();
+    };
+    const onPop = (event: PopStateEvent) => {
+      const released = releasing.current;
+      releasing.current = null;
+      if (released !== null && released === window.location.href) return;
+      if (restoring.current && window.location.href === standing.current?.url) {
+        // Back on the entry: Next never saw it leave, so it sees no return.
+        event.stopImmediatePropagation();
+        restoring.current = false;
+        if (resumeOnArrival.current) {
+          resumeOnArrival.current = false;
+          resume();
+        }
+        return;
+      }
+      const held = heldBack();
+      if (held?.hold !== hold) return;
+      const here = navigation?.currentEntry;
+      const from = keyedEntry(held.key);
+      if (!here || !from) return;
+      event.stopImmediatePropagation();
+      const delta = here.index - from.index;
+      destination.current = {
+        url: window.location.href,
+        key: here?.key ?? null,
+      };
+      restoring.current = true;
+      window.history.go(-delta);
+      holdBackRef.current();
+    };
+    // A Back across a browser-document boundary (the unfold was loaded or
+    // reloaded at its address), a reload or a tab close fires no popstate, so
+    // nothing can re-push: while a write is pending or marked, ask the browser
+    // to confirm leaving. Native dialog only; a confirmed leave drops the draft.
+    const onUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    let guarding = false;
+    const guard = () => {
+      const unsaved = !isProposalAutosaveSnapshotClean(
+        getProposalAutosaveSnapshot(owner),
+      );
+      if (unsaved === guarding) return;
+      guarding = unsaved;
+      if (unsaved) window.addEventListener("beforeunload", onUnload);
+      else window.removeEventListener("beforeunload", onUnload);
+    };
+    guard();
+    const unsubscribe = subscribeToProposalAutosaves(owner, guard);
+    if (navigation) {
+      backHolds.add(hold);
+      navigation.addEventListener("navigate", onNavigate);
+      window.addEventListener("popstate", onPop, { capture: true });
+    }
+    return () => {
+      unsubscribe();
+      window.removeEventListener("beforeunload", onUnload);
+      backHolds.delete(hold);
+      navigation?.removeEventListener("navigate", onNavigate);
+      window.removeEventListener("popstate", onPop, { capture: true });
+      generation.current += 1;
+      destination.current = null;
+      releasing.current = null;
+      restoring.current = false;
+      resumeOnArrival.current = false;
+    };
+  }, [open, ownerKind, ownerId, kind, resume]);
 
   const navigate = useCallback(
     (next: UnfoldNavigation) => {

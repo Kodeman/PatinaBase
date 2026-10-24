@@ -26,7 +26,7 @@ import {
   useProjectRoomPlacements,
   type ProjectFfeSpec,
 } from "@patina/supabase";
-import type { FfeRoomPlacement } from "@patina/types";
+import type { BoardOwnerRef, FfeRoomPlacement } from "@patina/types";
 import { useDocumentRooms } from "@/hooks/use-document-rooms";
 import {
   REMOVED_PLACE,
@@ -65,7 +65,20 @@ export interface SpecLensProps {
   projectId: string;
   room: BuildRoomPlace;
   canSeeMoney: boolean;
+  /** WP-01.6 — the line the address names (`?line=`): it opens first. */
+  line?: string | null;
+  /** WP-01.6 — the unfold host's owner, so its close waits for spec saves. */
+  autosaveOwner?: BoardOwnerRef | null;
+  /**
+   * WP-01.6 — the reader chose a line: the unfold's address follows it, so a
+   * reload or a shared link opens what is shown. Absent on the `/pieces`
+   * route, where choosing a line changes no address.
+   */
+  onChooseLine?: (lineId: string) => void;
 }
+
+/** WP-01.6 — said when the address names a line this room no longer has. */
+export const SPEC_LINE_MISSING_SENTENCE = "That line is no longer in this room.";
 
 interface SpecFieldRows {
   specs: Record<string, SpecLensSpec>;
@@ -135,13 +148,27 @@ function useSpecFieldRows(projectId: string, lines: readonly SpecLensLine[]) {
   });
 }
 
-export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
+export function SpecLens({
+  projectId,
+  room,
+  canSeeMoney,
+  line: addressedLine = null,
+  autosaveOwner = null,
+  onChooseLine,
+}: SpecLensProps) {
   const queryClient = useQueryClient();
   const { data: rawLines } = useProjectFFEItems(projectId);
   const { data: placements } = useProjectRoomPlacements(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
   const { data: groupData } = useProjectLineGroups(projectId);
-  const [chosenId, setChosenId] = useState<string | null>(null);
+  // The addressed line opens first; a later address (Back, Forward) opens its
+  // own. With none, the lens picks the first unfinished line as it always has.
+  const [chosenId, setChosenId] = useState<string | null>(addressedLine);
+  const [heldLine, setHeldLine] = useState(addressedLine);
+  if (heldLine !== addressedLine) {
+    setHeldLine(addressedLine);
+    if (addressedLine) setChosenId(addressedLine);
+  }
   const [announcement, setAnnouncement] = useState("");
   const [focusRequest, setFocusRequest] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -154,6 +181,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
   /** Shows a line; at 390 its pane sits above the list, so it takes focus. */
   const choose = (id: string) => {
     setChosenId(id);
+    onChooseLine?.(id);
     if (stacked()) setFocusRequest((n) => n + 1);
   };
 
@@ -215,13 +243,27 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
       ? chosenId
       : (firstUnfinished ?? orderedIds[0] ?? null);
   const active = lines.find((l) => l.id === activeId) ?? null;
+  // The address still names a line the room's answered reads do not hold:
+  // the lens shows its own first unfinished line, and says so (WP-01.6 F4).
+  const lineMissing =
+    addressedLine != null &&
+    chosenId === addressedLine &&
+    rawLines !== undefined &&
+    placements !== undefined &&
+    roomRows !== undefined &&
+    !orderedIds.includes(addressedLine);
   const nextId = nextUnfinishedId(orderedIds, activeId, progressOf);
 
   const onSpecSaved = (saved: ProjectFfeSpec) => {
     queryClient.setQueryData<SpecFieldRows>(
       specFieldRowsKey(projectId, [...orderedIds].sort()),
       (current) =>
-        current
+        // Never back to an older version than the cache already holds.
+        current &&
+        !(
+          (current.specs[saved.ffe_item_id]?.row_version ?? -1) >
+          saved.row_version
+        )
           ? {
               ...current,
               specs: {
@@ -291,7 +333,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
         const labor = isLaborLine(line);
         const current = line.id === activeId;
         return (
-          <li key={line.id}>
+          <li key={line.id} data-line-id={line.id}>
             <button
               type="button"
               aria-current={current ? "true" : undefined}
@@ -359,7 +401,15 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
         {next}
       </div>
       {active && (
-        <div className="order-1 min-w-0 md:order-none md:col-start-2 md:row-span-2 md:row-start-1">
+        <div className="order-1 flex min-w-0 flex-col gap-4 md:order-none md:col-start-2 md:row-span-2 md:row-start-1">
+          <p
+            role="status"
+            aria-live="polite"
+            data-spec-line-missing=""
+            className="font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)] empty:hidden"
+          >
+            {lineMissing ? SPEC_LINE_MISSING_SENTENCE : ""}
+          </p>
           <SpecFieldsPane
             key={active.id}
             projectId={projectId}
@@ -374,6 +424,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
             placements={placementsOf(active.id)}
             rooms={rooms}
             onSpecSaved={onSpecSaved}
+            autosaveOwner={autosaveOwner}
             headingRef={headingRef}
             onAnnounce={setAnnouncement}
             onFilled={(message) => {

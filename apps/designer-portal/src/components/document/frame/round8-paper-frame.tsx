@@ -33,6 +33,7 @@ import {
   ContentsMargin,
   type ContentsEntry,
 } from '@/components/document/paper/contents-margin';
+import { FfeChapter } from '@/components/document/paper/chapters/ffe-chapter';
 import { JobHead } from '@/components/document/paper/job-head';
 import { PaperChapter } from '@/components/document/paper/paper-chapter';
 import type { DocumentIndexKey } from '@/lib/document/document-index';
@@ -203,7 +204,7 @@ export default function Round8PaperFrame({
                 number={chapter.number}
                 title={chapter.label}
               >
-                {body}
+                {chapter.key === 'ffe' ? <FfeChapter docId={docId}>{body}</FfeChapter> : body}
               </PaperChapter>
             );
             const hosted =

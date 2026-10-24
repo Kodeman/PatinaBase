@@ -196,3 +196,18 @@ describe("DimensionFields — readOnly", () => {
     expect(screen.getByText("+1 captured field preserved")).toBeInTheDocument();
   });
 });
+
+describe("DimensionFields — invalid (SQ-1897 F11)", () => {
+  it("marks every input invalid while its last write failed, and none otherwise", () => {
+    const { rerender } = render(
+      <DimensionFields value={{ width: "72" }} onChange={jest.fn()} invalid />,
+    );
+    for (const name of ["width", "depth", "height", "unit"]) {
+      expect(screen.getByLabelText(name)).toHaveAttribute("aria-invalid", "true");
+    }
+    rerender(<DimensionFields value={{ width: "72" }} onChange={jest.fn()} />);
+    for (const name of ["width", "depth", "height", "unit"]) {
+      expect(screen.getByLabelText(name)).not.toHaveAttribute("aria-invalid");
+    }
+  });
+});

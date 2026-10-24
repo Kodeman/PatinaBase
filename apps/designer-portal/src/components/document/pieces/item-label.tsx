@@ -10,6 +10,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { itemLabelRefusal, useSetFfeItemLabel } from "@patina/supabase";
 import { Input } from "@/components/ui/controls";
+import type { PaneWriteHold } from "./spec-fields-pane";
 
 const SAVED = "Label saved.";
 
@@ -40,6 +41,7 @@ export function ItemLabelField({
   canEdit = true,
   className = "mb-3 block min-w-0",
   captionClassName = "t-head mb-1 block text-[var(--text-muted)]",
+  hold,
 }: {
   projectId: string;
   itemId: string;
@@ -47,6 +49,8 @@ export function ItemLabelField({
   canEdit?: boolean;
   className?: string;
   captionClassName?: string;
+  /** WP-01.6 — the unfolded sheet's hold; its writes and refusals reach it. */
+  hold?: PaneWriteHold;
 }) {
   const setLabel = useSetFfeItemLabel();
   const statusId = useId();
@@ -64,20 +68,30 @@ export function ItemLabelField({
   // re-render would otherwise send the write twice.
   const labelInFlight = useRef(false);
   const labelRefused = useRef<string | null>(null);
+  // Esc puts the draft back and ends the attempt: a late refusal for it marks
+  // nothing (SQ-1899 F1); a waiting close still stops once (`hold.track`).
+  const labelAttempt = useRef(0);
   const commitLabel = async (fromEnter: boolean) => {
     const next = labelDraft.trim();
     if (next === labelBaseline.current || next === labelRefused.current || labelInFlight.current) return;
+    const attempt = labelAttempt.current;
     labelInFlight.current = true;
     setLabelStatus(null);
     try {
-      const row = await setLabel.mutateAsync({ projectId, itemId, label: next || null });
+      const write = setLabel.mutateAsync({ projectId, itemId, label: next || null });
+      hold?.track(write);
+      const row = await write;
       labelRefused.current = null;
       labelBaseline.current = row.doc_code ?? "";
       setLabelDraft(labelBaseline.current);
       setLabelStatus(SAVED);
+      hold?.mark(null);
     } catch (error) {
+      if (labelAttempt.current !== attempt) return;
       labelRefused.current = next;
-      setLabelStatus(itemLabelRefusal((error as Error).message, next) ?? (error as Error).message);
+      const refusal = itemLabelRefusal((error as Error).message, next) ?? (error as Error).message;
+      setLabelStatus(refusal);
+      hold?.mark(refusal);
     } finally {
       labelInFlight.current = false;
       // Only Enter keeps the designer in the field; a blur commit leaves focus
@@ -101,6 +115,8 @@ export function ItemLabelField({
         onChange={(event) => {
           const next = event.target.value;
           setLabelDraft(next);
+          // Put back to the saved label, the refused draft no longer holds.
+          if (next.trim() === labelBaseline.current) hold?.mark(null);
           if (next.trim() !== labelRefused.current) {
             labelStatus !== null && setLabelStatus(null);
             labelRefused.current = null;
@@ -117,8 +133,10 @@ export function ItemLabelField({
           if (event.key === "Enter") { event.preventDefault(); void commitLabel(true); }
           if (event.key === "Escape") {
             skipLabelBlurCommit.current = true;
+            labelAttempt.current += 1;
             setLabelDraft(labelBaseline.current);
             setLabelStatus(null);
+            hold?.mark(null);
             event.currentTarget.blur();
           }
         }}

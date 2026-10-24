@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo } from "react";
+import type { BoardOwnerRef } from "@patina/types";
 import {
   useProjectFFEItems,
   useProjectPalettes,
@@ -39,11 +40,19 @@ export interface BuildRoomProps extends BuildRoomState {
   docId: string;
   canSeeMoney: boolean;
   embedded?: boolean;
-  onNavigate: (state: BuildRoomState) => void;
+  /**
+   * Push a lens or room change. Embedded, a chosen Spec line comes too
+   * (`line`), so the unfold's address names what is shown (WP-01.6).
+   */
+  onNavigate: (state: BuildRoomState & { line?: string | null }) => void;
   onReturn: () => void;
   onRequestClose?: () => void;
   /** The host resolves old proposal/lead addresses to their canonical project. */
   onRedirect: (projectId: string) => void;
+  /** WP-01.6 — the unfold's `?line=`: the Spec lens opens that line first. */
+  line?: string | null;
+  /** WP-01.6 — the unfold host's owner: its close waits for spec saves. */
+  autosaveOwner?: BoardOwnerRef | null;
 }
 
 export function BuildRoom({
@@ -56,6 +65,8 @@ export function BuildRoom({
   onReturn,
   onRequestClose,
   onRedirect,
+  line = null,
+  autosaveOwner = null,
 }: BuildRoomProps) {
   const {
     data: resolution,
@@ -185,6 +196,13 @@ export function BuildRoom({
           projectId={projectId}
           room={room}
           canSeeMoney={canSeeMoney}
+          line={line}
+          autosaveOwner={autosaveOwner}
+          onChooseLine={
+            embedded
+              ? (chosen) => onNavigate({ lens, room, line: chosen })
+              : undefined
+          }
         />
       )}
       {lens === "price" && (
