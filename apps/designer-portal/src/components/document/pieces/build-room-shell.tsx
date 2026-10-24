@@ -67,6 +67,12 @@ export interface BuildRoomShellProps {
   embedded?: boolean;
   /** Embedded hosts own the unfold history and restore its opening control. */
   onRequestClose?: () => void;
+  /**
+   * Embedded: the host landing's reader-intent latch. Once the reader has
+   * moved focus or scrolled since the unfold opened, the sheet does not take
+   * focus to its title, however late it mounts (SQ-1896 F5).
+   */
+  readerHasMoved?: () => boolean;
   /** The `/doc/[id]` segment, as the reader arrived. */
   docId: string;
   jobName: string;
@@ -286,6 +292,7 @@ export function BuildRoomShell({
   as = "main",
   embedded = false,
   onRequestClose,
+  readerHasMoved,
   docId,
   jobName,
   rooms,
@@ -324,12 +331,18 @@ export function BuildRoomShell({
   onReturnRef.current = onReturn;
   const titleRef = useRef<HTMLHeadingElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const readerHasMovedRef = useRef(readerHasMoved);
+  readerHasMovedRef.current = readerHasMoved;
 
   // Landing, and every lens or room change (T-60a F1, F2): focus goes to the
   // title, then to the room's heading once its section is on the sheet, and
   // that section's top is scrolled into view. A refetch never runs this.
+  // Embedded, the host owns landing: the title is not taken from a reader
+  // who has moved on while the sheet's reads were out.
   useEffect(() => {
-    titleRef.current?.focus({ preventScroll: true });
+    if (!embedded || !readerHasMovedRef.current?.()) {
+      titleRef.current?.focus({ preventScroll: true });
+    }
     if (embedded) return;
     const main = mainRef.current;
     if (room == null || !main) return;
