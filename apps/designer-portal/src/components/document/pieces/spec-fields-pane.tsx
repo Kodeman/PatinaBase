@@ -26,6 +26,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent,
   type ReactNode,
   type Ref,
   type RefObject,
@@ -286,6 +287,16 @@ function SpecText({
     value: draft,
     placeholder,
     onBlur: commit,
+    onKeyDown: (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      // Empty fields let Esc leave the shell; commit their clear before its hold runs.
+      if (event.key === "Escape" && event.currentTarget.value === "") {
+        event.currentTarget.blur();
+      }
+      if (event.key === "Enter" && !multiline) {
+        event.preventDefault();
+        commit();
+      }
+    },
     className: INPUT_CLS,
   };
   return (
@@ -300,12 +311,6 @@ function SpecText({
         <input
           {...common}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commit();
-            }
-          }}
         />
       )}
     </Field>
