@@ -476,15 +476,28 @@ function cssRules(css: string): CssRule[] {
   return found;
 }
 
-/** Selector list items, never split inside `:is(…)`. */
+/** Selector list items, split only on top-level commas. */
 function selectorList(selector: string): string[] {
   const parts: string[] = [];
-  let depth = 0;
+  const closers: string[] = [];
+  let quote: "\"" | "'" | null = null;
   let start = 0;
   for (let i = 0; i < selector.length; i += 1) {
-    if (selector[i] === "(") depth += 1;
-    else if (selector[i] === ")") depth -= 1;
-    else if (selector[i] === "," && depth === 0) {
+    const char = selector[i]!;
+    if (quote) {
+      if (char === "\\") i += 1;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "\\") {
+      i += 1;
+      continue;
+    }
+    if (char === "\"" || char === "'") quote = char;
+    else if (char === "[") closers.push("]");
+    else if (char === "(") closers.push(")");
+    else if (char === "]" || char === ")") closers.pop();
+    else if (char === "," && closers.length === 0) {
       parts.push(selector.slice(start, i).trim());
       start = i + 1;
     }
@@ -492,6 +505,14 @@ function selectorList(selector: string): string[] {
   parts.push(selector.slice(start).trim());
   return parts;
 }
+
+describe("selectorList", () => {
+  it("splits only on commas outside strings and nested selectors", () => {
+    expect(selectorList('a[x="1,2"], b')).toHaveLength(2);
+    expect(selectorList(":is(a, b) c, d")).toHaveLength(2);
+    expect(selectorList("a, b")).toHaveLength(2);
+  });
+});
 
 describe("P02 round-8 plate (Kody 2026-10-23)", () => {
   const strippedRound8 = round8Css.replace(/\/\*[\s\S]*?\*\//g, "");
