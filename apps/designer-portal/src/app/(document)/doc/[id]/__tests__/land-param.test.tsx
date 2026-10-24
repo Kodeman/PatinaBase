@@ -55,10 +55,25 @@ describe('one-shot land parameter', () => {
     expect(window.location.search).toBe('');
   });
 
+  it.each([
+    ['legacy with a valid unfold', false, 'pieces'],
+    ['round 8 with an invalid unfold', true, 'bogus'],
+  ])('lands once for %s when no sheet owns the arrival', (_name, unfoldedSheetMounted, unfold) => {
+    window.history.replaceState({ kept: true }, '', `/doc/job?land=region:money&unfold=${unfold}#note`);
+    const land = jest.fn();
+    const { rerender } = renderHook(() => useLandParam(true, land, unfoldedSheetMounted), { wrapper: StrictMode });
+    rerender();
+    expect(land).toHaveBeenCalledTimes(1);
+    expect(land).toHaveBeenCalledWith({ kind: 'region', region: 'money' });
+    expect(window.location.search).toBe(`?unfold=${unfold}`);
+    expect(window.location.hash).toBe('#note');
+    expect(window.history.state).toEqual({ kept: true });
+  });
+
   it('leaves an unfolded sheet landing to its reader-intent owner', () => {
     window.history.replaceState({}, '', `/doc/job?land=line:${LINE}&unfold=pieces&lens=spec&line=${LINE}`);
     const land = jest.fn();
-    renderHook(() => useLandParam(true, land));
+    renderHook(() => useLandParam(true, land, true));
     expect(land).not.toHaveBeenCalled();
     expect(new URLSearchParams(window.location.search).get('line')).toBe(LINE);
     expect(window.location.search).not.toContain('land=');

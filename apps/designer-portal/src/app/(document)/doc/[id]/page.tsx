@@ -3181,7 +3181,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
       jumpToSection(landing.sectionKey as SectionKey);
     }
-  });
+  }, round8Continuous);
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;

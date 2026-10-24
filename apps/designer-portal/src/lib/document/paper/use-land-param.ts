@@ -2,11 +2,15 @@
 
 import { useEffect } from 'react';
 import type { Landing } from '@/lib/arrival/types';
-import { consumeLanding } from './unfold-url';
+import { consumeLanding, parseUnfoldSearch } from './unfold-url';
 
 /** Spend the instruction only after the selected frame has committed. An
  * unfolded sheet owns its own landing and reader-intent latch. */
-export function useLandParam(ready: boolean, land: (landing: Landing) => void): void {
+export function useLandParam(
+  ready: boolean,
+  land: (landing: Landing) => void,
+  unfoldedSheetMounted = false,
+): void {
   useEffect(() => {
     if (!ready) return;
     const url = new URL(window.location.href);
@@ -17,6 +21,7 @@ export function useLandParam(ready: boolean, land: (landing: Landing) => void): 
       '',
       `${url.pathname}${consumed.search}${url.hash}`,
     );
-    if (consumed.landing && !url.searchParams.has('unfold')) land(consumed.landing);
-  }, [ready, land]);
+    const sheetOwnsLanding = () => unfoldedSheetMounted && parseUnfoldSearch(url.searchParams, { canSeeMoney: true });
+    if (consumed.landing && !sheetOwnsLanding()) land(consumed.landing);
+  }, [ready, land, unfoldedSheetMounted]);
 }
