@@ -217,7 +217,8 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
 for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
   test.describe(`Catalogue-only arrival ${viewport.width}`, () => {
     test.use({ viewport });
-    for (const mode of ['contained', 'pieces'] as const) test(`${mode}: uses the vetted edition hero or piece-size photographs without overflow`, async ({ page }) => {
+    for (const variant of ['contained', 'tall', 'pieces'] as const) test(`${variant}: uses the vetted edition hero or piece-size photographs without overflow`, async ({ page }) => {
+      const mode = variant === 'tall' ? 'contained' : variant;
       expect(['127.0.0.1', 'localhost', '[::1]']).toContain(new URL(LOCAL_SUPABASE.url).hostname);
       const db = admin();
       const fields = 'id,ground,width,height,crops,subject_box,focal,flags';
@@ -231,6 +232,10 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
           ground: 'white', width: 1600, height: 1600, subject_box: [0.12,0.27,0.7,0.4], focal: [0.45,0.48],
           crops: { pair: { rect: [0,197,1600,1143], widths: [768,1024,1600] }, piece: { rect: [0,0,1600,1600], widths: [256,512,768] } },
         }).eq('project_id', ELM.id));
+        if (variant === 'tall') await checked(db.from('client_plate_assets').update({
+          width: 800, height: 1600, subject_box: [0.1,0.1,0.8,0.85], focal: [0.5,0.525],
+          crops: { pair: { rect: [0,0,800,1600], widths: [800] }, piece: { rect: [0,0,800,1600], widths: [768] } },
+        }).eq('project_id', ELM.id));
         if (mode === 'pieces') {
           await checked(db.from('client_plate_assets').update({ flags: ['people'] }).eq('id', heroId));
           const facts = structuredClone(edition!.facts);
@@ -243,6 +248,11 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
           await checked(db.from('client_editions').update({ facts }).eq('id', ELM_EDITION.id));
         }
         await servePlates(page);
+        if (mode === 'contained') await page.route('**/plates/**', route => route.fulfill({
+          contentType: 'image/svg+xml', body: variant === 'tall'
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1600"><rect width="800" height="1600" fill="white"/><rect x="80" y="160" width="640" height="1360" fill="#80654d"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1143"><rect width="1600" height="1143" fill="white"/><rect x="192" y="235" width="1120" height="640" fill="#80654d"/></svg>',
+        }));
         await signInAsJune(page, `/projects/${ELM.id}`);
         await settled(page);
         const frame = page.locator('.gallery-arrival [data-gallery-mode]').first();
@@ -250,9 +260,20 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
         if (mode === 'contained') {
           await expect(frame).toHaveCSS('background-color', 'rgb(255, 255, 255)');
           await expect(frame.locator('img')).toBeVisible();
-          await expect(frame.locator('img')).toHaveAttribute('src', /pair-1600.webp/);
+          await expect(frame.locator('img')).toHaveAttribute('src', /pair-(1600|800).webp/);
           const image = await frame.locator('img').boundingBox();
-          expect(image!.width).toBeLessThanOrEqual(1600 * 1.25);
+          expect(image!.width).toBeLessThanOrEqual((variant === 'tall' ? 800 : 1600) * 1.25);
+          const painted = await frame.locator('img').evaluate(node => {
+            const img = node as HTMLImageElement;
+            const rect = img.getBoundingClientRect();
+            const scale = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight);
+            return { bottom: rect.y + (rect.height + img.naturalHeight * scale) / 2, width: img.naturalWidth };
+          });
+          expect(painted.width).toBe(variant === 'tall' ? 800 : 1600);
+          const band = await page.locator('.gallery-band').boundingBox();
+          expect(painted.bottom, 'painted image clears band').toBeLessThanOrEqual(band!.y);
+          const caption = await page.locator('.gallery-arrival-figure figcaption').boundingBox();
+          expect(caption!.y + caption!.height, 'caption clears band').toBeLessThanOrEqual(band!.y);
         } else {
           const pictures = frame.locator('img');
           await expect(pictures).toHaveCount(4);
@@ -273,7 +294,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 
         }
         await expect(page.locator('.gallery-chapter .gallery-chapter-pieces img').first()).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
-        await page.locator('.gallery-arrival').screenshot({ path: process.env.PLAYWRIGHT_EVIDENCE_DIR + '/catalogue-' + mode + '-' + viewport.width + '.png' });
+        await page.locator('.gallery-arrival').screenshot({ path: process.env.PLAYWRIGHT_EVIDENCE_DIR + '/catalogue-' + variant + '-' + viewport.width + '.png' });
       } finally {
         if (mode === 'pieces') await checked(db.from('client_editions').update({ facts: edition!.facts }).eq('id', ELM_EDITION.id));
         for (const original of originals!) {

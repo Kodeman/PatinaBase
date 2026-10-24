@@ -3,6 +3,7 @@
    and never the hero. */
 
 import { galleryHeroFits, placeRole } from './floors';
+import { piecePhotoCaption } from './caption';
 export { selectArrival } from '@patina/utils';
 import { compareArrivalAssets } from '@patina/utils';
 import type { ClientProjectEditorial, EditorialAsset } from './types';
@@ -101,11 +102,15 @@ export function roomPlates(
   });
 }
 
-/** Piece photographs in room/item order; the same piece choices as room chapters. */
-export function arrivalPieces(editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms'>) {
-  const choices = new Map(roomPlates(editorial).map(room => [room.roomId, room.pieces]));
+/** Renderable piece photographs in room/item order, ranked within each item. */
+export function arrivalPieces(editorial: Pick<ClientProjectEditorial, 'assets' | 'rooms' | 'project'>) {
+  const byId = new Map(editorial.assets.map(asset => [asset.id, asset]));
   return editorial.rooms.flatMap(room => room.items.flatMap(item => {
-    const asset = choices.get(room.id)?.find(piece => piece.itemId === item.id)?.asset;
-    return asset?.crops.piece?.widths.length ? [{ item, asset }] : [];
+    const asset = item.assetIds.map(id => byId.get(id))
+      .filter((asset): asset is EditorialAsset => Boolean(asset))
+      .filter(asset => tierOf(asset) !== null && placeRole('piece', asset.width, asset.height) === 'piece'
+        && Boolean(piecePhotoCaption(item, asset, editorial.project.showMakers)))
+      .sort(compareAssets)[0];
+    return asset ? [{ item, asset }] : [];
   })).slice(0, 4);
 }
