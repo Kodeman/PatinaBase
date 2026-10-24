@@ -17,7 +17,7 @@
  * `coverCropShown` is the crop the page then draws (crop.ts heroPicture).
  */
 
-import { galleryCropPosition, GALLERY_PHONE_ASPECT, GALLERY_DESKTOP_ASPECT, type GalleryRect, type GalleryPoint } from '@patina/utils';
+export { arrivalMode, arrivalRendition, selectArrival, type ArrivalAsset } from '@patina/utils';
 
 export type PlatePoint = [number, number];
 export type PlateBox = [number, number, number, number];
@@ -248,46 +248,3 @@ export function heroEligible(asset: {
 }
 
 
-// Stored rendition geometry, rather than an inferred worker crop, governs Gallery.
-export interface ArrivalAsset {
-  id: string; sha256: string; sourceKind: string | null; ground: string | null;
-  width: number; height: number; subjectBox: readonly number[] | null; focal: readonly number[] | null;
-  crops: Partial<Record<string, { rect: readonly number[]; widths: readonly number[] }>>;
-}
-function unitRect(rect: readonly number[], asset: ArrivalAsset): readonly number[] {
-  return rect.every(v => v >= 0 && v <= 1) ? rect : [rect[0] / asset.width, rect[1] / asset.height, rect[2] / asset.width, rect[3] / asset.height];
-}
-export function arrivalRendition(asset: ArrivalAsset, aspect: number | null) {
-  const subject = asset.subjectBox && unitRect(asset.subjectBox, asset);
-  const candidates = Object.entries(asset.crops).flatMap(([key, crop]) => {
-    const width = Math.max(0, ...(crop?.widths ?? []));
-    if (!crop || !width) return [];
-    const rect = unitRect(crop.rect, asset);
-    if (aspect === null) {
-      if (subject && (rect[0] > subject[0] + 1e-6 || rect[1] > subject[1] + 1e-6
-        || rect[0] + rect[2] < subject[0] + subject[2] - 1e-6 || rect[1] + rect[3] < subject[1] + subject[3] - 1e-6)) return [];
-      return [{ key, width, rect, position: '50% 50%' }];
-    }
-    const box = subject ? [(subject[0]-rect[0])/rect[2], (subject[1]-rect[1])/rect[3], subject[2]/rect[2], subject[3]/rect[3]] as GalleryRect : null;
-    const focal = asset.focal ? [(asset.focal[0]-rect[0])/rect[2], (asset.focal[1]-rect[1])/rect[3]] as GalleryPoint : null;
-    const position = galleryCropPosition(rect[2]*asset.width, rect[3]*asset.height, aspect, box, focal);
-    return position ? [{ key, width, rect, position }] : [];
-  });
-  return candidates.sort((a,b) => b.width-a.width)[0] ?? null;
-}
-export function arrivalMode(asset: ArrivalAsset): 'cover' | 'contained' | null {
-  if (asset.sourceKind === 'concept' || asset.sourceKind === 'sheet') return null;
-  const fullHeight = asset.crops.cover_phone?.widths.length && (asset.crops.wide?.widths.length || asset.crops.wide32?.widths.length);
-  const large = Math.max(asset.width, asset.height) >= 2000 && Math.min(asset.width, asset.height) >= 1200;
-  if (asset.ground === 'scene' && (large || fullHeight) && arrivalRendition(asset, GALLERY_PHONE_ASPECT) && arrivalRendition(asset, GALLERY_DESKTOP_ASPECT)) return 'cover';
-  return arrivalRendition(asset, null) ? 'contained' : null;
-}
-export function selectArrival<T extends ArrivalAsset>(editorial: { assets: readonly T[]; palette: readonly unknown[]; edition?: unknown; composition?: { hero?: { assetId: string } | null } | null }) {
-  const chosenId = editorial.edition ? editorial.composition?.hero?.assetId : null;
-  const chosen = editorial.assets.find(asset => asset.id === chosenId);
-  const tier = (asset: T) => asset.sourceKind === 'installed' ? 0 : ['scan','board','sheet','upload'].includes(asset.sourceKind ?? '') ? 1 : asset.sourceKind === 'maker' ? (asset.ground === 'white' ? 3 : 2) : 4;
-  const compare = (a:T,b:T) => tier(a)-tier(b) || b.width*b.height-a.width*a.height || (a.sha256 === b.sha256 ? 0 : a.sha256 < b.sha256 ? -1 : 1);
-  const asset = chosen && arrivalMode(chosen) ? chosen : [...editorial.assets].filter(asset => arrivalMode(asset) !== null).sort(compare)[0];
-  return asset ? { kind: 'photo' as const, asset, mode: arrivalMode(asset)! }
-    : { kind: editorial.palette.length ? 'paint' as const : 'empty' as const, asset: null, mode: null };
-}

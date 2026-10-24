@@ -1,6 +1,6 @@
 import { arrivalMode, containedRendition } from '../gallery-picture';
 import { selectArrival } from '../rank';
-import { arrivalCases, arrivalFixture, bed, smallScene } from './arrival-fixtures';
+import { arrivalCases, arrivalFixture, bed, smallScene } from '../__fixtures__/arrival-fixtures';
 
 it.each(arrivalCases)('selects $name before paint', ({ editorial, kind, id, mode }) => {
   const result = selectArrival(editorial);

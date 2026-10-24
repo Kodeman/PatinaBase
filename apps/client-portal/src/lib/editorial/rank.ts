@@ -3,16 +3,8 @@
    and never the hero. */
 
 import { galleryHeroFits, placeRole } from './floors';
-import { arrivalMode } from './gallery-picture';
-
-export function selectArrival(editorial: Pick<ClientProjectEditorial, 'assets' | 'palette' | 'edition' | 'composition'>) {
-  const chosenId = editorial.edition ? editorial.composition?.hero?.assetId : null;
-  const chosen = editorial.assets.find(asset => asset.id === chosenId);
-  const asset = chosen && arrivalMode(chosen) ? chosen
-    : [...editorial.assets].filter(asset => arrivalMode(asset) !== null).sort(compareAssets)[0];
-  return asset ? { kind: 'photo' as const, asset, mode: arrivalMode(asset)! }
-    : { kind: editorial.palette.length ? 'paint' as const : 'empty' as const, asset: null, mode: null };
-}
+export { selectArrival } from '@patina/utils';
+import { compareArrivalAssets } from '@patina/utils';
 import type { ClientProjectEditorial, EditorialAsset } from './types';
 
 export const TIER = {
@@ -40,23 +32,7 @@ export function tierOf(asset: Pick<EditorialAsset, 'sourceKind' | 'ground'>): Ti
   return SOURCE_TIER[asset.sourceKind] ?? null;
 }
 
-function rankTier(asset: EditorialAsset): Tier {
-  return tierOf(asset) ?? TIER.silhouette;
-}
-
-/** Better tier first, then more pixels, then sha256 so the order never wobbles. */
-export function compareAssets(a: EditorialAsset, b: EditorialAsset): number {
-  const tier = rankTier(a) - rankTier(b);
-  if (tier !== 0) return tier;
-  const area = b.width * b.height - a.width * a.height;
-  if (area !== 0) return area;
-  return compareCodepoints(a.sha256, b.sha256);
-}
-
-function compareCodepoints(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
+export const compareAssets = compareArrivalAssets;
 
 /**
  * The hero may bleed: never a concept, never a drawing sheet (a cropped

@@ -57,11 +57,37 @@ function picturePair(scope: string, asset: EditorialAsset | null, aspect: number
 }
 
 function photoCaption(asset: EditorialAsset | null, palette: readonly PaletteSwatch[]) {
-  if (!asset) return palette.length
-    ? 'Paint for the house · Screen colours are approximate; the paint card is the authority.' : 'Photographs to follow.';
+  if (!asset) return emptyCaption(palette);
   const caption = asset.ground === 'white' && asset.sourceKind === 'maker'
     ? catalogueCaption(asset.caption.what, null, asset.caption.when) : captionTriplet(asset.caption);
   return caption ? captionText(caption) : plateAlt(asset);
+}
+
+function emptyCaption(palette: readonly PaletteSwatch[]) {
+  return palette.length ? 'Paint for the house · Screen colours are approximate; the paint card is the authority.' : 'Photographs to follow.';
+}
+function containedPhoto(scope: string, asset: EditorialAsset | null, arrival: boolean) {
+  if (!arrival || !asset) return null;
+  return arrivalMode(asset) === 'contained' ? containedRendition(scope, asset) : null;
+}
+function shownAsset(contained: ReturnType<typeof containedRendition>, asset: EditorialAsset | null, pair: ReturnType<typeof picturePair>) {
+  return contained ? asset : pair?.asset ?? null;
+}
+function photoState(scope: string, asset: EditorialAsset | null, arrival: boolean, aspect: number | null, failed: boolean) {
+  const contained = failed ? null : containedPhoto(scope, asset, arrival);
+  const pair = failed || contained ? null : picturePair(scope, asset, aspect);
+  const shown = shownAsset(contained, asset, pair);
+  return { contained, pair, shown };
+}
+function photoStyle(contained: ReturnType<typeof containedRendition>, pair: ReturnType<typeof picturePair>): CSSProperties {
+  return contained ? { '--gallery-contained-width': `${contained.width * 1.25}px` } as CSSProperties : frameStyle(pair);
+}
+function PhotoContent({ contained, pair, asset, palette, arrival, onError }: {
+  contained: ReturnType<typeof containedRendition>; pair: ReturnType<typeof picturePair>; asset: EditorialAsset | null;
+  palette: readonly PaletteSwatch[]; arrival: boolean; onError: () => void;
+}) {
+  if (contained) return <img src={contained.src} alt={plateAlt(asset!)} loading="eager" fetchPriority="high" onError={onError} />;
+  return pair ? <ResponsivePhoto {...pair} arrival={arrival} onError={onError} /> : <GalleryPaint palette={palette} />;
 }
 
 /** The current viewport's cover window is applied to the exact cropped file served. */
@@ -76,14 +102,11 @@ export function GalleryPhoto({ scope, asset, palette, arrival = false }: {
   const frame = useRef<HTMLDivElement>(null);
   const aspect = useFrameAspect(frame);
   const [failed, setFailed] = useState(false);
-  const contained = !failed && arrival && asset && arrivalMode(asset) === 'contained' ? containedRendition(scope, asset) : null;
-  const pair = failed || contained ? null : picturePair(scope, asset, aspect);
-  const shown = contained ? asset : pair?.asset ?? null;
-  const style = contained ? { '--gallery-contained-width': `${contained.width * 1.25}px` } as CSSProperties : frameStyle(pair);
+  const { contained, pair, shown } = photoState(scope, asset, arrival, aspect, failed);
+  const style = photoStyle(contained, pair);
   return <figure className={arrival ? 'gallery-arrival-figure' : 'gallery-figure'}>
     <div ref={frame} className="gallery-photo-frame" data-gallery-mode={contained ? 'contained' : 'cover'} data-ground={shown?.ground} style={style}>
-      {contained ? <img src={contained.src} alt={plateAlt(asset!)} loading="eager" fetchPriority="high" onError={() => setFailed(true)} />
-        : pair ? <ResponsivePhoto {...pair} arrival={arrival} onError={() => setFailed(true)} /> : <GalleryPaint palette={palette} />}
+      <PhotoContent contained={contained} pair={pair} asset={asset} palette={palette} arrival={arrival} onError={() => setFailed(true)} />
       {conceptLabel(pair)}
     </div>
     <figcaption className="gallery-caption">{photoCaption(shown, palette)}</figcaption>

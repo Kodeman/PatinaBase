@@ -1,5 +1,5 @@
 import { selectArrival, arrivalRendition } from '../plate-crop';
-import { arrivalCases, bed } from '../../../../../client-portal/src/lib/editorial/__tests__/arrival-fixtures';
+import { arrivalCases, bed } from '../../../../../client-portal/src/lib/editorial/__fixtures__/arrival-fixtures';
 import { selectArrival as clientArrival } from '../../../../../client-portal/src/lib/editorial/rank';
 
 it.each(arrivalCases)('matches the client arrival for $name', ({ editorial, kind, id, mode }) => {

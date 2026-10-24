@@ -142,7 +142,7 @@ export function PressBand({
   );
   // Before any edition the client page opens on the editorial cover.
   const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !data.refreshRequired && !pending && !current);
-  const arrival = selectArrival({ assets: editorialAssets ?? [], palette: [] });
+
   const headingId = useId();
   if (!data) return null;
   if (data.refreshRequired) {
@@ -196,7 +196,7 @@ export function PressBand({
       ) : editorialAssets ? (
         <div className="flex flex-col gap-1">
           <h2 id={headingId} className={HEADING}>
-            {arrival.asset ? `The page opens on the ${arrival.asset.ground === 'white' ? 'catalogue photograph' : 'photograph'} of ${arrival.asset.caption.what || 'the house'}.` : COVER_IS_A_DRAWING}
+            {arrivalHeading(editorialAssets)}
           </h2>
           <DocumentActionRow surfaceKey="open-document" regionKey="press-band" aria-label="Cover">
             <DocumentAction
@@ -752,4 +752,12 @@ function PublishedEditions({
       </AlertDialog>
     </div>
   );
+}
+
+function arrivalHeading(assets: readonly import('@patina/supabase').ClientEditorialAsset[]) {
+  const arrival = selectArrival({ assets, palette: [] });
+  if (!arrival.asset) return COVER_IS_A_DRAWING;
+  const kind = arrival.asset.ground === 'white' ? 'catalogue photograph' : 'photograph';
+  const asset = arrival.asset;
+  return `The page opens on the ${kind} of ${asset.caption.what || 'the house'}.`;
 }

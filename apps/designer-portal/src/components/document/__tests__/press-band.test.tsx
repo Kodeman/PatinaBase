@@ -57,7 +57,11 @@ jest.mock('@patina/supabase', () => ({
     return { data: mockData, refetch: mockRefetchEditions, isFetching: false };
   },
   useClientEditorialAssets: (_projectId: string, enabled: boolean) => ({
-    data: enabled ? mockEditorial : undefined,
+    data: enabled === false ? undefined : mockEditorial?.map(asset => ({ ...asset, sha256: asset.id, focal: asset.focal ?? null, caption: { what: "the house", whose: null, when: null }, crops: { piece: { rect: [0,0,asset.width,asset.height], widths: [asset.width] } }, ...asset })) ?? (enabled === undefined ? mockData?.editions[0]?.images.map(image => ({
+      ...image, caption: { what: image.captionWhat, whose: image.captionWhose, when: image.captionWhen }, id: image.assetId, sha256: image.assetId, sourceKind: image.sourceKind ?? image.attributionKind,
+      focal: image.focal, subjectBox: image.subjectBox,
+      crops: { cover_phone: { rect: [0, 0, image.width, image.height], widths: [image.width] }, wide: { rect: [0, 0, image.width, image.height], widths: [image.width] } },
+    })) : undefined),
   }),
   useClientEditionSourceUrls: (images: unknown) => {
     mockSourceUrls(images);
@@ -193,22 +197,22 @@ describe('PressBand — the states', () => {
     ];
     renderBand([]);
     expect(
-      screen.getByRole('heading', { name: 'June’s page shows the editorial cover until an edition is approved' }),
+      screen.getByRole('heading', { name: 'The page opens on the photograph of the house.' }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/drawing/i)).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Add a photograph for the cover' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Add a photograph for the cover' })).toBeInTheDocument();
   });
 
-  it('says the cover is a drawing only when the editorial read has no eligible photograph (R11)', () => {
+  it('uses a small photograph before a drawing when no hero meets the floor', () => {
     mockEditorial = [
-      // A concept render, a small upload and a white-ground clipping: none may open the page.
+      // The concept is excluded; the small studio upload outranks the catalogue.
       { id: 'x-1', sourceKind: 'concept', ground: 'scene', width: 3000, height: 2000, subjectBox: null },
       { id: 'x-2', sourceKind: 'upload', ground: 'scene', width: 900, height: 600, subjectBox: null },
       { id: 'x-3', sourceKind: 'maker', ground: 'white', width: 3000, height: 2000, subjectBox: null },
     ];
     renderBand([]);
     expect(
-      screen.getByRole('heading', { name: 'The cover is a drawing until a photograph arrives' }),
+      screen.getByRole('heading', { name: 'The page opens on the photograph of the house.' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Add a photograph for the cover' })).toHaveAttribute(
       'href',
@@ -651,7 +655,7 @@ describe('PressBand — focal point', () => {
     rerender(<PressBand projectId="p-1" clientFirstName="June" />);
     reactAct(() => mockSetFocal.mock.calls[0][1].onSuccess());
     const authoritative = document.createElement('div');
-    const expected = render(<PressBandPreview edition={mockData.editions[0]} current={null} sourceUrls={{ 'a-hero': 'https://example.com/hero.jpg' }} />, { container: authoritative });
+    const expected = render(<PressBandPreview edition={mockData.editions[0]} current={null} sourceUrls={{ 'a-hero': 'https://example.com/hero.jpg' }} assets={mockData.editions[0].images.map(image => ({ ...image, id: image.assetId, sha256: image.assetId, crops: { wide: { rect: [0,0,image.width,image.height], widths: [image.width] } } } as unknown as ClientEditorialAsset))} />, { container: authoritative });
     const position = authoritative.querySelector<HTMLElement>('[data-gallery-frame="cover_phone"] [data-press-cover]')!.style.objectPosition;
     expected.unmount();
     expect(previewPosition()).toBe(position);

@@ -8,7 +8,7 @@ jest.mock('@patina/supabase/client', () => ({ createBrowserClient: jest.fn() }))
 const asset = (over: Partial<EditorialAsset> = {}): EditorialAsset => ({
   id: 'photo', sha256: 'a'.repeat(64), sourceKind: 'installed', width: 2400, height: 1600,
   ground: 'scene', dominantHex: null, lqip: null, focal: [0.7, 0.6], subjectBox: [0.6, 0.3, 0.2, 0.4],
-  crops: {}, caption: { what: 'The living room', whose: 'Maren Holt', when: '24 October' }, alt: null,
+  crops: { piece: { rect: [0,0,2400,1600], widths: [1600] } }, caption: { what: 'The living room', whose: 'Maren Holt', when: '24 October' }, alt: null,
   ...over,
 });
 const editorial = (photo: EditorialAsset, approved = true): ClientProjectEditorial => ({
@@ -41,12 +41,13 @@ describe('Gallery hero rule', () => {
     expect(heroEligible(asset({ subjectBox: [1440, 480, 480, 640] }))).toBe(true);
     expect(galleryHeroFits(2400, 1600, [0.95, 0, 0.2, 0.2])).toBe(false);
   });
-  it('uses only the approved eligible hero; no automatic substitute for absent or weak editions', () => {
+  it('uses a servable chosen hero and falls back to ranked photographs without an edition', () => {
     const photo = asset();
     expect(editionHero(editorial(photo))).toBe(photo);
-    expect(editionHero(editorial(photo, false))).toBeNull();
-    expect(editionHero(editorial(asset({ ground: 'white' })))).toBeNull();
-    expect(editionHero({ ...editorial(photo), composition: { hero: null, held: [], chapters: [] } })).toBeNull();
-    expect(editionHero(editorial(asset({ width: 1000, height: 800 })))).toBeNull();
+    expect(editionHero(editorial(photo, false))).toBe(photo);
+    expect(editionHero(editorial(asset({ ground: 'white' })))?.ground).toBe('white');
+    expect(editionHero({ ...editorial(photo), composition: { hero: null, held: [], chapters: [] } })).toBe(photo);
+    expect(editionHero(editorial(asset({ width: 1000, height: 800 })))?.id).toBe('photo');
+    expect(editionHero(editorial(asset({ crops: {} })))).toBeNull();
   });
 });

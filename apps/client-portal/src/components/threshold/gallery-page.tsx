@@ -66,10 +66,13 @@ function galleryChapters(issue: HouseIssue | null, bands: RoomBandModel[]): Gall
 function ChapterPicture({ chapter, issue, studioName }: { chapter: GalleryChapter; issue: HouseIssue | null; studioName: string | null }) {
   if (chapter.asset) return <GalleryPhoto scope={issue!.scopeId} asset={chapter.asset} palette={issue!.editorial.palette} />;
   if (chapter.band?.conceptRender) return <ConceptRenderPlate render={chapter.band.conceptRender} roomName={chapter.band.name} studioName={studioName} />;
+  return <ChapterPieces chapter={chapter} issue={issue} />;
+}
+function ChapterPieces({ chapter, issue }: { chapter: GalleryChapter; issue: HouseIssue | null }) {
   const room = issue?.editorial.rooms.find(room => room.id === chapter.band?.roomId);
   const choices = issue?.rooms.get(room?.id ?? '')?.pieces;
   if (room && choices?.some(piece => piece.asset)) return <ul className="gallery-chapter-pieces" aria-label={`Pieces for the ${room.name.toLowerCase()}`}>
-    {room.items.slice(0, 4).map(item => <li key={item.id}><PiecePlate scopeId={issue!.scopeId}
+    {[...room.items].sort((a, b) => Number(Boolean(choices.find(piece => piece.itemId === b.id)?.asset)) - Number(Boolean(choices.find(piece => piece.itemId === a.id)?.asset))).slice(0, 4).map(item => <li key={item.id}><PiecePlate scopeId={issue!.scopeId}
       showMakers={issue!.editorial.project.showMakers} item={item}
       asset={choices.find(piece => piece.itemId === item.id)?.asset ?? null} statusWords="" /></li>)}
   </ul>;

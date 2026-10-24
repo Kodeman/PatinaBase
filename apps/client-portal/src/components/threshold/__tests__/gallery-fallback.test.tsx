@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import type { RoomBandModel } from '@/lib/threshold/derive';
-import { arrivalFixture, bed, smallScene } from '@/lib/editorial/__tests__/arrival-fixtures';
+import { arrivalFixture, bed, smallScene } from '@/lib/editorial/__fixtures__/arrival-fixtures';
 import { houseIssue } from '../editorial/house-issue';
 import { GalleryPage } from '../gallery-page';
 import { GalleryPhoto } from '../gallery-photo';

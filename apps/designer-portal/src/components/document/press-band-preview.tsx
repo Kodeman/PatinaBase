@@ -148,6 +148,16 @@ function GalleryPaintCard({ palette }: { palette: readonly { hex: string; name: 
   </div>;
 }
 
+function previewRendition(asset: ClientEditorialAsset | null, mode: 'cover' | 'contained' | null, frame: (typeof GALLERY_FRAMES)[number]) {
+  return asset ? arrivalRendition(asset, mode === 'contained' ? null : frame.width / frame.height) : null;
+}
+function previewBox(mode: 'cover' | 'contained' | null, frame: (typeof GALLERY_FRAMES)[number], pixels: number, aspect: number) {
+  if (mode !== 'contained') return [frame.width, frame.height];
+  const width = Math.min(frame.width, pixels * 1.25, frame.height * aspect);
+  return [width, width / aspect];
+}
+function previewAlt(image: ClientEditionImage) { return image.alt ?? ''; }
+function previewGround(asset: ClientEditorialAsset) { return asset.ground === 'white' ? '#fff' : '#FAF7F2'; }
 function GalleryBackground({ hero, url, palette, frame, asset, mode }: {
   asset: ClientEditorialAsset | null; mode: 'cover' | 'contained' | null;
   hero: ClientEditionImage | null;
@@ -155,19 +165,18 @@ function GalleryBackground({ hero, url, palette, frame, asset, mode }: {
   palette: readonly { hex: string; name: string | null }[];
   frame: (typeof GALLERY_FRAMES)[number];
 }) {
-  const crop = asset ? arrivalRendition(asset, mode === 'contained' ? null : frame.width / frame.height) : null;
+  const crop = previewRendition(asset, mode, frame);
   if (!hero || !url || !asset || !crop) return <GalleryPaintCard palette={palette} />;
   const [x,y,w,h] = crop.rect;
   const aspect = w * asset.width / (h * asset.height);
-  const boxWidth = mode === 'contained' ? Math.min(frame.width, crop.width * 1.25, frame.height * aspect) : frame.width;
-  const boxHeight = mode === 'contained' ? boxWidth / aspect : frame.height;
+  const [boxWidth, boxHeight] = previewBox(mode, frame, crop.width, aspect);
   const scale = Math.max(boxWidth / (w * asset.width), boxHeight / (h * asset.height));
   const [px,py] = crop.position.split(' ').map(value => parseFloat(value) / 100);
   const left = (boxWidth - w * asset.width * scale) * px - x * asset.width * scale;
   const top = (boxHeight - h * asset.height * scale) * py - y * asset.height * scale;
-  return <div className="flex h-full w-full items-center justify-center" style={{ background: asset.ground === 'white' ? '#fff' : '#FAF7F2' }}>
+  return <div className="flex h-full w-full items-center justify-center" style={{ background: previewGround(asset) }}>
     <div className="relative overflow-hidden" style={{ width: boxWidth, height: boxHeight }} data-gallery-mode={mode}>
-      <img src={getOptimizedImageUrl(url, { width: Math.max(frame.width, crop.width) })} alt={hero.alt || ''} data-press-cover style={{ position: 'absolute', maxWidth: 'none', width: asset.width * scale, height: asset.height * scale, left, top }} />
+      <img src={getOptimizedImageUrl(url, { width: Math.max(frame.width, crop.width) })} alt={previewAlt(hero)} data-press-cover style={{ position: 'absolute', maxWidth: 'none', width: asset.width * scale, height: asset.height * scale, left, top, objectPosition: crop.position }} />
     </div>
   </div>;
 }
@@ -221,10 +230,7 @@ export function PressBandPreview({ edition, current, overrides, sourceUrls, delt
   palette?: readonly { hex: string; name: string | null }[];
   focal?: { assetId: string; point: PlatePoint } | null;
 }) {
-  const heroId = editionHeroId(edition, overrides);
-  const arrival = selectArrival({ assets, palette, edition, composition: { hero: heroId ? { assetId: heroId } : null } });
-  const asset = arrival.asset;
-  const selected = edition.images.find((image) => image.assetId === asset?.id);
+  const { arrival, asset, selected } = previewSelection(edition, overrides, assets, palette, focal);
   const hero = selected ? { ...selected, focal: focal?.assetId === selected.assetId ? focal.point : selected.focal } : null;
   if (hero && captionPolicy) hero.alt = readerImageContent(hero, { ...edition.overrides?.captions?.[hero.assetId], ...overrides?.captions?.[hero.assetId] }, captionPolicy).alt;
   const chapters = editionChapters(edition, overrides);
@@ -236,10 +242,10 @@ export function PressBandPreview({ edition, current, overrides, sourceUrls, delt
   return (
     <div className="flex flex-col gap-4" data-press-preview={edition.id}>
       {delta && <p className="text-[15px] leading-snug text-[var(--text-muted)]" data-press-delta>{editionDelta(edition, current, overrides)}</p>}
-      <div className="flex flex-wrap items-start gap-6" aria-label="Arrival previews">
+      {previewAvailable(asset, hero) && <div className="flex flex-wrap items-start gap-6" aria-label="Arrival previews">
         {GALLERY_FRAMES.map((frame) => <GalleryArrival key={frame.key} frame={frame} hero={hero} asset={asset} mode={arrival.mode} url={hero ? sourceUrls[hero.assetId] : undefined} headline={headline} palette={colors} />)}
-      </div>
-      {asset && !hero && <p>The page opens on the {asset.ground === 'white' ? 'catalogue photograph' : 'photograph'} of {asset.caption.what || 'the house'}.</p>}
+      </div>}
+      {unpicturedArrival(asset, hero)}
       {tooLong && <p className="text-[15px] text-[var(--text-muted)]">The cover headline is too long for the band, so the house name is shown instead.</p>}
       <p className="text-[15px] text-[var(--text-muted)]">The muted line is a sample; invoices and approvals supply the live words.</p>
       {chapters.some((chapter) => chapter.key !== 'cover') && <div>
@@ -259,4 +265,20 @@ export function PressBandPreview({ edition, current, overrides, sourceUrls, delt
       </ul>
     </div>
   );
+}
+
+function previewAvailable(asset: ClientEditorialAsset | null, hero: ClientEditionImage | null) { return !asset || hero; }
+function unpicturedArrival(asset: ClientEditorialAsset | null, hero: ClientEditionImage | null) {
+  if (!asset || hero) return null;
+  return <p>The page opens on the {asset.ground === 'white' ? 'catalogue photograph' : 'photograph'} of {asset.caption.what || 'the house'}.</p>;
+}
+function previewSelection(edition: ClientEdition, overrides: ClientEditionOverrides | null | undefined, assets: readonly ClientEditorialAsset[], palette: readonly unknown[], focal: { assetId: string; point: PlatePoint } | null | undefined) {
+  const heroId = editionHeroId(edition, overrides);
+  const arrival = selectArrival({ assets, palette, edition, composition: { hero: heroId ? { assetId: heroId } : null } });
+  const asset = previewFocal(arrival.asset, focal);
+  const selected = edition.images.find(image => image.assetId === asset?.id);
+  return { arrival, asset, selected };
+}
+function previewFocal(asset: ClientEditorialAsset | null, focal: { assetId: string; point: PlatePoint } | null | undefined) {
+  return asset && focal?.assetId === asset.id ? { ...asset, focal: focal.point } : asset;
 }
