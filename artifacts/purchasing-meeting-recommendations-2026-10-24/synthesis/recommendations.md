@@ -10,7 +10,7 @@ Settled in V26 and not reopened here: one ship-to per order (F-05), one review b
 
 ## 1 · For the founders, in one paragraph
 
-The meeting bought two real things on the Harchess job, and the path held: the paper, "release by phone or portal", the payment with its reference, the ETA benchmark and the field-app receiving all drew "that's super nice". Where it went wrong, it went wrong in two ways. Either something that already exists couldn't be found (the Order act's reason, job destinations, pass-through expenses, grouped ordering on the vendor page), or the paper and the money disagreed and there was nowhere honest to put the difference, so it went into freight (the $230.20 the Sierra bed rose at checkout, the wallpaper's import tariff and processing fee). The spine of this recommendation is that **a web checkout is an order paper marked as placed**, because only the paper carries a ship-to, riders, an ETA and per-piece shipments. That means grouped buying needs no new object. Before the next Harchess purchases we recommend thirteen small changes (eleven are copy or one control): say why Order is held and offer the act that clears it; say what a short client payment leaves closed; let places land on the job; put expenses where Leah stands; name fees that arrive later; record a checkout price rise with its reason and never move the client's price silently; and let a receipt come later, more than one file, with a quiet "owed" instead of a reminder. The one-sheet "Record the checkout" for a grouped buy, and a freight markup that actually computes, come next. Six questions stay with you as rulings, each with a recommended default.
+The meeting bought two real things on the Harchess job, and the path held: the paper, "release by phone or portal", the payment with its reference, the ETA benchmark and the field-app receiving all drew "that's super nice". Where it went wrong, it went wrong in two ways. Either something that already exists couldn't be found (the Order act's reason, job destinations, pass-through expenses, grouped ordering on the vendor page), or the paper and the money disagreed and there was nowhere honest to put the difference, so it went into freight (the $230.20 the Sierra bed rose at checkout, the wallpaper’s possible later fee (type, rate and payee unconfirmed)). The spine of this recommendation is that **a web checkout is an order paper marked as placed**, because only the paper carries a ship-to, riders, an ETA and per-piece shipments. That means grouped buying needs no new object. Before the next Harchess purchases, recommend only the S-sized copy and single-control unblock in §4. Larger changes belong to NOW-next in the same push, not a before-next-purchase promise. Grouping still reuses the order paper; the money and review links described below are proposed work, not existing behaviour.
 
 ---
 
@@ -43,7 +43,7 @@ Lanes: **Studio** (Leah or Ashley) · **Vendor site** (the maker's web checkout,
              pay on studio card      email to Leah's inbox,
                                      lead time maybe
 
- 3 mark      "Ordered on their site or by phone —                one review sheet (F-06), nothing sent
+ 3 mark      "Ordered on their site or by phone —                proposed new review (Q-07), nothing sent
    placed     mark as placed" ─────────────────────────────▶     [R-06]
 
  4 money     one payment for the checkout ──────────────────▶   order number → the order's vendor number
@@ -63,8 +63,8 @@ Lanes: **Studio** (Leah or Ashley) · **Vendor site** (the maker's web checkout,
  6 later     forwarded email / PDF ─────────────────────────▶   "+ Add a receipt" on the money record;
    paper                                                         owed clears [R-09]
 
- 7 later     the courier's "ding"   ◀──  processing fee           "Record payment to the courier" fills the ─▶ fee rider joins
-   fee       arrives                     collected at delivery    rider's actual (reused) [R-07]               unbilled riders
+ 7 later     the courier's "ding"   ◀──  processing fee           New linked write: "Record payment" fills the ─▶ fee rider joins
+   fee       arrives                     collected at delivery    rider’s actual (new linkage) [R-07]               unbilled riders
 
  8 ships     ──────────────────────▶  the sconce ships first      Record dispatch: "Pieces on this
                                                                  shipment · 1 of 1" (reused); the rod
@@ -83,7 +83,7 @@ Off this lane, by design: a piece the studio walked out with, or a pass-through 
 
 ## 3 · Recommendations
 
-Size is design-size (S = copy or one control on an existing surface; M = a new sheet, a new state, or one schema change; L = a new object or several surfaces). Vision test order: surface · studio moment · stream · promise.
+Size is design-size (S = copy or one control; M = one bounded interaction; L = several surfaces or coordinated schema/writes). Vision test order: surface · studio moment · stream · promise.
 
 ### R-01 · The Order act says why it's held and offers the act that clears it — F1
 
@@ -107,20 +107,20 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
   The section head adds up what is held, once: **"2 pieces approved and authorized · waiting on the deposit (A1) — Record the payment →"**. This map is the single source for every held-reason sentence in this set (R-12 uses it too).
   Engineering check, not a design change: confirm whether the client-payment write refreshes the line's deposit read; the meeting needed a refresh (mtg:235-237).
 - **Reuse vs new.** Reused: `deriveOrderReadiness`, the Next row, the client-payment record. New: the reason-to-act map and the copy.
-- **Size.** S.
+- **Size.** M for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document · the morning the studio starts buying · margin · nobody wonders whether they broke something.
 
 ### R-02 · The client payment says the gap and what it leaves closed — F11
 
 - **Quote.** Ashley: "I think your amount is off. You have 21, and I think it's supposed to be 23." (mtg:222) · Leah: "Don't want our money to be off."
-- **Today.** The Folio's payment panel opens empty, with the balance only as a placeholder (`components/document/accounts/invoice-folio.tsx:1205-1213`). Only an amount over the balance is flagged, "amount exceeds the remaining balance" (:1250-1256); anything under records as a partial without a word (:606-607).
+- **Today.** Ordinary Folio opening leaves the amount empty with the balance as a placeholder; landOn=record, used by money-region.tsx:317, fills the balance (invoice-folio.tsx:274–282). Make both paths consistent (`components/document/accounts/invoice-folio.tsx:1205-1213`). Only an amount over the balance is flagged, "amount exceeds the remaining balance" (:1250-1256); anything under records as a partial without a word (:606-607).
 - **Change.** Pre-fill the balance. When the amount is under it:
 
   > **$2,000.00 less than the balance.** $2,000.00 stays open, and the deposit on A1 isn't covered, so 2 pieces stay held. **[ Use $23,123.19 ]**
 
   When it matches: **"Matches the balance. A1's deposit is clear, so 2 pieces can be ordered."** Partials stay allowed. (The transcript records only "21"; $21,123.19 is illustrative.)
 - **Reuse vs new.** Reused: the balance, the gate derivation (`authorization-derivation.ts:439-478`). New: one sentence and the "Use $X" fill.
-- **Size.** S.
+- **Size.** M for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document, Money · banking the client's check · margin (it unblocks buying) · the second pair of eyes is always there.
 
 ### R-03 · Places land on the job; strays are named — F7
@@ -133,7 +133,7 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
   3. On a job, ship-to shows **On this job**, then **Studio places**. Private homes on other jobs fold behind **"A home on another job…"**.
   4. The Destinations sheet names a stray once: **"Kody's den is a private home on no job. Add it to a job, or make it a studio place."**
 - **Reuse vs new.** Reused: `project_destination_locations` (`supabase/migrations/00856_job_destinations.sql:152-252`), the Add to job act. New: one prompt, one fold, one notice.
-- **Size.** S.
+- **Size.** L for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document · setting up the job's places · margin · the client's home never turns up on another job.
 
 ### R-04 · Pass-through expenses are found where Leah stands — F8
@@ -146,7 +146,7 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
   - The section's money line carries one quiet count: **"Expenses to pass through · 3 · $186.40 · billed at final billing"** (figures illustrative).
   - No new head act (head-crowding; see Rejected).
 - **Reuse vs new.** All reused except the preset entry and the count.
-- **Size.** S.
+- **Size.** M for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document · the moment she remembers the rings · margin (pass-through at cost) · no approve-or-deny ceremony.
 
 ### R-05 · An Order without a quote is right for a web buy — F10
@@ -162,9 +162,9 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
 
 - **Quote.** Kody: "you can just do this release by phone or portal, and then it keeps that on file." Leah: "That's nice." (mtg:144-147)
 - **Today.** The act reads "Released by phone or portal — mark as sent" (`components/portal/procurement/order-paper/index.tsx:1261`) and the record "Released by phone or portal · {day}" (:1346). Since V26 F-03, "released" also means the owner's release back to the buyer.
-- **Change.** Act: **"Ordered on their site or by phone — mark as placed"**. Record: **"Placed on their site or by phone · {day}"**. The one review sheet (F-06) says: **"Nothing is sent to {maker}. This records an order you placed."** Behaviour unchanged.
-- **Reuse vs new.** Copy only.
-- **Size.** S.
+- **Change.** Act: **"Ordered on their site or by phone — mark as placed"**. Record: **"Placed on their site or by phone · {day}"**. A proposed new external-order review (Q-07; F-06 covers Send only) says: **"Nothing is sent to {maker}. This records an order you placed."** Today mark_sent calls sendPo directly; only mode=send opens PoPreview (order-paper/index.tsx:612–647). The rename alone is S; adding this review is M and needs Q-07.
+- **Reuse vs new.** S rename reuses the direct act; the M external-order review is new.
+- **Size.** M for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document, the paper · the minute after "Pay now" · margin · one word, one meaning.
 
 ### R-07 · Fees get a name, an owner and "not known yet" — F3
@@ -175,14 +175,15 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
 
   ```
   Riders
-    Import tariff · owed to the courier · amount not known yet · bill the client at cost
-    Processing fee · owed to the courier · about 3% · amount not known yet · bill the client at cost
+    Possible import / processing fee · type, rate, payee and amount unconfirmed
+    Waiting for the vendor's bill
   ```
 
-  When the courier's bill comes, the existing "Record payment to {payee}" fills the actual, and the rider joins "Bill N unbilled riders" (`ffe-section.tsx:2336`). Verify that a rider can be added after the order is marked placed.
-- **Reuse vs new.** Reused: `po_cost_lines`, null estimate, payee, the rider payment. New: three picker labels and the "not known yet" copy. The "+ Another fee" row on Bought it already is R-17 (NEXT).
-- **Size.** S.
-- **Vision test.** The Document, the paper · checkout, then the courier's bill weeks later · margin (an unbilled fee is margin lost) · the paper remembers the ding, not Leah.
+  Leah mentioned an import fee; the site said it would cover new customs fees. The merchandise-processing fee collected by a courier was uncertain; 3% was Kody's guess. Do not save two confirmed charges or a rate on that evidence.
+  Today Actual saves separately on blur (`riders.tsx:477–511`); the payment form has no cost-line id and only closes onDone (:540–549). `record_vendor_payment` (00718:624–780) inserts only a vendor payment. **Payment filling the fee's Actual is a new linked write**, not reuse. Verify that a rider can be added after mark-as-placed.
+- **Reuse vs new.** Reused: rider records, blank estimates, separate payment and Actual writes. New: fee naming and payment-to-cost-line linkage with coordinated writes. Purchase fees are R-17 (NEXT).
+- **Size.** L for the full item; S sub-slices only where listed in §4.
+- **Vision test.** The Document, the paper · checkout, then the later bill · furniture margin · the paper remembers the possible fee, not Leah.
 
 ### R-08 · A checkout price rise is recorded with its reason; the client's price waits — F2
 
@@ -193,14 +194,16 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
   ```
   Money out · Sierra bed                                         PO —
     Paid on 23 Oct    Amount $3,978.20    How  Studio card ••—
-    That is $230.20 more than the paper ($3,748.00: bed $3,449.00 + white glove $299.00).
+    First correct the inflated white-glove rider $529.20 → $299.00.
+    As the paper should have read: $3,748.00 (bed $3,449.00 + white glove $299.00).
+    Paid $3,978.20 is $230.20 above this reconstructed baseline; the saved inflated paper already matched the charge.
     Where did it go?
       ( ) The bed cost more                 bed $3,449.00 → $3,679.20
       ( ) A fee or shipping not on the paper   adds a rider to the order (R-07)
       ( ) Something else on this charge     records it as an expense (R-04) and
                                             takes it off this payment
       ( ) Not sure — leave it flagged       records the payment; the difference waits
-    Why, in a few words  [ sale ended at checkout ]
+    Why, in a few words  [ empty; example only: possible sale change ]
     Records $3,978.20 paid to the maker. The client's price does not change.
     [ Record the payment · $3,978.20 ]
   ```
@@ -210,14 +213,14 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
 
   ```
   Sierra bed · cost changed from $3,449.00 to $3,679.20
-  sale ended at checkout · recorded by Ashley, 23 Oct · margin on this piece down $230.20
+  Example reason: possible sale change · recorded by Leah, 23 Oct · margin on this piece down $230.20
   [ Keep the client's price ]   the studio absorbs $230.20
   [ Ask the client for it ]     opens Record a change → On the agreement, +$230.20 on the bed filled in
   ```
 
-  The flag stays until someone chooses (Q-01). The same sentence appears beside "Paid" on Bought it already when a line is linked.
+  If Not sure is selected, $230.20 stays unallocated and flagged; bed cost stays $3,449.00 and no reason is invented. Only the bed-cost choice changes that cost. The flag stays until someone chooses (Q-01). The same sentence appears beside "Paid" on Bought it already when a line is linked.
 - **Reuse vs new.** Reused: the payment form, the cost-change trigger, `resolve_ffe_cost_change`, the price-table row, the amendment sheet. New: the comparison sentence and its four choices; a reason on the cost change; one writer that records an *actual* unit cost on a released line, touching internal columns only, which the lock refuses today.
-- **Size.** M.
+- **Size.** L for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document, Money out · right after checkout · margin (protects the margin figure) · the books explain themselves later.
 
 ### R-09 · Receipt now or later, more than one file, owed quietly — F4
@@ -231,7 +234,7 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
   - The receipt anchors to the **money record** (the payment or the purchase). Each line on that order reads **"Receipt · on the Rejuvenation order"**: one upload for a checkout of one piece or six.
   - Owed shows on the record, as a count on Money out (**"2 receipts owed"**), and in closeout. No Desk need (Q-04).
 - **Reuse vs new.** Reused: Folio storage. New: a money-record anchor or link, the append-only act, the owed state. One schema change.
-- **Size.** M.
+- **Size.** L for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document, Money out · the first hand buying on the owner's logins · margin · nothing nags; the paper waits.
 
 ### R-10 · "Bought it already" with a linked line can't bill the piece twice — hazard found while tracing (F6/F8 money truth, not a meeting ask)
@@ -240,7 +243,7 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
 - **Today.** "Bill the client, at cost, on its own line" is ticked by default even when a line is linked (`purchase-record-form.tsx:84, 319-321`). A purchase bills its whole amount plus tax, premium and shipping (`lib/document/invoice-composer.ts:307-318`). The billing RPC refuses only a purchase that is already billed, not a piece already billed through its own price (`supabase/migrations/00822_us36_invoice_line_internal_cost.sql`, the purchase branch). A sold piece recorded this way could reach the client twice.
 - **Change.** Verify, then: when a line is linked, the box reads **"Bill the client for the shipping and fees on this buy ($X)"** and is off by default, with **"The piece bills through its line."** under it. This is a precondition of Q-02's recommended default.
 - **Reuse vs new.** Copy plus one composer rule (linked purchases bill shipping and fees only).
-- **Size.** S.
+- **Size.** L for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document · recording a buy against a sold piece · margin · the client is never billed twice.
 
 ### R-11 · "Cost plus" says what it does until R1 is ruled — F6
@@ -257,7 +260,7 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
 - **Quote.** Leah: "I think it'd be nice to be able to group your orders… these are both from Rejuvenation." (mtg:462-463) · Ashley: "you would have to go through each item and put in probably the order information." (mtg:457) · Kody: "come into your vendor page and then you would see everything that was queued up to order with them for a job… a block of items." (mtg:489)
 - **Today.** One PO is one maker and one job (`create_purchase_order`, `supabase/migrations/00450_ffe_po_compat_and_media_dedupe.sql`). The vendor page's "Order all — N items · ready · unordered" lays one paper per (maker, job) from ready lines only (`components/document/orders-book-vendors.tsx:614-645, 710-728`), mounted on vendor → Orders (:1168). Lines not yet ready don't appear at all, the same silence as F1. The way in is Ledgers → Purchase orders → Vendor accounts, whose rows say only terms and "open page →" (screen 47). On the job, "Prepare a PO" opens a paper with one line (`purchase-choices.tsx:25`).
 - **Change.**
-  - **NOW (entry).** When two or more ready lines on a job share a maker and a planned place, the section head offers **"2 ready from Rejuvenation · Order together →"**. It opens the existing `OrderPaperQueue` for this job and maker. One paper is created only when the studio saves or acts on it.
+  - **NOW-next (entry).** When two or more ready lines on a job share a maker and a planned place, the section head offers **"2 ready from Rejuvenation · Order together →"**. It opens the existing `OrderPaperQueue` for this job and maker. One paper is created only when the studio saves or acts on it.
   - **NEXT (the block).** VendorOrderAll is split into one block per job. Ready lines start ticked; lines not ready show with their R-01 reason and no tick; the planned place splits the block:
 
     ```
@@ -271,14 +274,14 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
     ```
 
     When ticked lines go to two places: **"Two places, so two orders: 2 to the Harchess home, 1 to {place}. [ Prepare 2 orders → ]"** (F-05; Kody: "You would do two separate orders." Leah: "Yep." mtg:479-480). The Vendor accounts row gains **"2 queued · the Harchess job"** only when something is queued. The job's "Order together" opens this same block, pre-ticked; there is no separate tick mode.
-- **Reuse vs new.** Reused: `readinessOf`/`deriveOrderReadiness`, `OrderPaperQueue`, Order all, one ship-to. New: the head suggestion (NOW); grouping by job, waiting rows, the two-places sentence and the queued count (NEXT). No schema change.
-- **Size.** S (NOW) · M (NEXT).
+- **Reuse vs new.** Reused: `readinessOf`/`deriveOrderReadiness`, `OrderPaperQueue`, Order all, one ship-to. New: the head suggestion (NOW-next); grouping by job, waiting rows, the two-places sentence and the queued count (NEXT). No schema change.
+- **Size.** M for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document, Pieces & purchasing and the vendor page · the buyer sits down with one maker's cart open · margin · one block instead of N unfolds.
 
 ### R-13 · "Record the checkout": one sheet for one checkout — F5 (record) · NEXT
 
 - **Quote.** Kody: "you would want to do a single money out line because you'd have one receipt for six items… but still have the ability to… track the shipping separately." (mtg:476) · Leah: "Here's the order number that attaches to this. And then we can still load in the order confirmation." (mtg:482) · "easily saving that order confirmation to all three items" (mtg:496)
-- **Today.** Recording a web checkout takes three trips: mark as placed (through the one review), then "Vendor confirmed by phone or email?" for the order number, `vendorPoNumber` (`components/document/po-preview.tsx:446-460`, screens 11–12), then "Record a payment" from one line (`purchase-choices.tsx:36-42`), whose receipt files to that line only (:42).
+- **Today.** Recording a web checkout takes three trips: mark as placed (directly today, without review), then "Vendor confirmed by phone or email?" for the order number, `vendorPoNumber` (`components/document/po-preview.tsx:446-460`, screens 11–12), then "Record a payment" from one line (`purchase-choices.tsx:36-42`), whose receipt files to that line only (:42).
 - **Change.** Once the paper is marked placed, its record line offers one sheet that composes the existing writes, in this order:
 
   ```
@@ -301,8 +304,8 @@ Size is design-size (S = copy or one control on an existing surface; M = a new s
   - The order number is typed once: it writes `vendorPoNumber` and pre-fills the payment reference.
   - Per-piece amounts come from the paper and open only when the card charge disagrees with the itemized total, which raises R-08's question.
   - Freight fills the **actual** of the order's existing Freight or White glove rider; it adds a rider only if none exists, so one charge never has two writers.
-- **Reuse vs new.** Reused: every write (ack log, PO payment, riders, order ETA). New: the sheet that composes them and the itemized comparison.
-- **Size.** M.
+- **Reuse vs new.** Reused: the separate ack, payment, rider and ETA writes. New: the sheet, itemized comparison and coordinated linkage; external-order review is also new, pending Q-07. This is not copy-only reuse.
+- **Size.** L for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document, the paper · the minute after "Pay now" · margin · one entry for one checkout.
 
 ### R-14 · The ETA says what it covers — F9 (kept) and F5
@@ -333,7 +336,7 @@ See §6. No change beyond R-06's rename.
 
   "Bill N unbilled riders" pre-fills $328.90; the internal cost stays $299.00 for the margin figure through the existing internal-cost record (`00822_us36_invoice_line_internal_cost.sql`). The client sees one delivery figure, never a "markup" row. A rider that has absorbed a price rise can't bill silently: it says **"includes $230.20 not on the maker's shipping line"** and points to R-08.
 - **Reuse vs new.** Reused: `billing_rule`, the composer override, the internal-cost record. New: a stored percent (job and rider), the read-out. One schema change.
-- **Size.** M.
+- **Size.** L for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document, the paper and the bill · adding delivery · margin (the first dollar) · delivery reads as delivery, at a figure chosen on purpose.
 
 ### R-17 · "+ Another fee" on Bought it already — F3 · NEXT
@@ -342,43 +345,62 @@ See §6. No change beyond R-06's rename.
 - **Today.** Studio purchases have Shipping and Buyer's premium only (`components/document/purchases/purchase-record.ts:31-49`; form :229-246); they have no riders.
 - **Change.** A **"+ Another fee"** row under Shipping with the same kind, owed-to and "not known yet" amount as R-07.
 - **Reuse vs new.** New fields on the purchase (schema change).
-- **Size.** M.
+- **Size.** M for the full item; S sub-slices only where listed in §4.
 - **Vision test.** The Document · a store buy with a fee · margin · the same fee looks the same on either door.
 
 ### LATER, only when a real buy needs it
 
 - **R-18 · A grouped "Bought it already"** (`studio_purchase_lines`, an arrival trigger over lines, a shipment link). Today a studio purchase covers at most one line (00703:63, 119-122), and `po_shipments.purchase_order_id` is NOT NULL (00704:115). Build only if a real multi-piece store buy (not a web checkout of shipping pieces) needs it. L.
-- **R-19 · Freight share per piece, read-only** (Q-03 option B): "+$— of the order's freight", pro-rata by trade cost, computed not stored. Useful if a piece is returned. S.
-- **R-20 · "ETA passed" on the buyer's Desk.** Inferred from Leah's "benchmark" (mtg:452); nobody asked for a reminder. Ask Leah before building. The Desk has no such need today (`lib/document/desk-derivation.ts:114-162`). If built: it rises once, the day after the benchmark passes with no shipment recorded, names the piece, and stands down once a shipment covers it. S–M.
-- **R-21 · Named rider kinds in the schema** (Import tariff, Processing fee), if `other` plus a name proves out. S.
+- **R-19 · Freight share per piece, read-only** (Q-03 option B): "+$— of the order's freight", pro-rata by trade cost, computed not stored. Useful if a piece is returned. M, provisional; ungated parked.
+- **R-20 · "ETA passed" on the buyer's Desk.** Inferred from Leah's "benchmark" (mtg:452); nobody asked for a reminder. Ask Leah before building. The Desk has no such need today (`lib/document/desk-derivation.ts:114-162`). If built: it rises once, the day after the benchmark passes with no shipment recorded, names the piece, and stands down once a shipment covers it. M, provisional; ungated parked.
+- **R-21 · Named rider kinds in the schema** (Import tariff, Processing fee), if `other` plus a name proves out. M, provisional; ungated parked.
 
 ---
 
 ## 4 · Phasing
 
-**NOW — before the next purchases on the Harchess job** (small; mostly discoverability, receipt-later, fees and variance):
+S means copy or one control; M means one bounded interaction; L means several surfaces or coordinated schema/writes. Full-item sizes above include every promised part, not just the easy entry label.
 
-| Id | What | F | Size |
-|---|---|---|---|
-| R-01 | Next row says why and offers the act; Order returns without refresh | F1 | S |
-| R-02 | Short client payment names the gap and what stays held | F11 | S |
-| R-03 | "For a job?", the ship-to fold, the stray notice | F7 | S |
-| R-04 | "An expense to pass through" first in Add items; one name for Bought it already; the count | F8 | S |
-| R-05 | "No quote on file… the checkout total is the price" | F10 | S |
-| R-06 | "Ordered on their site or by phone — mark as placed" | F12 | S |
-| R-07 | Import tariff, Processing fee, Other (name it); "amount not known yet" | F3 | S |
-| R-08 | Price-rise question on Money out; reason on the cost change; client's price waits | F2 | M |
-| R-09 | Receipts now or later, several files, on the money record; "receipt still owed" | F4 | M |
-| R-10 | Linked "Bought it already" can't bill the piece twice (verify first) | hazard | S |
-| R-11 | "Cost plus" says what it does | F6 | S |
-| R-12 (entry) | "2 ready from Rejuvenation · Order together →" opens the existing queue | F5 | S |
-| R-14 | ETA "for both pieces on this order" | F9/F5 | S |
+**NOW — minimal unblock before the next Harchess purchases.** Only copy and single controls, sized S. This does not deliver the complete proposal.
 
-Acceptance on the Harchess job: the Rejuvenation pair can be ordered on one paper from the job; the bed's $230.20 can be recorded as "the bed cost more" with the client's price unchanged; the wallpaper's tariff and processing fee sit on the paper as named riders with no amount until the courier bills; Ashley can record a payment with a screenshot and add the PDF later; Kody's den no longer appears on the Harchess ship-to.
+| Id | What | Size |
+|---|---|---|
+| R-01a | Show the existing held reason in the Next row; no new routing or refresh promise | S |
+| R-02a | Prefill the balance on both entry paths | S |
+| R-04a | One expense preset in Add items; no new count | S |
+| R-05 | No-quote explanation | S |
+| R-06a | Rename mark-as-sent only; no new review | S |
+| R-07a | Show “amount not known yet” for a blank estimate | S |
+| R-11 | Explain cost plus | S |
+| R-14 | Say the ETA covers both pieces | S |
 
-**NEXT:** R-12 (per-job block on the vendor page), R-13 (Record the checkout), R-16 (freight markup, after Q-05), R-17 (fees on Bought it already).
+**NOW-next — follow-ons in the same push, not a before-next-purchase promise.**
 
-**LATER:** R-18 to R-21.
+| Id | What | Size |
+|---|---|---|
+| R-01 | Reason-to-act map, head summary and refresh | M |
+| R-02 | Gap and gate feedback with fill action | M |
+| R-03 | People and ship-to destination changes | L |
+| R-04 | Expense count and naming across surfaces | M |
+| R-06b | New external-order review, pending Q-07 | M |
+| R-07 | Fee naming and new payment-to-Actual link | L |
+| R-08 | Released-line actual-cost writer with audit reason | L |
+| R-09 | Multi-file append, owed and closeout states | L |
+| R-10 | Linked-purchase billing correction; verify first | L |
+| R-12 entry | Job-scoped grouped-order entry | M |
+
+After NOW-next: acceptance includes a grouped paper from the job; the corrected white-glove baseline and an audited bed variance, including an unallocated flag; an unconfirmed fee with later payment-to-Actual linkage; append-later receipts; and job-scoped destinations. The minimal unblock alone does not claim these.
+
+**NEXT**
+
+| Id | What | Size |
+|---|---|---|
+| R-12 block | Vendor page grouped block | M |
+| R-13 | Checkout sheet and write coordination | L |
+| R-16 | Freight percent across job, rider and bill; Q-05 first | L |
+| R-17 | Purchase fee schema and form | M |
+
+**LATER — R-18–R-21 are ungated parked ideas.** Each needs the four-part vision test (surface, studio moment, money stream, promise) before any build commitment. Sizes are provisional: R-18 L; R-19 M; R-20 M; R-21 M.
 
 ---
 
@@ -388,12 +410,14 @@ Each was asked in more than one proposal; the ids below replace J-1–J-4, G1–
 
 | Id | Question | Options | Recommended default |
 |---|---|---|---|
-| **Q-01** (was R-M1, G3) | Who absorbs a checkout price rise, and who decides? | A. Preselect nothing: the line stays flagged, both buttons show the dollar effect, the owner (or whoever holds pricing) chooses. B. The studio absorbs automatically below a threshold the studio sets. C. Always ask the client through Record a change. | **A.** The buyer can record and "leave it flagged" (Ashley buys on Leah's logins; absorbing is the owner's call). Leah leaned towards absorbing small rises ("I don't want to be greedy", mtg:308), so a threshold is a reasonable later step, but it's a founder call. |
+| **Q-01** (was R-M1, G3) | Who absorbs a checkout price rise, and who decides? | A. Preselect nothing: the line stays flagged, both buttons show the dollar effect, the owner (or whoever holds pricing) chooses. B. The studio absorbs automatically below a threshold the studio sets. C. Always ask the client through Record a change. | **A.** The buyer can record and "leave it flagged" (Ashley buys on Leah's logins; absorbing is the owner's call). A threshold is the team’s inference from Leah’s freight-markup remark (mtg:308), not a stated preference about checkout rises. It remains a founder call. |
 | **Q-02** (was J-1, G5) | Must "Bought it already" respect the deposit gate? (`purchase-record.ts:166-185` has no such check; the paper does.) | A. Allow, warn before ("The deposit (A1) hasn't cleared. If you've already bought it, record it."), mark after ("Bought before the deposit cleared (A1)"). B. Refuse until the deposit clears. C. Allow for the owner only. | **A**, a purchase already made is historical truth (US-50 `direction.md:147-149`), **conditional on R-10** so the piece can't bill twice. |
 | **Q-03** (was G2, J-2) | How is shipping allocated across a grouped buy? | A. On the order: one rider, one client line, no piece's price moves. B. A, plus a computed per-piece share read-out. C. On one piece (Leah's "for now", mtg:483-485). | **A** (riders already sit on the order, `00704:56-59`). B can come later (R-19) without changing any record. C skews one piece's margin and breaks on a return. |
 | **Q-04** (was R-M2, G4, J-3) | Is a receipt required before a purchase is "complete"? | A. Not required; "receipt still owed" on the money record, a Money out count and a closeout list. B. A, plus a Desk need to the person who holds the email, after a set number of days. C. Required before the line can be billed or the job closed. | **A.** Leah's reason is "bookkeeping and if we ever were to get audited" (mtg:155), which a closeout list serves without putting a gate in the buyer's way. |
 | **Q-05** (R1, carried) | The freight markup default, and whether the client sees it. | A. Studio default 0% (at cost, as today); a job sets its own percent; a rider can override; the client sees one delivery figure. B. A studio-wide default percent (e.g. 10%). C. Per-rider only. D. Stay at cost; type an override in the bill (works today, R-11). | **A.** Leah's 10% was reasoned from this job ("a healthy markup on this job", mtg:306), so it is the Harchess job's setting, not the studio default. Until ruled, D is what works. |
 | **Q-06** (was G1, J-4) | Which door does a web checkout of a piece that ships use? | A. The order paper, marked placed. B. A grouped "Bought it already". | **A.** Only the paper carries ship-to, riders, the ETA (`movement-cell.tsx:216`) and per-piece shipments. "Bought it already" stays for walked-out store buys, finds and expenses. |
+
+| **Q-07** | Extend the Send review to recording an external order? | A. Add a review before mark as placed. B. Keep direct recording with clearer words. | **A, proposed**, M in NOW-next. V26 F-06 covers Send only; this extension requires founders’ ruling. |
 
 ---
 
@@ -420,7 +444,7 @@ Keep these as they are; only R-06's words change.
 
 ## Why the alternatives lost
 
-- **Price rise as an ack difference (GB §5).** Refused on an authorized line or once a payment is recorded (`00705:52-57`), which is exactly the Harchess case. Where it is allowed, it writes `trade_price_cents` with markup, so the client's price would rise with no paper. R-08 writes internal cost only.
+- **Price rise as an ack difference (GB §5).** Refused on an authorized line or once a payment is recorded (`00705:52-57`), which is exactly the Harchess case. Where allowed, 00810:1432–1439 writes trade cost and recalculates markup on unchanged unit_price_cents; it does not raise the client price. The authorization/payment refusal is the reason this path cannot solve the Harchess case.
 - **A third tick mode, "Order several together" (GB §2).** The head suggestion plus the per-job block, which has its own ticks, covers hand-picking with one component.
 - **A "Receipt owed" need on the Desk the next morning (J).** Nobody asked to be reminded; it would nudge Ashley for an email that lands in Leah's inbox, and the studio would notice Patina. Kept as Q-04 option B.
 - **Naming whose inbox holds the receipt (MT §3).** Patina doesn't know whose inbox a login's email goes to, and a typed name is one more field on every buy.

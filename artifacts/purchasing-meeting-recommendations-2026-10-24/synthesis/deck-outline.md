@@ -2,7 +2,7 @@
 
 **US-54 · founders' deck for Kody and Leah · 19 sheets + the mockup storyboard · design-only**
 
-Source of truth: `synthesis/recommendations.md` (R-01–R-21, Q-01–Q-06). Screens (local walk, 22 October) are in `artifacts/purchasing-workflow-review-2026-10-22/walk/screens/`; compressed copies are in `artifacts/purchasing-workflow-review-2026-10-22/deck/img/` (`*-crop.jpg`). Post-build captures in the session scratchpad (`buying-deck/img/`) are volatile and are wiped on restart, so re-capture them before relying on them.
+Source of truth: `synthesis/recommendations.md` (R-01–R-21, Q-01–Q-07). Screens (local walk, 22 October) are in `artifacts/purchasing-workflow-review-2026-10-22/walk/screens/`; compressed copies are in `artifacts/purchasing-workflow-review-2026-10-22/deck/img/` (`*-crop.jpg`). Post-build captures in the session scratchpad (`buying-deck/img/`) are volatile and are wiped on restart, so re-capture them before relying on them.
 
 ## Presentation contract
 
@@ -46,7 +46,7 @@ Source of truth: `synthesis/recommendations.md` (R-01–R-21, Q-01–Q-06). Scre
 ### 6 · The payment says what it leaves closed — R-02
 - **The point.** A short entry is allowed, but it should say the gap and that it keeps the deposit gate shut.
 - **Content.** Mock: "$2,000.00 less than the balance… 2 pieces stay held. [ Use $23,123.19 ]" and the matching line "Matches the balance. A1's deposit is clear, so 2 pieces can be ordered."
-- **Evidence.** `invoice-folio.tsx:1205-1213, 1250-1256, 606-607`; mtg:222. There's no walk screen of the Folio payment panel; the sheet uses the mock only.
+- **Evidence.** `invoice-folio.tsx:1205-1213, 1250-1256, 606-607`; mtg:222. Ordinary Folio opening is empty; landOn=record pre-fills the balance (invoice-folio.tsx:274–282; money-region.tsx:317). Make the paths consistent. There's no walk screen of the Folio payment panel; the sheet uses the mock only.
 
 ### 7 · The price rose at checkout — R-08 (1 of 2)
 - **The point.** The $230.20 went into white glove because there was nowhere honest to put it. Money out should notice and ask once.
@@ -54,14 +54,14 @@ Source of truth: `synthesis/recommendations.md` (R-01–R-21, Q-01–Q-06). Scre
 - **Evidence.** `record-payment.tsx:206-208`, `00809_us37_trade_pricing_core.sql:375-382`, `change-order.tsx:26-35`, `00705_po_acknowledgments.sql:52-57`; mtg:374-378, 386, 391, 395.
 
 ### 8 · The client's price waits for the studio — R-08 (2 of 2) · Q-01
-- **The point.** The cost changes and the margin shows the hit, but the client's price moves only by choice.
-- **Content.** The flagged line: "cost changed from $3,449.00 to $3,679.20 · sale ended at checkout · margin on this piece down $230.20 · [ Keep the client's price ] [ Ask the client for it ]". Q-01's options and the default (preselect nothing; the buyer can leave it flagged).
+- **The point.** The bed-cost branch changes cost; Not sure leaves $230.20 unallocated and flagged without an invented reason. The client’s price waits.
+- **Content.** The flagged line: "cost changed from $3,449.00 to $3,679.20 · Example reason: possible sale change · margin on this piece down $230.20 · [ Keep the client's price ] [ Ask the client for it ]". Q-01's options and the default (preselect nothing; the buyer can leave it flagged).
 - **Evidence.** `00809:39-46, 1343-1349`; `price-table.tsx:636-648`; mtg:308, 362.
 
-### 9 · Fees that come later — R-07
-- **The point.** An import tariff and a processing fee are named riders owed to the courier, with "amount not known yet", and they bill when the bill arrives.
-- **Content.** The wallpaper paper with two riders. Below it, "weeks later": Record payment to the courier fills the actual, and the rider joins "Bill N unbilled riders". A side note: on Bought it already this is R-17 (NEXT).
-- **Evidence.** `riders-model.ts:16-26, 55-60`; `00704:68, 73-75, 209-210`; screen `05-order-paper-sofa-1440` (riders area); mtg:48, 76, 100.
+### 9 · Fees that come later — R-07 · NOW-next · L
+- **The point.** A possible fee has no known amount yet. Type, rate and payee are unconfirmed until the vendor’s bill arrives; 3% was Kody’s guess and the site offered to cover new customs fees.
+- **Content.** One possible import / processing fee, not two confirmed charges. Today Actual is entered separately on blur; the courier payment inserts a vendor payment only. A payment-to-Actual link is proposed new coordinated work, L, not existing reuse.
+- **Evidence.** riders.tsx:477–511, 540–549; 00718:624–780; mtg:48, 76, 100. S blank-estimate copy is the minimal NOW slice.
 
 ### 10 · Receipt now or later — R-09 · Q-04
 - **The point.** Recording money and attaching paper are separate acts. More than one file, owed quietly, no reminder.
@@ -79,13 +79,13 @@ Source of truth: `synthesis/recommendations.md` (R-01–R-21, Q-01–Q-06). Scre
 - **Evidence.** `purchase-record-form.tsx:84, 319-321`; `invoice-composer.ts:307-318`; `00822_us36_invoice_line_internal_cost.sql` (purchase branch); `purchase-record.ts:166-185`.
 
 ### 13 · Order together — R-12
-- **The point.** Grouping already exists on the vendor page and is hard to find. Bring it to the job now; give the vendor page a block per job next.
-- **Content.** Today: Vendor accounts rows with no sign of waiting pieces, and Order all for ready lines only. NOW: "2 ready from Rejuvenation · Order together →" on the section head. NEXT: the per-job block with ticks, waiting reasons, and "Two places, so two orders".
+- **The point.** Grouping already exists on the vendor page and is hard to find. Bring it to the job in NOW-next (M); give the vendor page a block per job next.
+- **Content.** Today: Vendor accounts rows with no sign of waiting pieces, and Order all for ready lines only. NOW-next (M): "2 ready from Rejuvenation · Order together →" on the section head. NEXT: the per-job block with ticks, waiting reasons, and "Two places, so two orders".
 - **Evidence.** `orders-book-vendors.tsx:614-645, 710-728, 1168`; `00450_ffe_po_compat_and_media_dedupe.sql`; screens `47-orders-vendor-accounts-1440`, `44-orders-book-1440`; mtg:457, 462-463, 479-480, 489.
 
 ### 14 · Record the checkout — R-13 (NEXT)
 - **The point.** One checkout gives one sheet, one payment, one receipt and one order number typed once, and each piece keeps its own line.
-- **Content.** The sheet mock, itemized: pieces from the paper, Freight filling the existing rider, fees, something else on this charge, receipts now or later, and "Arrives about … for both pieces". Today's three trips shown as a strip.
+- **Content.** The sheet mock, itemized: pieces from the paper, Freight filling the existing rider, fees, something else on this charge, receipts now or later, and "Arrives about … for both pieces". Today’s three trips shown as a strip: mark-as-sent is direct, not reviewed. Review is new under Q-07; composing linked writes is L, not copy.
 - **Evidence.** `po-preview.tsx:446-460`; `purchase-choices.tsx:36-42`; screens `11-ack-check-1440`, `12-after-ack-1440`; mtg:476, 482, 496.
 
 ### 15 · Ships separately, arrives separately — R-14
@@ -99,18 +99,18 @@ Source of truth: `synthesis/recommendations.md` (R-01–R-21, Q-01–Q-06). Scre
 - **Evidence.** `studio-locations-editor.tsx:284-285`; `job-destinations-sheet.tsx:82-85, 145-157`; `ship-to-choice.tsx:68-77, 179, 231`; screens `32`–`34`; mtg:258-259.
 
 ### 17 · Expenses where Leah stands — R-04 · and two small truths, R-05 and R-06
-- **The point.** Pass-through expenses already work, four steps deep. Put them first in Add items. And two copy fixes: no quote is fine for a web buy, and "Released" becomes "mark as placed".
+- **The point.** Pass-through expenses already work, four steps deep. Put them first in Add items. And two S copy fixes, plus a separate M review extension under Q-07: no quote is fine for a web buy, and "Released" becomes "mark as placed".
 - **Content.** The Add items menu today vs proposed ("An expense to pass through" first); the "Expenses to pass through · 3 · $— · billed at final billing" count. Two one-liners: "No quote on file. For a web checkout, the checkout total is the price." and "Ordered on their site or by phone — mark as placed".
 - **Evidence.** Screen `37b-add-items-menu-1440`; `add-to-project-sheet.tsx:113-116`; `ffe-section.tsx:2141-2146, 2317-2331`; `authorization-derivation.ts:446-472`; `order-paper/index.tsx:1261, 1346`; mtg:199-200, 463-470.
 
 ### 18 · What comes when
-- **The point.** Thirteen small things before the next Harchess buys; four next; four only when a real buy needs them.
-- **Content.** The three-column NOW / NEXT / LATER list from recommendations §4, each item with its F-number and size. The Harchess acceptance list under NOW.
+- **The point.** Minimal S-sized NOW unblock before the next buys; larger NOW-next follow-ons in the same push; NEXT; ungated parked LATER.
+- **Content.** Use the exact minimal NOW, NOW-next, NEXT and LATER lists and full-item sizes in recommendations §4. Full acceptance follows NOW-next, not the minimal unblock. R-18–R-21 are ungated parked ideas until their four-part vision test is stated.
 - **Evidence.** recommendations §4.
 
 ### 19 · For you to rule · and what's parked
-- **The point.** Six questions, each with a recommended default. Nothing here is decided in code.
-- **Content.** Q-01 to Q-06 with options and defaults (one row each). A footer band: **Parked**, P1 the job mailbox (mtg:163-172) and P2 visual differentiation, which goes to the redesign review (mtg:511-523).
+- **The point.** Seven questions, each with a recommended default. Nothing here is decided in code.
+- **Content.** Q-01 to Q-07 with options and defaults (one row each). A footer band: **Parked**, P1 the job mailbox (mtg:163-172) and P2 visual differentiation, which goes to the redesign review (mtg:511-523).
 - **Evidence.** recommendations §5, §7.
 
 ---
@@ -133,17 +133,17 @@ One continuous Proposed walk on the Harchess job, in four acts. Desktop frames a
 |---|---|---|---|---|---|
 | 4 | One paper, two lines. Ship-to grouped: **On this job** holds the Harchess home (private home · no dock · liftgate); Studio places below; "A home on another job…" folded. The den is gone. | Ship to the Harchess home | "On this job · Studio places · A home on another job…" · "No quote on file. For a web checkout, the checkout total is the price." | R-03, R-05 | — |
 | 5 | The paper's riders: one Freight rider on the order, Bill the client on, cost plus showing its honest note. | + Freight, crating, receiving, fees… | "Freight · owed to Rejuvenation · $— · bill the client" · "Set the billed figure when you bill. Patina doesn't add a percent yet." | R-07, R-11 | — |
-| 6 | The paper's foot after the outside checkout, then the one review sheet. | Ordered on their site or by phone — mark as placed | "Nothing is sent to Rejuvenation. This records an order you placed." | R-06 | — |
-| 7 | NOW version of the money: one payment on the order, receipt field with a screenshot attached, ETA set. (NEXT variant, same frame: the Record the checkout sheet.) | Record the payment | "Receipts — add now or later" · "Arrives ~{date} · for both pieces on this order" · NEXT: "One payment, one receipt, both pieces." | R-09, R-14 (R-13 NEXT) | — |
+| 6 | The paper's foot after the outside checkout, then a proposed new review sheet (Q-07; today direct, F-06 covers Send only). | Ordered on their site or by phone — mark as placed | "Nothing is sent to Rejuvenation. This records an order you placed." | R-06 | — |
+| 7 | NOW-next version of the money: one payment on the order, receipt field with a screenshot attached, ETA set. (NEXT variant, same frame: the Record the checkout sheet.) | Record the payment | "Receipts — add now or later" · "Arrives ~{date} · for both pieces on this order" · NEXT: "One payment, one receipt, both pieces." | R-09, R-14 (R-13 NEXT) | — |
 | 8 | Phone, a week later: Ashley adds the PDF Leah forwarded. Each line reads where its receipt lives. | + Add a receipt | "Receipts · checkout-screenshot.png · order-confirmation.pdf" · on the line: "Receipt · on the Rejuvenation order" | R-09 | **390** |
 
 ### Act 3 · The bed and the wallpaper, money that didn't match
 
 | # | Frame | The one act | Key copy | R | 390 |
 |---|---|---|---|---|---|
-| 9 | Money out on the Sierra bed's paper: $3,978.20 typed against a paper of $3,748.00. The question, nothing selected. | The bed cost more | "That is $230.20 more than the paper ($3,748.00: bed $3,449.00 + white glove $299.00). Where did it go?" · four choices · "The client's price does not change." | R-08 | — |
-| 10 | The bed's line after recording: the flag with its reason and both dollar effects. | (none chosen; shown waiting) | "cost changed from $3,449.00 to $3,679.20 · sale ended at checkout · recorded by Ashley, 23 Oct · margin on this piece down $230.20 · [ Keep the client's price ] [ Ask the client for it ]" | R-08, Q-01 | — |
-| 11 | The wallpaper's paper: two fee riders with no amount. Then a "weeks later" inset: Record payment to the courier fills the processing fee. | Record payment to the courier | "Import tariff · owed to the courier · amount not known yet · bill the client at cost" · "Processing fee · about 3% · amount not known yet" → "Bill 1 unbilled rider →" | R-07 | — |
+| 9 | Money out on the Sierra bed's paper: $3,978.20 typed against the reconstructed $3,748.00 baseline, as the paper should have read, after correcting white glove $529.20 → $299.00. The question, nothing selected. | The bed cost more | "First correct white glove $529.20 → $299.00. As the paper should have read: $3,748.00; $230.20 below the charge. Where did it go?" · four choices · "The client's price does not change." | R-08 | — |
+| 10 | The bed's line after recording: the flag with its reason and both dollar effects. | (none chosen; shown waiting) | "cost changed from $3,449.00 to $3,679.20 · Example reason: possible sale change · recorded by Leah, 23 Oct · margin on this piece down $230.20 · [ Keep the client's price ] [ Ask the client for it ]" | R-08, Q-01 | — |
+| 11 | Possible fee, details unconfirmed until the bill. Later courier bill is illustrative. | Show a later bill · example | Proposed new payment-to-Actual link; today Actual entered separately. No confirmed rate or payee yet. | R-07 | — |
 
 ### Act 4 · Afterwards
 
@@ -182,3 +182,5 @@ Frame 8 at 390:
 ```
 
 R coverage: R-01 (1, 3) · R-02 (2) · R-03 (4) · R-04 (12, 14) · R-05 (4) · R-06 (6) · R-07 (5, 11, 14) · R-08 (9, 10) · R-09 (7, 8, 14) · R-11 (5) · R-12 (3) · R-13 (7, NEXT variant) · R-14 (7, 13). R-10 and R-16 appear on sheets 12 and 11 only, not in the walk. Frames needing 390: **1, 8, 12, 13**.
+
+Sizing and phasing authority: recommendations §3–4. R-01 M, R-02 M, R-03 L, R-04 M, R-05 S, R-06 S rename + M review, R-07 L, R-08 L, R-09 L, R-10 L, R-11 S, R-12 entry M / block M, R-13 L, R-14 S, R-15 KEEP, R-16 L, R-17 M. No large follow-on is promised before the next purchase. Q-07 explicitly asks whether to extend V26’s Send-only review to external-order recording.
