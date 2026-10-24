@@ -1,6 +1,6 @@
 # WP-01.9 first vertical slice evidence
 
-Status: browser capture revealed two test assertion defects; the spec is repaired and awaits a new browser authorization before its rerun.
+Status: the latest authorized browser capture exposed a missing lens-entry step in the test, not a product defect. The spec now scrolls the FF&E chapter into view and waits for the lens root to become full and settled; this test adjustment awaits browser authorization.
 
 ## Contract and fixture
 
@@ -17,7 +17,7 @@ Status: browser capture revealed two test assertion defects; the spec is repaire
 
 ## Browser evidence
 
-- Authorized initial run of `first-slice.spec.ts` on port 3426 — **0 passed, 4 failed**. The failures were blocked before the journey by an ambiguous `id` in the test's initial SQL and an expected caption string that differed from the real caption. Corrected the query to `i.id`; the assertion now checks the rendered caption `Survey, not installed`, which accurately distinguishes survey evidence from installed work. The repaired spec has not yet been browser-tested.
+- The repaired authorized first-slice run — **0 passed, 4 failed**. The saved trace showed the FF&E chapter still quiet: the test queried its room rows without first bringing the chapter into LENS's frame. Offline source tracing confirmed `PaperChapter` provides `data-index-region` (`paper-chapter.tsx:35–39`), `FFESection` exposes `data-density` (`ffe-section.tsx:2459–2460`), desktop ContentsMargin and the mobile chapter sheet both route through `jumpToChapter`, which calls `lens.forceFullThrough` (`page.tsx:2264–2273`, `2527–2538`). The failure was therefore a test gap, not a product or F01 fixture gap. The spec now scrolls the chapter into view and waits for its `data-density="full"` and the document shell's `data-lens-settled="true"` before querying room rows. This adjustment has not yet been browser-tested.
 - The same authorized sequence then ran `pieces-build-room.spec.ts` on port 3413 — **37 passed, 0 skipped** (Chromium, one worker). It logged expected refusal messages from exercised refusal cases and external Sanity-help fetch failures; Playwright reported all tests passed.
 - The F01 setup readback was `{"job":"f0180000-0000-4000-8000-000000000010","studio":"f0180000-0000-4000-8000-000000000001","lines":80,"living":36}`. After both browser runs, the owned F01 project and survey rows were deleted; no DB reset was performed. Shared actor/studio scaffold rows remain as in the existing local fixture convention.
 - Browser slot ports 3426, 3413 and 3424 had no listeners after the runs. `next-env.d.ts` was restored from the pre-run saved baseline. The exact #35 check (`SELECT count(*) FROM public.project_ffe_items WHERE project_id <> 'e6590000-0000-4000-8000-000000000001' AND product_id::text LIKE 'e6590000%';`) returned **0** after cleanup.

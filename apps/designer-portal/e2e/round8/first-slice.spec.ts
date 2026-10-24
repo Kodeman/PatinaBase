@@ -103,6 +103,10 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     await expect(evidence, 'the linked F01 living-room scan is shown in Design').toBeAttached({ timeout: 30_000 });
     await expect(evidence).toContainText('Survey, not installed');
     await evidence.scrollIntoViewIfNeeded();
+    const ffeChapter = page.locator('[data-paper-chapter="ffe"]');
+    await ffeChapter.scrollIntoViewIfNeeded();
+    await expect(ffeChapter, 'the reader brought FF&E into the lens frame').toHaveAttribute('data-density', 'full');
+    await expect(page.locator('[data-document-shell]')).toHaveAttribute('data-lens-settled', 'true');
 
     // Keep an object reference to the shell: identity, not selector count, proves no remount.
     await shell.evaluate((node) => {
@@ -251,6 +255,10 @@ test.describe('WP-01.9 first vertical slice (F01)', () => {
     const evidence = page.locator(`[data-survey-scan="${SCAN}"]`);
     await expect(evidence).toBeAttached({ timeout: 30_000 });
     await expect(evidence).toContainText('Survey, not installed');
+    const ffeChapter = page.locator('[data-paper-chapter="ffe"]');
+    await ffeChapter.scrollIntoViewIfNeeded();
+    await expect(ffeChapter, 'the reader brought FF&E into the lens frame').toHaveAttribute('data-density', 'full');
+    await expect(page.locator('[data-document-shell]')).toHaveAttribute('data-lens-settled', 'true');
     const room = page.locator(`[data-paper-chapter="ffe"] [data-pieces-room="${LIVING}"]`);
     await expect(room).toBeAttached({ timeout: 30_000 });
     await room.scrollIntoViewIfNeeded();
