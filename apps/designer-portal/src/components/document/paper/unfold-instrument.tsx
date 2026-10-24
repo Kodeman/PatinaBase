@@ -129,8 +129,19 @@ interface BackHold {
   standing: () => Standing | null;
   /** Whether a traversal to `to` is held (it is not the one releasing). */
   holds: (to: string) => boolean;
+  depart: (action: () => void) => void;
 }
 const backHolds = new Set<BackHold>();
+
+/** Explicit paper departures use the mounted sheet's Return/Esc barrier too. */
+export function requestUnfoldDeparture(action: () => void): void {
+  const kind = parseUnfoldSearch(new URLSearchParams(window.location.search), {
+    canSeeMoney: true,
+  })?.kind;
+  const hold = [...backHolds].find((candidate) => candidate.kind === kind);
+  if (hold) hold.depart(action);
+  else action();
+}
 
 /** The slice of the Navigation API a held traversal needs. */
 interface TraverseNavigateEvent extends Event {
@@ -207,7 +218,7 @@ function heldBack(
 }
 
 const readSearch = () => {
-  const held = heldBack();
+  const held = navigationApi() ? heldBack() : null;
   return held ? new URL(held.url).search : window.location.search;
 };
 const serverSearch = () => "";
@@ -421,10 +432,12 @@ export function UnfoldInstrument({
     return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
-  const close = useCallback(() => {
+  const depart = useCallback((action: () => void) => {
     if (closing) return;
-    if (!ownerKind || !ownerId || isProposalAutosaveSnapshotClean(snapshot)) {
-      foldAway();
+    if (!ownerKind || !ownerId || isProposalAutosaveSnapshotClean(
+      getProposalAutosaveSnapshot({ kind: ownerKind, id: ownerId }),
+    )) {
+      action();
       return;
     }
     setClosing(true);
@@ -436,7 +449,7 @@ export function UnfoldInstrument({
       () => {
         if (generation.current !== asked) return;
         setClosing(false);
-        foldAway();
+        action();
       },
       () => {
         if (generation.current !== asked) return;
@@ -444,7 +457,10 @@ export function UnfoldInstrument({
         setCloseError(UNFOLD_UNSAVED_MESSAGE);
       },
     );
-  }, [closing, ownerKind, ownerId, snapshot]);
+  }, [closing, ownerKind, ownerId]);
+  const departRef = useRef(depart);
+  departRef.current = depart;
+  const close = useCallback(() => depart(foldAway), [depart]);
   // Story #40/#41 — Back (or Forward) is held exactly like Return while the
   // pane has a write out or a field marked unsaved, whether it leads within
   // this document or to another one. Where the traversal's `navigate` event
@@ -508,6 +524,7 @@ export function UnfoldInstrument({
     const hold: BackHold = {
       kind,
       standing: () => standing.current,
+      depart: (action) => departRef.current(action),
       holds: (to) =>
         releasing.current !== to &&
         !isProposalAutosaveSnapshotClean(getProposalAutosaveSnapshot(owner)),
@@ -579,8 +596,8 @@ export function UnfoldInstrument({
     };
     guard();
     const unsubscribe = subscribeToProposalAutosaves(owner, guard);
+    backHolds.add(hold);
     if (navigation) {
-      backHolds.add(hold);
       navigation.addEventListener("navigate", onNavigate);
       window.addEventListener("popstate", onPop, { capture: true });
     }

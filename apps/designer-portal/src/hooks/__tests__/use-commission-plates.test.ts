@@ -25,6 +25,7 @@ function mockQuery(table: string) {
 }
 
 jest.mock('@patina/supabase', () => ({
+  boardOwnerQueryKeys: jest.requireActual('../../../../../packages/supabase/src/hooks/use-boards').boardOwnerQueryKeys,
   createBrowserClient: () => ({
     storage: { from: (bucket: string) => ({ createSignedUrls: (paths: string[]) => mockSign(bucket, paths) }) },
     from: (table: string) => {
