@@ -1,4 +1,4 @@
-import { browserNavigation } from "../../__tests__/browser-navigation";
+import { browserNavigation } from "../../__tests__/browser-navigation.cjs";
 /**
  * SQ-1891, repaired by SQ-1894 (WP-01.6): the round-8 FF&E chapter hosting
  * the real UnfoldInstrument, SpecLens and SpecFieldsPane. Only the Build room

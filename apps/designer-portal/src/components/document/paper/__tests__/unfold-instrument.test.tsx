@@ -1,4 +1,4 @@
-import { browserNavigation } from "./browser-navigation";
+import { browserNavigation } from "./browser-navigation.cjs";
 import { useEffect, useRef, useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useUpdateProjectFfeSpec } from "@patina/supabase";
