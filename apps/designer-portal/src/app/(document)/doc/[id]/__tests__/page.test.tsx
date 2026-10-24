@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useInsertionEffect, type ReactNode } from 'react';
-import DocumentPage from './page';
+import DocumentPage from '../page';
 import {
   beginEntry,
   noteRunStarted,
@@ -628,6 +628,10 @@ jest.mock('@/hooks/use-section-work', () => ({
 let mockEnabledFlags: string[] = [];
 // US-19 D6 — the FF&E lines the band's own act and install reading read.
 let mockProjectFfeItems: unknown[] = [];
+// WP-01.5 — this suite reads the legacy paper; the renderer latch is not under test.
+jest.mock('@/hooks/use-paper-renderer', () => ({
+  usePaperRenderer: () => ({ renderer: 'legacy', source: 'override' }),
+}));
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (key: string) => ({
     value: mockEnabledFlags.includes(key),

@@ -31,12 +31,20 @@ test('F01 live studio opens its full-service job with 36 living-room lines and 8
   // The first next dev compile of /doc/[id] is slow.
   await expect(page).toHaveURL(new RegExp(`/doc/${job}`), { timeout: 60_000 });
   await expect(page.locator('[data-document-shell]')).toBeVisible({ timeout: 30_000 });
-  let index = page.getByRole('navigation', { name: 'This paper', exact: true });
+  // WP-01.5 — the round-8 paper: the contents margin from 1180px; below it the
+  // mobile bar's sections sheet stays the way in (preservation-inventory).
   if ((page.viewportSize()?.width ?? 1440) < 1180) {
     await page.locator('[data-sections-door]').click();
-    index = page.getByRole('dialog', { name: 'Sections of this document', exact: true });
+    await page
+      .getByRole('dialog', { name: 'Sections of this document', exact: true })
+      .getByRole('button', { name: /^Pieces & purchasing\b/i })
+      .click();
+  } else {
+    await page
+      .getByRole('navigation', { name: 'Job contents', exact: true })
+      .locator('[data-contents-entry="ffe"]')
+      .click({ timeout: 30_000 });
   }
-  await index.getByRole('button', { name: /^Pieces & purchasing\b/i }).click();
   await expect(page.getByText('80 lines · not yet on the paper · press Pieces & purchasing on the index to open', { exact: true })).toHaveCount(0);
   const rooms = page.locator('[data-pieces-room]');
   await expect(rooms).toHaveCount(3);

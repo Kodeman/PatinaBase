@@ -2,6 +2,7 @@
 
 import { LegacyDocumentFrame } from '@/components/document/frame/legacy-document-frame';
 import type { DocumentFrameSlots } from '@/components/document/frame/frame-slots';
+import { usePaperRenderer } from '@/hooks/use-paper-renderer';
 
 import { calendarDaysPast } from '@patina/supabase';
 /**
@@ -13,7 +14,7 @@ import { calendarDaysPast } from '@patina/supabase';
  * presence. Esc puts down (sheet-first priority, §3).
  */
 
-import { use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -45,6 +46,9 @@ import {
   useNeedStates,
   useSetNeedState,
   useUnbilledTime,
+  useProjectRoomScans,
+  useGeneratedRoomFilesByScan,
+  useProjectVisits,
 } from '@patina/supabase';
 import type { DiscoveryRead } from '@patina/supabase';
 import {
@@ -81,6 +85,12 @@ import {
   type DocumentIndexKey,
   isPreWorkSection,
 } from '@/lib/document/document-index';
+import {
+  ROUND8_INDEX_KEYS,
+  round8ChapterHeadingId,
+  round8ChapterRegion,
+  type Round8ChapterKey,
+} from '@/lib/document/round8-paper-order';
 import {
   scrollToRegion,
   useDocumentRunningIndex,
@@ -972,6 +982,31 @@ function ladderFactsSignature(input: TicketInput): string {
   });
 }
 
+// WP-01.5 — the round-8 paper is its own chunk (and its own stylesheet); the
+// legacy route never downloads it. React.lazy, not next/dynamic: the loader
+// would ride the legacy route's static chunks (G5). Client-only by construction
+// — the page renders the skeleton until hydrated and the latch settles, so the
+// import only ever runs in the browser; the same skeleton covers its load.
+const Round8PaperFrame = lazy(() => import('@/components/document/frame/round8-paper-frame'));
+
+// R8-02 — two chapters carry pieces that print nothing on an empty read. The
+// chapter mounts on the SAME reads its piece makes (one query each, shared
+// through the cache), so it never stands as an empty heading. The page owns
+// the data path; the frame only places these gates around its chapters.
+function WhenRoomFiles({ projectId, children }: { projectId: string; children: ReactNode }) {
+  const { data: scans } = useProjectRoomScans(projectId);
+  const { data: byScan } = useGeneratedRoomFilesByScan((scans ?? []).map((scan) => scan.id));
+  // RoomFilesSection's own rule: a ready scan with a generated Room File.
+  return scans?.some((scan) => byScan?.has(scan.id)) ? children : null;
+}
+
+function WhenVisits({ projectId, children }: { projectId: string; children: ReactNode }) {
+  const { data: visits } = useProjectVisits(projectId);
+  return visits && visits.length > 0 ? children : null;
+}
+
+const ROUND8_GATES = { design: WhenRoomFiles, site: WhenVisits };
+
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   // F2 — the body is keyed on the document id so picking up a DIFFERENT
   // document is a fresh mount by our own construction, not by trusting the
@@ -1005,6 +1040,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // US-19 slice 2 (`one-voice`) — read once, above the guide: the guide, the
   // need acts and the band's own act all name an act from the one table.
   const oneVoice = useFeatureFlag('one-voice').value === true;
+  // WP-01.5 — presentation only; settles once per page load and never swaps a
+  // frame under an edit (flag-inventory §4).
+  const paperRenderer = usePaperRenderer();
 
   // L3 (00559) — the checklist's sixth row fires here, not on the Desk: the
   // moment it marks is a non-owner member opening a real Document. Reads the
@@ -2139,12 +2177,37 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : isPreWorkSection(row.active_section)
           ? paperRegionsForSection(row.active_section)
           : [];
-  const {
-    activeKey,
-    mountedKeys,
-  } = useDocumentRunningIndex(
-    runningIndexRegions.map((region) => region.key),
+  // R8-02 — under round 8 a project job is ONE continuous paper, so the index
+  // observes its chapters; pre-work documents keep their own regions. The
+  // consumers that speak legacy stops (ladder, margin rail, mobile bar) read
+  // the region each chapter carries.
+  const round8Continuous =
+    paperRenderer.renderer === 'round8' &&
+    row?.engagement_kind === 'project' &&
+    Boolean(row.project_id) &&
+    !isPreWorkSection(row.active_section);
+  const runningIndex = useDocumentRunningIndex<DocumentIndexKey | Round8ChapterKey>(
+    round8Continuous
+      ? ROUND8_INDEX_KEYS
+      : runningIndexRegions.map((region) => region.key),
     row?.project_id ?? '',
+  );
+  const chapterKey = round8Continuous
+    ? (runningIndex.activeKey as Round8ChapterKey | null)
+    : null;
+  const activeKey = round8Continuous
+    ? round8ChapterRegion(chapterKey)
+    : (runningIndex.activeKey as DocumentIndexKey | null);
+  const indexMountedKeys = runningIndex.mountedKeys;
+  const mountedKeys = useMemo(
+    () =>
+      round8Continuous
+        ? indexMountedKeys.flatMap((key) => {
+            const region = round8ChapterRegion(key as Round8ChapterKey);
+            return region ? [region] : [];
+          })
+        : (indexMountedKeys as readonly DocumentIndexKey[]),
+    [round8Continuous, indexMountedKeys],
   );
   const runningIndexProjectId = row?.project_id ?? '';
   // D-B18 — the press order, in one place. The unfold sets the index's 700ms
@@ -2158,6 +2221,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       requestRegionUnfold(key);
       lens.forceFullThrough(key);
       scrollToRegion(key, runningIndexProjectId);
+    },
+    [lens, runningIndexProjectId],
+  );
+
+  const jumpToChapter = useCallback(
+    (key: Round8ChapterKey) => {
+      const region = round8ChapterRegion(key);
+      if (region && region !== key) requestRegionUnfold(region);
+      // The unfold event and the lens key their roots by DOM value; a chapter
+      // root is one, so its key travels the same way.
+      requestRegionUnfold(key as DocumentIndexKey);
+      lens.forceFullThrough(key as DocumentIndexKey);
+      scrollToRegion(key, runningIndexProjectId, round8ChapterHeadingId(key));
     },
     [lens, runningIndexProjectId],
   );
@@ -3065,7 +3141,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // SSR always starts with an empty engagement cache, while client navigation
   // can arrive with a warm React Query cache. Hold the first client paint to
   // the server's loading tree so those two render contracts cannot diverge.
-  if (!hydrated || resolutionState === 'loading') {
+  if (
+    !hydrated ||
+    resolutionState === 'loading' ||
+    paperRenderer.renderer === 'pending'
+  ) {
     if (loadingRegister) return <DocumentSkeleton />;
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
@@ -3436,6 +3516,159 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ),
         }
       : { accountBand: null, kickoff: null };
+
+  // WP-01.5 — the spread's pieces, declared once. The legacy frame prints the
+  // one active spread (§4); the round-8 frame prints them as chapters of one
+  // continuous paper (R8-02). Only one frame ever mounts, so nothing doubles.
+  const scheduleSpine = row.project_id ? (
+    <>
+      <ScheduleSpine
+        projectId={row.project_id}
+        clientUserId={row.client_profile_id}
+        clientName={oneVoice ? householdDisplayName(row.client_name) || null : row.client_name}
+        projectStatus={project?.status}
+      />
+    </>
+  ) : null;
+  const roomFiles = row.project_id ? (
+    <>
+      <RoomFilesSection projectId={row.project_id} />
+    </>
+  ) : null;
+  const visits = row.project_id ? (
+    <>
+      <VisitsBlock projectId={row.project_id} />
+    </>
+  ) : null;
+  const projectFfe = row.project_id ? (
+    <>
+      <FFESection
+        projectId={row.project_id}
+        docId={id}
+        projectName={row.title}
+        mode="project"
+        projectStatus={row.project_status}
+        needs={rankedOperationalNeeds}
+        highlightId={highlightLineId ?? requestedFfeItemId}
+        requestedLineId={requestedFfeItemId}
+        onRequestedLineConsumed={() => setRequestedFfeItemId(null)}
+        onAddNote={setPendingNoteAnchor}
+        sectionKey="project"
+        clientUserId={row.client_profile_id}
+        clientName={row.client_name}
+        releaseLeaderElsewhere={deliveryProcurement}
+        onReleaseOffered={
+          deliveryProcurement || oneVoice ? setReleaseOffered : undefined
+        }
+      />
+    </>
+  ) : null;
+  const projectMoney = row.project_id ? (
+    <>
+      {row.engagement_kind === 'project' && (
+        <MoneyRegion
+          projectId={row.project_id}
+          projectName={row.title}
+          clientName={row.client_name}
+          activeSection={row.active_section}
+          /* W4b — on the table money is what the work is measured
+             against, not the work: one seam, one press from full. */
+          tableSeam={deliveryProcurement}
+        />
+      )}
+    </>
+  ) : null;
+  const projectCare = row.project_id ? (
+    <>
+      <CareBand
+        projectId={row.project_id}
+        onCloseoutReady={acceptCloseout}
+        indexRoot
+      />
+    </>
+  ) : null;
+  const installFfe = row.project_id ? (
+    <>
+      <FFESection
+        projectId={row.project_id}
+        projectName={row.title}
+        mode="install"
+        needs={rankedOperationalNeeds}
+        highlightId={highlightLineId}
+        onAddNote={setPendingNoteAnchor}
+        sectionKey="install"
+        clientUserId={row.client_profile_id}
+        clientName={row.client_name}
+        folioDrop={folioDrop}
+        onFolioDropConsumed={() => setFolioDrop(null)}
+        sectionDragOver={sectionDrag}
+      />
+    </>
+  ) : null;
+  const installCeremony = row.project_id ? (
+    <>
+      <InstallWindowCeremony projectId={row.project_id} />
+    </>
+  ) : null;
+  const installMoney = row.project_id ? (
+    <>
+      {row.engagement_kind === 'project' && (
+        <MoneyRegion
+          projectId={row.project_id}
+          projectName={row.title}
+          clientName={row.client_name}
+          activeSection={spreadSection}
+          accountsElsewhere
+        />
+      )}
+    </>
+  ) : null;
+  const installCare = row.project_id ? (
+    <>
+      <CareBand projectId={row.project_id} onCloseoutReady={acceptCloseout} />
+    </>
+  ) : null;
+  const careSection = true ? (
+    <>
+      <CareSection
+        completedLabel={
+          project?.target_end_date ? fmtMonthYear(project.target_end_date) : null
+        }
+        projectId={row.project_id}
+      />
+    </>
+  ) : null;
+  const careFfe = true ? (
+    <>
+      {row.project_id && (
+        <FFESection
+          projectId={row.project_id}
+          mode="install"
+          needs={rankedOperationalNeeds}
+          highlightId={highlightLineId}
+          sectionKey="care"
+          clientUserId={row.client_profile_id}
+          clientName={row.client_name}
+          folioDrop={folioDrop}
+          onFolioDropConsumed={() => setFolioDrop(null)}
+          sectionDragOver={sectionDrag}
+        />
+      )}
+    </>
+  ) : null;
+  const careMoney = true ? (
+    <>
+      {row.engagement_kind === 'project' && row.project_id && (
+        <MoneyRegion
+          projectId={row.project_id}
+          projectName={row.title}
+          clientName={row.client_name}
+          activeSection={spreadSection}
+          accountsElsewhere
+        />
+      )}
+    </>
+  ) : null;
 
   const slots: DocumentFrameSlots = {
     arrival: (<>
@@ -3869,132 +4102,48 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     B3 retired the schedule-spine flip gate — the Spine is the
                     ledger, unconditionally; CoordinationBand was its fallback
                     and no longer mounts anywhere. */}
-                  <ScheduleSpine
-                    projectId={row.project_id}
-                    clientUserId={row.client_profile_id}
-                    clientName={oneVoice ? householdDisplayName(row.client_name) || null : row.client_name}
-                    projectStatus={project?.status}
-                  />
+                  {scheduleSpine}
                   {/* Wave 1P (spec §11.2) — the Room-files zone the component's
                     own docstring was written for and nothing ever mounted.
                     Unflagged by FC-R10: it returns null for a project with no
                     Room-File-bearing scans, so a field-less project renders
                     exactly as it did before this line existed. */}
-                  <RoomFilesSection projectId={row.project_id} />
-                  <VisitsBlock projectId={row.project_id} />
-                  <FFESection
-                    projectId={row.project_id}
-                    docId={id}
-                    projectName={row.title}
-                    mode="project"
-                    projectStatus={row.project_status}
-                    needs={rankedOperationalNeeds}
-                    highlightId={highlightLineId ?? requestedFfeItemId}
-                    requestedLineId={requestedFfeItemId}
-                    onRequestedLineConsumed={() => setRequestedFfeItemId(null)}
-                    onAddNote={setPendingNoteAnchor}
-                    sectionKey="project"
-                    clientUserId={row.client_profile_id}
-                    clientName={row.client_name}
-                    releaseLeaderElsewhere={deliveryProcurement}
-                    onReleaseOffered={
-                      deliveryProcurement || oneVoice ? setReleaseOffered : undefined
-                    }
-                  />
+                  {roomFiles}
+                  {visits}
+                  {projectFfe}
                   {/* W2 — one money region: authority → plan → committed →
                     moved, over the four surfaces that used to stand apart
                     (design authority, working budget, authorizations & trade
                     scopes, the accounts). Gated on engagement_kind exactly as
                     the four tail mounts it replaced were. */}
-                  {row.engagement_kind === 'project' && (
-                    <MoneyRegion
-                      projectId={row.project_id}
-                      projectName={row.title}
-                      clientName={row.client_name}
-                      activeSection={row.active_section}
-                      /* W4b — on the table money is what the work is measured
-                         against, not the work: one seam, one press from full. */
-                      tableSeam={deliveryProcurement}
-                    />
-                  )}
+                  {projectMoney}
                   {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears).
                     W2 (C-2): the project spread's mount is the running index's
                     `care` root — one root per stop, so the scrollspy cannot
                     see two. */}
-                  <CareBand
-                    projectId={row.project_id}
-                    onCloseoutReady={acceptCloseout}
-                    indexRoot
-                  />
+                  {projectCare}
                 </>
               )}
             {spreadSection === 'install' && row.project_id && (
               <>
-                <FFESection
-                  projectId={row.project_id}
-                  projectName={row.title}
-                  mode="install"
-                  needs={rankedOperationalNeeds}
-                  highlightId={highlightLineId}
-                  onAddNote={setPendingNoteAnchor}
-                  sectionKey="install"
-                  clientUserId={row.client_profile_id}
-                  clientName={row.client_name}
-                  folioDrop={folioDrop}
-                  onFolioDropConsumed={() => setFolioDrop(null)}
-                  sectionDragOver={sectionDrag}
-                />
+                {installFfe}
                 {/* R112: the install week's commitment act, on the section
                     whose whole subject is that week. */}
-                <InstallWindowCeremony projectId={row.project_id} />
+                {installCeremony}
                 {/* Buying continues at install, so the Working budget's
                     recovery links must land here too. */}
-                {row.engagement_kind === 'project' && (
-                  <MoneyRegion
-                    projectId={row.project_id}
-                    projectName={row.title}
-                    clientName={row.client_name}
-                    activeSection={spreadSection}
-                    accountsElsewhere
-                  />
-                )}
+                {installMoney}
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
-                <CareBand projectId={row.project_id} onCloseoutReady={acceptCloseout} />
+                {installCare}
               </>
             )}
             {spreadSection === 'care' && (
               <>
-                <CareSection
-                  completedLabel={
-                    project?.target_end_date ? fmtMonthYear(project.target_end_date) : null
-                  }
-                  projectId={row.project_id}
-                />
-                {row.project_id && (
-                  <FFESection
-                    projectId={row.project_id}
-                    mode="install"
-                    needs={rankedOperationalNeeds}
-                    highlightId={highlightLineId}
-                    sectionKey="care"
-                    clientUserId={row.client_profile_id}
-                    clientName={row.client_name}
-                    folioDrop={folioDrop}
-                    onFolioDropConsumed={() => setFolioDrop(null)}
-                    sectionDragOver={sectionDrag}
-                  />
-                )}
-                {row.engagement_kind === 'project' && row.project_id && (
-                  <MoneyRegion
-                    projectId={row.project_id}
-                    projectName={row.title}
-                    clientName={row.client_name}
-                    activeSection={spreadSection}
-                    accountsElsewhere
-                  />
-                )}
+                {careSection}
+                {careFfe}
+                {careMoney}
               </>
             )}
             </TableFrame>
@@ -4199,19 +4348,93 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ),
   };
 
+  // R8-02 — the round-8 project paper's pieces, built once above and handed to
+  // the frame, which places them as chapters. Lead and proposal documents
+  // print their pre-work regions instead (round8Continuous false → null).
+  const round8Pieces = round8Continuous
+    ? {
+        section: spreadSection,
+        brief:
+          row.lead_id || unfoldProposalId ? (
+            <>
+              {row.lead_id ? (
+                <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />
+              ) : null}
+              <DiscoveryRecap
+                clientProfileId={row.client_profile_id}
+                engagementKind={row.engagement_kind}
+                engagementId={row.engagement_id}
+                proposalId={row.proposal_id}
+              />
+              {unfoldProposalId ? <ProposalBlocksReadOnly proposalId={unfoldProposalId} /> : null}
+            </>
+          ) : null,
+        roomFiles,
+        scheduleSpine,
+        visits,
+        projectFfe,
+        projectMoney,
+        projectCare,
+        installFfe,
+        installCeremony,
+        installMoney,
+        installCare,
+        careSection,
+        careFfe,
+        careMoney,
+      }
+    : null;
+
+  const shellProps = {
+    ref: lensShellRef,
+    'data-arrival': arrivalHeld ? undefined : 'document',
+    'data-arrival-held': arrivalHeld ? 'document' : undefined,
+    style: arrivalHeld && loadingRegister ? { visibility: 'hidden' as const } : undefined,
+    'data-arrival-ready': arrivalReady ? '' : undefined,
+    'data-arr-engagement': row.engagement_id,
+    // R8-02 — a chapter with no legacy region reads as its own key.
+    'data-reading-index': activeKey ?? chapterKey ?? undefined,
+  };
+  const paperProps = { ref: mainRef, 'data-shelf-open': openShelf ? 'true' : undefined };
+
+  if (paperRenderer.renderer === 'round8') {
+    return (
+      <Suspense fallback={<DocumentSkeleton />}>
+        <Round8PaperFrame
+          slots={slots}
+          shellProps={shellProps}
+          paperProps={paperProps}
+          docId={id}
+          jobName={row.title}
+          context={householdName}
+          pieces={round8Pieces}
+          gates={ROUND8_GATES}
+          projectId={row.project_id}
+          contents={{
+            subLabels: ladderValues,
+            regions: runningIndexRegions,
+            mountedKeys: runningIndex.mountedKeys,
+            activeKey: runningIndex.activeKey,
+            onSelect: (key) =>
+              round8Continuous
+                ? jumpToChapter(key as Round8ChapterKey)
+                : jumpToRegion(key as DocumentIndexKey),
+          }}
+          roomInHand={
+            heldRoomId && heldRoomName
+              ? { name: heldRoomName, onRelease: () => toggleRoom(heldRoomId) }
+              : null
+          }
+        />
+      </Suspense>
+    );
+  }
+
   return (
     <LegacyDocumentFrame
       slots={slots}
-      shellProps={{
-        ref: lensShellRef,
-        'data-arrival': arrivalHeld ? undefined : 'document',
-        'data-arrival-held': arrivalHeld ? 'document' : undefined,
-        style: arrivalHeld && loadingRegister ? { visibility: 'hidden' } : undefined,
-        'data-arrival-ready': arrivalReady ? '' : undefined,
-        'data-arr-engagement': row.engagement_id,
-        'data-reading-index': activeKey ?? undefined,
-      }}
-      paperProps={{ ref: mainRef, 'data-shelf-open': openShelf ? 'true' : undefined }}
+      shellProps={shellProps}
+      paperProps={paperProps}
     />
   );
 }
