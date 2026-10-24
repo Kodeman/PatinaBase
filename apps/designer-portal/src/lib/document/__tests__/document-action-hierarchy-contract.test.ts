@@ -36,7 +36,10 @@ function expectOneStaticPrimary(region: string): void {
   expect(region.match(/variant="primary"/g) ?? []).toHaveLength(1);
 }
 
-const desk = readRoute("desk/page.tsx");
+const desk = [
+  readRoute("desk/page.tsx"),
+  readComponent("frame/legacy-desk-body.tsx"),
+].join("\n");
 const letterhead = readComponent("letterhead-instruments.tsx");
 const proposalDraft = readComponent("proposal-instruments.tsx");
 const proposalWatch = readComponent("proposal-watch.tsx");
