@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { createServerClient } from '@supabase/ssr';
-import { SUPABASE_AUTH_STORAGE_KEY } from '@patina/supabase';
-import { request, type FullConfig } from '@playwright/test';
+import type { FullConfig } from '@playwright/test';
+import { warmAuthenticatedRoutes } from '../helpers/warm-authenticated-routes';
 import path from 'node:path';
 import { psqlRun, psqlScalar } from '../helpers/psql';
 
@@ -29,26 +28,5 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   // Cold next-dev compilation can full-reload the active Desk while WebKit is
   // navigating away. Compile both authenticated entries before any browser owns
   // an HMR connection; the tests still perform their real reads and arrivals.
-  const baseURL = config.projects[0].use.baseURL!;
-  if (new URL(baseURL).hostname !== 'localhost') throw new Error('F01 route warmup requires localhost.');
-  const cookies: Array<{ name: string; value: string }> = [];
-  const client = createServerClient(api.href, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    auth: { storageKey: SUPABASE_AUTH_STORAGE_KEY },
-    cookies: { getAll: () => [], setAll: values => { cookies.push(...values); } },
-  });
-  const { error } = await client.auth.signInWithPassword({
-    email: process.env.DESIGNER_E2E_EMAIL!, password: process.env.DESIGNER_E2E_PASSWORD,
-  });
-  if (error) throw error;
-  const warmup = await request.newContext({
-    baseURL, extraHTTPHeaders: { Cookie: cookies.map(({ name, value }) => `${name}=${value}`).join('; ') },
-  });
-  try {
-    for (const route of ['/desk', '/doc/f0180000-0000-4000-8000-000000000010']) {
-      const response = await warmup.get(route, { timeout: 120_000, maxRedirects: 0 });
-      if (response.status() !== 200) throw new Error(`F01 warmup ${route}: HTTP ${response.status()}`);
-    }
-  } finally {
-    await warmup.dispose();
-  }
+  await warmAuthenticatedRoutes(config, ['/desk', '/doc/f0180000-0000-4000-8000-000000000010']);
 }
