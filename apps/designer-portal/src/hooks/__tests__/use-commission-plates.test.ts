@@ -9,6 +9,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockTables: string[] = [];
 const mockRows: Record<string, unknown[]> = {};
+const mockSign = jest.fn(async (bucket: string, paths: string[]) => ({
+  data: paths.map((path) => bucket === 'project-ffe-working'
+    ? { path, signedUrl: 'https://local.test/storage/v1/object/sign/project-ffe-working/' + path + '?token=fixture' }
+    : { path, error: 'Object not found' }),
+  error: null,
+}));
 
 function mockQuery(table: string) {
   const result = { data: mockRows[table] ?? [], error: null };
@@ -20,13 +26,14 @@ function mockQuery(table: string) {
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({
+    storage: { from: (bucket: string) => ({ createSignedUrls: (paths: string[]) => mockSign(bucket, paths) }) },
     from: (table: string) => {
       mockTables.push(table);
       return mockQuery(table);
     },
   }),
-  // Signing is the board-storage helper's own concern; covers pass through.
-  signBoardMediaValue: async (_client: unknown, value: unknown) => value,
+  signBoardMediaValue: jest.requireActual('../../../../../packages/supabase/src/lib/board-storage').signBoardMediaValue,
+  signProjectWorkingBoardRow: jest.requireActual('../../../../../packages/supabase/src/hooks/use-boards').signProjectWorkingBoardRow,
 }));
 
 import {
@@ -96,6 +103,20 @@ describe('useCommissionPlates', () => {
     expect(result.current.plates.get('p1')).toEqual({ url: 'https://cdn/board.jpg', source: 'board' });
     expect(result.current.plates.get('q2')).toEqual({ url: 'https://cdn/cover.jpg', source: 'proposal' });
     expect([...new Set(mockTables)].sort()).toEqual(['proposal_boards', 'proposals']);
+  });
+
+  it('signs private project working-board covers in project-ffe-working and keeps the plate', async () => {
+    const path = 'p1/boards/b1/cover.jpg';
+    mockRows.proposal_boards = [
+      { project_id: 'p1', proposal_id: null, cover_image_url: path, updated_at: null },
+    ];
+    const jobs = [job('p1', 'p1', null)];
+    const { result } = renderHook(() => useCommissionPlates(jobs), { wrapper });
+    await waitFor(() => expect(result.current.plates.get('p1')).toEqual({
+      url: 'https://local.test/storage/v1/object/sign/project-ffe-working/' + path + '?token=fixture', source: 'board',
+    }));
+    expect(mockSign).toHaveBeenCalledWith('project-ffe-working', [path]);
+    expect(mockSign).not.toHaveBeenCalledWith('proposal-mood-boards', expect.anything());
   });
 
   it('reads nothing for a studio with no jobs', () => {

@@ -18,7 +18,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient, signBoardMediaValue } from '@patina/supabase';
+import { createBrowserClient, signBoardMediaValue, signProjectWorkingBoardRow } from '@patina/supabase';
 
 export interface CommissionJob {
   /** The studio's job key: `project_id ?? engagement_id`. */
@@ -123,7 +123,9 @@ export function useCommissionPlates(jobs: readonly CommissionJob[]) {
       if (proposalsRead.error) throw proposalsRead.error;
       // A board cover may be a private storage reference; a signing miss
       // becomes null, so the job falls through to its next source.
-      const boards = (await signBoardMediaValue(supabase, boardsRead.data ?? [])) as PlateBoardRow[];
+      const workingRows = await Promise.all((boardsRead.data ?? []).map((row: PlateBoardRow) =>
+        signProjectWorkingBoardRow(supabase, row)));
+      const boards = (await signBoardMediaValue(supabase, workingRows)) as PlateBoardRow[];
       return { boards, proposals: (proposalsRead.data ?? []) as PlateProposalRow[] };
     },
   });

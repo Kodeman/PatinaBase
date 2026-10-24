@@ -78,7 +78,7 @@ test.describe('F01 round-8 studio', () => {
     await openStudio(page);
     const item = page
       .locator('[data-studio-attention-item]')
-      .getByRole('link', { name: new RegExp(`— ${escapeRegExp(name)}$`) })
+      .getByRole('link', { name: new RegExp(`^${escapeRegExp(name)} — `) })
       .first();
     await expect(item, "F01's due task is on the attention list").toBeVisible({ timeout: 30_000 });
     await expect(item).toHaveAttribute('href', new RegExp(`^/doc/${JOB}(\\?|$)`));

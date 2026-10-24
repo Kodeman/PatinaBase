@@ -12,12 +12,14 @@ const mockRound8Props = jest.fn();
 jest.mock('@/hooks/use-paper-renderer', () => ({
   usePaperRenderer: () => mockRenderer.current,
 }));
-// The round-8 studio is the page's next/dynamic import; this suite proves which
-// body the page picks, not what the studio prints.
-jest.mock('next/dynamic', () => () => (props: Record<string, unknown>) => {
-  mockRound8Props(props);
-  return <div data-testid="round8-desk" />;
-});
+// Keep React.lazy and Suspense real; only the loaded body is stubbed.
+jest.mock('@/components/document/studio/round8-desk', () => ({
+  __esModule: true,
+  default: (props: Record<string, unknown>) => {
+    mockRound8Props(props);
+    return <div data-testid="round8-desk" />;
+  },
+}));
 jest.mock('@/components/document/frame/legacy-desk-body', () => ({
   LegacyDeskBody: () => <div data-testid="legacy-desk" />,
 }));
@@ -100,10 +102,10 @@ describe('desk/page.tsx — one body per renderer decision', () => {
     expect(mockRound8Props).not.toHaveBeenCalled();
   });
 
-  it('mounts the round-8 studio, and only it, on the same reads when the renderer is round 8', () => {
+  it('mounts the round-8 studio, and only it, on the same reads when the renderer is round 8', async () => {
     mockRenderer.current = { renderer: 'round8', source: 'override' };
     render(<DeskPage />);
-    expect(screen.getByTestId('round8-desk')).toBeInTheDocument();
+    expect(await screen.findByTestId('round8-desk')).toBeInTheDocument();
     expect(screen.queryByTestId('legacy-desk')).not.toBeInTheDocument();
     const props = mockRound8Props.mock.calls.at(-1)![0];
     expect(props.studioName).toBe('Middle West Studio');

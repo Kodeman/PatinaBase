@@ -3,7 +3,7 @@
 /**
  * The round-8 studio (WP-01.8, studio.html of Room Proof 08): the Desk's own
  * reads, set as a masthead, a commission spread, the jobs register and the
- * next conversation. Loaded only through the Desk page's next/dynamic import
+ * next conversation. Loaded only through the Desk page's React.lazy import
  * once the renderer latch says round 8, so the legacy Desk never downloads it
  * or its stylesheet. It owns no data: every row arrives from the Desk page's
  * one set of hooks, the same slots the legacy body prints.
@@ -155,28 +155,30 @@ export function Round8Desk(props: Round8DeskProps) {
 
   const body = (loading || arrivalHeld) ? (
     <DeskTodaySkeleton dateLabel={dateLabel} />
-  ) : deskEmpty && sheet.unchecked.length === 0 ? (
-    <div data-tour-anchor="desk-needs-your-hand">
-      <EmptyState eyebrow={dateLabel ? `${dateLabel} · Today` : 'Today'}>
-        No project files yet. Record an inquiry or create a project file to begin.
-      </EmptyState>
-    </div>
   ) : (
     <>
-      <CommissionSpread
-        job={featured}
-        plate={featured ? plates.get(featured.jobId) : undefined}
-        onLeave={leave}
-        attention={
-          <AttentionList
-            items={attention}
-            unchecked={sheet.unchecked}
-            scope={scope}
-            onScope={onScope}
-            onLeave={leaveFromAttention}
-          />
-        }
-      />
+      {deskEmpty && sheet.unchecked.length === 0 ? (
+      <div data-tour-anchor="desk-needs-your-hand">
+        <EmptyState eyebrow={dateLabel ? `${dateLabel} · Today` : 'Today'}>
+          No project files yet. Record an inquiry or create a project file to begin.
+        </EmptyState>
+      </div>
+      ) : (
+        <CommissionSpread
+          job={featured}
+          plate={featured ? plates.get(featured.jobId) : undefined}
+          onLeave={leave}
+          attention={
+            <AttentionList
+              items={attention}
+              unchecked={sheet.unchecked}
+              scope={scope}
+              onScope={onScope}
+              onLeave={leaveFromAttention}
+            />
+          }
+        />
+        )}
       <JobsRegister
         rows={registerRows}
         plates={plates}

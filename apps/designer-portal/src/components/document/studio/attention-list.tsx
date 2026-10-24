@@ -12,7 +12,7 @@
 import { type MouseEvent } from 'react';
 import type { DaySheet, SheetCard } from '@/lib/document/day-sheet';
 import type { DeskScope } from '@/lib/document/desk-scope';
-import { deskActionLabel, deskNeedText, type NeedLine } from '@/lib/document/desk-derivation';
+import { deskNeedText, type NeedLine } from '@/lib/document/desk-derivation';
 import { DocumentAction } from '@/components/document/document-action';
 import { openLedger } from '@/components/document/command-bar';
 
@@ -49,16 +49,24 @@ export function deriveAttentionItems(
   const names = new Map(cards.map((card) => [card.jobId, card.name]));
   return sheet.lines
     .filter((entry) => !entry.settled)
-    .map((entry) => ({
+    .map((entry) => {
+      const subject = entry.need.releaseHeld
+        ? 'Release held'
+        : entry.need.kind.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+      const destination = entry.need.ledger
+        ? `Open ${entry.need.ledger.name}`
+        : entry.need.deepLink ? 'Open the linked work' : 'Open the job';
+      return {
       key: entry.key,
       docId: entry.projectId,
       jobName: names.get(entry.projectId) ?? entry.projectName,
       sentence: deskNeedText(entry.need, oneVoice),
-      actLabel: deskActionLabel(entry.need, oneVoice) ?? 'Open project file',
+      actLabel: `${subject} — ${destination}`,
       href: attentionHref(entry.projectId, entry.need),
       ...(entry.need.ledger ? { ledger: entry.need.ledger } : {}),
       anchorId: attentionAnchorId(entry.key),
-    }));
+      };
+    });
 }
 
 const SCOPES: ReadonlyArray<{ key: DeskScope; word: string }> = [
@@ -143,7 +151,7 @@ export function AttentionList({
                   variant="tertiary"
                   href={item.href}
                   onClick={open(item)}
-                  aria-label={`${item.actLabel} — ${item.jobName}`}
+                  aria-label={`${item.jobName} — ${item.actLabel}`}
                   className="mt-2"
                 >
                   {item.actLabel}
