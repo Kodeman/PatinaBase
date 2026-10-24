@@ -286,20 +286,48 @@ export function scrollToRegion(
 ): void {
   const headingTarget =
     headingId ?? regionHeadingId(key as DocumentIndexKey, projectId);
-  const reduceMotion = window.matchMedia?.(
+  const behavior: ScrollBehavior = window.matchMedia?.(
     '(prefers-reduced-motion: reduce)',
-  ).matches;
+  ).matches
+    ? 'auto'
+    : 'smooth';
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const root = regionRoot(key);
-      root?.scrollIntoView({
-        block: 'start',
-        behavior: reduceMotion ? 'auto' : 'smooth',
-      });
+      root?.scrollIntoView({ block: 'start', behavior });
       const heading = document.getElementById(headingTarget);
       (heading ?? (root as HTMLElement | null))?.focus?.({
         preventScroll: true,
       });
+      if (root) holdLanding(root, behavior);
     });
   });
+}
+
+const READER_SCROLL = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+
+/**
+ * Bodies above the target that finish loading after the press push it down
+ * mid-scroll, leaving focus on a heading below the fold. Follow the root
+ * until the reader scrolls for themselves, or for two seconds.
+ */
+function holdLanding(root: Element, behavior: ScrollBehavior) {
+  if (typeof ResizeObserver === 'undefined') return;
+  const at = () => root.getBoundingClientRect().top + window.scrollY;
+  let landing = at();
+  const follow = new ResizeObserver(() => {
+    const now = at();
+    if (Math.abs(now - landing) < 1) return;
+    landing = now;
+    root.scrollIntoView({ block: 'start', behavior });
+  });
+  const release = () => {
+    follow.disconnect();
+    for (const type of READER_SCROLL) window.removeEventListener(type, release);
+  };
+  follow.observe(document.documentElement);
+  for (const type of READER_SCROLL) {
+    window.addEventListener(type, release, { passive: true });
+  }
+  window.setTimeout(release, 2000);
 }

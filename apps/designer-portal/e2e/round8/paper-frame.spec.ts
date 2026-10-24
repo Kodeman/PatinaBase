@@ -7,6 +7,11 @@ import { ROUND8_INDEX_KEYS } from '../../src/lib/document/round8-paper-order';
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 
 async function openJob(page: Page) {
+  // next dev's first compile of /doc/[id] sends a Fast Refresh full reload to
+  // the Desk tab the sign-in left open, which interrupted the job's goto
+  // (webkit-iphone). Leave the dev server's page first so no HMR client is
+  // connected while the job compiles.
+  await page.goto('about:blank');
   // The first next dev compile of /doc/[id] is slow.
   await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await expect(page.locator('[data-document-shell]')).toBeVisible({ timeout: 60_000 });

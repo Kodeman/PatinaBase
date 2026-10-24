@@ -32,9 +32,13 @@ test('F01 live studio opens its full-service job with 36 living-room lines and 8
   await expect(page).toHaveURL(new RegExp(`/doc/${job}`), { timeout: 60_000 });
   await expect(page.locator('[data-document-shell]')).toBeVisible({ timeout: 30_000 });
   // WP-01.5 — the round-8 paper: the contents margin from 1180px; below it the
-  // paper is one continuous scroll, so the reader scrolls to FF&E.
+  // mobile bar's sections sheet stays the way in (preservation-inventory).
   if ((page.viewportSize()?.width ?? 1440) < 1180) {
-    await page.locator('#ffe-chapter-heading').scrollIntoViewIfNeeded({ timeout: 30_000 });
+    await page.locator('[data-sections-door]').click();
+    await page
+      .getByRole('dialog', { name: 'Sections of this document', exact: true })
+      .getByRole('button', { name: /^Pieces & purchasing\b/i })
+      .click();
   } else {
     await page
       .getByRole('navigation', { name: 'Job contents', exact: true })
