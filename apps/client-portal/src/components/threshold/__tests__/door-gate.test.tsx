@@ -189,6 +189,12 @@ const signAction = () => screen.getByRole('button', { name: /^Sign/ });
  * Fake time covers the hold itself and is handed back before the signature
  * request's promises are flushed, so the swing timers stay real.
  */
+beforeEach(() => {
+  jest.spyOn(HTMLButtonElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    top: 0, left: 0, right: 100, bottom: 44, width: 100, height: 44,
+  } as DOMRect);
+});
+
 async function holdSign({ faked = false } = {}) {
   const target = signAction();
   if (!faked) jest.useFakeTimers();

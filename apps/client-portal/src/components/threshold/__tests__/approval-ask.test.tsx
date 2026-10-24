@@ -126,6 +126,12 @@ const APPROVAL: ProjectApprovalReview = {
  * and is handed back before the act's own promises are flushed, so the
  * mutations settle on the real clock the rest of the file waits on.
  */
+beforeEach(() => {
+  jest.spyOn(HTMLButtonElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    top: 0, left: 0, right: 100, bottom: 44, width: 100, height: 44,
+  } as DOMRect);
+});
+
 async function hold(target: HTMLElement) {
   jest.useFakeTimers();
   fireEvent.pointerDown(target, { clientX: 4, clientY: 4 });
