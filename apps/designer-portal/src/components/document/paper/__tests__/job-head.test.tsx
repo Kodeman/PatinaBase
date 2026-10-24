@@ -108,7 +108,7 @@ describe('Studio return history', () => {
   });
   it.each(['desk-entry', 'unfold-entry'])('records the Desk return intent before navigating past %s', (key) => {
     history(key);
-    const assertIntent = () => expect(takeDeskReturn()).toEqual({ focusId: 'pressed-control', anchorId: 'held-control' });
+    const assertIntent = () => expect(takeDeskReturn()).toEqual({ docId: 'job', anchor: 'pressed-control', at: expect.any(Number) });
     mockBack.mockImplementationOnce(assertIntent);
     mockPush.mockImplementationOnce(assertIntent);
     render(<JobHead returnTo={{ href: '/desk', label: 'Studio' }} origin={readPaperOrigin('job')} jobName="Job" />);
@@ -142,5 +142,6 @@ describe('Studio return history', () => {
     await userEvent.click(screen.getByRole('link', { name: 'Studio' }));
     expect(mockPush).toHaveBeenCalledWith('/desk');
     expect(mockBack).not.toHaveBeenCalled();
+    expect(takeDeskReturn()).toBeNull();
   });
 });

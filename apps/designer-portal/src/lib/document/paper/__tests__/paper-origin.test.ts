@@ -118,13 +118,13 @@ describe("paper-origin", () => {
   it("round-trips the Desk return focus hint exactly once without copying scroll", () => {
     rememberPaperOrigin(DOC, { path: "/desk", focusId: "pressed-control", anchorId: "desk-row" });
     markDeskReturn(readPaperOrigin(DOC));
-    expect(takeDeskReturn()).toEqual({ focusId: "pressed-control", anchorId: "desk-row" });
+    expect(takeDeskReturn()).toEqual({ docId: DOC, anchor: "pressed-control", at: expect.any(Number) });
     expect(takeDeskReturn()).toBeNull();
   });
 
   it("makes Desk return a no-op with storage disabled", () => {
     jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
-    expect(() => markDeskReturn({ focusId: "control", anchorId: null })).not.toThrow();
+    expect(() => markDeskReturn({ docId: DOC, focusId: "control", anchorId: null })).not.toThrow();
     expect(takeDeskReturn()).toBeNull();
     jest.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });
     expect(takeDeskReturn()).toBeNull();

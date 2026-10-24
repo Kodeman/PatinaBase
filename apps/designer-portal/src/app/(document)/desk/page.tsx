@@ -542,39 +542,61 @@ export default function DeskPage() {
 
   // F6 — the row last pressed, held with the offset as its fallback.
   const pressedAnchor = useRef<string | null>(null);
-  const deskRoot = useRef<HTMLElement>(null);
+  const [deskBody, setDeskBody] = useState<HTMLElement | null>(null);
+  const bodyShown = useRef(false);
+  const returnTaken = useRef(false);
+  const returnPlace = useRef<DeskPlace | null>(null);
+  const stopRestoring = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    if (arrivalRoot && deskBody) bodyShown.current = true;
+  }, [arrivalRoot, deskBody]);
   useLayoutEffect(() => {
     deskMounted = true;
-    const onHide = () => holdDeskPlace(pressedAnchor.current);
+    // Take on the first mount, not on readiness. A real unmount discards this
+    // ref; StrictMode's effect rehearsal keeps it without taking twice.
+    if (!returnTaken.current) {
+      const intent = takeDeskReturn();
+      const held = intent ? heldDeskPlace() : null;
+      returnPlace.current = intent ? {
+        anchor: intent.anchor,
+        y: held?.anchor === intent.anchor ? held.y : null,
+      } : placeToRestore;
+      placeToRestore = null;
+      returnTaken.current = true;
+    }
+    const cancelReturn = () => {
+      returnPlace.current = null;
+      stopRestoring.current?.();
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      const anchor = returnPlace.current?.anchor;
+      if (!anchor || !document.getElementById(anchor)?.contains(event.target as Node)) cancelReturn();
+    };
+    const hands = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+    hands.forEach((hand) => window.addEventListener(hand, cancelReturn, { passive: true }));
+    document.addEventListener('focusin', onFocusIn);
+    const onHide = () => {
+      if (bodyShown.current) holdDeskPlace(pressedAnchor.current);
+    };
     window.addEventListener('pagehide', onHide);
     return () => {
-      // A layout cleanup runs before the Desk leaves the page, so the offset
-      // is still the Desk's own, whichever way she left.
-      holdDeskPlace(pressedAnchor.current);
+      // Never replace the saved place with a loading/error screen's offset.
+      onHide();
+      hands.forEach((hand) => window.removeEventListener(hand, cancelReturn));
+      document.removeEventListener('focusin', onFocusIn);
       window.removeEventListener('pagehide', onHide);
       deskMounted = false;
-      // A real leave drops a place the Desk never got to put back; React's
-      // dev rehearsal of an unmount remounts before this runs.
       window.setTimeout(() => {
         if (!deskMounted) placeToRestore = null;
       });
     };
   }, []);
-  // Restored once the root latches. The roster can still be filling in then,
-  // so a place the page cannot yet hold is tried again as the page grows,
-  // until it lands, her hand moves the page, or the wait runs out.
+  // The lazy body must commit before its anchor wait starts. Arrival data can
+  // settle seconds before that chunk is available.
   useLayoutEffect(() => {
-    if (!arrivalRoot) return;
-    const intent = takeDeskReturn();
-    if (intent) {
-      placeToRestore = {
-        anchor: intent.focusId ?? intent.anchorId,
-        y: heldDeskPlace()?.y ?? null,
-      };
-    }
-    const place = placeToRestore;
+    if (!arrivalRoot || !deskBody) return;
+    const place = returnPlace.current;
     if (!place) return;
-    const initialFocus = document.activeElement;
     let finished = false;
     const land = (waitForAnchor = true): boolean => {
       const anchor = place.anchor ? document.getElementById(place.anchor) : null;
@@ -591,44 +613,34 @@ export default function DeskPage() {
       anchor.focus({ preventScroll: true });
       return true;
     };
-    const readerOwnsFocus = () => document.activeElement !== document.body && document.activeElement !== initialFocus;
     const attempt = (waitForAnchor = true) => {
       if (finished) return;
-      if (readerOwnsFocus() || land(waitForAnchor)) {
+      if (returnPlace.current !== place || land(waitForAnchor)) {
         finished = true;
-        placeToRestore = null;
+        returnPlace.current = null;
       }
     };
     attempt();
     if (finished) return;
-    const hands = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
     const grow = new ResizeObserver(() => {
       attempt();
       if (finished) settle();
     });
     const wait = window.setTimeout(() => { attempt(false); settle(); }, 3000);
-    // A cleanup only stops watching: a dev rehearsal remount tries again.
     function stop() {
       grow.disconnect();
       window.clearTimeout(wait);
-      hands.forEach((hand) => window.removeEventListener(hand, settle));
-      document.removeEventListener('focusin', onFocusIn);
+      stopRestoring.current = null;
     }
     function settle() {
       finished = true;
-      placeToRestore = null;
+      returnPlace.current = null;
       stop();
     }
-    const onFocusIn = (event: FocusEvent) => {
-      const anchor = place.anchor ? document.getElementById(place.anchor) : null;
-      if (!anchor?.contains(event.target as Node)) settle();
-    };
-    document.addEventListener('focusin', onFocusIn);
-    // The Desk's own root grows as the roster fills in; the body does not.
-    grow.observe(deskRoot.current ?? document.body);
-    hands.forEach((hand) => window.addEventListener(hand, settle, { passive: true }));
+    stopRestoring.current = settle;
+    grow.observe(deskBody);
     return stop;
-  }, [arrivalRoot]);
+  }, [arrivalRoot, deskBody]);
   const notePress = (event: ReactMouseEvent<HTMLElement>) => {
     const target = event.target as Element | null;
     if (!target?.closest?.('a[href]')) return;
@@ -668,7 +680,7 @@ export default function DeskPage() {
           arrivalRoot={arrivalRoot}
           arrivalReady={arrivalReady}
           deskRead={deskRead}
-          deskRoot={deskRoot}
+          deskRoot={setDeskBody}
           notePress={notePress}
           firstName={firstName}
           greetingWord={greetingWord}
@@ -712,7 +724,7 @@ export default function DeskPage() {
       arrivalRoot={arrivalRoot}
       arrivalReady={arrivalReady}
       deskRead={deskRead}
-      deskRoot={deskRoot}
+      deskRoot={setDeskBody}
       notePress={notePress}
       firstName={firstName}
       greetingWord={greetingWord}
