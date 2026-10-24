@@ -168,9 +168,9 @@ function projection(over: Partial<InvoiceProjection> = {}): InvoiceProjection {
 
 describe("the hero preload", () => {
   it("names exactly the sources HeroPlate draws (server restatement pinned to preloadLink)", () => {
-    const ed = editorial([SCENE, WHITE]);
+    const ed = edition([SCENE, WHITE]);
     const fromServer = heroPreloads(ed);
-    const fromPlate = preloadLink(PROJECT, SCENE).map(
+    const fromPlate = preloadLink(EDITION_ID, SCENE).map(
       ({ imageSrcSet, imageSizes, media }) => ({
         imageSrcSet,
         imageSizes,
@@ -188,7 +188,7 @@ describe("the hero preload", () => {
 
   it("renders one high-priority avif image preload per source", () => {
     const { container } = render(
-      <HeroPreloadLinks preloads={heroPreloads(editorial([SCENE]))} />,
+      <HeroPreloadLinks preloads={heroPreloads(edition([SCENE]))} />,
     );
     const links = document.querySelectorAll('link[rel="preload"][as="image"]');
     expect(links).toHaveLength(2);
@@ -275,7 +275,7 @@ describe("the issue", () => {
   });
 
   it("sets the compact letterhead, purpose, cover, rows and link row in reading order, and drops today’s lines", () => {
-    const { container } = render(head(houseIssue(editorial([SCENE]))));
+    const { container } = render(head(houseIssue(edition([SCENE]))));
     expect(screen.getByTestId("doorplate-title")).toHaveTextContent(
       "Elm Street House",
     );
@@ -301,7 +301,7 @@ describe("the issue", () => {
   });
 
   it("draws the hero when a photograph meets the floor, a drawn cover when none does", () => {
-    const withHero = houseIssue(editorial([SCENE]));
+    const withHero = houseIssue(edition([SCENE]));
     const { container, unmount } = render(head(withHero));
     expect(
       container.querySelector(
@@ -554,7 +554,7 @@ import { createBrowserClient } from '@patina/supabase/client';
 
 it('renders editorial immediately while analytics is unavailable', () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const { result } = renderHook(() => useEditionIssue(PROJECT, editorial([asset('cover')])), {
+  const { result } = renderHook(() => useEditionIssue(PROJECT, edition([asset('cover')])), {
     wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
   });
   expect(result.current?.hero?.id).toBe('cover');
@@ -601,13 +601,13 @@ describe("the approved edition", () => {
     );
   }
 
-  it("heroes the composition's pick, a white-ground catalogue shot included, where Phase 1 would draw the cover", () => {
+  it("rejects an approved white-ground catalogue hero rather than substituting another photo", () => {
     expect(houseIssue(editorial([CATALOGUE])).hero).toBeNull();
     const issue = houseIssue(edition([CATALOGUE, SCENE], { hero: { assetId: CATALOGUE.id } }));
-    expect(issue.hero?.id).toBe(CATALOGUE.id);
+    expect(issue.hero).toBeNull();
     cover(issue);
-    expect(screen.getByTestId("house-issue-hero")).toBeInTheDocument();
-    expect(screen.queryByTestId("house-issue-cover")).toBeNull();
+    expect(screen.queryByTestId("house-issue-hero")).toBeNull();
+    expect(screen.getByTestId("house-issue-cover")).toBeInTheDocument();
   });
 
   it("marks a hero headline past LONG_HEADLINE for the smaller step, whole, and leaves a short one alone", () => {
@@ -696,7 +696,7 @@ describe("the approved edition", () => {
     const loose = { ...editorial([SCENE]), composition: { hero: null, held: [], chapters: [{ key: "cover", headline: "Loose", standing: null }] } };
     const chapters = editionChapters(houseIssue(loose), [])!;
     expect(chapters.get("cover")?.headline).not.toBe("Loose");
-    expect(houseIssue(loose).hero?.id).toBe(SCENE.id);
+    expect(houseIssue(loose).hero).toBeNull();
   });
 
   it("prints a chapter's standing sentence under its head, inside one revealed child", () => {
@@ -942,10 +942,9 @@ describe("the approved edition", () => {
       subjectBox: [0.05, 0, 0.9, 0.57],
       crops: { cover_phone: { rect: [0, 0, 1200, 1046], widths: [640, 828, 1080] } },
     });
-    cover(houseIssue(edition([scan], { chapters: [{ key: "cover", headline: "Your scan, from the room upstairs", standing: null }] })));
-    const hero = screen.getByTestId("house-issue-hero");
-    expect(hero).toHaveAttribute("data-hero-frame", "short");
-    const slot = hero.querySelector<HTMLElement>(".ed-hero-slot")!;
+    render(<HeroPlate scopeId={EDITION_ID} asset={scan} eyebrow="01 · Elm Street House" headline="Your scan, from the room upstairs" phoneObjectPosition={shortFramePosition(scan)} fallback={{ name: "The room upstairs" }} />);
+    const hero = document.querySelector<HTMLElement>('.ed-hero-slot')!;
+    const slot = hero;
     expect(slot.style.getPropertyValue("--ed-hero-phone-fit")).toBe("contain");
     height = 300;
     act(() => window.dispatchEvent(new Event("resize")));
@@ -964,11 +963,9 @@ describe("the approved edition", () => {
         cover_phone: { rect: [0, 0, 1560, 1360], widths: [640, 828, 1080] },
       },
     });
-    const view = cover(houseIssue(edition([nearEdge], { chapters: [{ key: "cover", headline: sixty, standing: null }] })));
-    const hero = screen.getByTestId("house-issue-hero");
-    expect(hero.getAttribute("data-headline")).toBe("long");
-    expect(hero.getAttribute("data-hero-frame")).toBe("short");
-    const slot = hero.querySelector<HTMLElement>(".ed-hero-slot")!;
+    const view = render(<HeroPlate scopeId={EDITION_ID} asset={nearEdge} eyebrow="01 · Elm Street House" headline={sixty} phoneObjectPosition={shortFramePosition(nearEdge)} fallback={{ name: "The room upstairs" }} />);
+    const hero = document.querySelector<HTMLElement>('.ed-hero-slot')!;
+    const slot = hero;
     expect(slot.style.getPropertyValue("--ed-hero-phone-position")).toBe("50% 0%");
     view.unmount();
 
@@ -983,24 +980,22 @@ describe("the approved edition", () => {
         tall: { rect: [113, 0, 874, 1900], widths: [640, 828] },
       },
     });
-    cover(houseIssue(edition([tall], { chapters: [{ key: "cover", headline: sixty, standing: null }] })));
-    const kept = screen.getByTestId("house-issue-hero");
-    expect(kept.getAttribute("data-headline")).toBe("long");
-    expect(kept.getAttribute("data-hero-frame")).toBeNull();
-    expect(kept.querySelector<HTMLElement>(".ed-hero-slot")!.style.getPropertyValue("--ed-hero-phone-position")).toBe("");
+    render(<HeroPlate scopeId={EDITION_ID} asset={tall} eyebrow="01 · Elm Street House" headline={sixty} fallback={{ name: "The room upstairs" }} />);
+    const kept = document.querySelector<HTMLElement>('.ed-hero-slot')!;
+    expect(kept.style.getPropertyValue("--ed-hero-phone-position")).toBe("");
   });
 });
 
 
 describe('approved catalogue cover', () => {
-  it('keeps the approved white-ground hero and renumbers its phase-free label', () => {
+  it('withholds the approved catalogue hero and keeps its phase-free chapter address', () => {
     const photo = asset('bed', { width: 1600, height: 1600, ground: 'white', subjectBox: [0.12, 0.27, 0.7, 0.4], crops: { pair: { rect: [0, 197, 1600, 1143], widths: [768, 1024, 1600] }, piece: CROPS.piece } });
     const data = editorial([photo]);
     data.project.phase = null;
     data.edition = { id: 'approved', seq: 1, approvedAt: '2026-10-23', approvedBy: 'studio', notice: null };
     data.composition = { hero: { assetId: photo.id }, held: [], chapters: [{ key: 'cover', headline: 'Your bed is on the way to the house', standing: null }] };
     const issue = houseIssue(data)!;
-    expect(issue.hero?.id).toBe('bed');
+    expect(issue.hero).toBeNull();
     const { container } = render(
       <HouseIssueHead
         issue={issue}
@@ -1013,10 +1008,10 @@ describe('approved catalogue cover', () => {
         plan={{ unread: true, rooms: null, marks: [] }}
       />,
     );
-    expect(container.querySelector('[data-testid="house-issue-hero"]')).not.toHaveAttribute('data-hero-frame');
-    expect(container.querySelector('.ed-hero--contained')).not.toBeNull();
+    expect(container.querySelector('[data-testid="house-issue-hero"]')).toBeNull();
+    expect(screen.getByTestId('house-issue-cover')).toBeInTheDocument();
     const chapters = editionChapters(issue, ['doorstep'])!;
     expect(chapters.get('cover')!.eyebrow).toBe('01 · Elm Street House');
-    expect(heroPreloads(data)[0].imageSrcSet).toContain('/pair-1600.avif');
+    expect(heroPreloads(data)).toEqual([]);
   });
 });

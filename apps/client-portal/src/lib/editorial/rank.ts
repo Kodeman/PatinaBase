@@ -2,7 +2,7 @@
    photograph > catalogue > silhouette. A concept render is a room-plate state
    and never the hero. */
 
-import { placeRole } from './floors';
+import { galleryHeroFits, placeRole } from './floors';
 import type { ClientProjectEditorial, EditorialAsset } from './types';
 
 export const TIER = {
@@ -53,8 +53,8 @@ function compareCodepoints(a: string, b: string): number {
  * drawing misstates its scale), never a white-ground clipping.
  */
 export function heroEligible(asset: EditorialAsset): boolean {
-  if (tierOf(asset) === null || asset.sourceKind === 'sheet' || asset.ground === 'white') return false;
-  return placeRole('hero', asset.width, asset.height, asset.subjectBox) === 'hero';
+  if (!['installed', 'upload', 'scan', 'maker'].includes(asset.sourceKind) || asset.ground !== 'scene') return false;
+  return galleryHeroFits(asset.width, asset.height, asset.subjectBox);
 }
 
 export function rankHero(editorial: Pick<ClientProjectEditorial, 'assets'>): EditorialAsset | null {

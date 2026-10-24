@@ -57,7 +57,7 @@ jest.mock('../papers-sheet', () => ({
   __esModule: true,
   PapersSheet: ({ open, onDismiss }: { open: boolean; onDismiss: () => void }) =>
     open ? (
-      <div role="dialog" data-testid="papers-sheet-stub">
+      <div data-testid="papers-sheet-stub">
         <button type="button" onClick={onDismiss}>
           Dismiss the papers
         </button>
@@ -68,6 +68,7 @@ jest.mock('../papers-sheet', () => ({
 jest.mock('@patina/supabase', () => ({
   __esModule: true,
   useDirectOrders: jest.fn(),
+  useStartDirectOrderCheckout: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProjectInvoices: jest.fn(),
   useClientInvoices: jest.fn(),
   useClientSafeProposals: jest.fn(),
@@ -533,6 +534,10 @@ function invoiceRow(id: string): HTMLElement {
   return row;
 }
 
+function openGallery(hash: string) {
+  act(() => { window.history.replaceState({}, '', hash); window.dispatchEvent(new HashChangeEvent('hashchange')); });
+}
+
 function renderThreshold(
   milestones: MilestoneDetail[] = MILESTONES,
   otherHouses: { id: string; name: string }[] = [],
@@ -555,6 +560,13 @@ function renderThreshold(
 }
 
 beforeEach(() => {
+  window.history.replaceState({}, '', '/#doorstep');
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function() { this.setAttribute('open', ''); } });
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function() { this.removeAttribute('open'); } });
+  Element.prototype.scrollIntoView = jest.fn();
+  (useInvoicePaymentOptions as jest.Mock).mockReturnValue({ data: { card_surcharge_resolved: true, card_surcharge_bps: 0 }, isPending: false, isError: false });
+  (useStartCheckout as jest.Mock).mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
+  (useNotifyCheckIntent as jest.Mock).mockReturnValue({ mutateAsync: jest.fn(), isPending: false });
   approvalsMock.mockReturnValue({ data: [], isLoading: false, isError: false });
   authMock.mockReturnValue({
     user: { id: 'client-1', name: 'Harper Vale' },
@@ -699,7 +711,7 @@ describe('Threshold — which house', () => {
     const review = screen.getByRole('region', { name: 'Published spending plan' });
     expect(review).toHaveTextContent('BC-003');
     expect(screen.getByRole('button', { name: 'Acknowledge this spending plan' })).toBeInTheDocument();
-    expect(container.querySelector('#ledger')!.compareDocumentPosition(review) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('#approvals')!.contains(review)).toBe(true);
   });
   // Path B's sheet is two columns: a story-pole rail on the left and the house
   // on the right. The pole therefore comes FIRST in the DOM and is not part of
@@ -707,61 +719,32 @@ describe('Threshold — which house', () => {
   // column, and the rail is asserted separately as a rail.
   it('draws the house, in reading order, once the rooms have come back', () => {
     const { container } = renderThreshold();
-
-    const house = container.querySelector('#doorstep')!.parentElement!;
-    const ordered = [
-      container.querySelector('#doorplate')!,
-      ...Array.from(
-        house.querySelectorAll(
-          '#doorstep, #key, section[id^="room-"], #road, #note, #previously, #mat',
-        ),
-      ),
-    ].map((node) => node.id);
-
-    expect(ordered).toEqual([
-      'doorplate',
-      'doorstep',
-      'key',
-      `room-${LIBRARY}`,
-      `room-${ENTRY}`,
-      'road',
-      'note',
-      'previously',
-      'mat',
-    ]);
+    expect([...container.querySelectorAll('.gallery-arrival, #road, .gallery-chapter, #note, #mat')].map(el => el.id || el.className)).toEqual(['gallery-arrival', 'road', `room-${LIBRARY}`, `room-${ENTRY}`, 'note', 'mat']);
     expect(screen.queryByTestId('ground-floor')).not.toBeInTheDocument();
   });
 
   it('stands the story pole beside the whole house, as a sticky left rail', () => {
     const { container } = renderThreshold();
-
-    const pole = container.querySelector('#story-pole')!;
-    const rail = pole.parentElement!;
-    expect(rail.className).toContain('sticky');
-
-    // The rail is the first column, so it precedes the house in the DOM…
-    const doorstep = container.querySelector('#doorstep')!;
-    expect(pole.compareDocumentPosition(doorstep) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // …and it is a SIBLING of the whole house column, not a child of its head,
-    // so it stands beside the room bands and the mat too.
-    expect(rail.parentElement).toBe(doorstep.parentElement!.parentElement);
-    expect(rail.parentElement!.contains(container.querySelector('#mat'))).toBe(true);
+    expect(container.querySelector('#story-pole')).toBeNull();
+    openGallery('#menu');
+    expect(screen.getByRole('navigation', { name: 'Page index' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Library & lounge' })).toHaveAttribute('href', '#room-' + LIBRARY);
   });
 
   it('falls to the ground floor when the rooms have settled empty', () => {
     roomsMock.mockReturnValue(settled([]));
-    renderThreshold();
-
-    expect(screen.getByTestId('ground-floor')).toBeInTheDocument();
-    expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
-    expect(screen.getByTestId('doorstep')).toBeInTheDocument();
+    const { container } = renderThreshold();
+    expect(container.querySelector('.gallery-arrival')).toBeInTheDocument();
+    expect(container.querySelectorAll('.gallery-chapter')).toHaveLength(0);
+    expect(screen.getByTestId('letterbox')).toBeInTheDocument();
+    expect(screen.queryByTestId('threshold-hold')).not.toBeInTheDocument();
   });
 
   it('holds the house’s place while the rooms are still coming — never the ground floor', () => {
     roomsMock.mockReturnValue({ data: undefined, isPending: true, isLoading: true, isError: false });
     renderThreshold();
 
-    expect(screen.getByTestId('doorstep')).toBeInTheDocument();
+    expect(document.querySelector('.gallery-arrival')).toBeInTheDocument();
     expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
     expect(screen.queryByTestId('ground-floor')).not.toBeInTheDocument();
     expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
@@ -778,6 +761,7 @@ describe('Threshold — which house', () => {
       isError: true,
     });
     renderThreshold();
+    openGallery('#key');
 
     expect(screen.getByTestId('threshold-rooms-error')).toHaveTextContent(
       'Couldn’t load your rooms. Please refresh.',
@@ -812,7 +796,7 @@ describe('Threshold — which house', () => {
     });
     renderThreshold();
 
-    expect(screen.getByTestId('road-orders-error')).toBeInTheDocument();
+    expect(within(screen.getByTestId('gallery-direct-orders')).getByRole('alert')).toHaveTextContent('Couldn’t read your orders.');
     expect(screen.queryByText('No orders in progress.')).not.toBeInTheDocument();
   });
 
@@ -820,8 +804,8 @@ describe('Threshold — which house', () => {
     notesMock.mockReturnValue({ data: undefined, isPending: true, isLoading: true, isError: false });
     renderThreshold();
 
-    expect(screen.getByTestId('doorstep-sentence-pending')).toBeInTheDocument();
-    expect(screen.queryByTestId('doorstep-sentence')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(document.querySelector('.gallery-asks-line')).not.toBeInTheDocument();
   });
 });
 
@@ -842,17 +826,16 @@ describe('Threshold — the five facts', () => {
     expect(within(letter).getByTestId('invoice-row-amount')).toHaveTextContent('$9,125.00');
     expect(within(letter).getByTestId('invoice-row-status')).toHaveTextContent('15 August 2026');
     // 5 · the chapter the house stands in
-    expect(screen.getByTestId('doorplate-sub')).toHaveTextContent('Procurement');
+    expect(document.querySelector('#mat')!).toHaveTextContent('Procurement');
   });
 
   it('addresses the plate to the client the session names, and to nobody without one', () => {
     const { unmount } = renderThreshold();
-    expect(screen.getByTestId('doorplate-line')).toHaveTextContent('prepared for Harper Vale');
+    expect(screen.getByText('Prepared for Harper Vale')).toBeInTheDocument();
     unmount();
-
     authMock.mockReturnValue({ user: { name: null }, signOut: jest.fn() });
     renderThreshold();
-    expect(screen.getByTestId('doorplate-line')).not.toHaveTextContent('prepared for');
+    expect(screen.queryByText(/Prepared for/)).not.toBeInTheDocument();
   });
 
   it('gives the first door and the first wall the page-level anchors', () => {
@@ -885,8 +868,6 @@ describe('Threshold — the five facts', () => {
   it('pins nothing on the ground floor, where the letter is already set above', () => {
     roomsMock.mockReturnValue(settled([]));
     renderThreshold();
-
-    expect(screen.getByTestId('ground-floor')).toBeInTheDocument();
     expect(screen.getAllByTestId('note-body')).toHaveLength(1);
     expect(screen.queryByTestId('door-note-pin')).not.toBeInTheDocument();
   });
@@ -963,21 +944,15 @@ describe('Threshold — the reading mark', () => {
 describe('the story pole when the studio never opened the phase register', () => {
   it('graduates the house’s six canonical chapters', () => {
     renderThreshold([]);
-
-    const rail = screen.getByTestId('story-pole-rail');
-    expect(rail.querySelectorAll('li')).toHaveLength(6);
-    expect(rail).toHaveTextContent('Discovery');
-    expect(rail).toHaveTextContent('Completion');
+    openGallery('#key');
+    expect(screen.getByTestId('progress-now')).toHaveTextContent('Procurement');
+    expect(screen.queryByTestId('story-pole-rail')).not.toBeInTheDocument();
   });
 
   it('holds the chapter the project itself names', () => {
     renderThreshold([]);
-
-    expect(screen.getByTestId('story-pole-graduation-procurement')).toHaveAttribute(
-      'data-held',
-      'true',
-    );
-    expect(screen.queryByTestId('story-pole-span-procurement')).not.toBeInTheDocument();
+    expect(document.querySelector('#mat')).toHaveTextContent('Procurement');
+    expect(document.querySelector('#road')).toHaveTextContent('Procurement');
   });
 });
 
@@ -1367,6 +1342,7 @@ describe('Threshold — the doorstep’s own asks', () => {
    answer too, and the sentence links to it. */
 describe('Threshold — the doorstep sentence names the asks under Approvals', () => {
   function withNoGates() {
+    invoicesMock.mockReturnValue(settled([]));
     proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
     selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [] }));
   }
@@ -1375,10 +1351,10 @@ describe('Threshold — the doorstep sentence names the asks under Approvals', (
     withNoGates();
     renderWithApprovals([PHASE_APPROVAL]);
 
-    const sentence = screen.getByTestId('doorstep-sentence');
-    expect(sentence).toHaveTextContent('One approval needs your answer.');
+    const sentence = document.querySelector('.gallery-asks-line')!;
+    expect(sentence).toHaveTextContent('Library elevations.');
     expect(sentence).not.toHaveTextContent('Nothing waits for your name.');
-    expect(screen.getByTestId('doorstep-sentence-object')).toHaveAttribute('href', '#approvals');
+    expect(document.querySelector('.gallery-asks-line')!).toHaveAttribute('href', '#doorstep');
     expect(screen.getByTestId('approvals')).toHaveAttribute('id', 'approvals');
   });
 
@@ -1399,40 +1375,32 @@ describe('Threshold — the doorstep sentence names the asks under Approvals', (
     });
     renderWithApprovals([]);
 
-    const sentence = screen.getByTestId('doorstep-sentence');
-    expect(sentence).toHaveTextContent('A request waits for your answer.');
+    const sentence = document.querySelector('.gallery-asks-line')!;
+    expect(sentence).toHaveTextContent('Add a runner to the stair hall.');
     expect(sentence).not.toHaveTextContent('Nothing waits for your name.');
-    expect(screen.getByTestId('doorstep-sentence-object')).toHaveAttribute('href', '#approvals');
+    expect(document.querySelector('.gallery-asks-line')!).toHaveAttribute('href', '#doorstep');
   });
 
   it('still says nothing waits when no ask and no gate stands', () => {
     withNoGates();
     renderWithApprovals([]);
 
-    expect(screen.getByTestId('doorstep-sentence')).toHaveTextContent(
-      /^Nothing waits for your name\./,
+    expect(document.querySelector('.gallery-asks-line')!).toHaveTextContent(
+      /Nothing from Nora today/,
     );
   });
 });
 
 describe('Threshold — the acts the house owes', () => {
   it('turns the since reading on and off from the doorstep', () => {
-    previousMarkMock.mockReturnValue({
-      data: '2026-08-04T00:00:00Z',
-      isPending: false,
-      isError: false,
-    });
+    previousMarkMock.mockReturnValue({ data: '2026-08-04T00:00:00Z', isPending: false, isError: false });
     renderThreshold();
-
-    fireEvent.click(screen.getByRole('button', { name: /what changed since yesterday/i }));
-    expect(
-      screen.getByRole('button', { name: /show all project updates/i }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /show all project updates/i }));
-    expect(
-      screen.getByRole('button', { name: /what changed since yesterday/i }),
-    ).toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: /what changed since yesterday/i });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('leaves the house through the mat — the only way out on this route', () => {
@@ -1508,37 +1476,27 @@ describe('Threshold — the acts the house owes', () => {
 
   it('names the papers on the mat, each pointing at its own section', () => {
     renderThreshold();
-
-    const papers = screen.getByTestId('mat-papers');
-    expect(papers).toHaveTextContent('The drawing set');
-    expect(papers).toHaveTextContent('Furnishings authorization No. 7');
-    expect(papers).toHaveTextContent('Invoice No. 4');
+    const footer = screen.getByTestId('mat');
+    expect(within(footer).getByRole('link', { name: 'Documents' })).toHaveAttribute('href', '#mat-papers');
+    expect(within(footer).getByRole('link', { name: 'Invoices' })).toHaveAttribute('href', '#letterbox');
+    expect(within(footer).getByRole('link', { name: 'Earlier' })).toHaveAttribute('href', '#previously');
   });
 
   it('lays the papers over the house from the mat, and takes them away again', async () => {
     renderThreshold();
-
-    const act = screen.getByRole('button', { name: /the papers, in full/i });
-    expect(act).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-
-    await userEvent.click(act);
+    await userEvent.click(within(screen.getByTestId('mat')).getByRole('link', { name: 'Documents' }));
     expect(screen.getByTestId('papers-sheet-stub')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /the papers, in full/i })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-
+    expect(document.querySelectorAll('dialog')).toHaveLength(1);
     await userEvent.click(screen.getByRole('button', { name: /dismiss the papers/i }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('papers-sheet-stub')).not.toBeInTheDocument());
   });
 
   it('stands a capture in every room, and the strays after the last one', () => {
     renderThreshold();
-
-    const captures = screen.getAllByTestId('room-capture-stub');
-    expect(captures).toHaveLength(screen.getAllByTestId('room-band-lintel').length);
-    expect(captures.every((capture) => capture.getAttribute('data-room-id'))).toBe(true);
+    for (const room of ROOMS) {
+      openGallery('#pieces-' + room.id);
+      expect(screen.getByTestId('room-capture-stub')).toHaveAttribute('data-room-id', room.id);
+    }
     expect(screen.getByTestId('stray-captures-stub')).toBeInTheDocument();
   });
 
@@ -1587,6 +1545,7 @@ describe('Threshold — the held draws', () => {
       settled({ origin: 'commercial', selections: [CREDENZA, PAINTWORK, SECOND_TRADE] }),
     );
     renderThreshold();
+    openGallery('#key');
 
     // $1,440 on the paintwork + $960 on the tilework.
     expect(screen.getByTestId('house-ledger-held')).toHaveTextContent(
@@ -1609,6 +1568,7 @@ describe('Threshold — the held draws', () => {
     );
 
     renderThreshold();
+    openGallery('#key');
 
     expect(screen.getByTestId('house-ledger-held')).toHaveTextContent('$1,440');
   });
@@ -1627,6 +1587,7 @@ describe('Threshold — the held draws', () => {
 describe('Threshold — a room’s target', () => {
   it('prefers the published plan’s figure for a room it names', () => {
     renderThreshold();
+    openGallery('#key');
 
     // $24,900 agreed against the plan's $23,800 → about eleven hundred past.
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
@@ -1647,6 +1608,7 @@ describe('Threshold — a room’s target', () => {
     );
 
     renderThreshold();
+    openGallery('#key');
 
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent('$31,000.00 planned');
   });
@@ -1658,6 +1620,7 @@ describe('Threshold — a room’s target', () => {
     roomsMock.mockReturnValue(settled([{ ...ROOMS[0], budget_cents: 0 }]));
 
     renderThreshold();
+    openGallery('#key');
 
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
       'The house stands at $61,400.00 agreed.',
@@ -1799,7 +1762,7 @@ describe('Threshold — never reverse', () => {
       mock.mockReturnValue(IN_FLIGHT);
       const { unmount } = renderThreshold();
 
-      expect(screen.getByTestId('doorstep')).toBeInTheDocument();
+      expect(document.querySelector('.gallery-arrival')).toBeInTheDocument();
       expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
       expect(screen.queryByTestId('house-ledger')).not.toBeInTheDocument();
       expect(screen.queryByTestId('letterbox')).not.toBeInTheDocument();
@@ -1866,9 +1829,8 @@ describe('Threshold — never reverse', () => {
   it('holds the doorplate up throughout — the house is always named', () => {
     invoicesMock.mockReturnValue(IN_FLIGHT);
     renderThreshold();
-
-    expect(screen.getByTestId('doorplate-title')).toHaveTextContent('The Vale Residence');
-    expect(screen.getByTestId('doorstep-sentence-pending')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('The Vale Residence');
+    expect(screen.getByRole('status')).toHaveTextContent('Reading your house');
   });
 });
 
@@ -1898,7 +1860,7 @@ describe('Threshold — a wall the drawing cannot place', () => {
 
     const { container } = renderThreshold();
 
-    expect(screen.getByTestId('ground-floor')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveAttribute('open');
     expect(container.querySelector('#wall')).not.toBeNull();
     expect(container.querySelector('#door')).not.toBeNull();
   });
@@ -1930,24 +1892,12 @@ describe('Threshold — enclosures and history', () => {
   });
 
   it('prints an instrument on the doorstep’s Previously line, never a note body', () => {
-    notesMock.mockReturnValue(
-      settled([
-        NOTE,
-        {
-          ...NOTE,
-          id: 'note-old',
-          body: 'A very long line that would run right off the doorstep if it were printed there.',
-          state: 'retired' as const,
-          retiredAt: '2026-08-02T09:00:00Z',
-        },
-      ]),
-    );
-
+    notesMock.mockReturnValue(settled([NOTE, { ...NOTE, id: 'note-old', body: 'A very long line that would run right off the doorstep if it were printed there.', state: 'retired', retiredAt: '2026-08-02T09:00:00Z' }]));
     renderThreshold();
-
-    const line = screen.getByTestId('doorstep-previously');
-    expect(line).toHaveTextContent('Design services agreement');
-    expect(line).not.toHaveTextContent('run right off the doorstep');
+    const earlier = document.querySelector('#previously')!;
+    expect(earlier).toHaveTextContent('Design services agreement');
+    expect(screen.queryByTestId('doorstep-previously')).not.toBeInTheDocument();
+    expect(document.querySelector('.gallery-band')).not.toHaveTextContent('run right off the doorstep');
   });
 });
 
@@ -2058,11 +2008,10 @@ describe('Threshold — the door that opened on her name', () => {
     await signTheDoor();
     proposalsMock.mockReturnValue(settled([SIGNED_AUTHORIZATION, SIGNED_AGREEMENT]));
     redraw();
-
-    const mat = screen.getByTestId('mat-papers');
-    const listed = within(mat).getAllByText(/Furnishings authorization No\. 7/);
-    expect(listed).toHaveLength(1);
-    expect(listed[0].closest('a')).toHaveAttribute('href', '#previously');
+    expect(screen.getByTestId('door-receipt')).toBeInTheDocument();
+    openGallery('#menu');
+    expect(within(screen.getByRole('navigation', { name: 'Page index' })).queryByRole('link', { name: /^Furnishings authorization No. 7/ })).not.toBeInTheDocument();
+    expect(within(document.querySelector<HTMLElement>('#previously')!).getByRole('button', { name: /Furnishings authorization/ })).toBeInTheDocument();
   });
 });
 
@@ -2325,10 +2274,8 @@ describe('Threshold — L6, the review and scope-change asks mounted in place', 
 
   it('offers "Ask for a change" inside a room band, naming the room', () => {
     renderThreshold();
-
-    const band = document.querySelector(`#room-${LIBRARY}`);
-    expect(band).not.toBeNull();
-    expect(within(band as HTMLElement).getByText(/Ask for a change in/)).toBeInTheDocument();
+    openGallery('#pieces-' + LIBRARY);
+    expect(screen.getByText(/Ask for a change in/)).toHaveTextContent('Library & lounge');
   });
 
   // Finding #10 — the settle gate must hold the whole house, asks included,
@@ -2339,7 +2286,7 @@ describe('Threshold — L6, the review and scope-change asks mounted in place', 
     renderThreshold();
 
     expect(screen.getByTestId('threshold-hold')).toBeInTheDocument();
-    expect(screen.getByTestId('doorstep-sentence-pending')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.queryByTestId('mat')).not.toBeInTheDocument();
   });
 
@@ -2413,7 +2360,7 @@ describe('the settle gate — a query that cannot answer may not hold the house'
     renderThreshold();
 
     expect(screen.queryByTestId('threshold-hold')).not.toBeInTheDocument();
-    expect(document.querySelector('#doorstep')).toBeInTheDocument();
+    expect(document.querySelector('.gallery-arrival')).toBeInTheDocument();
   });
 
   it('does not hold on the edition bundle when no ?review= link came', () => {
@@ -2499,15 +2446,9 @@ describe("Threshold — the studio's own letters", () => {
 
   it("keeps this house's own letter behind the studio's, not instead of it", () => {
     clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
-
     renderThreshold();
-
-    // Both stand in plain view: no outstanding invoice waits behind a fold.
-    const toPay = screen.getByTestId('invoices-to-pay');
-    expect(within(toPay).getAllByTestId('invoice-row').map((row) => row.dataset.invoiceId)).toEqual(
-      expect.arrayContaining(['inv-4', 'inv-31']),
-    );
-    expect(screen.queryByRole('button', { name: 'Earlier invoices' })).not.toBeInTheDocument();
+    expect([...document.querySelectorAll('[data-testid="invoice-row"]')].map(row => row.getAttribute('data-invoice-id'))).toEqual(expect.arrayContaining(['inv-4', 'inv-31']));
+    expect(screen.getByTestId('gallery-also-open')).toHaveTextContent('Also open');
   });
 
   // The adopted house belongs to one studio; the letter standing in its
@@ -2532,9 +2473,10 @@ describe("Threshold — the studio's own letters", () => {
 
     renderThreshold();
 
-    expect(screen.getByTestId('doorplate-line')).toHaveTextContent('Quist Interiors');
+    expect(document.querySelector('.gallery-chip')!).toHaveTextContent('Quist Interiors');
 
-    fireEvent.click(within(invoiceRow('inv-31')).getByRole('button', { name: 'View invoice' }));
+    openGallery('#letterbox');
+    expect(within(invoiceRow('inv-31')).getByRole('button', { name: 'View invoice' })).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(screen.getByRole('radio', { name: /check/i }));
 
     const panel = await screen.findByTestId('threshold-check-panel');
@@ -2565,6 +2507,7 @@ describe("Threshold — the studio's own letters", () => {
     clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
 
     renderThreshold();
+    openGallery('#key');
 
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
       'unpaid across two open invoices, one from the studio',
@@ -2575,6 +2518,7 @@ describe("Threshold — the studio's own letters", () => {
     clientInvoicesMock.mockReturnValue(settled([STUDIO_INVOICE]));
 
     renderThreshold(MILESTONES, [{ id: 'proj-ash', name: 'The Ash cottage' }]);
+    openGallery('#key');
 
     const sentence = screen.getByTestId('house-ledger-reconcile');
     expect(sentence).toHaveTextContent('unpaid on');
@@ -3411,50 +3355,33 @@ describe('LetterboxDoor — the origin agreement, before there is a house', () =
 });
 
 describe('Threshold — the landmark ledger and the story pole’s sections', () => {
-  /** The landmarks as rendered: [label, href]. */
-  function landmarks(container: HTMLElement): Array<[string, string | null]> {
-    return Array.from(
-      container.querySelectorAll('[data-testid="landmark-ledger"] a'),
-    ).map((link) => [link.textContent?.trim() ?? '', link.getAttribute('href')]);
-  }
 
   it('strikes the ledger directly under the doorplate, above the doorstep', () => {
     const { container } = renderThreshold();
-
-    const ledger = screen.getByTestId('landmark-ledger');
-    const doorplate = container.querySelector('#doorplate')!;
-    const doorstep = container.querySelector('#doorstep')!;
-
-    expect(doorplate.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(ledger.compareDocumentPosition(doorstep) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
+    expect(container.querySelector('[data-testid="landmark-ledger"]')).toBeNull();
+    expect(container.querySelector('.gallery-band a')).toHaveAttribute('href', '#doorstep');
+    openGallery('#menu');
+    expect(screen.getByRole('link', { name: 'The house' })).toHaveAttribute('href', '#key');
   });
 
   it('points every landmark at an id that is actually on the page', () => {
-    const { container } = renderThreshold();
-
-    const struck = landmarks(container);
-    expect(struck.length).toBeGreaterThan(0);
-    for (const [, href] of struck) {
-      expect(container.querySelector(href!)).not.toBeNull();
+    renderThreshold();
+    openGallery('#menu');
+    const menu = screen.getByRole('navigation', { name: 'Page index' });
+    const links = [...menu.querySelectorAll('a')].map(a => a.getAttribute('href'));
+    expect(links).toEqual(expect.arrayContaining(['#key', '#letterbox', '#mat-papers', '#room-' + LIBRARY]));
+    for (const hash of ['#key', '#letterbox', '#mat-papers']) {
+      openGallery(hash);
+      expect(screen.getByRole('dialog')).toHaveAttribute('open');
     }
   });
 
   it('sends Approvals to the first gate that drew, and keeps the money undimmable', () => {
-    const { container } = renderThreshold();
-
-    expect(landmarks(container)).toEqual(
-      expect.arrayContaining([
-        ['Invoices', '#letterbox'],
-        ['Approvals', '#wall'],
-        ['Progress', '#road'],
-        ['Documents', '#mat-papers'],
-      ]),
-    );
-    expect(
-      container.querySelector('[data-testid="landmark-ledger"] a[href="#letterbox"]'),
-    ).toHaveAttribute('data-never-dim');
+    renderThreshold();
+    openGallery('#approvals');
+    expect(screen.getByTestId('approvals')).toBeInTheDocument();
+    expect(document.querySelector('#wall')).toBeInTheDocument();
+    expect(document.querySelector('#letterbox')!.closest('[data-dimmable]')).toBeNull();
   });
 
   it('gives the house holding its place no landmarks at all', () => {
@@ -3466,87 +3393,48 @@ describe('Threshold — the landmark ledger and the story pole’s sections', ()
   });
 
   it('renames no anchor — the id set the redirect map holds is unchanged', () => {
-    const { container } = renderThreshold();
-
-    for (const id of [
-      'doorstep',
-      'key',
-      'letterbox',
-      'wall',
-      'door',
-      'road',
-      'note',
-      'previously',
-      'mat',
-      'mat-papers',
-      'ledger',
-    ]) {
-      expect(container.querySelector(`#${id}`)).not.toBeNull();
+    renderThreshold();
+    for (const hash of ['#doorstep', '#ledger', '#letterbox', '#approvals']) {
+      openGallery(hash);
+      expect(screen.getByRole('dialog')).toHaveAttribute('open');
+      expect(document.querySelector('#letterbox')).toBeInTheDocument();
     }
+    for (const id of ['wall', 'door', 'road', 'note', 'previously', 'mat']) expect(document.getElementById(id)).toBeInTheDocument();
+    openGallery('#key');
+    expect(document.querySelector('#key')).toBeInTheDocument();
+    openGallery('#mat-papers');
+    expect(screen.getByTestId('papers-sheet-stub')).toBeInTheDocument();
   });
 
   it('sends the pole’s Installation to the first room band, not to the key', () => {
-    const { container } = renderThreshold();
-
-    const installation = screen.getByTestId('story-pole-link-ph-5');
-    expect(installation).toHaveAttribute('href', `#room-${LIBRARY}`);
-    expect(container.querySelector(`#room-${LIBRARY}`)).not.toBeNull();
-
-    for (const link of Array.from(
-      container.querySelectorAll('[data-testid="story-pole"] a'),
-    )) {
-      expect(link.getAttribute('href')).not.toBe('#key');
-    }
+    renderThreshold();
+    openGallery('#menu');
+    const room = screen.getByRole('link', { name: 'Library & lounge' });
+    expect(room).toHaveAttribute('href', '#room-' + LIBRARY);
+    fireEvent.click(room);
+    expect(document.querySelector('#room-' + LIBRARY)).toBeInTheDocument();
+    expect(screen.queryByTestId('story-pole')).not.toBeInTheDocument();
   });
 
   it('draws no chapter link at a key a house whose rooms failed never prints', () => {
-    roomsMock.mockReturnValue({
-      data: undefined,
-      isPending: false,
-      isLoading: false,
-      isError: true,
-    });
-    const { container } = renderThreshold();
-
+    roomsMock.mockReturnValue({ data: undefined, isPending: false, isLoading: false, isError: true });
+    renderThreshold();
+    openGallery('#key');
     expect(screen.getByTestId('threshold-rooms-error')).toBeInTheDocument();
-    expect(container.querySelector('#key')).toBeNull();
-
-    for (const link of Array.from(
-      container.querySelectorAll('[data-testid="story-pole"] a'),
-    )) {
-      expect(container.querySelector(link.getAttribute('href')!)).not.toBeNull();
-    }
+    expect(screen.queryByTestId('plan-key')).not.toBeInTheDocument();
+    openGallery('#menu');
+    expect(screen.queryByRole('link', { name: 'Library & lounge' })).not.toBeInTheDocument();
   });
 
   it('gives the caret the money and the ask to land on', () => {
-    const observed: string[] = [];
-    const original = window.IntersectionObserver;
-    Object.defineProperty(window, 'IntersectionObserver', {
-      writable: true,
-      configurable: true,
-      value: class {
-        unobserve = jest.fn();
-        disconnect = jest.fn();
-        constructor(_callback: unknown) {}
-        observe(node: Element) {
-          observed.push(node.id);
-        }
-      },
-    });
-
-    try {
-      renderThreshold();
-      expect(observed).toContain('letterbox');
-      expect(observed).toContain('wall');
-      expect(observed).toContain('doorstep');
-      expect(observed).toContain('mat');
-    } finally {
-      Object.defineProperty(window, 'IntersectionObserver', {
-        writable: true,
-        configurable: true,
-        value: original,
-      });
+    renderThreshold();
+    for (const hash of ['#letterbox', '#approvals']) {
+      openGallery(hash);
+      expect(screen.getByRole('dialog')).toHaveAttribute('open');
     }
+    openGallery('#mat');
+    expect(document.querySelector('#mat')).toBeInTheDocument();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 });
 
@@ -3555,40 +3443,19 @@ describe('Threshold — the landmark ledger and the story pole’s sections', ()
    state, or a recovery message; arrival counts read from the one invoice
    projection and withheld whenever it withholds them. ───────────────────── */
 describe('Threshold — the arrival and its wayfinding (CPUX-01)', () => {
-  function landmarks(container: HTMLElement): Array<[string, string | null]> {
-    return Array.from(
-      container.querySelectorAll('[data-testid="landmark-ledger"] a'),
-    ).map((link) => [link.textContent?.trim() ?? '', link.getAttribute('href')]);
-  }
 
   it('says what the page is for between the doorplate and the ledger', () => {
-    const { container } = renderThreshold();
-
-    const purpose = screen.getByText(
-      'Pay invoices, review approvals, and follow your project here.',
-    );
-    const doorplate = container.querySelector('#doorplate')!;
-    const ledger = screen.getByTestId('landmark-ledger');
-    expect(doorplate.compareDocumentPosition(purpose) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(purpose.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
+    renderThreshold();
+    expect(screen.queryByText('Pay invoices, review approvals, and follow your project here.')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Menu' })).toHaveAttribute('href', '#menu');
   });
 
   it('strikes Invoices, Approvals and Progress first, then Updates, Documents and help', () => {
-    const { container } = renderThreshold();
-
-    expect(landmarks(container)).toEqual([
-      ['Invoices', '#letterbox'],
-      ['Approvals', '#wall'],
-      ['Progress', '#road'],
-      ['Updates', '#note'],
-      ['Documents', '#mat-papers'],
-      ['Contact your designer', '#contact'],
-    ]);
-    for (const [, href] of landmarks(container)) {
-      expect(container.querySelector(href!)).not.toBeNull();
-    }
+    renderThreshold();
+    openGallery('#menu');
+    const links = [...screen.getByRole('navigation', { name: 'Page index' }).querySelectorAll('a')].map(a => a.getAttribute('href'));
+    expect(links.indexOf('#approvals')).toBeLessThan(links.indexOf('#room-' + LIBRARY));
+    expect(links.slice(-4)).toEqual(['#key', '#letterbox', '#mat-papers', '#contact']);
   });
 
   it('keeps the empty line away while an ask waits anywhere on the page', () => {
@@ -3605,7 +3472,7 @@ describe('Threshold — the arrival and its wayfinding (CPUX-01)', () => {
     selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [] }));
     const { container } = renderThreshold();
 
-    expect(landmarks(container)).toContainEqual(['Approvals', '#approvals']);
+    openGallery('#approvals');
     const approvals = screen.getByTestId('approvals');
     expect(within(approvals).getByRole('heading', { name: 'Approvals' })).toBeInTheDocument();
     expect(screen.getByTestId('approvals-empty')).toHaveTextContent(
@@ -3626,10 +3493,7 @@ describe('Threshold — the arrival and its wayfinding (CPUX-01)', () => {
   it('counts the invoices to pay at the arrival from the projection', () => {
     invoicesMock.mockReturnValue(settled([{ ...INVOICE, payments: [] }]));
     renderThreshold();
-
-    expect(screen.getByTestId('arrival-invoices')).toHaveTextContent(
-      'You have one invoice to pay.',
-    );
+    expect(document.querySelector('.gallery-asks-line')).toHaveTextContent('$9,125.00 past due');
   });
 
   it('withholds the count when one half of the adopted read failed', () => {
@@ -3646,7 +3510,7 @@ describe('Threshold — the arrival and its wayfinding (CPUX-01)', () => {
     expect(screen.queryByTestId('arrival-invoices')).not.toBeInTheDocument();
     // The letterbox still stands for the rows that did read.
     expect(container.querySelector('#letterbox')).not.toBeNull();
-    expect(landmarks(container)).toContainEqual(['Invoices', '#letterbox']);
+    expect(document.querySelector('.gallery-asks-line')).toHaveTextContent('Please check your invoices and asks.');
   });
 
   it('never says letters are waiting', () => {
@@ -3659,10 +3523,10 @@ describe('Threshold — the arrival and its wayfinding (CPUX-01)', () => {
 describe('Threshold — Project progress and designer help (CPUX-06)', () => {
   it('stands the summary at #road from the sources the house holds, with no percentage', () => {
     const { container } = renderThreshold();
-    const road = container.querySelector<HTMLElement>('#road')!;
+    openGallery('#key');
+    const road = screen.getByTestId('project-progress');
 
     expect(within(road).getByRole('heading', { name: 'Project progress' })).toBeInTheDocument();
-    expect(road).toHaveAccessibleName('Project progress');
     expect(within(road).getByTestId('progress-now')).not.toHaveTextContent(
       'No project stage is shown here yet.',
     );
@@ -3681,7 +3545,8 @@ describe('Threshold — Project progress and designer help (CPUX-06)', () => {
     const refetch = jest.fn();
     notesMock.mockReturnValue({ data: undefined, isPending: false, isLoading: false, isError: true, refetch });
     const { container } = renderThreshold();
-    const road = container.querySelector<HTMLElement>('#road')!;
+    openGallery('#key');
+    const road = screen.getByTestId('project-progress');
 
     expect(within(road).getByTestId('progress-now')).not.toHaveTextContent('No project stage');
     expect(within(road).getByTestId('progress-update-error')).toHaveTextContent(
@@ -3713,11 +3578,13 @@ describe('Threshold — Project progress and designer help (CPUX-06)', () => {
   describe('Waiting on you', () => {
     /** No open paper, no finished work to review, no approval: every ask is the test's. */
     function quietHouse() {
+      invoicesMock.mockReturnValue(settled([]));
       proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
       selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA] }));
     }
     function progressRow(container: HTMLElement, testId: string): HTMLElement {
-      return within(container.querySelector<HTMLElement>('#road')!).getByTestId(testId);
+      openGallery('#key');
+      return within(container).getByTestId(testId);
     }
 
     it('says nothing waits on a quiet house whose every read answered', () => {
@@ -3953,18 +3820,12 @@ describe('Threshold — The House Issue data', () => {
   it('ground floor renders the approved house held plate once after approvals and before the road', () => {
     roomsMock.mockReturnValue(settled([]));
     const { container } = renderThreshold(MILESTONES, [], groundFloorEdition(true));
-    const groundFloor = screen.getByTestId('ground-floor');
-    const held = groundFloor.querySelector('.ed-held')!;
-    expect(groundFloor.querySelectorAll('.ed-held')).toHaveLength(1);
-    expect(held.querySelector('figcaption')).toHaveTextContent('The direction board · Fieldwork Studio · 14 October 2026');
-    expect(held.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/plates/approved-edition/'));
-    for (const anchor of ['doorstep', 'ledger', 'approvals']) {
-      const act = container.querySelector(`#${anchor}`)!;
-      expect(act.compareDocumentPosition(held) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    }
-    expect(held.compareDocumentPosition(container.querySelector('#road')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(container.querySelector('#key')).toBeNull();
-    expect(held.closest('[data-dimmable]')).toBeNull();
+    expect(container.querySelectorAll('.gallery-chapter')).toHaveLength(1);
+    const chapter = container.querySelector('.gallery-chapter')!;
+    expect(chapter.querySelector('figcaption')).toHaveTextContent('The direction board · Fieldwork Studio · 14 October 2026');
+    expect(chapter.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/plates/approved-edition/'));
+    expect(screen.getByTestId('approvals')).toBeInTheDocument();
+    expect(chapter.closest('[data-dimmable]')).toBe(chapter);
   });
 
   it('ground floor without an approved held plate stays byte-identical even with an unapproved held row', () => {
@@ -3983,31 +3844,21 @@ describe('Threshold — The House Issue data', () => {
 
   it('editorial data alone: the hero stands between the doorplate and the house, and every anchor stays', () => {
     const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
-    const hero = screen.getByTestId('house-issue-hero');
-    const doorplate = container.querySelector('#doorplate')!;
-    const doorstep = container.querySelector('#doorstep')!;
-    expect(doorplate.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(hero.compareDocumentPosition(doorstep) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // A plate never sits inside a section the since-yesterday light dims.
-    expect(container.querySelector('[data-dimmable] .ed-plate')).toBeNull();
-    expect(container.querySelectorAll('.ed-plate').length).toBeGreaterThan(0);
-    for (const id of ['doorstep', 'ledger', 'letterbox', 'approvals', 'key', `room-${LIBRARY}`, 'road', 'note', 'previously', 'mat']) {
-      expect(container.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
-    }
-    expect([...container.querySelectorAll('[data-standing-row]')].map((a) => a.getAttribute('href'))).toEqual([
-      '#letterbox',
-      '#approvals',
-      '#ledger',
-    ]);
-    expect(container.querySelectorAll('.ed-chapter-head').length).toBeGreaterThan(0);
+    expect(container.querySelector('.gallery-paint')).toBeInTheDocument();
+    expect(container.querySelector('[data-standing-row]')).toBeNull();
+    expect(container.querySelector('.ed-chapter-head')).toBeNull();
+    expect(container.querySelector('.gallery-chapter')).toBeInTheDocument();
+    for (const hash of ['#doorstep', '#ledger', '#letterbox', '#approvals']) { openGallery(hash); expect(screen.getByRole('dialog')).toHaveAttribute('open'); }
+    for (const id of ['road', 'note', 'previously', 'mat']) expect(container.querySelectorAll('[id="' + id + '"]')).toHaveLength(1);
   });
 
   /* Standing row 2 reads the same projection "Waiting on you" reads at #road
      (SQ-1585 F1), never which gates are drawn. */
   describe('standing row 2', () => {
-    const rowTwo = (container: HTMLElement) => container.querySelector('[data-standing-row="2"]');
+    const rowTwo = (container: HTMLElement) => container.querySelector('.gallery-asks-line');
     /** No open paper, no finished work to review, no approval. */
     function quietHouse() {
+      invoicesMock.mockReturnValue(settled([]));
       proposalsMock.mockReturnValue(settled([SIGNED_AGREEMENT]));
       selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA] }));
     }
@@ -4020,7 +3871,7 @@ describe('Threshold — The House Issue data', () => {
       const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
 
       expect(container.querySelector('#door')).not.toBeNull();
-      expect(rowTwo(container)).toHaveTextContent('Nothing waiting on you');
+      expect(rowTwo(container)).toHaveTextContent('Nothing from Nora today');
     });
 
     it('names a studio-sent scope change rather than saying nothing waits', () => {
@@ -4041,13 +3892,13 @@ describe('Threshold — The House Issue data', () => {
       });
       const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
 
-      expect(rowTwo(container)).toHaveTextContent('Waiting for you: Add a runner to the stair hall.');
+      expect(rowTwo(container)).toHaveTextContent('Add a runner to the stair hall.');
     });
 
     it.each([
       ['percent', 'Increase the fabric allowance by 10%'],
       ['fraction', 'Replace the 2/3-height panel'],
-    ])('uses an affirmative fallback for a sent scope-change title containing a %s', (_measure, title) => {
+    ])('names an actionable sent scope-change title containing a %s', (_measure, title) => {
       quietHouse();
       scopeChangesMock.mockReturnValue({
         data: [
@@ -4065,8 +3916,8 @@ describe('Threshold — The House Issue data', () => {
       });
       const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
 
-      expect(rowTwo(container)).toHaveTextContent(/^A request is waiting for you\.$/);
-      expect(rowTwo(container)).toHaveAttribute('href', '#approvals');
+      expect(rowTwo(container)).toHaveTextContent(title);
+      expect(rowTwo(container)).toHaveAttribute('href', '#doorstep');
       expect(screen.queryByText('Nothing waiting on you')).not.toBeInTheDocument();
     });
 
@@ -4081,7 +3932,7 @@ describe('Threshold — The House Issue data', () => {
       });
       const { container } = renderThreshold(MILESTONES, [], EDITORIAL);
 
-      expect(rowTwo(container)).toHaveTextContent('The approvals could not be read just now.');
+      expect(rowTwo(container)).toHaveTextContent('Your asks could not all be read. Please check them.');
     });
   });
 });

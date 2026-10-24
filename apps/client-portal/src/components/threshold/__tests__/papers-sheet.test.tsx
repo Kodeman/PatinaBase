@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ClientPlanSheet, ProjectDocument } from '@patina/supabase';
 
@@ -136,6 +136,24 @@ describe('PapersSheet — the papers, laid over the house', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAccessibleName('The papers');
     expect(dialog).toHaveFocus();
+  });
+
+  it('embeds its registers without taking dialog, Escape, focus or scroll-lock ownership', () => {
+    const dismiss = jest.fn();
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+    document.body.style.overflow = 'clip';
+    const { unmount } = render(<PapersSheet projectId="project-1" open embedded onDismiss={dismiss} />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+    expect(document.body.style.overflow).toBe('clip');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(dismiss).not.toHaveBeenCalled();
+    unmount();
+    expect(document.body.style.overflow).toBe('clip');
+    document.body.style.overflow = '';
+    opener.remove();
   });
 
   it('holds the house still underneath, and lets it go again', () => {

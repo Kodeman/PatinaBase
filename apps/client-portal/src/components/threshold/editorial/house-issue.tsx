@@ -890,7 +890,7 @@ function ChapterPlate({
   );
 }
 
-function Pieces({
+export function Pieces({
   issue,
   choice,
 }: {

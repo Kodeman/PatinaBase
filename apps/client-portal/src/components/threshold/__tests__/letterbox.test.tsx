@@ -3,6 +3,8 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Invoice } from '@patina/supabase';
 
+import { asksLine } from '@/lib/threshold/asks-line';
+import { galleryInvoiceReceipt } from '@/lib/threshold/gallery-invoices';
 import { resetCheckoutReturn } from '@/lib/threshold/checkout-return';
 import {
   invoiceProjection,
@@ -211,6 +213,60 @@ describe('Letterbox — every invoice in plain view (US-45 CPUX-02, CPUX-03)', (
 
   afterEach(() => {
     Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+  });
+
+  it('G01 · Gallery puts urgent invoice and its payment act before full approvals, then Also open', () => {
+    render(<Letterbox invoices={MIXED} today={TODAY} gallery={{ approvals: <section data-testid="full-approval">The sofa · Approve $7,480.00</section> }} />);
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-a']);
+    expect(viewInvoice('inv-a')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /continue to secure payment/i })).toBeInTheDocument();
+    const approval = screen.getByTestId('full-approval');
+    expect(row('inv-a').compareDocumentPosition(approval) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(approval.compareDocumentPosition(screen.getByTestId('gallery-also-open')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('gallery-also-open')).toHaveTextContent('Also open, $1,375.00');
+    expect(rowIds('gallery-other-payable')).toEqual(['inv-b', 'inv-e', 'inv-c', 'inv-f', 'inv-d']);
+    expect(screen.getAllByTestId('invoice-row')).toHaveLength(6);
+  });
+
+  it('G02 · Gallery with no asks still opens the invoice list and keeps payment history', async () => {
+    render(<Letterbox invoices={[MIXED[0], MIXED[8]]} today={TODAY} gallery={{ approvals: null }} />);
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-f']);
+    expect(screen.queryByTestId('gallery-also-open')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Payment history' }));
+    expect(rowIds('payment-history')).toEqual(['inv-p2']);
+  });
+
+  it('G03 · Gallery receipt is first and uses the settled server payment amount and date', () => {
+    standAt('?invoice=inv-paid&checkout=success');
+    const paid = invoiceRow({ id: 'inv-paid', status: 'paid', amount_paid_cents: 60_000,
+      payments: [{ id: 'payment-1', invoice_id: 'inv-paid', status: 'succeeded', amount_cents: 60_000,
+        received_at: '2026-10-24T12:00:00Z' }] as Invoice['payments'] });
+    render(<Letterbox invoices={[paid, MIXED[0]]} today={TODAY} gallery={{ approvals: <p>The sofa</p> }} />);
+    const receipt = screen.getByTestId('letterbox-receipt');
+    expect(receipt).toHaveTextContent('Paid $600.00 on 24 October. Thank you.');
+    expect(screen.getByTestId('letterbox').firstElementChild).toBe(receipt);
+    expect(rowIds('invoices-to-pay')).toEqual(['inv-f']);
+  });
+
+  // Run with TZ=America/Chicago to catch UTC-midnight date-only drift.
+  it('G05 · Gallery keeps a 31 October date-only due date and receipt on 31 October', () => {
+    const invoice = invoiceRow({ id: 'inv-calendar', due_date: '2026-10-31' });
+    const today = new Date(2026, 9, 31, 12);
+    render(<Letterbox invoices={[invoice]} today={today} gallery={{ approvals: null }} />);
+    expect(row('inv-calendar')).toHaveTextContent('Due today · 31 October 2026');
+    expect(row('inv-calendar')).not.toHaveTextContent('30 October');
+    const projection = invoiceProjection([invoice], { read: 'complete', today });
+    expect(asksLine(projection, [], 'Nora')).toBe('$300.00 due today.');
+    const paid = invoiceRow({ status: 'paid', payments: [{ id: 'calendar-payment', status: 'succeeded',
+      amount_cents: 30_000, received_at: '2026-10-31' }] as Invoice['payments'] });
+    expect(galleryInvoiceReceipt(paid)).toBe('Paid $300.00 on 31 October. Thank you.');
+  });
+
+  it('G04 · Gallery never fabricates a receipt from success params for an unpaid invoice', () => {
+    standAt('?invoice=inv-f&checkout=success&amount=60000');
+    render(<Letterbox invoices={[MIXED[0]]} today={TODAY} gallery={{ approvals: null }} />);
+    expect(screen.getByTestId('letterbox-receipt')).toHaveTextContent('Confirming payment');
+    expect(screen.getByTestId('letterbox-receipt')).not.toHaveTextContent('Paid $600.00');
   });
 
   it('A01 · lists all six outstanding invoices, soonest due first, with nothing expanded', () => {

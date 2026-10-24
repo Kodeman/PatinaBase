@@ -45,7 +45,6 @@ import {
 import { KIND_LABEL } from './consent-copy';
 import { DoorGate, type DoorProposal } from './door-gate';
 import {
-  ARRIVAL_PURPOSE,
   ArrivalLine,
   LandmarkLedger,
   invoiceArrivalLines,
@@ -558,7 +557,6 @@ export function LetterboxDoor({ namedProposalId = null }: LetterboxDoorProps = {
         preparedFor={user?.name ?? null}
         monthLabel={today ? monthAndYear(today) : null}
       />
-      <ArrivalLine>{ARRIVAL_PURPOSE}</ArrivalLine>
       <LandmarkLedger
         invoices
         approvals={firstDoorId ? 'door' : 'approvals'}

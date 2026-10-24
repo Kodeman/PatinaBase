@@ -58,14 +58,13 @@ const pages = [
   ['named project', () => ProjectPage({ params: Promise.resolve({ projectId: 'p1' }) })],
 ] as const;
 
-it.each(pages)('%s always reads editorial and preloads its hero without analytics', async (_name, page) => {
+it.each(pages)('%s always reads editorial without analytics and withholds an unapproved hero', async (_name, page) => {
   const analytics = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('analytics blocked'));
   render(await page());
   expectBothReads();
   expect(analytics).not.toHaveBeenCalled();
   const preloads = document.querySelectorAll('link[rel="preload"][as="image"]');
-  expect(preloads.length).toBeGreaterThan(0);
-  for (const link of preloads) expect(link.getAttribute('imagesrcset')).toContain('/plates/p1/');
+  expect(preloads).toHaveLength(0);
   expect(screen.getByTestId('surface')).toHaveAttribute('data-editorial', 'present');
 });
 

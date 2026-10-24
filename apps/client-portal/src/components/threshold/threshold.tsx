@@ -31,9 +31,8 @@ import type {
 import { getFieldTradeLabel } from "@patina/types";
 
 import { Colophon } from '@/components/threshold/instruments/colophon';
-import { ContactDesigner, PresentedBy, hasPresentation } from '@/components/presented-by';
+import { ContactDesigner, PresentedBy } from '@/components/presented-by';
 import { openChapterOf } from '@/components/threshold/instruments/making-spine';
-import { monthAndYear } from '@/components/threshold/instruments/standing-sentence';
 import { clientEvents } from '@/lib/analytics/events';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -42,15 +41,7 @@ import {
   useClientProjectReviewBundle,
   useClientSelections,
 } from '@/hooks/use-commercial-client';
-import {
-  HouseIssueHead,
-  HouseHeldPlate,
-  groundFloorChapters,
-  sheetChapters,
-  useEditionIssue,
-  withChapter,
-  withRoomOpening,
-} from '@/components/threshold/editorial/house-issue';
+import { useEditionIssue } from '@/components/threshold/editorial/house-issue';
 import { useHoldCeiling } from '@/hooks/use-hold-ceiling';
 import { useHydrated } from '@/hooks/use-hydrated';
 import type { ClientProjectEditorial } from '@/lib/editorial/types';
@@ -83,12 +74,8 @@ import {
 } from '@/lib/threshold/invoice-rollup';
 import { planKeyGeometry } from '@/lib/threshold/plan-key';
 import { toClosedOrders, toRoadOrders } from '@/lib/threshold/road-orders';
-import {
-  keySentence,
-  previouslyLine,
-  readingMarkLine,
-  thresholdStanding,
-} from '@/lib/threshold/standing';
+import { keySentence } from '@/lib/threshold/standing';
+import { asksLine, urgentInvoice } from '@/lib/threshold/asks-line';
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
 
 import { ApprovalAsk, ApprovalRecords, useDoorstepApprovals } from './approval-ask';
@@ -97,19 +84,15 @@ import { PapersUnread } from './letterbox-door';
 import { Letters, MuteLetters, WRITE_BACK_ANCHOR, WriteBack } from './correspondence';
 import { DetailsSheet } from './details-sheet';
 import { DoorGate, type DoorProposal } from './door-gate';
-import { Doorplate } from './doorplate';
-import { Doorstep, hasChangedBlock } from './doorstep';
-import { GroundFloor } from './ground-floor';
-import { HouseLedger } from './house-ledger';
 import { BudgetCheckpointReview } from './budget-checkpoint-review';
-import {
-  ArrivalLine,
-  LandmarkLedger,
-  invoiceArrivalLines,
-} from './landmark-ledger';
 import { Letterbox } from './letterbox';
-import { Mat, type MatPaper, type MatPerson } from './mat';
-import type { OtherHouse } from './other-houses';
+import { OtherHouses, type OtherHouse } from './other-houses';
+import type { MatPerson } from './mat';
+import { GalleryPage, GalleryPieces } from './gallery-page';
+import { SinceYesterday } from './since-yesterday';
+import { readingMarkLine } from '@/lib/threshold/standing';
+import { RoadOrders } from './road-orders';
+import { formatCurrency } from '@patina/shared';
 import { PapersSheet } from './papers-sheet';
 import { PlanKey } from './plan-key';
 import { Previously } from './previously';
@@ -120,7 +103,6 @@ import {
   useReviewEditionId,
   useSelectionEditionPending,
 } from './review-ask';
-import { RoomBand } from './room-band';
 import { RoomCapture, StrayCaptures } from './room-capture';
 import {
   MyScopeChangeRequestsAsk,
@@ -128,10 +110,9 @@ import {
   RequestChangeAct,
   ResolvedScopeChangesPrevious,
 } from './scope-change-ask';
-import { SinceYesterday } from './since-yesterday';
-import { StoryPole } from './story-pole';
 import { TheNote, type NoteEnclosure } from './the-note';
-import { TheRoad, type ProgressAsk, type ProjectProgressProps } from './the-road';
+import { ProjectProgress, type ProjectProgressProps, type ProgressAsk } from './the-road';
+import { HouseLedger } from './house-ledger';
 import { WallGate } from './wall-gate';
 
 /* ── THE THRESHOLD ──────────────────────────────────────────────────────────
@@ -203,16 +184,6 @@ function progressAsk(anchor: string, label: string | null | undefined): Progress
 /** A door or wall the page draws, under its own element id. */
 function waitingGate(mark: ThresholdMark | undefined, anchorOf: (mark: ThresholdMark) => string) {
   return mark ? progressAsk(anchorOf(mark), mark.label) : null;
-}
-
-/** The gate standing row 2 names: the wall before the door, and only one still owed. */
-function owedGate(wall: ThresholdMark | undefined, door: ThresholdMark | undefined) {
-  return wall ? "wall" : door ? "door" : null;
-}
-
-/** The House Issue draws a room's pictures as plates, so its bands draw none. */
-function bandImagery(issue: ReturnType<typeof useEditionIssue>) {
-  return issue ? "editorial" : "legacy";
 }
 
 /** An approval still owed her answer: one waiting on the studio to issue it is not. */
@@ -556,8 +527,6 @@ export function Threshold({
   const { mutate: markProjectRead } = useMarkProjectRead();
   const previousMark = usePreviousReadingMark(projectId);
 
-  const [sinceActive, setSinceActive] = useState(false);
-  const [papersOpen, setPapersOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   /* W3-01 / W3-02. THE DOOR THAT OPENED ON HER NAME STAYS ON THE PAGE.
@@ -588,6 +557,7 @@ export function Threshold({
   // Fired ONCE per project, after hydration. `mark_project_read` returns the
   // PREVIOUS read_at and then advances the mark, so the only chance to learn
   // what "since" means is the first call — a second would return this visit.
+  const [sinceActive, setSinceActive] = useState(false);
   const markedProject = useRef<string | null>(null);
   useEffect(() => {
     if (!hydrated || !projectId) return;
@@ -623,7 +593,6 @@ export function Threshold({
   // mark, so this is a first visit and nothing can have changed since.
   const previousReadAt =
     typeof previousMark.data === "string" ? previousMark.data : null;
-  const showSince = typeof previousMark.data === "string";
 
   // ── the papers ─────────────────────────────────────────────────────────────
   const { pending: pendingProposals, accepted } = partitionProposals(
@@ -886,7 +855,6 @@ export function Threshold({
     editionNoticeAt: edition?.notice ? edition.approvedAt : null,
   });
   // The letter stands for a standing note, or for an edition's notice alone.
-  const letterStands = Boolean(model.note || edition?.notice);
   // A complete read that proved a held invoice settled retires its hold, so a
   // refund that reopens it this visit is judged on its own read. Adjusted in
   // render: the same holds come back when nothing retires.
@@ -957,40 +925,6 @@ export function Threshold({
      reads the same rule from the same component: the doorstep's claim steps
      aside, and the notice below says what the page actually knows. */
   const papersUnread = proposalsQuery.isError;
-
-  // ── the doorstep's sentence ────────────────────────────────────────────────
-  // The asks under Approvals are owed her answer as much as a door is owed her
-  // signature, so the sentence names them (US-45 FX-I) by the same rules
-  // "Waiting on you" reads them by.
-  const standing =
-    hydrated && !loading && !papersUnread
-      ? thresholdStanding({
-          doors: model.marks.filter((mark) => mark.kind === "door").length,
-          walls: model.marks.filter((mark) => mark.kind === "wall").length,
-          approvals: doorstepAsks.filter(isClientActionableProjectApproval).length,
-          otherAsks:
-            !!waitingReviewRequest(pendingReviewQuery.data, projectId, adopted) ||
-            !!waitingEdition(editionId, editionQuery.data) ||
-            !!openScopeChange(scopeChangesQuery.data),
-          balanceCents: model.ledger.owedCents ?? 0,
-          nothingOwed:
-            model.marks.length === 0 && model.doorstepAsks.length === 0,
-        })
-      : null;
-
-  // Instruments only. `model.previously` also carries retired NOTES, whose
-  // label is the note's whole body — and the doorstep's line is one mono
-  // sentence ("Previously — fourteen selections agreed, 19 June."), not a
-  // paragraph. A note that was taken down is history the client reads in
-  // Previously, not on the doorstep.
-  const firstReceipt =
-    model.previously.find(
-      (entry) => entry.kind === "instrument" && entry.date !== null,
-    ) ?? null;
-  const previously =
-    hydrated && !loading && firstReceipt?.date
-      ? previouslyLine({ label: firstReceipt.label, date: firstReceipt.date })
-      : null;
 
   // ── the marks, sorted onto their rooms ─────────────────────────────────────
   // `first` is decided ACROSS the page, not per band, so `#door` and `#wall`
@@ -1099,25 +1033,6 @@ export function Threshold({
     );
   };
 
-  // A mark stands on the doorstep when no band can claim it. `deriveThreshold`
-  // already nulls a roomId the drawing does not draw, so this is the same
-  // partition read from the other side — and it holds even if a mark ever
-  // arrives naming a room that is not in `model.bands`.
-  const banded = new Set(model.bands.map((band) => band.roomId));
-  const onDoorstep = (mark: ThresholdMark) =>
-    mark.roomId === null || !banded.has(mark.roomId);
-
-  // The room the work has actually started in, for the bands that have nothing
-  // on their floor yet. Null while nothing has been agreed anywhere — an empty
-  // room then says only that it is empty, which is all the house knows.
-  const leadRoomName =
-    model.bands.find((band) => band.pieces.length > 0)?.name ?? null;
-
-  const doorstepGates: ReactNode[] = [
-    ...doorMarks.filter(onDoorstep).map(renderDoor),
-    ...wallMarks.filter(onDoorstep).map(renderWall),
-  ];
-
   // ── the note's enclosures ──────────────────────────────────────────────────
   /** A trade scope's own name, off the instrument the selection was cut from. */
   const scopeNameById = new Map(
@@ -1212,62 +1127,21 @@ export function Threshold({
       })),
   ];
 
-  const papers: MatPaper[] = [
-    ...(model.bands.length > 0
-      ? [{ label: "The drawing set", href: "#key" }]
-      : []),
-    // The doors still asking. A sealed one is in Previously by now, and the
-    // mat may not list one paper twice.
-    ...openDoorMarks.flatMap((mark) =>
-      paperById.has(mark.proposalId ?? "")
-        ? [{ label: mark.label, href: `#${gateAnchor(mark)}` }]
-        : [],
-    ),
-    ...model.previously
-      .filter((entry) => entry.kind === "instrument")
-      .map((entry) => ({ label: entry.label, href: "#previously" })),
-    ...(model.letterbox
-      ? [{ label: model.letterbox.number ?? "The invoice", href: "#letterbox" }]
-      : []),
-  ];
-
-  const mat = (
-    <>
-      <Mat
-        people={people}
-        papers={papers}
-        otherHouses={otherHouses}
-        onOpenDetails={() => setDetailsOpen((open) => !open)}
-        detailsOpen={detailsOpen}
-        onSignOut={() => void signOut()}
-        correspondence={
-          <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
-        }
-        onOpenPapers={() => setPapersOpen(true)}
-        papersOpen={papersOpen}
-        extraActs={<RequestChangeAct projectId={projectId} projectStatus={project.status} />}
-      />
-      {/* House sheet §A8 — the colophon is page furniture on every
-          client-facing surface, mounted directly after the mat. Absence is
-          silence: the identity query is not in the page's `loading` gate, so
-          `studioName` can still be null here on first paint — the rule above
-          the colophon is gated on the same condition Colophon itself checks,
-          so a resolved-but-empty studio name never leaves a bare hairline
-          standing over nothing. */}
-      {(studioName?.trim() || hasPresentation(presentationQuery.data)) && (
-        <>
-          <hr className="border-[var(--border-subtle)]" />
-          <div className="mt-6 space-y-4 pb-12">
-            {/* US-37 #6 — the studio mark and the lead's contact, as quiet
-                page furniture over the colophon. Absence is silence here too:
-                PresentedBy draws only the fields the studio filled. */}
-            <PresentedBy identity={presentationQuery.data} />
-            <Colophon studioName={words(presentationQuery.data?.firmName)} />
-          </div>
-        </>
-      )}
-    </>
-  );
+  const footer = <>
+    {previousReadAt && <div><button type="button" aria-pressed={sinceActive} onClick={() => setSinceActive(was => !was)}>What changed since yesterday</button><p data-testid="doorstep-reading-mark">{readingMarkLine(parseSourceDate(previousReadAt))}</p></div>}
+    <p>{openChapter.label}</p>
+    <OtherHouses houses={otherHouses} />
+    {user?.id && <StrayCaptures projectId={projectId} userId={user.id} rooms={model.bands} standsUnfiled={adopted} />}
+    <details><summary>People on the project</summary><ul>{people.map((person, index) => <li key={index}>{person.name} · {person.role}{person.where ? ` · ${person.where}` : ''}</li>)}</ul></details>
+    <a href="#mat-papers">The papers</a>
+    <button type="button" onClick={() => setDetailsOpen(true)}>Project details</button>
+    <RequestChangeAct projectId={projectId} projectStatus={project.status} />
+    <MuteLetters threadId={correspondence.threadId} muted={correspondence.muted} />
+    {!presentationQuery.isPending && <ContactDesigner identity={presentationQuery.data} writeAnchor={correspondence.threadId ? WRITE_BACK_ANCHOR : null} />}
+    <PresentedBy identity={presentationQuery.data} />
+    <Colophon studioName={words(presentationQuery.data?.firmName)} />
+    <button type="button" onClick={() => void signOut()}>Sign out</button>
+  </>;
 
   // A review request, a direct order or a capture filed against no house at
   // all belongs to the relationship rather than to a project, and must stand
@@ -1275,19 +1149,6 @@ export function Threshold({
   // she answers the same ask twice and reads the same lamp twice.
   const standsUnfiledAsks = adopted;
 
-  const ledger = <><HouseLedger ledger={model.ledger} today={today} /><BudgetCheckpointReview projectId={projectId} /></>;
-  const letterbox = (
-    <Letterbox
-      projection={model.invoices}
-      onHold={onInvoiceHold}
-      projectName={words(project.name)}
-      invoice={model.letterbox}
-      invoices={invoices}
-      designerName={studioName}
-      onRefetch={refetchInvoices}
-      today={today}
-    />
-  );
   // direct_orders is client-wide and unfiltered, and most clients have no rows
   // in it — it decides what the ROAD says, not what the house says, so it
   // gates the road alone rather than the whole page's first paint. The road
@@ -1299,17 +1160,11 @@ export function Threshold({
   const ordersSettled = !ordersQuery.isPending && !ordersUnread;
   const roadOrders = ordersSettled ? toRoadOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
   const closedOrders = ordersSettled ? toClosedOrders(ordersQuery.data, projectId, standsUnfiledAsks) : [];
-  const ordersShown =
-    ordersUnread ||
-    (ordersSettled &&
-      (model.road.length > 0 || roadOrders.length > 0 || closedOrders.length > 0));
-  // CPUX-06 — the Project progress summary stands at #road on every house,
-  // read line by line off sources this page already holds.
-  //
-  // "Waiting on you" names only an ask still owed her answer, by the id it is
-  // drawn under. A door kept on the page as the receipt of her signature, or an
-  // approval waiting on the studio, is owed nothing (R9); the review, edition
-  // and scope-change asks drawn beside the approvals are owed like any other (R1).
+  const unreadAsks = [
+    { enabled: true, query: approvalsQuery }, { enabled: true, query: proposalsQuery },
+    { enabled: hasProject, query: selectionsQuery }, { enabled: hasUser, query: pendingReviewQuery },
+    { enabled: hasProject, query: scopeChangesQuery }, { enabled: !!editionId, query: editionQuery },
+  ].filter((read) => read.enabled && read.query.isError);
   const waitingWall = wallMarks.find((mark) => mark.id === firstWallId);
   const waitingDoor = drawnDoors.find((mark) => openDoorIds.has(mark.id));
   const waitingAsk = [
@@ -1320,16 +1175,6 @@ export function Threshold({
     waitingEdition(editionId, editionQuery.data),
     waitingScopeChange(scopeChangesQuery.data),
   ].find(Boolean);
-  // Every read an ask is drawn from. Nothing is said to wait, or not, until
-  // each has answered; one that failed says so, and Retry re-reads it.
-  const unreadAsks = [
-    { enabled: true, query: approvalsQuery },
-    { enabled: true, query: proposalsQuery },
-    { enabled: hasProject, query: selectionsQuery },
-    { enabled: hasUser, query: pendingReviewQuery },
-    { enabled: hasProject, query: scopeChangesQuery },
-    { enabled: !!editionId, query: editionQuery },
-  ].filter((read) => read.enabled && read.query.isError);
   const progress: ProjectProgressProps = {
     now: openChapter.label ?? null,
     nextMilestone: project.nextMilestone ?? null,
@@ -1356,28 +1201,10 @@ export function Threshold({
         ? 'previously'
         : null,
   };
-  // Help names only what the studio presented; held until that read answers
-  // so the fallback line is never printed and then rewritten.
-  const help = presentationQuery.isPending ? null : (
-    <ContactDesigner
-      identity={presentationQuery.data}
-      writeAnchor={correspondence.threadId ? WRITE_BACK_ANCHOR : null}
-      className="mb-6"
-    />
-  );
-  const road = (
-    <TheRoad
-      progress={progress}
-      help={help}
-      showOrders={ordersShown}
-      pieces={model.road}
-      orders={roadOrders}
-      closedOrders={closedOrders}
-      ordersUnread={ordersUnread}
-      onOrdersRefetch={ordersQuery.refetch}
-      today={today}
-    />
-  );
+  const road = <div data-testid="gallery-direct-orders">
+    {ordersUnread && <p role="alert">Couldn’t read your orders. <button type="button" onClick={() => void ordersQuery.refetch()}>Try again</button></p>}
+    <RoadOrders orders={roadOrders} closed={closedOrders} onRefetch={ordersQuery.refetch} today={today} />
+  </div>;
   // The reply belongs under the note. With no standing note there is no note
   // to answer under and the central act of /messages would be unreachable, so
   // it heads the record instead.
@@ -1449,43 +1276,11 @@ export function Threshold({
     </>
   );
 
-  const doorstep = (
-    <Doorstep
-      sentence={standing}
-      previously={previously}
-      changedCount={model.changed.size}
-      showSince={showSince}
-      sinceActive={sinceActive}
-      onToggleSince={() => setSinceActive((was) => !was)}
-      readingMark={readingMarkLine(parseSourceDate(previousReadAt))}
-    >
-      {ledger}
-      {/* The ground floor sets the letterbox itself; a house whose rooms did
-          not read still shows its invoices. */}
-      {model.groundFloor && !roomsUnread ? null : letterbox}
-    </Doorstep>
-  );
-
-  /**
-   * The doorstep before the house can speak: the sentence's measure held open
-   * and nothing else. No ledger rows, no letterbox — because an empty
-   * letterbox says "Nothing in the letterbox" and an empty key says "Nothing
-   * stands open on this drawing", and both would be contradicted a moment
-   * later. Silence never has to take anything back.
-   */
-  const quietDoorstep = (
-    <Doorstep
-      sentence={null}
-      previously={null}
-      changedCount={0}
-      showSince={false}
-      sinceActive={false}
-    />
-  );
-
   const askList = (
     <>
-      {doorstepGates}
+      {doorMarks.map(renderDoor)}
+      {wallMarks.map(renderWall)}
+      <BudgetCheckpointReview projectId={projectId} />
       {/* A failed read, in the ink every other failed read on this surface
           uses (the papers registers, the captures). Not red: the house has no
           red, and this is not a refusal of an act — it is the page saying it
@@ -1535,7 +1330,7 @@ export function Threshold({
      notice, always replaces it. It never stands while a door or wall waits in
      a room band, because then `whatNeedsYou` names it. */
   const asksKnown =
-    doorstepGates.some(Boolean) ||
+    doorMarks.length > 0 || wallMarks.length > 0 ||
     doorstepAsks.length > 0 ||
     projectApprovalsError ||
     papersUnread;
@@ -1567,301 +1362,48 @@ export function Threshold({
     </section>
   );
 
-  // ── the page ───────────────────────────────────────────────────────────────
-  const doorplate = (
-    <Doorplate
-      studioName={studioName}
-      location={project.location}
-      projectName={project.name}
-      phaseLabel={openChapter.label ?? null}
-      monthLabel={today ? monthAndYear(today) : null}
-      preparedFor={preparedFor}
-    />
-  );
 
-  /**
-   * The same three terms the hold below reads, named so the landmark ledger
-   * can answer them. While the house is silent nothing under the doorstep has
-   * drawn, and an index of five names over a page holding its place would be
-   * five links to nowhere.
-   */
   const houseHasSpoken = hydrated && !loading && !model.pending;
-  // The standing note, else the back matter that keeps the past ones.
-  const updatesAnchor = letterStands ? 'note' : model.previously.length > 0 || hasRecord ? 'previously' : null;
-  // `help` (#contact) stands once the presentation read has answered.
-  const presentedDesigner = words(presentationQuery.data?.designerName);
-  const contactLandmark = help
-    ? {
-        anchor: 'contact',
-        label: presentedDesigner ? `Contact ${presentedDesigner}` : 'Contact your designer',
-      }
-    : null;
+  const waitingNames = [
+    ...openDoorMarks.map((mark) => mark.label),
+    ...wallMarks.map((mark) => mark.label),
+    ...doorstepAsks.filter(isClientActionableProjectApproval).map((ask) => ask.artifactTitle),
+    waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks)?.label,
+    waitingEdition(editionId, editionQuery.data)?.label,
+    waitingScopeChange(scopeChangesQuery.data)?.label,
+  ].filter((name): name is string => !!name);
+  const urgent = urgentInvoice(model.invoices);
+  const menuAsks = <>
+    {urgent && <li><a href={`#invoice-${urgent.invoice.id}`}>{urgent.invoice.invoice_number ?? 'Invoice'}<small>{formatCurrency(urgent.balanceCents, urgent.currency)}</small></a></li>}
+    {openDoorMarks.map((mark) => <li key={mark.id}><a href={`#${gateAnchor(mark)}`}>{mark.label}<small>{formatCurrency(mark.amountCents)}</small></a></li>)}
+    {wallMarks.map((mark) => <li key={mark.id}><a href={`#${gateAnchor(mark)}`}>{mark.label}<small>{formatCurrency(mark.amountCents)}</small></a></li>)}
+    {doorstepAsks.filter(isClientActionableProjectApproval).map((ask) => <li key={ask.decisionId}><a href={`#approval-${ask.decisionId}`}>{ask.artifactTitle}<small>{formatCurrency(ask.costCentsDelta)}</small></a></li>)}
+    {waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks) && <li><a href="#approvals">{waitingReviewRequest(pendingReviewQuery.data, projectId, standsUnfiledAsks)!.label}</a></li>}
+    {waitingEdition(editionId, editionQuery.data) && <li><a href="#approvals">{waitingEdition(editionId, editionQuery.data)!.label}</a></li>}
+    {waitingScopeChange(scopeChangesQuery.data) && <li><a href="#approvals">{waitingScopeChange(scopeChangesQuery.data)!.label}</a></li>}
+    <li><a href="#approvals">All asks and approvals</a></li>
+  </>;
+  const letterbox = <Letterbox projection={model.invoices} onHold={onInvoiceHold}
+    projectName={words(project.name)} invoice={model.letterbox} invoices={invoices}
+    designerName={studioName} onRefetch={refetchInvoices} today={today}
+    gallery={{ approvals: <>{asks}{road}<a className="gallery-question" href={`#${WRITE_BACK_ANCHOR}`}>Ask {designerGivenName ?? 'your designer'} a question</a></> }} />;
 
-  let body: ReactNode;
-  // The House Issue's chapter heads, numbered in the order each branch prints
-  // its sections. Null with the edition off: `withChapter` hands back the
-  // section itself and the page is today's tree.
-  let chapters: ReturnType<typeof sheetChapters> = null;
-  const printed = {
-    note: letterStands,
-    previously: model.previously.length + (edition ? 1 : 0),
-    hasRecord,
-  };
-
-  // NEVER REVERSE. The house speaks only once every source it speaks FROM has
-  // answered — the papers, the goods, the ledger, the rooms and the letter.
-  // Until then the doorstep stands alone and holds the house's place. This is
-  // the pending rule of `deriveThreshold` widened from the rooms to all five,
-  // because "Nothing in the letterbox" and "Nothing stands open on this
-  // drawing" are assertions, not blanks: a client who reads them and then
-  // watches $9,125 and two open marks arrive has been told something untrue.
-  // Absence is silence — and silence is also what an unanswered query sounds
-  // like.
-  if (!hydrated || loading || model.pending) {
-    body = (
-      <>
-        {quietDoorstep}
-        {/* Silence is for a hold that ends. Past the ceiling this one has not
-            ended, and a blank page saying nothing is not silence — it is a
-            page that looks broken. One sentence, stating no fact about the
-            house, so nothing is ever taken back. Outside the spacer, which is
-            aria-hidden and would take the sentence with it. */}
-        {heldTooLong && (
-          <p
-            role="status"
-            data-testid="threshold-hold-ceiling"
-            className="mt-8 max-w-[52ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
-          >
-            This is taking longer than it should. Please refresh.
-          </p>
-        )}
-        <div
-          aria-hidden="true"
-          data-testid="threshold-hold"
-          className="min-h-[60vh]"
-        />
-      </>
-    );
-  } else if (model.groundFloor && !roomsUnread) {
-    chapters = groundFloorChapters(issue, printed);
-    body = (
-      <GroundFloor
-        doorstep={withChapter(chapters, 'doorstep', doorstep)}
-        note={withChapter(chapters, 'note', note)}
-        enclosures={
-          <>
-            {withChapter(chapters, 'approvals', asks)}
-            <HouseHeldPlate issue={issue} />
-          </>
-        }
-        bench={withChapter(chapters, 'road', road)}
-        toll={letterbox}
-        previously={withChapter(chapters, 'previously', previouslySection)}
-        ahead={phases.future}
-        mat={withChapter(chapters, 'mat', mat)}
-      />
-    );
-  } else {
-    // `label` is the sentence the pole's desktop rail prints; `short` is the
-    // noun the ≤600px bar puts after "You are in: ", which supplies the verb
-    // itself — "You are in: You stand at the doorstep" says it twice.
-    const sections = [
-      { id: "doorstep", label: "Project status", short: "project status" },
-      // The money and the ask, in the order the page prints them. Without
-      // these two the caret could land on every part of the house except the
-      // two the page is actually about.
-      { id: "letterbox", label: "Invoices and payments", short: "invoices and payments" },
-      ...(firstGateAnchor
-        ? [
-            {
-              id: firstGateAnchor,
-              label: "Approvals",
-              // `firstGateAnchor` is only ever "wall" or "door" — the two
-              // gates whose paper the page has already proven is present.
-              short: firstGateAnchor === "wall" ? "finished work to review" : "document to sign",
-            },
-          ]
-        : []),
-      // The key is skipped when the rooms did not read, so the array skips it
-      // too: this array is also the story pole's set of ids that are ON the
-      // page, and a chapter allowed to link at an id that never renders is
-      // IA-21's own failure.
-      ...(roomsUnread
-        ? []
-        : [{ id: "key", label: "Project rooms", short: "project rooms" }]),
-      ...model.bands.map((band) => ({
-        id: band.anchor,
-        label: band.name,
-        short: band.name,
-      })),
-      ...(road ? [{ id: "road", label: "Orders in progress", short: "orders in progress" }] : []),
-      ...(model.note
-        ? [{ id: "note", label: "Message from your designer", short: "designer message" }]
-        : letterStands
-          ? [{ id: "note", label: "A note from the studio", short: "studio note" }]
-          : []),
-      ...(model.previously.length > 0
-        ? [{ id: "previously", label: "Previously", short: "Previously" }]
-        : []),
-      { id: "mat", label: "Project details and documents", short: "project details and documents" },
-    ];
-    chapters = sheetChapters(issue, {
-      ...printed,
-      roomsUnread,
-      roomAnchors: model.bands.map((band) => band.anchor),
-    });
-
-    body = (
-      // Path B's sheet: a 170px pole rail on the LEFT, sticky, standing beside
-      // the WHOLE house rather than beside its first screenful. The pole's
-      // caret watches every section on the page — the bands, the road, the
-      // note, Previously, the mat — so a rail that scrolls away before the
-      // first room band is watching sections the reader can no longer see it
-      // for. Narrow, the rail collapses to the six dots 3A draws and the grid
-      // falls to one column, which puts the pole under the doorplate.
-      <div className="grid items-start gap-[clamp(20px,3vw,44px)] [grid-template-columns:170px_minmax(0,1fr)] max-[860px]:gap-0 max-[860px]:[grid-template-columns:minmax(0,1fr)]">
-        <div className="sticky top-[14px] self-start max-[860px]:static">
-          <StoryPole
-            phases={phases}
-            sections={sections}
-            firstBandAnchor={model.bands[0]?.anchor ?? null}
-          />
-        </div>
-
-        <div className="min-w-0">
-          {withChapter(chapters, 'doorstep', doorstep)}
-          {withChapter(chapters, 'approvals', asks)}
-          {roomsUnread ? (
-            <p
-              data-testid="threshold-rooms-error"
-              className="mt-8 max-w-[60ch] border-t border-[var(--border-subtle)] pt-4 text-[15px] leading-relaxed text-[var(--text-body)]"
-            >
-              Couldn&rsquo;t load your rooms. Please refresh.
-            </p>
-          ) : (
-            withChapter(
-              chapters,
-              'key',
-              <PlanKey
-                geometry={planKeyGeometry(rooms ?? [], model.marks)}
-                marks={model.marks}
-                keySentence={keySentence(model.drawnMarkCount)}
-              />,
-            )
-          )}
-
-          {model.bands.map((band) =>
-            withRoomOpening(issue, chapters, band.roomId,
-            <RoomBand
-              key={band.roomId}
-              band={band}
-              projectId={projectId}
-              studioName={studioName}
-              leadRoomName={leadRoomName}
-              imagery={bandImagery(issue)}
-            >
-              {/* ONE array, keyed by mark: a door that has just been signed
-                  leaves `band.marks` (the band's own sentence may not go on
-                  saying a door waits on her name) and arrives from
-                  `sealedMarks`, and React keeps the component — and the
-                  receipt printed on it — mounted only if both stand in the
-                  same child slot. */}
-              {[
-                ...band.marks,
-                ...sealedMarks.filter((mark) => mark.roomId === band.roomId),
-              ].map((mark) =>
-                mark.kind === "door" ? renderDoor(mark) : renderWall(mark),
-              )}
-              <RoomCapture projectId={projectId} roomId={band.roomId} roomName={band.name} />
-              <RequestChangeAct
-                projectId={projectId}
-                roomId={band.roomId}
-                roomName={band.name}
-                projectStatus={project.status}
-              />
-            </RoomBand>,
-            ),
-          )}
-
-          {user?.id && (
-            <StrayCaptures
-              projectId={projectId}
-              userId={user.id}
-              standsUnfiled={standsUnfiledAsks}
-              rooms={model.bands.map((band) => ({ roomId: band.roomId, name: band.name }))}
-            />
-          )}
-
-          {withChapter(chapters, 'road', road)}
-          {withChapter(chapters, 'note', note)}
-          {withChapter(chapters, 'previously', previouslySection)}
-          {withChapter(chapters, 'mat', mat)}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-w-0" data-testid="the-threshold" style={ACCENT_STYLE}>
-      {/* Under the doorplate and OUTSIDE the since-yesterday dimming: an index
-          that faded with the page would be an index of nothing. Every landmark
-          is answered from what the branches below actually drew. With the
-          edition on, the cover and its three standing rows stand here too,
-          and the rows wait for the house to speak: an early "Nothing waiting
-          on you" would be taken back. */}
-      <HouseIssueHead
-        issue={issue}
-        chapters={chapters}
-        doorplate={doorplate}
-        letterhead={{ studioName, projectName: project.name, preparedFor }}
-        ledger={
-          <LandmarkLedger
-            invoices={houseHasSpoken}
-            approvals={houseHasSpoken ? (whatNeedsYou ?? 'approvals') : null}
-            progress={houseHasSpoken}
-            updates={houseHasSpoken ? updatesAnchor : null}
-            whatChanged={
-              houseHasSpoken &&
-              hasChangedBlock({
-                showSince,
-                changedCount: model.changed.size,
-                readingMark: readingMarkLine(parseSourceDate(previousReadAt)),
-              })
-            }
-            documents={houseHasSpoken}
-            contact={houseHasSpoken ? contactLandmark : null}
-          />
-        }
-        todayLines={
-          houseHasSpoken &&
-          invoiceArrivalLines(model.invoices).map((line) => (
-            <ArrivalLine key={line} testId="arrival-invoices">
-              {line}
-            </ArrivalLine>
-          ))
-        }
-        rows={{
-          // The same projection "Waiting on you" reads at #road.
-          spoken: houseHasSpoken,
-          invoices: model.invoices,
-          asks: doorstepAsks.filter(isClientActionableProjectApproval),
-          gate: owedGate(waitingWall, waitingDoor),
-          waiting: waitingAsk,
-          readFailed: unreadAsks.length > 0,
-        }}
-        plan={{ unread: roomsUnread, rooms, marks: model.marks }}
-        studioName={studioName}
-        today={today}
-      />
-      <SinceYesterday active={sinceActive} changed={model.changed}>
-        {body}
-      </SinceYesterday>
-      <PapersSheet
-        projectId={projectId}
-        open={papersOpen}
-        onDismiss={() => setPapersOpen(false)}
-      />
-      <DetailsSheet open={detailsOpen} onClose={() => setDetailsOpen(false)} />
-    </div>
-  );
+  return <div style={ACCENT_STYLE}><SinceYesterday active={sinceActive} changed={model.changed}>
+    <GalleryPage projectName={project.name} studioName={studioName}
+      designerName={words(presentationQuery.data?.designerName) ?? leadDesignerName}
+      preparedFor={preparedFor} issue={issue} ready={houseHasSpoken} heldTooLong={heldTooLong}
+      line={asksLine(model.invoices, waitingNames, designerGivenName, unreadAsks.length === 0)}
+      menuAsks={menuAsks} asks={letterbox} otherHouses={otherHouses}
+      plan={<><HouseLedger ledger={model.ledger} today={today} /><ProjectProgress {...progress} />{roomsUnread ? <p data-testid="threshold-rooms-error">Couldn’t load your rooms. Please refresh.</p> : <PlanKey
+        geometry={planKeyGeometry(rooms ?? [], model.marks)} marks={model.marks}
+        keySentence={keySentence(model.drawnMarkCount)} />}</>}
+      documents={(dismiss) => <PapersSheet projectId={projectId} open embedded onDismiss={dismiss} />}
+      bands={model.bands} pieces={(band) => <GalleryPieces band={band} issue={issue} extras={<>
+        <RoomCapture projectId={projectId} roomId={band.roomId} roomName={band.name} />
+        <RequestChangeAct projectId={projectId} roomId={band.roomId} roomName={band.name} projectStatus={project.status} />
+      </>} />}
+      roadSentence={<><p>{project.nextMilestone?.title ?? openChapter.label}</p>{roomsUnread && <p>Couldn’t load your rooms. Please refresh.</p>}</>}
+      note={note} earlier={previouslySection} footer={footer} />
+    </SinceYesterday><DetailsSheet open={detailsOpen} onClose={() => setDetailsOpen(false)} />
+  </div>;
 }
