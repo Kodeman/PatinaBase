@@ -2,7 +2,7 @@
 
 /** One focal point, live in both Gallery arrival previews; the existing RPC stores it. */
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useSetPlateFocal, type ClientEditionImage } from '@patina/supabase';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
 import {
@@ -107,6 +107,21 @@ function FocalEditor({
   const [dragFrom, setDragFrom] = useState<PlatePoint | null>(null);
   const dragFrame = useRef<number | null>(null);
   const setPlateFocal = useSetPlateFocal();
+  const framing = JSON.stringify([image.focal, image.subjectBox]);
+  const previousFraming = useRef(framing);
+  const [initialX, initialY] = initial;
+  useEffect(() => {
+    if (previousFraming.current === framing || setPlateFocal.isPending) return;
+    previousFraming.current = framing;
+    // Refreshed framing wins over a local unsaved drag. Do not interrupt a save.
+    saved.current = [initialX, initialY];
+    setFocal([initialX, initialY]);
+    setMoved(false);
+    setDragFrom(null);
+    dragFrame.current = null;
+    onFocalChange?.(null);
+  }, [framing, initialX, initialY, onFocalChange, setPlateFocal.isPending]);
+
   const moveTo = (next: PlatePoint) => {
     if (setPlateFocal.isPending) return;
     const point = inBox(next, hold);

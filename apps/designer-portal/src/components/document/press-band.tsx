@@ -294,8 +294,14 @@ function JobControls({
 
 function useEditionFocal(edition: ClientEdition, approving: boolean) {
   const [focal, setFocal] = useState<FocalEdit | null>(null);
-  // Keep successful writes visible while the live edition read catches up.
-  const [savedFocals, setSavedFocals] = useState<Record<string, PlatePoint>>({});
+  // Successful writes bridge only the current read, never a refreshed projection.
+  const [savedFocals, setSavedFocals] = useState({
+    images: edition.images,
+    points: {} as Record<string, PlatePoint>,
+  });
+  if (savedFocals.images !== edition.images) {
+    setSavedFocals({ images: edition.images, points: {} });
+  }
   const cropReasonId = useId();
   return {
     focal,
@@ -306,13 +312,13 @@ function useEditionFocal(edition: ClientEdition, approving: boolean) {
     savingCrop: focal?.status === 'saving',
     previewEdition: {
       ...edition,
-      images: edition.images.map((image) => savedFocals[image.assetId]
-        ? { ...image, focal: savedFocals[image.assetId] }
+      images: edition.images.map((image) => savedFocals.points[image.assetId]
+        ? { ...image, focal: savedFocals.points[image.assetId] }
         : image),
     },
     onFocalChange: (edit: FocalEdit | null) => {
       if (edit?.status === 'saved') {
-        setSavedFocals((saved) => ({ ...saved, [edit.assetId]: edit.point }));
+        setSavedFocals({ images: edition.images, points: { ...savedFocals.points, [edit.assetId]: edit.point } });
         setFocal(null);
       } else setFocal(edit);
     },
@@ -431,7 +437,7 @@ function PendingEdition({
           overrides={overrides}
           savingCrop={savingCrop}
           onChange={(next) => {
-            if (next.heroAssetId !== overrides.heroAssetId) setFocal(null);
+            if (editionHeroId(edition, next) !== editionHeroId(edition, overrides)) setFocal(null);
             setOverrides(next);
           }}
           onFocalChange={onFocalChange}
