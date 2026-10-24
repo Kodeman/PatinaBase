@@ -39,5 +39,43 @@ The route totals above **exclude** both lazy chunks. A flag-on first visit pays 
 ## Disposition
 
 - Wave 1 exit required G5 to be **measured** for both paths, and it is.
-- The `/doc` regression past budget is not accepted silently. A repair ticket moves round-8-only code behind the lazy boundary and trims the Wave 1 eager growth.
-- The inherited `/desk` overage (−3,765 at baseline, also present on main) is a separate budget ruling for Kody.
+- The `/doc` regression past budget is not accepted silently.
+
+## Repair (SQ-1968, merged at `caa8dcfc4`)
+
+**Changes**
+
+- `Round8DocumentState` loads lazily.
+- A single minimal eager fallback, `frame/round8-document-loading.tsx`, paints the pending-renderer loading DOM. The lazy states reuse it.
+- The Desk return reader moves out of `paper-origin` into `desk-return.ts`.
+
+**Measured** (executor capture `2ce5eba1`, same commands)
+
+| Route       | Before repair | After repair | Remaining Wave 1 growth vs baseline |    Budget | Result                                    |
+| ----------- | ------------: | -----------: | ----------------------------------: | --------: | ----------------------------------------- |
+| `/desk`     |     1,353,015 |    1,352,304 |                            ≈ +2,500 | 1,346,026 | still over (inherited −3,765 plus Wave 1) |
+| `/doc/[id]` |     1,692,207 |    1,691,899 |                            ≈ +4,200 | 1,687,684 | still over by 4,215                       |
+
+The "before repair" figures are the executor's rebuild of the same base. They differ from the orchestrator's build above by about 230 B of build-to-build noise.
+
+**Accepted for Wave 1** (orchestrator decision, 2026-10-24)
+
+The remaining growth is shared behaviour that legacy readers also execute:
+
+- the renderer latch (~1.7 KB parsed);
+- the extracted legacy frames;
+- explicit Studio return restoration;
+- the reviewed departure/focus safety fixes (SQ-1832 R1–R4).
+
+Reshaping those to recover about 4 KB on a 1.69 MB route was judged a worse trade than the risk of regressing them.
+
+**Gate from here** (`g5-ratchet.mjs`)
+
+- No round-8-only module may ship in an eager route chunk. The single exception is the loading fallback.
+- Eager totals may not exceed the ratchet: `/desk` 1,352,604 and `/doc` 1,692,199.
+- `bundle-budget.mjs` and its budgets are unchanged, and it still exits 1.
+
+**Owed to Kody before WP-11** (explicit, not silent)
+
+- Accept the `/doc` overage of about 4.2 KB from Wave 1 shared seams and raise that budget, or fund further trimming.
+- Rule on the inherited `/desk` overage, which was −3,765 at baseline and is also present on main.
