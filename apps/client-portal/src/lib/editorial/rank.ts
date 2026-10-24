@@ -3,6 +3,16 @@
    and never the hero. */
 
 import { galleryHeroFits, placeRole } from './floors';
+import { arrivalMode } from './gallery-picture';
+
+export function selectArrival(editorial: Pick<ClientProjectEditorial, 'assets' | 'palette' | 'edition' | 'composition'>) {
+  const chosenId = editorial.edition ? editorial.composition?.hero?.assetId : null;
+  const chosen = editorial.assets.find(asset => asset.id === chosenId);
+  const asset = chosen && arrivalMode(chosen) ? chosen
+    : [...editorial.assets].filter(asset => arrivalMode(asset) !== null).sort(compareAssets)[0];
+  return asset ? { kind: 'photo' as const, asset, mode: arrivalMode(asset)! }
+    : { kind: editorial.palette.length ? 'paint' as const : 'empty' as const, asset: null, mode: null };
+}
 import type { ClientProjectEditorial, EditorialAsset } from './types';
 
 export const TIER = {

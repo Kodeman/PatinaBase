@@ -36,6 +36,12 @@
 .gallery-arrival .gallery-photo-frame { height: calc(100vh - 48px); height: calc(100svh - 48px); }
 .gallery-photo-frame :is(picture, img) { display: block; width: 100%; height: 100%; }
 .gallery-photo-frame img { object-fit: cover; object-position: var(--gallery-phone-position, 50% 50%); }
+.gallery-photo-frame[data-gallery-mode="contained"] { display: flex; align-items: center; justify-content: center; }
+.gallery-photo-frame[data-gallery-mode="contained"][data-ground="white"] { background: #fff; }
+.gallery-photo-frame[data-gallery-mode="contained"] img { width: min(100%, var(--gallery-contained-width)); height: 100%; object-fit: contain; object-position: center; }
+.gallery-chapter-pieces { display: flex; flex-wrap: wrap; gap: 16px; padding: 0 var(--gallery-gutter); margin: 0; list-style: none; }
+.gallery-chapter-pieces > li { min-width: 0; max-width: 100%; }
+.gallery-chapter-pieces .ed-piece { max-width: 100%; }
 .gallery-paint { display: flex; height: 100%; width: 100%; background: var(--gallery-paper); }
 .gallery-paint span { flex: 1; }
 .gallery-top { position: absolute; inset: 16px 16px auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }

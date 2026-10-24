@@ -51,7 +51,7 @@ import {
   pendingEdition,
   wasPublished,
 } from '@/lib/document/client-editions';
-import { heroEligible } from '@/lib/document/plate-crop';
+import { selectArrival } from '@/lib/document/plate-crop';
 import { DocumentAction, DocumentActionRow } from './document-action';
 import {
   ProjectGalleryPreview,
@@ -142,6 +142,7 @@ export function PressBand({
   );
   // Before any edition the client page opens on the editorial cover.
   const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !data.refreshRequired && !pending && !current);
+  const arrival = selectArrival({ assets: editorialAssets ?? [], palette: [] });
   const headingId = useId();
   if (!data) return null;
   if (data.refreshRequired) {
@@ -192,10 +193,10 @@ export function PressBand({
         </h2>
       ) : frozen ? (
         <h2 id={headingId} className={HEADING}>Closed</h2>
-      ) : editorialAssets && !editorialAssets.some(heroEligible) ? (
+      ) : editorialAssets ? (
         <div className="flex flex-col gap-1">
           <h2 id={headingId} className={HEADING}>
-            {COVER_IS_A_DRAWING}
+            {arrival.asset ? `The page opens on the ${arrival.asset.ground === 'white' ? 'catalogue photograph' : 'photograph'} of ${arrival.asset.caption.what || 'the house'}.` : COVER_IS_A_DRAWING}
           </h2>
           <DocumentActionRow surfaceKey="open-document" regionKey="press-band" aria-label="Cover">
             <DocumentAction

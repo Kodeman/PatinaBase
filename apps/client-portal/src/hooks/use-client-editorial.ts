@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase/client';
 
-import { heroEligible } from '@/lib/editorial/rank';
+import { selectArrival } from '@/lib/editorial/rank';
 import type {
   ClientProjectEditorial,
   EditionChapterWords,
@@ -133,16 +133,9 @@ export function plateScope(editorial: ClientProjectEditorial): string {
   return editorial.edition?.id ?? editorial.project.id;
 }
 
-/**
- * Gallery uses only the approved edition's chosen photograph, and only when
- * both full-height crops meet the hero rule. No ranked substitute: absent or
- * ineligible photography leaves the project's paint card.
- */
+/** The edition's photograph first, then a servable picture before paint. */
 export function editionHero(editorial: ClientProjectEditorial): EditorialAsset | null {
-  if (!editorial.edition) return null;
-  const id = editorial.composition?.hero?.assetId;
-  const hero = id ? editorial.assets.find((asset) => asset.id === id) : undefined;
-  return hero && heroEligible(hero) ? hero : null;
+  return selectArrival(editorial).asset;
 }
 
 export function useClientEditorial(projectId: string, initialData: ClientProjectEditorial | null, enabled = true) {

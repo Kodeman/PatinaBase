@@ -2,7 +2,7 @@
 
 /** Gallery arrival and reading words, with the studio’s pending edits laid over them. */
 
-import { useProjectPalettes, useProjectV2 } from '@patina/supabase';
+import { useClientEditorialAssets, type ClientEditorialAsset, useProjectPalettes, useProjectV2 } from '@patina/supabase';
 import { galleryCropPosition, type GalleryPoint, type GalleryRect } from '@patina/utils';
 import type {
   ClientEdition,
@@ -11,7 +11,7 @@ import type {
 } from '@patina/supabase';
 import { readerImageContent, type CaptionPolicy } from '@/lib/document/client-editions';
 import { getOptimizedImageUrl } from '@/lib/media-utils';
-import type { PlatePoint, PlateWindow } from '@/lib/document/plate-crop';
+import { arrivalRendition, selectArrival, type PlatePoint, type PlateWindow } from '@/lib/document/plate-crop';
 
 /** The hero asset an edition opens on, the studio's choice first. */
 export function editionHeroId(
@@ -148,19 +148,32 @@ function GalleryPaintCard({ palette }: { palette: readonly { hex: string; name: 
   </div>;
 }
 
-function GalleryBackground({ hero, url, palette, frame }: {
+function GalleryBackground({ hero, url, palette, frame, asset, mode }: {
+  asset: ClientEditorialAsset | null; mode: 'cover' | 'contained' | null;
   hero: ClientEditionImage | null;
   url?: string;
   palette: readonly { hex: string; name: string | null }[];
   frame: (typeof GALLERY_FRAMES)[number];
 }) {
-  return hero && url ? (
-            <img src={getOptimizedImageUrl(url, { width: frame.width })} alt={hero.alt || ''} className="h-full w-full object-cover" style={{ objectPosition: gallerySourcePosition(hero, frame.width / frame.height) ?? undefined }} data-press-cover />
-          ) : (
-            <GalleryPaintCard palette={palette} />);
+  const crop = asset ? arrivalRendition(asset, mode === 'contained' ? null : frame.width / frame.height) : null;
+  if (!hero || !url || !asset || !crop) return <GalleryPaintCard palette={palette} />;
+  const [x,y,w,h] = crop.rect;
+  const aspect = w * asset.width / (h * asset.height);
+  const boxWidth = mode === 'contained' ? Math.min(frame.width, crop.width * 1.25, frame.height * aspect) : frame.width;
+  const boxHeight = mode === 'contained' ? boxWidth / aspect : frame.height;
+  const scale = Math.max(boxWidth / (w * asset.width), boxHeight / (h * asset.height));
+  const [px,py] = crop.position.split(' ').map(value => parseFloat(value) / 100);
+  const left = (boxWidth - w * asset.width * scale) * px - x * asset.width * scale;
+  const top = (boxHeight - h * asset.height * scale) * py - y * asset.height * scale;
+  return <div className="flex h-full w-full items-center justify-center" style={{ background: asset.ground === 'white' ? '#fff' : '#FAF7F2' }}>
+    <div className="relative overflow-hidden" style={{ width: boxWidth, height: boxHeight }} data-gallery-mode={mode}>
+      <img src={getOptimizedImageUrl(url, { width: Math.max(frame.width, crop.width) })} alt={hero.alt || ''} data-press-cover style={{ position: 'absolute', maxWidth: 'none', width: asset.width * scale, height: asset.height * scale, left, top }} />
+    </div>
+  </div>;
 }
 
-function GalleryArrival({ hero, url, headline, palette, frame }: {
+function GalleryArrival({ hero, url, headline, palette, frame, asset, mode }: {
+  asset: ClientEditorialAsset | null; mode: 'cover' | 'contained' | null;
   hero: ClientEditionImage | null;
   url?: string;
   headline: string;
@@ -174,7 +187,7 @@ function GalleryArrival({ hero, url, headline, palette, frame }: {
       <p className="m-0 text-[15px] text-[var(--text-muted)]">{frame.label} · {frame.width} × {frame.height}</p>
       <div className="relative h-[120px] overflow-hidden border border-[var(--border-subtle)]" style={{ width: frame.width * scale, maxWidth: '100%' }} data-gallery-frame={frame.key} aria-hidden={wide ? true : undefined}>
         <div className="absolute left-0 top-0 overflow-hidden" style={{ width: frame.width, height: frame.height, transform: 'scale(' + scale + ')', transformOrigin: 'top left' }}>
-          <GalleryBackground hero={hero} url={url} palette={palette} frame={frame} />
+          <GalleryBackground hero={hero} url={url} palette={palette} frame={frame} asset={asset} mode={mode} />
           <div className="absolute inset-x-0 bottom-0 bg-[#2E2A26] text-[#F4EFE7]" style={{ display: wide ? 'flex' : 'block', alignItems: 'end', justifyContent: 'space-between', gap: 48, padding: wide ? '28px 52px' : '24px 22px' }} data-gallery-band>
             <p className="m-0 font-normal" style={{ fontFamily: 'var(--font-display, "Playfair Display"), serif', fontSize: wide ? 52 : 34, lineHeight: 1.08 }}>{headline}</p>
             <p className="mb-0 mt-3 text-[#D0C9BE]" style={{ fontFamily: 'Inter, var(--font-inter), sans-serif', fontSize: 16, lineHeight: 1.35 }}>The line about invoices and approvals goes here</p>
@@ -187,15 +200,17 @@ function GalleryArrival({ hero, url, headline, palette, frame }: {
 
 export function ProjectGalleryPreview({ projectId, ...props }: { projectId: string } & Parameters<typeof PressBandPreview>[0]) {
   const { data: project } = useProjectV2(projectId);
+  const { data: assets } = useClientEditorialAssets(projectId);
   const { data: palettes } = useProjectPalettes(projectId);
   // Match get_client_project_editorial's primary-palette order, not the hook's list order.
   const chosen = [...(palettes ?? [])].sort((a, b) =>
     Number(b.is_primary) - Number(a.is_primary) || a.sort_order - b.sort_order ||
     a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))[0];
-  return <PressBandPreview {...props} houseName={project?.name ?? 'Your house'} palette={chosen?.swatches ?? []} />;
+  return <PressBandPreview {...props} assets={assets} houseName={project?.name ?? 'Your house'} palette={chosen?.swatches ?? []} />;
 }
 
-export function PressBandPreview({ edition, current, overrides, sourceUrls, delta = true, captionPolicy, houseName = 'Your house', palette = [], focal }: {
+export function PressBandPreview({ edition, current, overrides, sourceUrls, delta = true, captionPolicy, houseName = 'Your house', palette = [], focal, assets = [] }: {
+  assets?: readonly ClientEditorialAsset[];
   edition: ClientEdition;
   current: ClientEdition | null;
   overrides?: ClientEditionOverrides | null;
@@ -207,8 +222,10 @@ export function PressBandPreview({ edition, current, overrides, sourceUrls, delt
   focal?: { assetId: string; point: PlatePoint } | null;
 }) {
   const heroId = editionHeroId(edition, overrides);
-  const selected = edition.images.find((image) => image.assetId === heroId);
-  const hero = selected && galleryHeroEligible(selected) ? { ...selected, focal: focal?.assetId === selected.assetId ? focal.point : selected.focal } : null;
+  const arrival = selectArrival({ assets, palette, edition, composition: { hero: heroId ? { assetId: heroId } : null } });
+  const asset = arrival.asset;
+  const selected = edition.images.find((image) => image.assetId === asset?.id);
+  const hero = selected ? { ...selected, focal: focal?.assetId === selected.assetId ? focal.point : selected.focal } : null;
   if (hero && captionPolicy) hero.alt = readerImageContent(hero, { ...edition.overrides?.captions?.[hero.assetId], ...overrides?.captions?.[hero.assetId] }, captionPolicy).alt;
   const chapters = editionChapters(edition, overrides);
   const cover = chapters.find((chapter) => chapter.key === 'cover')?.headline.trim() ?? '';
@@ -220,8 +237,9 @@ export function PressBandPreview({ edition, current, overrides, sourceUrls, delt
     <div className="flex flex-col gap-4" data-press-preview={edition.id}>
       {delta && <p className="text-[15px] leading-snug text-[var(--text-muted)]" data-press-delta>{editionDelta(edition, current, overrides)}</p>}
       <div className="flex flex-wrap items-start gap-6" aria-label="Arrival previews">
-        {GALLERY_FRAMES.map((frame) => <GalleryArrival key={frame.key} frame={frame} hero={hero} url={hero ? sourceUrls[hero.assetId] : undefined} headline={headline} palette={colors} />)}
+        {GALLERY_FRAMES.map((frame) => <GalleryArrival key={frame.key} frame={frame} hero={hero} asset={asset} mode={arrival.mode} url={hero ? sourceUrls[hero.assetId] : undefined} headline={headline} palette={colors} />)}
       </div>
+      {asset && !hero && <p>The page opens on the {asset.ground === 'white' ? 'catalogue photograph' : 'photograph'} of {asset.caption.what || 'the house'}.</p>}
       {tooLong && <p className="text-[15px] text-[var(--text-muted)]">The cover headline is too long for the band, so the house name is shown instead.</p>}
       <p className="text-[15px] text-[var(--text-muted)]">The muted line is a sample; invoices and approvals supply the live words.</p>
       {chapters.some((chapter) => chapter.key !== 'cover') && <div>

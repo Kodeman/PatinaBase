@@ -14,6 +14,7 @@ import { Pieces as EditorialPieces, type HouseIssue } from './editorial/house-is
 import { GalleryDrawer, useGalleryRoute } from './gallery-drawer';
 import { GalleryPhoto } from './gallery-photo';
 import { SilhouettePlate } from './editorial/silhouette-plate';
+import { PiecePlate } from './editorial/piece-plate';
 import { ConceptRenderPlate, floorLine, stampDetail } from './room-band';
 
 interface GalleryChapter {
@@ -65,6 +66,13 @@ function galleryChapters(issue: HouseIssue | null, bands: RoomBandModel[]): Gall
 function ChapterPicture({ chapter, issue, studioName }: { chapter: GalleryChapter; issue: HouseIssue | null; studioName: string | null }) {
   if (chapter.asset) return <GalleryPhoto scope={issue!.scopeId} asset={chapter.asset} palette={issue!.editorial.palette} />;
   if (chapter.band?.conceptRender) return <ConceptRenderPlate render={chapter.band.conceptRender} roomName={chapter.band.name} studioName={studioName} />;
+  const room = issue?.editorial.rooms.find(room => room.id === chapter.band?.roomId);
+  const choices = issue?.rooms.get(room?.id ?? '')?.pieces;
+  if (room && choices?.some(piece => piece.asset)) return <ul className="gallery-chapter-pieces" aria-label={`Pieces for the ${room.name.toLowerCase()}`}>
+    {room.items.slice(0, 4).map(item => <li key={item.id}><PiecePlate scopeId={issue!.scopeId}
+      showMakers={issue!.editorial.project.showMakers} item={item}
+      asset={choices.find(piece => piece.itemId === item.id)?.asset ?? null} statusWords="" /></li>)}
+  </ul>;
   const piece = chapter.band?.pieces[0];
   if (piece) return <SilhouettePlate name={piece.name} category={piece.itemType} className="gallery-silhouette" />;
   return null;

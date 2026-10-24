@@ -2,9 +2,9 @@
 
 import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 
-import { captionText, captionTriplet, plateAlt } from '@/lib/editorial/caption';
+import { captionText, captionTriplet, catalogueCaption, plateAlt } from '@/lib/editorial/caption';
 import { GALLERY_DESKTOP_ASPECT, GALLERY_PHONE_ASPECT } from '@patina/utils';
-import { galleryRendition } from '@/lib/editorial/gallery-picture';
+import { arrivalMode, containedRendition, galleryRendition } from '@/lib/editorial/gallery-picture';
 import type { EditorialAsset, PaletteSwatch } from '@/lib/editorial/types';
 
 export function GalleryPaint({ palette }: { palette: readonly PaletteSwatch[] }) {
@@ -59,7 +59,8 @@ function picturePair(scope: string, asset: EditorialAsset | null, aspect: number
 function photoCaption(asset: EditorialAsset | null, palette: readonly PaletteSwatch[]) {
   if (!asset) return palette.length
     ? 'Paint for the house · Screen colours are approximate; the paint card is the authority.' : 'Photographs to follow.';
-  const caption = captionTriplet(asset.caption);
+  const caption = asset.ground === 'white' && asset.sourceKind === 'maker'
+    ? catalogueCaption(asset.caption.what, null, asset.caption.when) : captionTriplet(asset.caption);
   return caption ? captionText(caption) : plateAlt(asset);
 }
 
@@ -75,12 +76,16 @@ export function GalleryPhoto({ scope, asset, palette, arrival = false }: {
   const frame = useRef<HTMLDivElement>(null);
   const aspect = useFrameAspect(frame);
   const [failed, setFailed] = useState(false);
-  const pair = failed ? null : picturePair(scope, asset, aspect);
+  const contained = !failed && arrival && asset && arrivalMode(asset) === 'contained' ? containedRendition(scope, asset) : null;
+  const pair = failed || contained ? null : picturePair(scope, asset, aspect);
+  const shown = contained ? asset : pair?.asset ?? null;
+  const style = contained ? { '--gallery-contained-width': `${contained.width * 1.25}px` } as CSSProperties : frameStyle(pair);
   return <figure className={arrival ? 'gallery-arrival-figure' : 'gallery-figure'}>
-    <div ref={frame} className="gallery-photo-frame" style={frameStyle(pair)}>
-      {pair ? <ResponsivePhoto {...pair} arrival={arrival} onError={() => setFailed(true)} /> : <GalleryPaint palette={palette} />}
+    <div ref={frame} className="gallery-photo-frame" data-gallery-mode={contained ? 'contained' : 'cover'} data-ground={shown?.ground} style={style}>
+      {contained ? <img src={contained.src} alt={plateAlt(asset!)} loading="eager" fetchPriority="high" onError={() => setFailed(true)} />
+        : pair ? <ResponsivePhoto {...pair} arrival={arrival} onError={() => setFailed(true)} /> : <GalleryPaint palette={palette} />}
       {conceptLabel(pair)}
     </div>
-    <figcaption className="gallery-caption">{photoCaption(pair?.asset ?? null, palette)}</figcaption>
+    <figcaption className="gallery-caption">{photoCaption(shown, palette)}</figcaption>
   </figure>;
 }
