@@ -23,10 +23,13 @@ test.describe('round-8 composition (live F01)', () => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
       await settled(page);
-      const title = page.locator('[data-paper-cover] h1');
+      const name = page.locator('[data-paper-cover] [data-part="name"]');
+      const title = name.getByRole('button', { name: 'Rename the project', exact: true });
       await expect(title).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
       await screenshot(page, `job-${width}`);
-      expect(await title.evaluate(node => parseFloat(getComputedStyle(node).fontSize)), 'commission display scale').toBeCloseTo(fontSize, 0);
+      const paintedSize = await title.evaluate(node => parseFloat(getComputedStyle(node).fontSize));
+      expect.soft(paintedSize, 'painted title commission display scale').toBeCloseTo(fontSize, 0);
       const contents = page.locator('[data-contents-margin]');
       if (width >= 1180) {
         const paper = page.locator('[data-document-paper]');
@@ -57,6 +60,32 @@ test.describe('round-8 composition (live F01)', () => {
       }
     });
   }
+
+  test('painted title scales in width and keeps its scale while editing', async ({ authenticatedPage: page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+    await settled(page);
+    await page.evaluate(() => document.fonts.ready);
+    const name = page.locator('[data-paper-cover] [data-part="name"]');
+    const title = name.getByRole('button', { name: 'Rename the project', exact: true });
+    await expect(title).toBeVisible();
+    const paintedSize = await title.evaluate(node => parseFloat(getComputedStyle(node).fontSize));
+    const wideWidth = (await title.boundingBox())!.width;
+    await page.setViewportSize({ width: 1180, height: 900 });
+    const narrowWidth = (await title.boundingBox())!.width;
+    expect.soft(wideWidth / narrowWidth, 'painted title grows with commission scale').toBeGreaterThanOrEqual(1.15);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await title.click();
+    const input = name.getByRole('textbox', { name: 'Project title', exact: true });
+    await expect(input).toBeFocused();
+    const editSize = await input.evaluate(node => parseFloat(getComputedStyle(node).fontSize));
+    expect.soft(editSize, 'editing title commission display scale').toBeCloseTo(68, 0);
+    expect(editSize, 'edit swap keeps the painted title size').toBe(paintedSize);
+    await input.press('Escape');
+    await expect(title).toBeVisible();
+    await expect(title).toBeFocused();
+    await expect(input).toHaveCount(0);
+  });
 
   for (const [width, gap] of [[1440, 48], [1180, 24]]) {
     test(`studio spread gap at ${width}`, async ({ authenticatedPage: page }) => {
