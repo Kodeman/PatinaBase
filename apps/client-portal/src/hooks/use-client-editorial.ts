@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase/client';
 
-import { placeRole } from '@/lib/editorial/floors';
-import { rankHero } from '@/lib/editorial/rank';
+import { heroEligible } from '@/lib/editorial/rank';
 import type {
   ClientProjectEditorial,
   EditionChapterWords,
@@ -135,18 +134,15 @@ export function plateScope(editorial: ClientProjectEditorial): string {
 }
 
 /**
- * The hero. With an approved edition it is the composition's pick (studio
- * override already merged), any job-owned picture the studio chose, a
- * white-ground catalogue shot included (V2-1); never a concept (R142, which
- * 00846 already enforces), and the drawn cover when the edition names none or
- * its picture fails the hero floor. Without an edition, the code's rank.
+ * Gallery uses only the approved edition's chosen photograph, and only when
+ * both full-height crops meet the hero rule. No ranked substitute: absent or
+ * ineligible photography leaves the project's paint card.
  */
 export function editionHero(editorial: ClientProjectEditorial): EditorialAsset | null {
-  if (!editorial.edition) return rankHero(editorial);
+  if (!editorial.edition) return null;
   const id = editorial.composition?.hero?.assetId;
   const hero = id ? editorial.assets.find((asset) => asset.id === id) : undefined;
-  if (!hero || hero.sourceKind === 'concept') return null;
-  return placeRole('hero', hero.width, hero.height, hero.subjectBox) === 'hero' ? hero : null;
+  return hero && heroEligible(hero) ? hero : null;
 }
 
 export function useClientEditorial(projectId: string, initialData: ClientProjectEditorial | null, enabled = true) {

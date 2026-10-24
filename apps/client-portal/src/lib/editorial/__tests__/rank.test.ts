@@ -126,7 +126,7 @@ describe('rank', () => {
 
 // Installed Field photos use the existing room-photo slot, not a new room schema.
 it('chooses an installed photograph ahead of board, scan and maker for hero and room', () => {
-  const installed = asset({ sourceKind: 'installed', width: 1800, height: 1200 });
+  const installed = asset({ sourceKind: 'installed', width: 2000, height: 1200 });
   const others = (['board', 'scan', 'maker', 'concept'] as const).map(sourceKind =>
     asset({ sourceKind, width: 6000, height: 4000 }));
   const editorial = { assets: [...others, installed], rooms: [room({ scanAssetIds: [...others, installed].map(a => a.id) })] };
