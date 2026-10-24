@@ -74,14 +74,15 @@ import {
 import { type CapturedLead } from '@/components/document/overlays/capture-lead-sheet';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { takeDeskReturn } from '@/lib/document/paper/paper-origin';
 
 // F6 — Back keeps the place. The Desk holds its scroll offset (and the row
-// last pressed) for this tab when it is left, and puts it back only when a
-// history traversal lands here; a fresh entry belongs to the arrival.
+// last pressed) for this tab when it is left, and puts it back on a history
+// traversal or an explicit Studio return; a fresh entry belongs to arrival.
 const DESK_PLACE_KEY = 'patina.desk.place';
 
 interface DeskPlace {
-  y: number;
+  y: number | null;
   anchor: string | null;
 }
 
@@ -563,8 +564,16 @@ export default function DeskPage() {
   // so a place the page cannot yet hold is tried again as the page grows,
   // until it lands, her hand moves the page, or the wait runs out.
   useLayoutEffect(() => {
+    if (!arrivalRoot) return;
+    const intent = takeDeskReturn();
+    if (intent) {
+      placeToRestore = {
+        anchor: intent.focusId ?? intent.anchorId,
+        y: heldDeskPlace()?.y ?? null,
+      };
+    }
     const place = placeToRestore;
-    if (!arrivalRoot || !place) return;
+    if (!place) return;
     const initialFocus = document.activeElement;
     let finished = false;
     const land = (waitForAnchor = true): boolean => {
@@ -572,7 +581,7 @@ export default function DeskPage() {
       const room = document.documentElement.scrollHeight - window.innerHeight;
       if (waitForAnchor && place.anchor && !anchor) return false;
       if (anchor && !anchor.matches('a, button, input, select, textarea, [tabindex]')) anchor.tabIndex = -1;
-      if (place.y <= room) {
+      if (place.y !== null && place.y <= room) {
         window.scrollTo({ top: place.y, behavior: 'auto' });
         anchor?.focus({ preventScroll: true });
         return true;

@@ -17,6 +17,7 @@
 import { originLabel } from "@/lib/document/room-origin";
 
 const PAPER_ORIGIN_KEY = "patina:paper-origin:v1";
+const DESK_RETURN_KEY = "patina:desk-return:v1";
 /** Origins kept per tab, most recent last. */
 const MAX_REMEMBERED = 20;
 
@@ -165,6 +166,34 @@ export function clearPaperOrigin(): void {
     window.sessionStorage.removeItem(PAPER_ORIGIN_KEY);
   } catch {
     /* no-op */
+  }
+}
+
+/** Explicit Studio return, including pushes and returns after a job reload. */
+export function markDeskReturn(origin: Pick<PaperOrigin, "focusId" | "anchorId">): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(DESK_RETURN_KEY, JSON.stringify({
+      focusId: origin.focusId,
+      anchorId: origin.anchorId,
+    }));
+  } catch {
+    /* storage disabled — navigation still works */
+  }
+}
+
+/** Cleared on read so an unrelated later Desk visit never takes focus. */
+export function takeDeskReturn(): Pick<PaperOrigin, "focusId" | "anchorId"> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(DESK_RETURN_KEY);
+    window.sessionStorage.removeItem(DESK_RETURN_KEY);
+    const held: unknown = raw ? JSON.parse(raw) : null;
+    if (!held || typeof held !== "object") return null;
+    const intent = held as Partial<PaperOrigin>;
+    return { focusId: nullableString(intent.focusId), anchorId: nullableString(intent.anchorId) };
+  } catch {
+    return null;
   }
 }
 
