@@ -78,7 +78,7 @@ export function HeroPreloadLinks({ preloads }: HeroPreloadLinksProps) {
     <>
       {preloads.map((p) => (
         <link
-          key={p.imageSrcSet}
+          key={`${p.imageSrcSet}|${p.media ?? ''}`}
           rel="preload"
           as="image"
           type="image/avif"

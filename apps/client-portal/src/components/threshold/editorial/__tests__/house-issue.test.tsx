@@ -33,7 +33,7 @@ import {
 import { GalleryPhoto } from '../../gallery-photo';
 import { HeroPlate, preloadLink } from "../hero-plate";
 import { arrivalPieces } from '@/lib/editorial/rank';
-import { shortFramePosition } from "@/lib/editorial/crop";
+import { heroPreloadSources, shortFramePosition } from "@/lib/editorial/crop";
 
 const PROJECT = "b0000000-0000-0000-0000-0000000e1a01";
 
@@ -169,9 +169,8 @@ function projection(over: Partial<InvoiceProjection> = {}): InvoiceProjection {
 }
 
 describe("the hero preload", () => {
-  it("names exactly the sources HeroPlate draws (server restatement pinned to preloadLink)", () => {
-    const ed = edition([SCENE, WHITE]);
-    const fromServer = heroPreloads(ed);
+  it("names exactly the sources HeroPlate draws (legacy helper pinned to preloadLink)", () => {
+    const fromLegacy = heroPreloadSources(EDITION_ID, SCENE);
     const fromPlate = preloadLink(EDITION_ID, SCENE).map(
       ({ imageSrcSet, imageSizes, media }) => ({
         imageSrcSet,
@@ -179,13 +178,27 @@ describe("the hero preload", () => {
         ...(media ? { media } : {}),
       }),
     );
-    expect(fromServer).toEqual(fromPlate);
-    expect(fromServer).toHaveLength(2);
+    expect(fromLegacy).toEqual(fromPlate);
+    expect(fromLegacy).toHaveLength(2);
   });
 
   it("preloads nothing for a drawn cover", () => {
     expect(heroPreloads(editorial([{ ...WHITE, crops: {} }]))).toEqual([]);
     expect(heroPreloads(null)).toEqual([]);
+  });
+
+  it("renders identical preload URLs under distinct media without duplicate-key warnings", () => {
+    const error = jest.spyOn(console, "error");
+    try {
+      const preloads = heroPreloads(edition([SCENE]));
+      expect(preloads).toHaveLength(2);
+      expect(preloads[0].imageSrcSet).toBe(preloads[1].imageSrcSet);
+      expect(preloads[0].media).not.toBe(preloads[1].media);
+      render(<HeroPreloadLinks preloads={preloads} />);
+      expect(error.mock.calls.filter(args => /same key|unique.*key/i.test(args.join(" ")))).toEqual([]);
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it("renders one high-priority avif image preload per source", () => {
