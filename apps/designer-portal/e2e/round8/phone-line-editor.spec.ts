@@ -13,7 +13,7 @@ async function openLine(page: Page, line: string) {
   await chapter.scrollIntoViewIfNeeded();
   await expect(chapter).toHaveAttribute('data-density', 'full');
   const room = chapter.locator(`[data-pieces-room="${ROOM}"]`);
-  const toggle = room.getByRole('button', { name: /Living Room/ });
+  const toggle = room.getByRole('button', { name: 'Living Room', exact: true });
   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
   await room.getByRole('link', { name: /Edit room selections/ }).click();
   const sheet = instrument(page);
