@@ -42,8 +42,12 @@ jest.mock('../../hooks/use-feature-flags', () => ({
   isTeachingNotesEnabled: () => mockIsTeachingNotesEnabled(),
 }));
 
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { createElement, type PropsWithChildren } from 'react';
+jest.mock('../../hooks/use-document-state', () => ({ useDocumentEngagement: () => ({ data: null }) }));
+jest.mock('../../hooks/document-time-provider', () => ({ useHoldDocument: () => undefined }));
+
+import DocumentHoldLayout from '../../app/(document)/doc/[id]/layout';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
+import { createElement, StrictMode, type PropsWithChildren } from 'react';
 import { QueryClientProvider, useMutation } from '@tanstack/react-query';
 import { enterInlineErrorSurface, nextSubjectQueryClient, queryClient, retireQueryClient } from '../react-query';
 import {
@@ -64,6 +68,81 @@ describe('React Query error surfaces', () => {
     mockHandleAuthExpiry.mockReset().mockReturnValue(false);
   });
 
+  function visit(id: string, strict = false) {
+    const params = { status: 'fulfilled', value: { id }, then: () => undefined } as unknown as Promise<{ id: string }>;
+    const layout = createElement(DocumentHoldLayout, { params, children: null });
+    return render(strict ? createElement(StrictMode, null, layout) : layout);
+  }
+
+  it.each([false, true])('leave and return to the same job before refusal toasts once (StrictMode=%s)', async strict => {
+    const original = window.location.href;
+    window.history.replaceState(null, '', '/doc/job-1');
+    const leaveInline = enterInlineErrorSurface();
+    const oldVisit = visit('job-1', strict);
+    let reject!: (error: Error) => void;
+    let started!: () => void;
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      meta: { errorSurface: 'inline' }, retry: false,
+      mutationFn: () => { started(); return new Promise<void>((_resolve, fail) => { reject = fail; }); },
+    });
+    const result = mutation.execute(undefined).catch(error => error);
+    let newVisit: ReturnType<typeof visit> | undefined;
+    try {
+      await ready;
+      window.history.replaceState(null, '', '/desk');
+      oldVisit.unmount();
+      window.history.replaceState(null, '', '/doc/job-1');
+      newVisit = visit('job-1', strict);
+      const failure = new Error('late line refusal after return');
+      reject(failure);
+      expect(await result).toBe(failure);
+      expect(mockShowErrorToast).toHaveBeenCalledTimes(1);
+      expect(mockShowErrorToast).toHaveBeenCalledWith(failure);
+    } finally {
+      oldVisit.unmount();
+      newVisit?.unmount();
+      leaveInline();
+      window.history.replaceState(null, '', original);
+    }
+  });
+
+  it.each([false, true])('same mounted visit stays inline across sub-routes (StrictMode=%s)', async strict => {
+    const original = window.location.href;
+    window.history.replaceState(null, '', '/doc/job-1');
+    const leaveInline = enterInlineErrorSurface();
+    const currentVisit = visit('job-1', strict);
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      retry: false,
+      mutationFn: async () => {
+        window.history.replaceState(null, '', '/doc/job-1/pieces');
+        throw new Error('same-visit refusal');
+      },
+    });
+    try {
+      await expect(mutation.execute(undefined)).rejects.toThrow('same-visit refusal');
+      expect(mockLogError).toHaveBeenCalledTimes(1);
+      expect(mockShowErrorToast).not.toHaveBeenCalled();
+    } finally {
+      currentVisit.unmount();
+      leaveInline();
+      window.history.replaceState(null, '', original);
+    }
+  });
+
+  it('a mutation outside a doc visit keeps the inline opt-out', async () => {
+    const original = window.location.href;
+    window.history.replaceState(null, '', '/desk');
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      meta: { errorSurface: 'inline' }, retry: false,
+      mutationFn: async () => { throw new Error('unattributed refusal'); },
+    });
+    try {
+      await expect(mutation.execute(undefined)).rejects.toThrow('unattributed refusal');
+      expect(mockShowErrorToast).not.toHaveBeenCalled();
+    } finally { window.history.replaceState(null, '', original); }
+  });
+
   it.each([
     ['/desk', undefined, true],
     ['/doc/other-job', 'inline', true],
@@ -74,6 +153,7 @@ describe('React Query error surfaces', () => {
     const original = window.location.href;
     window.history.replaceState(null, '', '/doc/job-1?unfold=pieces');
     const leaveInlineSurface = enterInlineErrorSurface();
+    const currentVisit = visit('job-1');
     const failure = new Error('late spec refusal');
     let reject!: (reason: Error) => void;
     let started!: () => void;
@@ -95,6 +175,7 @@ describe('React Query error surfaces', () => {
       if (toasts) expect(mockShowErrorToast).toHaveBeenCalledWith(failure);
       else expect(mockShowErrorToast).not.toHaveBeenCalled();
     } finally {
+      currentVisit.unmount();
       leaveInlineSurface();
       window.history.replaceState(null, '', original);
     }
@@ -104,6 +185,7 @@ describe('React Query error surfaces', () => {
     const original = window.location.href;
     window.history.replaceState(null, '', '/doc/nested-job');
     const leaveInline = enterInlineErrorSurface();
+    const currentVisit = visit('nested-job');
     const failure = { code: 'XX000', message: 'vitals refused' };
     let reject!: (reason: unknown) => void;
     let started!: () => void;
@@ -130,6 +212,7 @@ describe('React Query error surfaces', () => {
       if (leftJob) expect(mockShowErrorToast).toHaveBeenCalledWith(failure);
     } finally {
       hook.unmount();
+      currentVisit.unmount();
       leaveInline();
       window.history.replaceState(null, '', original);
     }

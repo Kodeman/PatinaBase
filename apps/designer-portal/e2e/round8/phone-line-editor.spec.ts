@@ -84,8 +84,9 @@ for (const width of [320, 390]) {
       }
     });
 
-    for (const leaveJob of [false, true]) {
-      test(`absent API late refusal ${leaveJob ? 'uses the existing off-job error surface' : 'recovers the draft and focused alert'}`, async ({ authenticatedPage: page }, testInfo) => {
+    for (const destination of ['inline', 'off-job', 'returned'] as const) {
+      const leaveJob = destination !== 'inline';
+      test(`absent API late refusal ${destination === 'returned' ? 'toasts once after returning to the same job' : leaveJob ? 'uses the existing off-job error surface' : 'recovers the draft and focused alert'}`, async ({ authenticatedPage: page }, testInfo) => {
         await page.addInitScript(() => Object.defineProperty(window, 'navigation', { configurable: true, value: undefined }));
         const line = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 02' AND removed_at IS NULL;`);
         expect(line).toMatch(/^[0-9a-f-]{36}$/);
@@ -125,10 +126,18 @@ for (const width of [320, 390]) {
             await expect(page).toHaveURL(/\/desk(?:\?|$)/);
             await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '');
             await expect(retained).toHaveCount(0);
+            if (destination === 'returned') {
+              await page.evaluate(job => (window as unknown as { next: { router: { push: (url: string) => void } } }).next.router.push(`/doc/${job}`), JOB);
+              await expect(page).toHaveURL(new RegExp(`/doc/${JOB}(?:\\?|$)`));
+              await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+              await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+              await expect(instrument(page)).toHaveCount(0);
+            }
           }
         } finally { release(); }
         if (leaveJob) {
           await expect(page.getByRole('region', { name: 'Notifications (F8)' }).getByText('SQ-2015 late refusal', { exact: true }), 'existing MutationCache → showErrorToast tells the designer').toBeVisible();
+          await expect(page.getByRole('region', { name: 'Notifications (F8)' }).getByText('SQ-2015 late refusal', { exact: true })).toHaveCount(1);
           await expect(instrument(page)).toHaveCount(0);
           expect(finishOf(line)).toBe(original);
           expect(writes).toBe(1);

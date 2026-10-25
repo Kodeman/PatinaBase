@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import {
   QueryClient,
   QueryCache,
@@ -22,7 +23,7 @@ import type { TeachingBoundaryKey, TeachingNoteState } from './teaching/types';
  * R83 — the error grammar. Mutations on (document) surfaces render failures as
  * a quiet inline band at the act site (terracotta, with the reason and a retry
  * act) and must NOT also raise the global red toast. Since US-34 N12b that
- * holds while the mutation's job remains on screen and a (document) surface
+ * holds while the mutation's job visit remains on screen and a (document) surface
  * is mounted (see `enterInlineErrorSurface`). A late failure after leaving
  * that job uses the existing global toast. Elsewhere, `meta: { errorSurface:
  * 'inline' }` opts out when the caller renders its own alert; supporting
@@ -213,11 +214,26 @@ export function enterInlineErrorSurface(): () => void {
 
 export const isInlineErrorSurface = (): boolean => inlineErrorSurfaces > 0;
 
-const mutationJobs = new WeakMap<object, string | undefined>();
-const currentJobPath = (): string | undefined =>
-  typeof window === 'undefined'
-    ? undefined
-    : window.location.pathname.match(/^\/doc\/[^/]+/)?.[0];
+type JobVisit = { path: string };
+let activeJobVisit: JobVisit | undefined;
+const mutationJobs = new WeakMap<object, JobVisit | undefined>();
+const currentJobVisit = (): JobVisit | undefined =>
+  typeof window !== 'undefined' &&
+  window.location.pathname.match(/^\/doc\/[^/]+/)?.[0] === activeJobVisit?.path
+    ? activeJobVisit
+    : undefined;
+
+/** The doc layout owns this lifetime across all of its child routes. Identity
+ * changes on a fresh mount, even when the designer returns to the same job. */
+export function useJobVisit(id: string): void {
+  useEffect(() => {
+    const visit: JobVisit = { path: `/doc/${id}` };
+    activeJobVisit = visit;
+    return () => {
+      if (activeJobVisit === visit) activeJobVisit = undefined;
+    };
+  }, [id]);
+}
 
 // Create mutation cache with error handling
 const createMutationCache = (isRetired: () => boolean) => {
@@ -230,7 +246,7 @@ const createMutationCache = (isRetired: () => boolean) => {
   // fails the act with no call made.
   onMutate: (_variables, mutation) => {
     if (isRetired()) throw new SubjectChangedError();
-    mutationJobs.set(mutation, currentJobPath());
+    mutationJobs.set(mutation, currentJobVisit());
     if (mutation.meta?.act && !onlineManager.isOnline()) throw new OfflineRefusal();
   },
   onError: (error, _variables, _context, mutation) => {
@@ -242,7 +258,7 @@ const createMutationCache = (isRetired: () => boolean) => {
     // An inline act site cannot surface its late failure after leaving the job,
     // even when the shared (document) layout remains mounted on /desk.
     const originatingJob = mutationJobs.get(mutation);
-    const leftJob = originatingJob !== undefined && originatingJob !== currentJobPath();
+    const leftJob = originatingJob !== undefined && originatingJob !== currentJobVisit();
     const inlineErrorSurface = !leftJob && (
       mutation.meta?.errorSurface === 'inline' || isInlineErrorSurface()
     );
