@@ -255,7 +255,7 @@ export function PeopleRoom() {
       const rest = new URLSearchParams(params.toString());
       for (const k of keys) rest.delete(k);
       const qs = rest.toString();
-      router.replace(qs ? `/people?${qs}` : "/people", { scroll: false });
+      window.history.replaceState(window.history.state, "", qs ? `/people?${qs}` : "/people");
     };
     const person = params.get("person");
     const firm = params.get("firm");
@@ -407,8 +407,11 @@ export function PeopleRoom() {
     setOrDelete("firm", openFirm);
     const next = params.toString();
     if (next === window.location.search.replace(/^\?/, "")) return;
-    router.replace(next ? `/people?${next}` : "/people", { scroll: false });
-  }, [view, chip, scope, trade, openPerson, openFirm, router]);
+    // Local state owns this address. Next's native History integration updates
+    // useSearchParams without queuing a route replacement that can land after
+    // a newer choice (including a return to the already-current URL).
+    window.history.replaceState(window.history.state, "", next ? `/people?${next}` : "/people");
+  }, [view, chip, scope, trade, openPerson, openFirm]);
 
   /**
    * US-28 — the dock's More and ⌘K walk to `/people?view=<key>` while the
@@ -433,12 +436,16 @@ export function PeopleRoom() {
   useEffect(() => {
     if (!deepLinkHandledRef.current) return;
     const answered = answeredCardRef.current;
-    if (personParam === openPersonIdRef.current) answered.person = personParam;
-    if (firmParam === openFirmRef.current) answered.firm = firmParam;
-    if (!personParam) answered.person = null;
-    if (!firmParam) answered.firm = null;
-    const person = personParam !== answered.person ? personParam : null;
-    const firm = !person && firmParam !== answered.firm ? firmParam : null;
+    // The local writer may have updated History earlier in this commit.
+    const address = new URLSearchParams(window.location.search);
+    const addressPerson = address.get("person");
+    const addressFirm = address.get("firm");
+    if (addressPerson === openPersonIdRef.current) answered.person = addressPerson;
+    if (addressFirm === openFirmRef.current) answered.firm = addressFirm;
+    if (!addressPerson) answered.person = null;
+    if (!addressFirm) answered.firm = null;
+    const person = addressPerson !== answered.person ? addressPerson : null;
+    const firm = !person && addressFirm !== answered.firm ? addressFirm : null;
     // Wait for the roster, as the first read does, to resolve the id's role.
     if ((!person && !firm) || !all) return;
     setPendingThreadId(null);
@@ -469,6 +476,8 @@ export function PeopleRoom() {
     // An address that names a card is followed by the effect above; the view
     // follows that card rather than putting it down.
     if (personParam || firmParam) return;
+    // A local address write in this commit supersedes its captured params.
+    if (viewParam !== new URLSearchParams(window.location.search).get("view")) return;
     const wanted = peopleViewFromParam(viewParam) ?? "directory";
     if (wanted === viewRef.current) return;
     setOpenPerson(null);

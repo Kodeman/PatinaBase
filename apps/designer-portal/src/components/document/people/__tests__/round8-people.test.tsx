@@ -1,11 +1,12 @@
 /** Round-8 shell with mocked existing data/action-owner boundaries. */
 import { StrictMode } from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { PeopleRoom } from "../people-room";
 jest.mock("@/hooks/use-paper-renderer", () => ({ usePaperRenderer: () => ({ renderer: mockRenderer }) }));
 
 let mockRenderer = "round8";
 const mockReplace = jest.fn();
+const mockHistoryReplace = jest.spyOn(window.history, "replaceState");
 /** CR9-1 — the seat the stubbed person card hands back to the Room. */
 const seatToOpen: { current: Record<string, unknown> } = { current: {} };
 const mockPush = jest.fn();
@@ -163,6 +164,28 @@ test("round8 resources delegate every destination to its existing view", () => {
   }
 });
 
+test("StrictMode fast consecutive view switches keep the last choice after pending navigation settles", () => {
+  window.history.replaceState({}, "", "/people");
+  const pending: string[] = [];
+  mockReplace.mockImplementation((href: string) => pending.push(href));
+  try {
+    const tree = <StrictMode><PeopleRoom /></StrictMode>;
+    const { container, rerender } = render(tree);
+    const nav = screen.getByRole("navigation", { name: "People resources" });
+    for (const label of ["Relationship follow-ups", "Client reviews", "Email campaigns", "Directory"]) {
+      fireEvent.click(within(nav).getByRole("button", { name: label, exact: true }));
+    }
+    act(() => {
+      for (const href of pending) window.history.replaceState({}, "", href);
+    });
+    rerender(<StrictMode><PeopleRoom /></StrictMode>);
+    expect(window.location.pathname + window.location.search).toBe("/people");
+    expect(container.querySelector("[data-people-current-view]")).toHaveAttribute("data-people-current-view", "directory");
+  } finally {
+    mockReplace.mockReset();
+  }
+});
+
 test("directory to person to job preserves the exact People return address", () => {
   render(<PeopleRoom />);
   fireEvent.click(screen.getByRole("button", { name: "Dana Kowalski" }));
@@ -187,14 +210,16 @@ test.each([
 ])("%s warm return preserves the %s address while opening its card", (renderer, key, id, card) => {
   mockRenderer = renderer;
   window.history.replaceState({}, "", `/people?${key}=${id}`);
+  mockHistoryReplace.mockClear();
   render(<StrictMode><PeopleRoom /></StrictMode>);
   expect(screen.getByTestId(card)).toBeInTheDocument();
-  for (const [href] of mockReplace.mock.calls) {
-    expect(new URL(href, window.location.origin).searchParams.get(key)).toBe(id);
+  for (const [, , href] of mockHistoryReplace.mock.calls) {
+    expect(new URL(String(href), window.location.origin).searchParams.get(key)).toBe(id);
   }
+  expect(new URL(window.location.href).searchParams.get(key)).toBe(id);
   fireEvent.click(screen.getByRole("button", { name: "Back to Studio contacts" }));
   expect(screen.getByTestId("directory-view")).toBeInTheDocument();
-  expect(mockReplace).toHaveBeenLastCalledWith("/people", { scroll: false });
+  expect(window.location.pathname + window.location.search).toBe("/people");
 });
 
 test("legacy keeps the existing shell and unresolved renderer mounts no subview", () => {

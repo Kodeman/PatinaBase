@@ -183,9 +183,7 @@ describe("the address", () => {
       "crew",
     );
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/people?role=crew", {
-        scroll: false,
-      }),
+      expect(window.location.search).toBe("?role=crew"),
     );
   });
 
