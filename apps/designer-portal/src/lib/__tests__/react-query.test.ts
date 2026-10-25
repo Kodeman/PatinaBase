@@ -74,11 +74,16 @@ describe('React Query error surfaces', () => {
     return render(strict ? createElement(StrictMode, null, layout) : layout);
   }
 
-  it.each([false, true])('leave and return to the same job before refusal toasts once (StrictMode=%s)', async strict => {
+  it.each([
+    [false, 'job-1', 'job-1'],
+    [true, 'job-1', 'job-1'],
+    [false, '%660180000-0000-4000-8000-000000000010', 'f0180000-0000-4000-8000-000000000010'],
+    [true, '%660180000-0000-4000-8000-000000000010', 'f0180000-0000-4000-8000-000000000010'],
+  ] as const)('leave and return to the same job before refusal toasts once (StrictMode=%s, entry=%s)', async (strict, entry, id) => {
     const original = window.location.href;
-    window.history.replaceState(null, '', '/doc/job-1');
+    window.history.replaceState(null, '', `/doc/${entry}`);
     const leaveInline = enterInlineErrorSurface();
-    const oldVisit = visit('job-1', strict);
+    const oldVisit = visit(id, strict);
     let reject!: (error: Error) => void;
     let started!: () => void;
     const ready = new Promise<void>(resolve => { started = resolve; });
@@ -92,8 +97,8 @@ describe('React Query error surfaces', () => {
       await ready;
       window.history.replaceState(null, '', '/desk');
       oldVisit.unmount();
-      window.history.replaceState(null, '', '/doc/job-1');
-      newVisit = visit('job-1', strict);
+      window.history.replaceState(null, '', `/doc/${id}`);
+      newVisit = visit(id, strict);
       const failure = new Error('late line refusal after return');
       reject(failure);
       expect(await result).toBe(failure);
@@ -107,15 +112,23 @@ describe('React Query error surfaces', () => {
     }
   });
 
-  it.each([false, true])('same mounted visit stays inline across sub-routes (StrictMode=%s)', async strict => {
+  it.each([
+    [false, 'job-1', 'job-1', 'job-1'],
+    [true, 'job-1', 'job-1', 'job-1'],
+    [false, '%660180000-0000-4000-8000-000000000010', '%660180000-0000-4000-8000-000000000010', 'f0180000-0000-4000-8000-000000000010'],
+    [true, '%660180000-0000-4000-8000-000000000010', '%660180000-0000-4000-8000-000000000010', 'f0180000-0000-4000-8000-000000000010'],
+    [false, 'f0180000-0000-4000-8000-000000000010', '%660180000-0000-4000-8000-000000000010', 'f0180000-0000-4000-8000-000000000010'],
+    [true, 'f0180000-0000-4000-8000-000000000010', '%660180000-0000-4000-8000-000000000010', 'f0180000-0000-4000-8000-000000000010'],
+    [false, '%E0%A4%A', '%E0%A4%A', '%E0%A4%A'],
+  ] as const)('same mounted visit stays inline across sub-routes (StrictMode=%s, entry=%s, destination=%s)', async (strict, entry, destination, id) => {
     const original = window.location.href;
-    window.history.replaceState(null, '', '/doc/job-1');
+    window.history.replaceState(null, '', `/doc/${entry}`);
     const leaveInline = enterInlineErrorSurface();
-    const currentVisit = visit('job-1', strict);
+    const currentVisit = visit(id, strict);
     const mutation = queryClient.getMutationCache().build(queryClient, {
       retry: false,
       mutationFn: async () => {
-        window.history.replaceState(null, '', '/doc/job-1/pieces');
+        window.history.replaceState(null, '', `/doc/${destination}/pieces`);
         throw new Error('same-visit refusal');
       },
     });

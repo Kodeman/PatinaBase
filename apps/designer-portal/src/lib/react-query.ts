@@ -214,20 +214,26 @@ export function enterInlineErrorSurface(): () => void {
 
 export const isInlineErrorSurface = (): boolean => inlineErrorSurfaces > 0;
 
-type JobVisit = { path: string };
+type JobVisit = { id: string };
 let activeJobVisit: JobVisit | undefined;
 const mutationJobs = new WeakMap<object, JobVisit | undefined>();
-const currentJobVisit = (): JobVisit | undefined =>
-  typeof window !== 'undefined' &&
-  window.location.pathname.match(/^\/doc\/[^/]+/)?.[0] === activeJobVisit?.path
-    ? activeJobVisit
-    : undefined;
+const currentJobVisit = (): JobVisit | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  let id = window.location.pathname.match(/^\/doc\/([^/]+)/)?.[1];
+  if (id === undefined) return undefined;
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // Match Next's decoded param when valid; keep malformed segments raw.
+  }
+  return id === activeJobVisit?.id ? activeJobVisit : undefined;
+};
 
 /** The doc layout owns this lifetime across all of its child routes. Identity
  * changes on a fresh mount, even when the designer returns to the same job. */
 export function useJobVisit(id: string): void {
   useEffect(() => {
-    const visit: JobVisit = { path: `/doc/${id}` };
+    const visit: JobVisit = { id };
     activeJobVisit = visit;
     return () => {
       if (activeJobVisit === visit) activeJobVisit = undefined;
