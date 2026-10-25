@@ -32,12 +32,13 @@ export function libraryHref(params: URLSearchParams, address = parseLibraryAddre
 }
 
 const STORAGE_KEY = "patina:library-return:v1";
-const MAX_AGE = 120_000;
+const MAX_AGE = 30 * 60_000;
 
 export function rememberLibraryReturn(opener: HTMLElement): void {
   const address = libraryHref(new URLSearchParams(window.location.search));
   const context = captureReturnContext({
     documentId: "library",
+    chapter: "library",
     filters: {
       address,
       expanded: String(!!document.querySelector('[aria-controls="library-shelf-panel-plates"][aria-expanded="true"]')),
@@ -48,23 +49,29 @@ export function rememberLibraryReturn(opener: HTMLElement): void {
   } catch { /* Navigation still works when session storage is unavailable. */ }
 }
 
-/** A return belongs to the next Library visit only, never a later matching visit. */
+/** Retain the latest piece visit for matching Back/Forward traversals in this tab. */
 export function takeLibraryReturn(): ReturnContext | null {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
-    window.sessionStorage.removeItem(STORAGE_KEY);
     if (!raw) return null;
     const { at, context } = JSON.parse(raw);
-    if (!isReturnContext(context) || context.documentId !== "library" || Date.now() - at > MAX_AGE) return null;
+    if (!isReturnContext(context) || context.documentId !== "library" || !Number.isFinite(at) || Date.now() - at > MAX_AGE) {
+      window.sessionStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
     return context.filters.address === libraryHref(new URLSearchParams(window.location.search)) ? context : null;
   } catch { return null; }
 }
 
 /** Wait for a cold shelf/search result, but never take the reader's place back. */
-export function restoreLibraryReturn(context: ReturnContext, timeout = 3000): () => void {
+export function restoreLibraryReturn(
+  context: ReturnContext,
+  timeout = 3000,
+  readsSettled: () => boolean = () => true,
+): () => void {
   let frame = 0;
   let stopped = false;
-  const deadline = performance.now() + timeout;
+  let deadline: number | undefined;
   // Navigation scroll/focus is not reader input. A press (including a
   // scrollbar drag) or key cancels before any focus or scroll it causes.
   const events = ["pointerdown", "touchmove", "wheel", "keydown"] as const;
@@ -76,18 +83,26 @@ export function restoreLibraryReturn(context: ReturnContext, timeout = 3000): ()
   let restored: HTMLElement | null = null;
   const attempt = () => {
     if (stopped) return;
+    if (!readsSettled()) {
+      frame = window.requestAnimationFrame(attempt);
+      return;
+    }
+    deadline ??= performance.now() + timeout;
     const control = context.initiatingControlId ? document.getElementById(context.initiatingControlId) : null;
     if (control && control.getClientRects().length > 0) {
       const anchor = context.scrollAnchor;
       // Search results above the card and the router's own scroll can settle
       // after it mounts. Follow its anchor only until the reader takes over.
       if (control !== restored || (anchor && control.getBoundingClientRect().top !== anchor.top)) {
-        restoreReturnContext(context);
+        if (restoreReturnContext(context) !== "control") return stop();
         restored = control;
       }
     }
     if (performance.now() < deadline) frame = window.requestAnimationFrame(attempt);
-    else stop();
+    else {
+      if (!restored) restoreReturnContext(context);
+      stop();
+    }
   };
   for (const event of events) window.addEventListener(event, stop, { capture: true, passive: true });
   frame = window.requestAnimationFrame(attempt);

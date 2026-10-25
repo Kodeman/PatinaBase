@@ -32,20 +32,23 @@ function opener() {
   document.body.append(link);
   return link;
 }
-it("consumes a matching session return once and discards a mismatched visit", () => {
+it("retains a matching session return across repeated traversals and mismatched visits", () => {
   const link = opener();
   rememberLibraryReturn(link);
   expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
-  expect(takeLibraryReturn()).toBeNull();
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
   rememberLibraryReturn(link);
   window.history.replaceState({}, "", "/library?shelf=studio");
   expect(takeLibraryReturn()).toBeNull();
   window.history.replaceState({}, "", "/library");
-  expect(takeLibraryReturn()).toBeNull();
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
 });
-it("ignores expired return context", () => {
-  rememberLibraryReturn(opener());
+it("retains a normal inspection for thirty minutes then expires", () => {
+  const link = opener();
+  rememberLibraryReturn(link);
   jest.advanceTimersByTime(120001);
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
+  jest.advanceTimersByTime(30 * 60_000 - 120001 + 1);
   expect(takeLibraryReturn()).toBeNull();
 });
 it("restores a late opener with native focus and scroll only once", () => {
@@ -109,9 +112,52 @@ it("stops waiting at the deadline without moving the reader", () => {
   const context = captureReturnContext({ documentId: "library" }, link);
   link.remove();
   restoreLibraryReturn(context, 50);
-  jest.advanceTimersByTime(64);
+  jest.advanceTimersByTime(80);
   document.body.append(link);
   jest.spyOn(link, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
   jest.advanceTimersByTime(1000);
   expect(link).not.toHaveFocus();
+});
+
+it("starts the restore deadline only after native reads settle", () => {
+  const link = opener();
+  const context = captureReturnContext({ documentId: "library" }, link);
+  link.remove();
+  let settled = false;
+  const cancel = restoreLibraryReturn(context, 50, () => settled);
+  jest.advanceTimersByTime(4000);
+  settled = true;
+  document.body.append(link);
+  jest.spyOn(link, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+  jest.advanceTimersByTime(32);
+  expect(link).toHaveFocus();
+  cancel();
+});
+it.each(["removed", "inaccessible"])("uses the shared heading fallback for a %s opener", (state) => {
+  const link = opener();
+  const context = captureReturnContext({ documentId: "library", chapter: "library" }, link);
+  if (state === "removed") link.remove();
+  else link.setAttribute("aria-disabled", "true");
+  const section = document.createElement("section");
+  section.setAttribute("data-paper-chapter", "library");
+  const heading = document.createElement("h2");
+  heading.textContent = "Personal library";
+  section.append(heading);
+  document.body.append(section);
+  restoreLibraryReturn(context, 50);
+  jest.advanceTimersByTime(80);
+  expect(heading).toHaveFocus();
+});
+it("new captures replace the retained opener and expansion", () => {
+  const first = opener();
+  rememberLibraryReturn(first);
+  const next = opener();
+  next.id = "library-piece-2-reference";
+  const fold = document.createElement("button");
+  fold.setAttribute("aria-controls", "library-shelf-panel-plates");
+  fold.setAttribute("aria-expanded", "true");
+  document.body.append(fold);
+  rememberLibraryReturn(next);
+  expect(takeLibraryReturn()).toMatchObject({ initiatingControlId: next.id, filters: { expanded: "true" } });
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(next.id);
 });
