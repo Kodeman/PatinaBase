@@ -275,6 +275,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     authenticatedPage: page,
   }) => {
     const line = livingLineId('F01 Living Room selection 08');
+    const acknowledged = psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id='${line}';`);
     const typed = `Back-held finish ${Date.now()}`;
     await openJob(page);
     await holdShell(page);
@@ -307,8 +308,27 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await expect(pane.getByRole('alert')).toContainText(/Forced failure|not saved/, { timeout: 30_000 });
     await expect(finish).toHaveAttribute('aria-invalid', 'true');
     const length = await page.evaluate(() => history.length);
+    const capability = await page.evaluate(() => {
+      const navigation = (window as unknown as { navigation?: { currentEntry?: { url: string } } }).navigation;
+      return { url: location.href, entryUrl: navigation?.currentEntry?.url ?? null };
+    });
+    const usableNavigation = capability.entryUrl === capability.url;
+    await test.info().attach('Back-navigation', { body: Buffer.from(JSON.stringify(capability)), contentType: 'application/json' });
 
     await pressBack(page);
+    if (!usableNavigation) {
+      await expect(instrument(page), 'stale API Back folds a refused draft immediately').toHaveCount(0);
+      await expect(page.locator(`[data-pieces-room="${LIVING}"]`).getByRole('link', { name: /Edit room selections/ })).toBeFocused();
+      expect(unfoldParams(page).unfold).toBeNull();
+      expect(await page.evaluate(() => history.length), 'stale API Back grows no history').toBe(length);
+      expect(psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id='${line}';`), 'refused draft never reaches the row').toBe(acknowledged);
+      expect(refused, 'stale API Back never retries the refused write').toBe(1);
+      expect(await sameShell(page), 'stale API Back does not remount the paper').toBe(true);
+      await expect(page.getByRole('textbox', { name: 'Finish' })).toHaveCount(0);
+      test.info().annotations.push({ type: 'residual', description: 'silent-loss: stale API Back discards the already-refused draft; paired repair required before integration (SQ-2015)' });
+      await page.unroute(specWrite);
+      return;
+    }
     await expect(instrument(page).getByText(/Your changes are not saved yet/)).toBeVisible({
       timeout: 30_000,
     });
@@ -341,6 +361,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     authenticatedPage: page,
   }) => {
     const line = livingLineId('F01 Living Room selection 10');
+    const acknowledged = psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id='${line}';`);
     const typed = `Pending-Back finish ${Date.now()}`;
     await openJob(page);
     await holdShell(page);
@@ -374,7 +395,40 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
     await finish.evaluate((el: HTMLElement) => el.blur());
     await expect.poll(() => sent, { timeout: 30_000 }).toBe(1);
     const length = await page.evaluate(() => history.length);
+    const capability = await page.evaluate(() => {
+      const navigation = (window as unknown as { navigation?: { currentEntry?: { url: string } } }).navigation;
+      return { url: location.href, entryUrl: navigation?.currentEntry?.url ?? null };
+    });
+    const usableNavigation = capability.entryUrl === capability.url;
+    await test.info().attach('Back-navigation', { body: Buffer.from(JSON.stringify(capability)), contentType: 'application/json' });
 
+    if (!usableNavigation) {
+      const refused = page.waitForResponse(response => response.request().method() === 'PATCH' && specWrite(new URL(response.url())) && response.status() === 500);
+      const handled = page.waitForEvent('console', message => message.type() === 'error' && message.text().includes('Error:') && message.text().includes('Forced failure (SQ-1900 e2e)'));
+      try {
+        await pressBack(page);
+        await expect(instrument(page), 'stale API Back folds before the pending refusal').toHaveCount(0);
+        await expect(page.locator(`[data-pieces-room="${LIVING}"]`).getByRole('link', { name: /Edit room selections/ })).toBeFocused();
+      } finally { answer(); }
+      await refused;
+      await handled;
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      expect(psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id='${line}';`), 'late refusal leaves the acknowledged row unchanged').toBe(acknowledged);
+      expect(sent, 'stale API Back never replays a write').toBe(1);
+      expect(await page.evaluate(() => history.length), 'stale API Back grows no history').toBe(length);
+      expect(unfoldParams(page).unfold).toBeNull();
+      expect(await sameShell(page), 'stale API Back does not remount the paper').toBe(true);
+      const boundary = await page.evaluate(draft => ({
+        visibleAlerts: Array.from(document.querySelectorAll<HTMLElement>('[role="alert"]')).filter(node => node.getClientRects().length > 0).map(node => node.textContent),
+        draftKept: Array.from(document.querySelectorAll<HTMLInputElement>('input')).some(input => input.value === draft),
+        unfolded: !!document.querySelector('[data-unfold-instrument]'),
+      }), typed);
+      expect(boundary, 'current silent-loss boundary requires paired repair before integration').toEqual({ visibleAlerts: [], draftKept: false, unfolded: false });
+      await test.info().attach('stale-api-late-failure-boundary', { body: Buffer.from(JSON.stringify(boundary)), contentType: 'application/json' });
+      test.info().annotations.push({ type: 'residual', description: 'silent-loss: stale API Back drops a draft before its late refusal; paired repair required before integration (SQ-2015)' });
+      await page.unroute(specWrite);
+      return;
+    }
     await pressBack(page);
     await expect(instrument(page)).toBeVisible();
     expect(unfoldParams(page).unfold, 'a pending save holds Back').toBe('pieces');
@@ -433,9 +487,11 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       const backHeldWhereCancelable = async () => {
         const binding = `__sq1904Cancelable${++traversals}`;
         let cancelable: unknown = null;
+        let destinationSignal: unknown = null;
         // Keep the observation outside the document the traversal may replace.
-        await page.exposeBinding(binding, (_source, value: unknown) => {
+        await page.exposeBinding(binding, (_source, value: unknown, signal: unknown) => {
           cancelable = value;
+          destinationSignal = signal;
         });
         await page.evaluate((binding) => {
           const w = window as unknown as {
@@ -446,10 +502,15 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
           const observe = (event: Event) => {
             const traversal = event as Event & {
               navigationType: string;
-              destination: { url: string };
+              hashChange?: boolean;
+              destination: { url: string; sameDocument?: boolean };
             };
             if (traversal.navigationType !== 'traverse' || traversal.destination.url !== desk) return;
-            void (w[binding] as (value: boolean) => Promise<void>)(event.cancelable);
+            void (w[binding] as (value: boolean, signal: unknown) => Promise<void>)(event.cancelable, {
+              sameDocument: traversal.destination.sameDocument ?? null,
+              navigationType: traversal.navigationType,
+              hashChange: traversal.hashChange ?? null,
+            });
             w.navigation?.removeEventListener('navigate', observe);
           };
           w.navigation?.addEventListener('navigate', observe);
@@ -460,7 +521,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
           { timeout: 10_000, message: 'the matching desk traverse must report boolean cancelable' },
         ).toBe('boolean');
         await test.info().attach('back-navigate-cancelable', {
-          body: `${browserName}: ${String(cancelable)}`,
+          body: `${browserName}: ${String(cancelable)}\n${JSON.stringify(destinationSignal)}`,
           contentType: 'text/plain',
         });
         if (browserName === 'chromium') {
