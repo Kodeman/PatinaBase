@@ -654,3 +654,12 @@ describe("PriceLens: access (R1, Q7)", () => {
     expect(screen.queryByText(/priced/)).toBeNull();
   });
 });
+
+
+it("round-8 price reading keeps the existing instrument", () => {
+  renderLens();
+  const reading = screen.getByText("Pricing the room").closest("header");
+  expect(reading).toHaveAttribute("data-round8-lens", "price");
+  expect(reading).toHaveClass("hidden", "[[data-paper-renderer=round8]_&]:block");
+  expect(screen.getByText(/Released client values stay fixed/)).toBeInTheDocument();
+});

@@ -1056,8 +1056,12 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       data-price-lens=""
       // F10: at 390 a control scrolled into view stops above the docked
       // summary (--price-dock-h, measured by PriceSummary).
-      className="flex flex-col py-6 max-md:[&_button]:scroll-mb-[var(--price-dock-h,0px)] max-md:[&_input]:scroll-mb-[var(--price-dock-h,0px)]"
+      className="flex flex-col py-6 max-md:[&_button]:scroll-mb-[var(--price-dock-h,0px)] max-md:[&_input]:scroll-mb-[var(--price-dock-h,0px)] [[data-paper-renderer=round8]_&_thead]:bg-[var(--sheet-row-hover)] [[data-paper-renderer=round8]_&_th]:font-normal"
     >
+      <header data-round8-lens="price" className="hidden border-b border-[var(--sheet-rule-strong)] mb-6 pb-4 [[data-paper-renderer=round8]_&]:block">
+        <h3 className="font-heading text-[24px] font-normal leading-[1.2] text-[var(--sheet-ink)]">Pricing the room</h3>
+        <p className="mt-2 max-w-[72ch] font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-muted)]">Type markup or client price. A changed trade cost asks what to preserve. Released client values stay fixed; ordered trade costs are also protected.</p>
+      </header>
       {composerParked ? (
         <p className="mb-3">
           <button

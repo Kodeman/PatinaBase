@@ -924,9 +924,13 @@ export function RoughInLens({
   }
 
   return (
-    <div ref={sheetRef} data-rough-in-lens="" className="flex gap-6 py-6">
+    <div ref={sheetRef} data-rough-in-lens="" className="flex gap-6 py-6 [[data-paper-renderer=round8]_&_thead]:bg-[var(--sheet-row-hover)] [[data-paper-renderer=round8]_&_th]:font-normal">
       {/* The phone's cards fit; only the md–lg table may scroll sideways. */}
       <div className="min-w-0 flex-1 md:overflow-x-auto">
+        <header data-round8-lens="rough" className="hidden border-b border-[var(--sheet-rule-strong)] mb-6 pb-4 [[data-paper-renderer=round8]_&]:block">
+        <h3 className="font-heading text-[24px] font-normal leading-[1.2] text-[var(--sheet-ink)]">Preliminary selections</h3>
+        <p className="mt-2 max-w-[72ch] font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-muted)]">Begin with what the room needs. Enter adds a line; paste several rows for review, or type / to choose from the library.</p>
+      </header>
         {places.map((placeItem) => {
           const target = dropRoom(placeItem);
           const dropLabel = target ? drag.roomDropLabel(target) : null;

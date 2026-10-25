@@ -560,3 +560,13 @@ describe("the painter's print", () => {
     expect(screen.queryByTestId("finishes-print-page")).not.toBeInTheDocument();
   });
 });
+
+
+it("round-8 finishes reading keeps the existing instrument", () => {
+  renderLens();
+  const reading = screen.getByText("Room finishes").closest("header");
+  expect(reading).toHaveAttribute("data-round8-lens", "finishes");
+  expect(reading).toHaveClass("hidden", "[[data-paper-renderer=round8]_&]:block");
+  expect(mockMutate).not.toHaveBeenCalled();
+  expect(screen.getByText(/Confirm the finish with a physical sample/)).toBeInTheDocument();
+});
