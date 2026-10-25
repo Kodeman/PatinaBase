@@ -451,6 +451,19 @@ function usePaneCloseHold(
       const [first] = held;
       return first ? { field: first[0], message: first[1] } : null;
     };
+    const waitPending = async () => {
+      const seen = failures.current;
+      while (inFlight.current.size > 0) {
+        await Promise.all([...inFlight.current]);
+      }
+      const held =
+        firstHeld() ??
+        (failures.current !== seen ? lastFailure.current : null);
+      if (!held) return;
+      showErrorRef.current(held.message);
+      fieldControl(paneRef.current, held.field)?.focus();
+      throw new Error(held.message);
+    };
     const registration = registerBoardOwnerAutosave(
       { kind: ownerKind, id: ownerId },
       {
@@ -459,19 +472,8 @@ function usePaneCloseHold(
           flushing: inFlight.current.size > 0,
           error: unsavedRef.current.values().next().value ?? null,
         }),
-        flush: async () => {
-          const seen = failures.current;
-          while (inFlight.current.size > 0) {
-            await Promise.all([...inFlight.current]);
-          }
-          const held =
-            firstHeld() ??
-            (failures.current !== seen ? lastFailure.current : null);
-          if (!held) return;
-          showErrorRef.current(held.message);
-          fieldControl(paneRef.current, held.field)?.focus();
-          throw new Error(held.message);
-        },
+        flush: waitPending,
+        waitPending,
       },
     );
     notify.current = registration.notify;
