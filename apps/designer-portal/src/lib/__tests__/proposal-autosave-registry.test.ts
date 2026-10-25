@@ -1,5 +1,6 @@
 import {
   flushBoardOwnerAutosaves,
+  waitPendingBoardOwnerAutosaves,
   flushProposalAutosaves,
   getProposalAutosaveSnapshot,
   registerBoardOwnerAutosave,
@@ -9,6 +10,51 @@ import {
 } from '../proposal-autosave-registry';
 
 afterEach(() => resetProposalAutosaveRegistryForTests());
+
+describe('waitPendingBoardOwnerAutosaves', () => {
+  it('waits only for captured in-flight registrations, never flushing or sending edits', async () => {
+    const owner = { kind: 'project' as const, id: 'pending-owner' };
+    const flush = jest.fn();
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    const snapshot = { dirty: true, flushing: true, error: null };
+    const waitPending = jest.fn(() => pending);
+    registerBoardOwnerAutosave(owner, { getSnapshot: () => snapshot, flush, waitPending });
+    const unsupportedWait = jest.fn();
+    registerBoardOwnerAutosave(owner, { getSnapshot: () => snapshot, flush });
+    registerBoardOwnerAutosave(owner, {
+      getSnapshot: () => ({ ...snapshot, flushing: false }), flush, waitPending: unsupportedWait,
+    });
+    registerBoardOwnerAutosave({ ...owner, id: 'other' }, {
+      getSnapshot: () => snapshot, flush, waitPending: unsupportedWait,
+    });
+    const captured = waitPendingBoardOwnerAutosaves(owner);
+    expect(captured).not.toBeNull();
+    const laterWait = jest.fn();
+    registerBoardOwnerAutosave(owner, { getSnapshot: () => snapshot, flush, waitPending: laterWait });
+    finish();
+    await expect(captured).resolves.toEqual([{ status: 'fulfilled', value: undefined }]);
+    expect(waitPending).toHaveBeenCalledTimes(1);
+    expect(flush).not.toHaveBeenCalled();
+    expect(unsupportedWait).not.toHaveBeenCalled();
+    expect(laterWait).not.toHaveBeenCalled();
+  });
+
+  it('returns each captured refusal independently and ignores handles with no wait-only method', async () => {
+    const owner = { kind: 'project' as const, id: 'pending-owner' };
+    const flush = jest.fn();
+    const getSnapshot = () => ({ dirty: true, flushing: true, error: null });
+    registerBoardOwnerAutosave(owner, { getSnapshot, flush });
+    expect(waitPendingBoardOwnerAutosaves(owner)).toBeNull();
+    const refusal = new Error('refused');
+    registerBoardOwnerAutosave(owner, { getSnapshot, flush, waitPending: () => Promise.reject(refusal) });
+    registerBoardOwnerAutosave(owner, { getSnapshot, flush, waitPending: () => Promise.resolve() });
+    await expect(waitPendingBoardOwnerAutosaves(owner)).resolves.toEqual([
+      { status: 'rejected', reason: refusal }, { status: 'fulfilled', value: undefined },
+    ]);
+    expect(flush).not.toHaveBeenCalled();
+  });
+});
 
 describe('runProposalAutosaveAction', () => {
   it('exposes its tail before action start and blocks a same-tick barrier until it settles', async () => {

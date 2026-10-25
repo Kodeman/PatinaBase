@@ -22,8 +22,9 @@ import type { TeachingBoundaryKey, TeachingNoteState } from './teaching/types';
  * R83 — the error grammar. Mutations on (document) surfaces render failures as
  * a quiet inline band at the act site (terracotta, with the reason and a retry
  * act) and must NOT also raise the global red toast. Since US-34 N12b that
- * holds for every mutation that fails while a (document) surface is mounted
- * (see `enterInlineErrorSurface`). Elsewhere, `meta: { errorSurface:
+ * holds while the mutation's job remains on screen and a (document) surface
+ * is mounted (see `enterInlineErrorSurface`). A late failure after leaving
+ * that job uses the existing global toast. Elsewhere, `meta: { errorSurface:
  * 'inline' }` opts out when the caller renders its own alert; supporting
  * background mutations use `'silent'`. The MutationCache logs both without
  * toasting, while mutations without metadata keep the legacy toast behavior.
@@ -212,8 +213,16 @@ export function enterInlineErrorSurface(): () => void {
 
 export const isInlineErrorSurface = (): boolean => inlineErrorSurfaces > 0;
 
+const mutationJobs = new WeakMap<object, string | undefined>();
+const currentJobPath = (): string | undefined =>
+  typeof window === 'undefined'
+    ? undefined
+    : window.location.pathname.match(/^\/doc\/[^/]+/)?.[0];
+
 // Create mutation cache with error handling
-const createMutationCache = (isRetired: () => boolean) => new MutationCache({
+const createMutationCache = (isRetired: () => boolean) => {
+  const notifiedOffJobErrors = new WeakSet<object>();
+  return new MutationCache({
   // PQ15 / O3 — under the default networkMode 'online' an offline mutation
   // pauses and runs by itself on reconnect. Ticks and edits may wait like
   // that; a send or a money write must not fire minutes later. This runs
@@ -221,6 +230,7 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
   // fails the act with no call made.
   onMutate: (_variables, mutation) => {
     if (isRetired()) throw new SubjectChangedError();
+    mutationJobs.set(mutation, currentJobPath());
     if (mutation.meta?.act && !onlineManager.isOnline()) throw new OfflineRefusal();
   },
   onError: (error, _variables, _context, mutation) => {
@@ -229,11 +239,13 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
 
     const appError = handleApiError(error);
 
-    // R83 — mutations that render their own inline error band opt out of the
-    // global toast (see the meta contract at the top of this file), and so
-    // does every mutation that fails while a (document) surface is mounted.
-    const inlineErrorSurface =
-      mutation.meta?.errorSurface === 'inline' || isInlineErrorSurface();
+    // An inline act site cannot surface its late failure after leaving the job,
+    // even when the shared (document) layout remains mounted on /desk.
+    const originatingJob = mutationJobs.get(mutation);
+    const leftJob = originatingJob !== undefined && originatingJob !== currentJobPath();
+    const inlineErrorSurface = !leftJob && (
+      mutation.meta?.errorSurface === 'inline' || isInlineErrorSurface()
+    );
     const silentErrorSurface = mutation.meta?.errorSurface === 'silent';
 
     // Log error for monitoring
@@ -241,6 +253,14 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
       mutationKey: mutation.options.mutationKey,
       meta: mutation.meta,
     });
+
+    // Nested wrappers rethrow the same refusal (e.g. project vitals → update).
+    // Claim it only on the off-job toast path, never on inline/silent paths.
+    if (leftJob && !silentErrorSurface && error !== null &&
+        (typeof error === 'object' || typeof error === 'function')) {
+      if (notifiedOffJobErrors.has(error)) return;
+      notifiedOffJobErrors.add(error);
+    }
 
     // Handle auth errors. An expired session routes to sign-in (so a failed
     // write doesn't leave the user staring at a generic toast on a dead
@@ -305,6 +325,7 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
     }
   },
 });
+};
 
 /**
  * Records the boundary in memory (anchors read it), then, only while the

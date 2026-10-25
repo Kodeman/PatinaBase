@@ -42,8 +42,10 @@ jest.mock('../../hooks/use-feature-flags', () => ({
   isTeachingNotesEnabled: () => mockIsTeachingNotesEnabled(),
 }));
 
-import { waitFor } from '@testing-library/react';
-import { nextSubjectQueryClient, queryClient, retireQueryClient } from '../react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement, type PropsWithChildren } from 'react';
+import { QueryClientProvider, useMutation } from '@tanstack/react-query';
+import { enterInlineErrorSurface, nextSubjectQueryClient, queryClient, retireQueryClient } from '../react-query';
 import {
   firedOn,
   resetTeachingBoundaries,
@@ -60,6 +62,77 @@ describe('React Query error surfaces', () => {
     mockLogError.mockClear();
     mockIsAuthError.mockReset().mockReturnValue(false);
     mockHandleAuthExpiry.mockReset().mockReturnValue(false);
+  });
+
+  it.each([
+    ['/desk', undefined, true],
+    ['/doc/other-job', 'inline', true],
+    ['/doc/job-1?unfold=pieces', undefined, false],
+    ['/doc/job-1/pieces', 'inline', false],
+    ['/desk', 'silent', false],
+  ] as const)('late job refusal at %s with %s metadata toasts=%s', async (destination, errorSurface, toasts) => {
+    const original = window.location.href;
+    window.history.replaceState(null, '', '/doc/job-1?unfold=pieces');
+    const leaveInlineSurface = enterInlineErrorSurface();
+    const failure = new Error('late spec refusal');
+    let reject!: (reason: Error) => void;
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => { started = resolve; });
+    const pending = new Promise<void>((_resolve, fail) => { reject = fail; });
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      mutationKey: ['late-spec-write'],
+      meta: errorSurface ? { errorSurface } : undefined,
+      mutationFn: () => { started(); return pending; },
+      retry: false,
+    });
+    const result = mutation.execute(undefined).catch((error: unknown) => error);
+    try {
+      await ready;
+      window.history.replaceState(null, '', destination);
+      reject(failure);
+      expect(await result).toBe(failure);
+      expect(mockLogError).toHaveBeenCalled();
+      if (toasts) expect(mockShowErrorToast).toHaveBeenCalledWith(failure);
+      else expect(mockShowErrorToast).not.toHaveBeenCalled();
+    } finally {
+      leaveInlineSurface();
+      window.history.replaceState(null, '', original);
+    }
+  });
+
+  it.each([false, true])('nested inline vitals/update mutations share their error and toast once only off-job (left=%s)', async (leftJob) => {
+    const original = window.location.href;
+    window.history.replaceState(null, '', '/doc/nested-job');
+    const leaveInline = enterInlineErrorSurface();
+    const failure = { code: 'XX000', message: 'vitals refused' };
+    let reject!: (reason: unknown) => void;
+    let started!: () => void;
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    const pending = new Promise<void>((_resolve, fail) => { reject = fail; });
+    // useSaveProjectVitals → useUpdateProject: both inline, outer returns
+    // inner.mutateAsync unchanged; PostgREST's error object is thrown by inner.
+    const hook = renderHook(() => {
+      const update = useMutation({ meta: { errorSurface: 'inline' }, retry: false,
+        mutationFn: async () => { started(); return pending; } });
+      const vitals = useMutation({ meta: { errorSurface: 'inline' }, retry: false,
+        mutationFn: async () => update.mutateAsync() });
+      return vitals;
+    }, { wrapper: ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client: queryClient }, children) });
+    try {
+      let result!: Promise<unknown>;
+      act(() => { result = hook.result.current.mutateAsync().catch(error => error); });
+      await ready;
+      if (leftJob) window.history.replaceState(null, '', '/desk');
+      await act(async () => { reject(failure); expect(await result).toBe(failure); });
+      expect(mockLogError).toHaveBeenCalledTimes(2);
+      expect(mockLogError.mock.calls.every(([error]) => error === failure)).toBe(true);
+      expect(mockShowErrorToast).toHaveBeenCalledTimes(leftJob ? 1 : 0);
+      if (leftJob) expect(mockShowErrorToast).toHaveBeenCalledWith(failure);
+    } finally {
+      hook.unmount();
+      leaveInline();
+      window.history.replaceState(null, '', original);
+    }
   });
 
   it('logs but does not toast a query explicitly marked as a silent background lookup', async () => {
