@@ -46,6 +46,7 @@ import {
 } from "@/lib/document/stamp-derivation";
 import { pieceLineStage } from "@/lib/document/pieces/line-stage";
 import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
+import { boundedInTransport } from "@/lib/document/pieces/bounded-in-transport";
 import { AlsoInLine } from "./placement-chips";
 import {
   GROUP_MEMBER_MARK,
@@ -118,39 +119,33 @@ function useSpecFieldRows(projectId: string, lines: readonly SpecLensLine[]) {
     enabled: lineIds.length > 0,
     queryFn: async (): Promise<SpecFieldRows> => {
       const supabase = createBrowserClient() as any;
-      // 100 UUIDs keep the encoded PostgREST URL below 8 KB, including
-      // columns and origin. A shared pool bounds BOTH reads to four requests.
-      const requests: Array<() => Promise<void>> = [];
       const result: SpecFieldRows = { specs: {}, needLabels: {} };
-      for (let offset = 0; offset < lineIds.length; offset += 100) {
-        const ids = lineIds.slice(offset, offset + 100);
-        requests.push(async () => {
-          const { data, error } = await supabase
-            .from("project_ffe_specs")
-            .select(SPEC_COLUMNS)
-            .in("ffe_item_id", ids);
-          if (error) throw error;
-          for (const spec of (data ?? []) as SpecLensSpec[])
-            result.specs[spec.ffe_item_id] = spec;
-        });
-      }
-      for (let offset = 0; offset < threadIds.length; offset += 100) {
-        const ids = threadIds.slice(offset, offset + 100);
-        requests.push(async () => {
-          const { data, error } = await supabase
-            .from("project_ffe_selection_threads")
-            .select("id, need_label")
-            .in("id", ids);
-          if (error) throw error;
-          for (const thread of (data ?? []) as { id: string; need_label: string | null }[])
-            if (thread.need_label?.trim()) result.needLabels[thread.id] = thread.need_label;
-        });
-      }
-      let next = 0;
-      const worker = async () => {
-        while (next < requests.length) await requests[next++]();
-      };
-      await Promise.all(Array.from({ length: Math.min(4, requests.length) }, worker));
+      await boundedInTransport([
+        {
+          ids: lineIds,
+          read: async (ids) => {
+            const { data, error } = await supabase
+              .from("project_ffe_specs")
+              .select(SPEC_COLUMNS)
+              .in("ffe_item_id", ids);
+            if (error) throw error;
+            for (const spec of (data ?? []) as SpecLensSpec[])
+              result.specs[spec.ffe_item_id] = spec;
+          },
+        },
+        {
+          ids: threadIds,
+          read: async (ids) => {
+            const { data, error } = await supabase
+              .from("project_ffe_selection_threads")
+              .select("id, need_label")
+              .in("id", ids);
+            if (error) throw error;
+            for (const thread of (data ?? []) as { id: string; need_label: string | null }[])
+              if (thread.need_label?.trim()) result.needLabels[thread.id] = thread.need_label;
+          },
+        },
+      ]);
       return result;
     },
   });

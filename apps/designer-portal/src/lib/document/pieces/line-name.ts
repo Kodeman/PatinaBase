@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createBrowserClient } from "@patina/supabase";
+import { boundedInTransport } from "./bounded-in-transport";
 
 interface NamedLine {
   name?: string | null;
@@ -50,19 +51,25 @@ export function useNeedLabels(
     ],
     enabled: threadIds.length > 0,
     queryFn: async (): Promise<NeedLabels> => {
-      const { data: threads, error } = await (createBrowserClient() as any)
-        .from("project_ffe_selection_threads")
-        .select("id, need_label")
-        .in("id", threadIds);
-      if (error) throw error;
+      const supabase = createBrowserClient() as any;
       const labels: Record<string, string> = {};
-      for (const thread of (threads ?? []) as {
-        id: string;
-        need_label: string | null;
-      }[]) {
-        if (thread.need_label?.trim())
-          labels[thread.id] = thread.need_label.trim();
-      }
+      await boundedInTransport([{
+        ids: threadIds,
+        read: async (ids) => {
+          const { data: threads, error } = await supabase
+            .from("project_ffe_selection_threads")
+            .select("id, need_label")
+            .in("id", ids);
+          if (error) throw error;
+          for (const thread of (threads ?? []) as {
+            id: string;
+            need_label: string | null;
+          }[]) {
+            if (thread.need_label?.trim())
+              labels[thread.id] = thread.need_label.trim();
+          }
+        },
+      }]);
       return labels;
     },
   });
