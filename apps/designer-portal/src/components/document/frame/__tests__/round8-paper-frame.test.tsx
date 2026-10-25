@@ -193,6 +193,19 @@ describe('Round8PaperFrame', () => {
     ]);
   });
 
+  it('renders the brief slot as the brief and agreement chapter', () => {
+    const { container } = renderFrame({ pieces: {
+      ...pieces(),
+      brief: { brief: 'Original piano inquiry', discovery: 'Measured rooms', agreement: 'Agreed services' },
+    } });
+    const chapter = container.querySelector('[data-paper-chapter="brief"]') as HTMLElement;
+    expect(chapter.querySelector('[data-brief-agreement-chapter]')).not.toBeNull();
+    expect(within(chapter).getByRole('heading', { name: 'Original brief' })).toBeInTheDocument();
+    expect(chapter).toHaveTextContent('Original piano inquiry');
+    expect(chapter).toHaveTextContent('Measured rooms');
+    expect(chapter).toHaveTextContent('Agreed services');
+  });
+
   it('gives each chapter a focusable heading the contents can land on', () => {
     const { container } = renderFrame();
     const heading = container.querySelector('#ffe-chapter-heading') as HTMLElement;
