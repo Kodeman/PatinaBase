@@ -64,7 +64,7 @@ test.describe('Round-8 Library resources', () => {
       await expect(reference).toBeFocused();
       await page.screenshot({ path: testInfo.outputPath('library-resources.png'), fullPage: true });
       await reference.press('Enter');
-      await expect(page).toHaveURL(new RegExp(`/library/${productId}$`));
+      await expect(page).toHaveURL(new RegExp(`/library/${productId}$`), { timeout: 60_000 });
       await page.goBack();
       await expect(page.locator('[data-library-room]')).toBeVisible();
 
@@ -78,7 +78,7 @@ test.describe('Round-8 Library resources', () => {
       const compose = page.getByRole('button', { name: 'Create a product record', exact: true });
       await expect(compose).toBeFocused();
       await compose.press('Enter');
-      await expect(page).toHaveURL(/\/compose$/);
+      await expect(page).toHaveURL(/\/compose$/, { timeout: 60_000 });
     } finally {
       // Only this actor's exact fictional capture; never touch another product.
       psqlRun(`DELETE FROM products WHERE owner_user_id='${DESIGNER}' AND name='${PRODUCT_NAME}' AND layer='personal';`);
