@@ -48,6 +48,7 @@ function BuildRoomRoute({ docId }: { docId: string }) {
       docId={docId}
       lens={lens}
       room={room}
+      line={searchParams.get("line") ?? searchParams.get("ffeItemId")}
       canSeeMoney={canSeeMoney}
       onNavigate={navigate}
       onReturn={leave}

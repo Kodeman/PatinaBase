@@ -45,6 +45,7 @@ import type {
   FfeAssignmentScope,
   FfeLineUnit,
   FfeRoomPlacement,
+  PlaceProductInProjectRequest,
 } from "@patina/types";
 import { cn } from "@/lib/utils";
 import { useAssignLineRoom } from "@/hooks/use-document-rooms";
@@ -229,6 +230,20 @@ function fillItemType(line: RoughInLine) {
         budgetMaxCents: line.budget_max_cents ?? null,
       }
     : { itemType: "fixed" as const };
+}
+
+function fillPlacement(line: RoughInLine, scope: FfeAssignmentScope) {
+  const disposition = line.design_disposition ?? "";
+  return {
+    placeholderSelectionId: line.id,
+    assignmentScope: (line.assignment_scope ?? scope) as FfeAssignmentScope,
+    roomId: line.project_room_id ?? null,
+    quantity: line.quantity ?? 1,
+    ...fillItemType(line),
+    ...(KEPT_DISPOSITIONS.has(disposition)
+      ? { disposition: disposition as "candidate" | "selected" | "alternate" }
+      : {}),
+  } satisfies Partial<PlaceProductInProjectRequest>;
 }
 
 /** Released, on an order, past `ordered`, or a Trade Scope line. */
@@ -779,25 +794,11 @@ export function RoughInLens({
     try {
       if (current.kind === "fill") {
         const line = current.line;
-        const disposition = line.design_disposition ?? "";
         // A fill keeps the line where it is and as it was decided (00730).
         const filled = await place.mutateAsync({
           projectId,
           productId: product.id,
-          placeholderSelectionId: line.id,
-          assignmentScope: (line.assignment_scope ??
-            placeItem.scope) as FfeAssignmentScope,
-          roomId: line.project_room_id ?? null,
-          quantity: line.quantity ?? 1,
-          ...fillItemType(line),
-          ...(KEPT_DISPOSITIONS.has(disposition)
-            ? {
-                disposition: disposition as
-                  | "candidate"
-                  | "selected"
-                  | "alternate",
-              }
-            : {}),
+          ...fillPlacement(line, placeItem.scope),
           duplicateMode: "reuse",
           roleConfigurationIdentity: "default",
           idempotencyKey: newKey("fill"),
@@ -900,6 +901,10 @@ export function RoughInLens({
                 projectId,
                 returnTo: window.location.pathname + window.location.search + window.location.hash,
               });
+              params.set("assignmentScope", placeItem.scope);
+              if (tool.kind === "fill") {
+                params.set("fill", JSON.stringify(fillPlacement(tool.line, placeItem.scope)));
+              }
               if (placeItem.roomId) params.set("roomId", placeItem.roomId);
               if (query) params.set("q", query);
               router.push("/library?" + params.toString());

@@ -10,7 +10,40 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePlaceProductInProjectV2 } from '@patina/supabase';
-import type { FfeAssignmentScope, FfeDuplicateMode } from '@patina/types';
+import type { FfeAssignmentScope, FfeDuplicateMode, PlaceProductInProjectRequest } from '@patina/types';
+
+export type FillPlacementIntent = Pick<PlaceProductInProjectRequest,
+  'placeholderSelectionId' | 'assignmentScope' | 'roomId' | 'quantity' |
+  'itemType' | 'budgetMinCents' | 'budgetMaxCents' | 'disposition'>;
+
+/** URL context is only intent; native V2 still validates the line and its authority. */
+export function readFillPlacementIntent(value: string | null): FillPlacementIntent | undefined {
+  if (!value) return undefined;
+  try {
+    const fill = JSON.parse(value);
+    if (!fill || typeof fill.placeholderSelectionId !== 'string' || !fill.placeholderSelectionId ||
+        !['room', 'throughout', 'unassigned'].includes(fill.assignmentScope) ||
+        !(fill.roomId === null || typeof fill.roomId === 'string') ||
+        (fill.assignmentScope === 'room' && !fill.roomId) ||
+        !Number.isFinite(fill.quantity) || fill.quantity <= 0 ||
+        !['fixed', 'allowance'].includes(fill.itemType) ||
+        (fill.disposition !== undefined && !['candidate', 'selected', 'alternate'].includes(fill.disposition)) ||
+        ![fill.budgetMinCents, fill.budgetMaxCents].every(n => n == null || (Number.isFinite(n) && n >= 0))) {
+      throw new Error('Invalid Fill context');
+    }
+    return {
+      placeholderSelectionId: fill.placeholderSelectionId,
+      assignmentScope: fill.assignmentScope,
+      roomId: fill.roomId,
+      quantity: fill.quantity,
+      itemType: fill.itemType,
+      ...(fill.itemType === 'allowance' ? { budgetMinCents: fill.budgetMinCents ?? null, budgetMaxCents: fill.budgetMaxCents ?? null } : {}),
+      ...(fill.disposition ? { disposition: fill.disposition } : {}),
+    };
+  } catch {
+    throw new Error('The Fill context could not be read. Return to Pieces and choose Fill again.');
+  }
+}
 
 export interface PlaceablePiece {
   /** product id */
@@ -40,6 +73,7 @@ export function usePlaceInDocument() {
       boardId = null,
       duplicateMode = 'reuse',
       idempotencyKey,
+      fill,
     }: {
       projectId: string;
       piece: PlaceablePiece;
@@ -49,17 +83,19 @@ export function usePlaceInDocument() {
       boardId?: string | null;
       duplicateMode?: FfeDuplicateMode;
       idempotencyKey?: string;
+      fill?: FillPlacementIntent;
     }) => {
       const result = await place.mutateAsync({
         projectId,
         productId: piece.id,
-        name: piece.name,
+        ...(fill ? {} : { name: piece.name }),
         itemType: 'fixed',
         assignmentScope,
         roomId,
         boardId,
         disposition: 'candidate',
-        duplicateMode,
+        duplicateMode: fill ? 'reuse' : duplicateMode,
+        ...fill,
         configurationId,
         roleConfigurationIdentity: 'default',
         source: 'engine',

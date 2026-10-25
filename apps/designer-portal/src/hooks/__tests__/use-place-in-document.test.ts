@@ -75,3 +75,15 @@ it('does not silently replace an explicit duplicate choice or invent a configura
     boardId: null, assignmentScope: 'unassigned', disposition: 'candidate',
   }));
 });
+
+it('fills the stable allowance through native V2 without candidate defaults replacing its intent', async () => {
+  mockPlace.mockResolvedValue({ outcome: 'filled', selectionId: 'allowance-1' });
+  const { result } = setup();
+  const fill = {
+    placeholderSelectionId: 'allowance-1', assignmentScope: 'throughout' as const, roomId: null,
+    quantity: 4, itemType: 'allowance' as const, budgetMinCents: 20000, budgetMaxCents: 60000, disposition: 'selected' as const,
+  };
+  await act(async () => { await result.current.mutateAsync({ ...request, fill, duplicateMode: 'create' }); });
+  expect(mockPlace).toHaveBeenCalledWith(expect.objectContaining({ ...fill, productId: request.piece.id, duplicateMode: 'reuse', configurationId: request.configurationId }));
+  expect(mockPlace.mock.calls[0][0]).not.toHaveProperty('name');
+});
