@@ -923,6 +923,29 @@ function RowMenu({
   const [open, setOpen] = useState(false);
   const [moving, setMoving] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const anchorRef = useRef({
+    getBoundingClientRect() {
+      const trigger = buttonRef.current!.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const top = viewport?.offsetTop ?? 0;
+      const viewportBottom = top + (viewport?.height ?? window.innerHeight);
+      const rail = document.querySelector('[data-mobile-edge-owner="document-bar"]')
+        ?.getBoundingClientRect();
+      const bottom = rail && rail.height > 0
+        ? Math.min(viewportBottom, rail.top)
+        : viewportBottom;
+      const menuHeight = (menuRef.current?.scrollHeight ?? 0) + 2;
+      // Popper shifts horizontally, not vertically. Keep its top-side anchor in
+      // the usable viewport even when the row scrolls away or Move expands.
+      const y = Math.min(bottom - 4, Math.max(trigger.top, top + menuHeight + 12));
+      return {
+        x: trigger.x, y, width: trigger.width, height: 0,
+        top: y, bottom: y, left: trigger.left, right: trigger.right,
+        toJSON: () => ({ x: trigger.x, y, width: trigger.width, height: 0 }),
+      };
+    },
+  });
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const wasMoving = useRef(false);
 
@@ -977,7 +1000,6 @@ function RowMenu({
   const stock = buttonRef.current?.closest<HTMLElement>(
     "[data-drafting-stock]",
   );
-  const railSpace = stock ? parseFloat(getComputedStyle(stock).paddingBottom) || 0 : 0;
 
   return (
     <Popover.Root
@@ -1001,15 +1023,17 @@ function RowMenu({
             ⋯
           </button>
         </Popover.Trigger>
+        <Popover.Anchor virtualRef={anchorRef} />
         {open ? (
           // Escape the Body scroller, but keep the drafting tokens and round-8 scope.
           <Popover.Portal container={stock}>
             <Popover.Content
               asChild
               align="end"
+              side="top"
               sideOffset={4}
-              collisionBoundary={stock}
-              collisionPadding={{ top: 8, right: 8, bottom: railSpace + 8, left: 8 }}
+              collisionPadding={8}
+              updatePositionStrategy="always"
               sticky="always"
               onOpenAutoFocus={(event) => {
                 event.preventDefault();
@@ -1023,6 +1047,7 @@ function RowMenu({
               onCloseAutoFocus={(event) => event.preventDefault()}
             >
               <ul
+                ref={menuRef}
                 id={menuId}
                 role="menu"
                 aria-label={`Acts for ${label}`}
