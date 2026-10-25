@@ -39,6 +39,7 @@ import { SectionEyebrow } from '../section-eyebrow';
 import { StatusChip } from '../status-chip';
 import { PlanLinkOnce } from './plan-link-once';
 import { EmptyState } from '../empty-state';
+import { PlanPrintViewer } from './plan-print-viewer';
 
 const STATE_WORD: Record<string, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'var(--color-aged-oak)' },
@@ -142,7 +143,7 @@ export function PlanRoomSet({
     }
   };
 
-  if (set.length === 0) {
+  if (set.length === 0 && bundle.issues.length === 0) {
     return (
       <section aria-label="The light table" className="max-w-[42rem] px-4 py-12 md:px-8">
         {/* The one empty state (US-28 S1; chrome-p5), never a dashed box. */}
@@ -254,6 +255,8 @@ export function PlanRoomSet({
           );
         })}
       </div>
+
+      <PlanIssueHistory bundle={bundle} />
 
       <SectionEyebrow count={log.length}>Drawing register</SectionEyebrow>
       {/* The header sits OUTSIDE the list: a column heading is not a list item,
@@ -408,6 +411,137 @@ export function PlanRoomSet({
             })}
           </div>
         </>
+      )}
+    </section>
+  );
+}
+
+/** Issue rows are frozen snapshots, never reconstructed from the current set. */
+export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
+  const [openPrintId, setOpenPrintId] = useState<string | null>(null);
+  const openPrint = bundle.prints.find((print) => print.id === openPrintId);
+  const openSheet = bundle.sheets.find(
+    (sheet) => sheet.id === openPrint?.sheet_id,
+  );
+  const snapshot = bundle.issuePrints.find(
+    (print) => print.print_id === openPrintId,
+  );
+  return (
+    <section aria-label="Issued print history" className="my-6 min-w-0">
+      <SectionEyebrow count={bundle.issues.length}>
+        Issued print history
+      </SectionEyebrow>
+      <p className="t-meta my-2">
+        Issues freeze exact prints. Sharing follows current; sending an issue
+        does not advance a recipient’s held edition. Link opened is not
+        confirmation of receipt or acceptance.
+      </p>
+      {bundle.issues.length === 0 && (
+        <p className="t-body-sm">No drawing issues recorded.</p>
+      )}
+      {[...bundle.issues]
+        .sort((a, b) => b.issue_number - a.issue_number)
+        .map((issue) => (
+          <details
+            key={issue.id}
+            className="border-b border-[var(--border-default)] py-3"
+          >
+            <summary className="t-body-sm min-h-11 cursor-pointer py-2">
+              Issue {issue.issue_number} · {issue.name} ·{' '}
+              {fmtDay(issue.issued_at)}
+            </summary>
+            <p className="t-meta break-all">
+              Frozen set checksum: {issue.set_checksum}
+            </p>
+            <ul className="my-3">
+              {bundle.issuePrints
+                .filter((print) => print.issue_id === issue.id)
+                .map((print) => {
+                  const sheet = bundle.sheets.find(
+                    (row) => row.id === print.sheet_id,
+                  );
+                  const available = bundle.prints.some(
+                    (row) => row.id === print.print_id,
+                  );
+                  return (
+                    <li
+                      key={print.id}
+                      className="border-t border-[var(--border-default)] py-3"
+                      data-issued-print-id={print.print_id}
+                    >
+                      <p className="t-body-sm">
+                        {print.sheet_number} · {print.sheet_title} · Rev{' '}
+                        {print.rev_letter}
+                      </p>
+                      <p className="t-meta">
+                        Issued ·{' '}
+                        {sheet?.current_print_id === print.print_id
+                          ? 'also current'
+                          : 'not current / superseded'}
+                      </p>
+                      <p className="t-meta break-all">
+                        Print {print.print_id} · SHA-256 {print.sha256}
+                      </p>
+                      <DocumentActionRow
+                        surfaceKey="plan-room"
+                        regionKey={print.id}
+                      >
+                        <DocumentAction
+                          actionKey="open-issued-print"
+                          variant="tertiary"
+                          disabled={!available}
+                          onClick={() => setOpenPrintId(print.print_id)}
+                        >
+                          Open issued print
+                        </DocumentAction>
+                      </DocumentActionRow>
+                      {!available && (
+                        <p className="t-meta">
+                          Print unavailable to you. The frozen record is
+                          retained.
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+            </ul>
+            <ul aria-label="Recipients of this issue">
+              {bundle.transmittals
+                .filter((row) => row.issue_id === issue.id)
+                .map((row) => {
+                  const opened = bundle.tokens.find(
+                    (token) =>
+                      token.transmittal_id === row.id && token.first_opened_at,
+                  )?.first_opened_at;
+                  return (
+                    <li key={row.id} className="t-meta py-1">
+                      {row.party_display_name} · sent {fmtDay(row.sent_at)} ·{' '}
+                      {opened
+                        ? 'link opened ' + fmtDay(opened)
+                        : 'link not recorded as opened'}{' '}
+                      · receipt not confirmed
+                    </li>
+                  );
+                })}
+            </ul>
+          </details>
+        ))}
+      {openPrint && snapshot && (
+        <PlanPrintViewer
+          key={openPrint.id}
+          sheetNumber={snapshot.sheet_number}
+          sheetTitle={snapshot.sheet_title}
+          revLetter={snapshot.rev_letter}
+          filedAt={openPrint.created_at}
+          projectDocumentId={openPrint.project_document_id}
+          isCurrent={openSheet?.current_print_id === openPrint.id}
+          supersededBy={
+            bundle.prints.find(
+              (print) => print.id === openSheet?.current_print_id,
+            )?.rev_letter ?? null
+          }
+          onClose={() => setOpenPrintId(null)}
+        />
       )}
     </section>
   );

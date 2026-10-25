@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 import { Stamp } from '../stamp';
+import { DocumentAction, DocumentActionRow } from '../document-action';
 import {
   FullScreenViewerShell,
   FullScreenViewerState,
@@ -44,6 +45,7 @@ export function PlanPrintViewer({
 }: PlanPrintViewerProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [settled, setSettled] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -96,7 +98,7 @@ export function PlanPrintViewer({
     return () => {
       live = false;
     };
-  }, [projectDocumentId]);
+  }, [projectDocumentId, attempt]);
 
   const title = `${sheetNumber} · Rev ${revLetter}`;
 
@@ -120,9 +122,12 @@ export function PlanPrintViewer({
         {!settled ? (
           <FullScreenViewerState>Opening the print…</FullScreenViewerState>
         ) : !url ? (
-          <FullScreenViewerState error>
-            This print could not be opened. File it again and try once more.
-          </FullScreenViewerState>
+          <div>
+            <FullScreenViewerState error>This print could not be opened. Its filed bytes have not changed.</FullScreenViewerState>
+            <DocumentActionRow surfaceKey="plan-room" regionKey="print-read-retry">
+              <DocumentAction actionKey="retry-plan-print" variant="secondary" onClick={() => setAttempt((value) => value + 1)}>Retry opening print</DocumentAction>
+            </DocumentActionRow>
+          </div>
         ) : (
           <iframe
             title={title}

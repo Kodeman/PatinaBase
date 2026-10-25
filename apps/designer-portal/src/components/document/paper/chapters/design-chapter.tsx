@@ -18,6 +18,7 @@ import {
 import { InlineErrorSurface } from "@/components/feedback/inline-error-surface";
 import { CaptureContextSection } from "@/components/room-file/capture-context-section";
 import { DocumentAction, DocumentActionRow } from "../../document-action";
+import { PlanIssueHistory } from "../../plans/plan-room-set";
 
 type ProjectRoom = Database["public"]["Tables"]["project_rooms"]["Row"];
 // The existing SELECT * includes this linkage; RoomScan predates migration 00265.
@@ -199,7 +200,7 @@ function ConceptEvidence({
             <p className="t-body-sm">Concept image unavailable.</p>
           )}
           <figcaption className="t-meta mt-2">
-            Concept, not installed · {stamp(concept.data.uploadedAt)}
+            Concept, not installed · {stamp(concept.data.uploadedAt)} · Private room evidence; not product media.
             {concept.data.caption && (
               <span className="block">{concept.data.caption}</span>
             )}
@@ -256,12 +257,14 @@ function ProjectPrints({
                       {current
                         ? `Current print ${current.print_number} · revision ${current.rev_letter} · ${stamp(current.created_at)}`
                         : "No current print recorded"}
+                      {sheet.state === "shared" ? " · Client-shared current" : " · Studio only"}
                     </span>
                   </li>
                 );
               })}
             </ul>
           )}
+          <PlanIssueHistory bundle={plans.data} />
           <DocumentActionRow surfaceKey="design" regionKey="project-drawings">
             <DocumentAction
               actionKey="open-project-drawings"
