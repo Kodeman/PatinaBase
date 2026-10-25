@@ -59,7 +59,10 @@ test.describe('Library internal return', () => {
       await page.goForward();
       await expect(page).toHaveURL(new RegExp(`/library/${PREFIX}000000000001\\?`), { timeout: 60_000 });
       await page.goBack();
+      await expect(page).toHaveURL(libraryUrl.href);
       await expect(room.getByRole('searchbox')).toHaveValue(NAME);
+      await expect(room.getByRole('button', { name: 'Fold the shelf', exact: true })).toHaveAttribute('aria-expanded', 'true');
+      await expect(opener).toBeFocused({ timeout: 10_000 });
       console.log('[C04b native readback]', JSON.stringify({ products: count(), filters: libraryUrl.search, history: 'replace-only filters; piece Back/Forward', viewport: page.viewportSize() }));
     } finally {
       psqlRun(`DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM products WHERE id::text LIKE '${PREFIX}%' AND (owner_user_id IS DISTINCT FROM '${DESIGNER}' OR name NOT LIKE '${NAME}%')), 'refuse foreign C04b product'; END $$; DELETE FROM products WHERE id::text LIKE '${PREFIX}%' AND owner_user_id='${DESIGNER}' AND name LIKE '${NAME}%';`);

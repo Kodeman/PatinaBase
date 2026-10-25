@@ -1,3 +1,5 @@
+import { rememberLibraryReturn } from "@/lib/document/library-return";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   act,
@@ -14,6 +16,11 @@ import type { LibraryCapabilityFilter } from "../library-configuration-summary";
 const mockUseCrossLayerSearch = jest.fn();
 let mockRenderer = "legacy";
 const mockPush = jest.fn();
+const mockQueryClient = new QueryClient();
+jest.mock("@tanstack/react-query", () => ({
+  ...jest.requireActual("@tanstack/react-query"),
+  useQueryClient: () => mockQueryClient,
+}));
 
 jest.mock("@patina/supabase", () => ({
   useLayerCounts: () => ({ data: { personal: 2, studio: 7, catalog: 31 } }),
@@ -308,5 +315,57 @@ describe("Library address ownership", () => {
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "walnut & oak" } });
     expect(new URLSearchParams(location.search).get("q")).toBe("walnut & oak");
     expect(history.length).toBe(length);
+  });
+});
+
+
+describe("Library native-read return deadline", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockRenderer = "legacy";
+    mockQueryClient.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState({}, "", "/library?shelf=studio&q=oak");
+    jest.spyOn(window, "scrollTo").mockImplementation(() => {});
+    jest.spyOn(window, "scrollBy").mockImplementation(() => {});
+    mockUseCrossLayerSearch.mockReturnValue({ data: { rows: [exactRow], byLayer: { personal: [exactRow], studio: [], catalog: [] } }, isLoading: false, isError: false });
+  });
+  afterEach(() => {
+    mockQueryClient.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState({}, "", "/library");
+    jest.restoreAllMocks();
+  });
+  it.each(["layer-products", "cross-layer-search"])("waits past three seconds for its %s read, not unrelated work", async (family) => {
+    const link = document.createElement("a");
+    link.id = "library-match-piece-1";
+    document.body.append(link);
+    rememberLibraryReturn(link);
+    link.remove();
+    const layerKey = ["layer-products", "studio"];
+    const searchKey = ["cross-layer-search", "oak"];
+    mockQueryClient.setQueryData(layerKey, []);
+    mockQueryClient.setQueryData(searchKey, []);
+    let answer!: (value: unknown[]) => void;
+    const pending = mockQueryClient.fetchQuery({ queryKey: family === "layer-products" ? layerKey : searchKey, queryFn: () => new Promise<unknown[]>((resolve) => { answer = resolve; }) });
+    let finishUnrelated!: (value: unknown[]) => void;
+    const unrelated = mockQueryClient.fetchQuery({ queryKey: ["other-job"], queryFn: () => new Promise<unknown[]>((resolve) => { finishUnrelated = resolve; }) });
+    const inactive = new QueryObserver(mockQueryClient, { queryKey: ["layer-products", "studio", { search: "other picker" }], enabled: false }).subscribe(() => {});
+    const observers = [layerKey, searchKey].map((queryKey) => new QueryObserver(mockQueryClient, { queryKey, staleTime: Infinity }).subscribe(() => {}));
+    render(<LibraryRoom />);
+    act(() => jest.advanceTimersByTime(4000));
+    const result = document.getElementById("library-match-piece-1")!;
+    jest.spyOn(result, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+    expect(result).not.toHaveFocus();
+    await act(async () => { answer([]); await pending; });
+    act(() => jest.advanceTimersByTime(32));
+    try {
+      expect(result).toHaveFocus();
+      expect(mockQueryClient.isFetching({ queryKey: ["other-job"] })).toBe(1);
+    } finally {
+      await act(async () => { finishUnrelated([]); await unrelated; });
+      observers.forEach((unsubscribe) => unsubscribe());
+      inactive();
+    }
   });
 });

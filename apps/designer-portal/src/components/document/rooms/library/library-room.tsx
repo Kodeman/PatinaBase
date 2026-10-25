@@ -10,6 +10,7 @@
  */
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePaperRenderer } from "@/hooks/use-paper-renderer";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -63,6 +64,7 @@ const SHELF_COPY: Record<LibraryShelfLens, { name: string; meta: string }> = {
 export function LibraryRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.library); // R89 — scope help to the Library room
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const address = parseLibraryAddress(searchParams);
   const { shelf: activeLayer, capability: activeCapability } = address;
@@ -77,8 +79,15 @@ export function LibraryRoom() {
     const context = returnContext.current;
     if (!context) return;
     setReturnExpanded(context.filters.expanded === "true");
-    return restoreLibraryReturn(context);
-  }, []);
+    const { shelf, q } = parseLibraryAddress(new URLSearchParams(context.filters.address.split("?")[1]));
+    const keys = (shelf === "all" ? ["personal", "studio", "catalog"] : [shelf])
+      .map((layer) => ["layer-products", layer]);
+    if (q.trim()) keys.push(["cross-layer-search", q.trim()]);
+    return restoreLibraryReturn(context, 3000, () => keys.every((queryKey) => {
+      const reads = queryClient.getQueryCache().findAll({ queryKey, type: "active" });
+      return reads.length > 0 && reads.every(({ state }) => state.status !== "pending" && state.fetchStatus === "idle");
+    }));
+  }, [queryClient]);
   const { renderer } = usePaperRenderer();
   const round8 = renderer === "round8";
   const { data: counts } = useLayerCounts();
@@ -191,7 +200,7 @@ export function LibraryRoom() {
   );
   const content = (
     <>
-      <div className="mx-auto max-w-[1240px] px-4 sm:px-9" onClickCapture={(event) => {
+      <div data-paper-chapter="library" className="mx-auto max-w-[1240px] px-4 sm:px-9" onClickCapture={(event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         const link = (event.target as Element).closest<HTMLAnchorElement>("a[href]");
         if (link?.origin === window.location.origin && /^\/library\/[^/]+$/.test(link.pathname) && link.target !== "_blank") rememberLibraryReturn(link);
