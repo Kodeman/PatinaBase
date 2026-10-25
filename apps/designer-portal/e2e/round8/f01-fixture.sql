@@ -71,6 +71,32 @@ WHERE NOT EXISTS (
 )
 ON CONFLICT (user_id, organization_id) DO UPDATE SET role = 'owner', status = 'active';
 
+-- Profile provisioning creates a personal studio before the explicit F01 seat.
+-- Keep one active seat so native proposal inserts can derive the F01 studio.
+-- Retain the inactive membership for the fixture teardown's owned-org lookup.
+SET LOCAL ROLE service_role;
+UPDATE public.organization_members AS member
+SET status = 'removed'
+FROM public.organizations AS org
+WHERE member.organization_id = org.id
+  AND member.user_id = 'f0180000-0000-4000-8000-000000000002'
+  AND member.role = 'owner' AND member.status = 'active'
+  AND org.type = 'design_studio' AND org.name = 'F01 Fictional Designer'
+  AND org.id <> 'f0180000-0000-4000-8000-000000000001'
+  AND NOT EXISTS (
+    SELECT 1 FROM public.organization_members AS other
+    WHERE other.organization_id = org.id AND other.user_id <> member.user_id
+  );
+RESET ROLE;
+DO $$ BEGIN
+  IF (SELECT array_agg(organization_id ORDER BY organization_id)
+      FROM public.organization_members
+      WHERE user_id = 'f0180000-0000-4000-8000-000000000002' AND status = 'active')
+    IS DISTINCT FROM ARRAY['f0180000-0000-4000-8000-000000000001'::uuid]
+  THEN RAISE EXCEPTION 'F01 requires exactly one active seat in F01 Fictional Studio';
+  END IF;
+END $$;
+
 -- Only this fixture's owned job and scan are rebuilt. No shared-stack reset.
 DELETE FROM public.room_scans WHERE id = 'f0180000-0000-4000-8000-000000000020';
 DELETE FROM public.projects WHERE id = 'f0180000-0000-4000-8000-000000000010';
