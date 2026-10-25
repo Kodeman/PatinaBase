@@ -75,14 +75,18 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
     expect(versions).toBe('t');
   });
 
-  test('shows the revised agreement in the mounted project chapter', async ({ authenticatedPage: page }) => {
-    // SQ-2006 owns the stale post-activation root alias; open the real project here.
-    await openDocument(page, id('17'));
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('F02 Fictional Revision');
-    const chapter = page.locator('[data-paper-chapter="brief"] [data-brief-agreement-chapter]');
-    await expect(chapter).toContainText('F02 revised agreement: preserve the piano alcove.');
-    await expect(chapter).not.toContainText('F02 original agreement: retain the piano.');
+  // Native execution requires the lead-owned cumulative replay of 00872.
+  test('opens the stale root through its activated revision on the mounted project agreement', async ({ authenticatedPage: page }) => {
+    for (const alias of ['23', '24', '17']) {
+      await openDocument(page, id(alias));
+      await expect(page).toHaveURL(new RegExp(`/doc/${id('17')}(?:\\?|$)`));
+      await expect(page.getByRole('heading', { level: 1 })).toContainText('F02 Fictional Revision');
+      const chapter = page.locator('[data-paper-chapter="brief"] [data-brief-agreement-chapter]');
+      await expect(chapter).toContainText('F02 revised agreement: preserve the piano alcove.');
+      await expect(chapter).not.toContainText('F02 original agreement: retain the piano.');
+    }
     expect(psqlScalar(`SELECT proposal_id FROM public.projects WHERE id = '${id('17')}'`)).toBe(id('24'));
+    expect(psqlScalar(`SELECT project_id IS NULL FROM public.proposals WHERE id = '${id('23')}'`)).toBe('t');
   });
 
   test('opens a direct project without forging an agreement or source inquiry', async ({ authenticatedPage: page }) => {
