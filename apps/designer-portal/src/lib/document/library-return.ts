@@ -35,7 +35,9 @@ const STORAGE_KEY = "patina:library-return:v2";
 const ENTRY_KEY = "patinaLibraryEntry";
 const MAX_AGE = 30 * 60_000;
 interface LibraryReturnRecord { at: number; context: ReturnContext; piece: string }
-interface LibraryReturns { latest?: string; entries: Record<string, LibraryReturnRecord> }
+interface LibraryReturns { entries: Record<string, LibraryReturnRecord> }
+const SOURCE_KEY = "patinaLibrarySource";
+let pendingSource: string | null = null;
 let immediateReturn: { record: LibraryReturnRecord; at: number } | null = null;
 
 function readReturns(): LibraryReturns {
@@ -46,20 +48,20 @@ function readReturns(): LibraryReturns {
       return record && Number.isFinite(record.at) && Date.now() - record.at <= MAX_AGE &&
         isReturnContext(record.context) && record.context.documentId === "library" && typeof record.piece === "string";
     })) as LibraryReturns["entries"];
-    return { latest: stored?.latest, entries };
+    return { entries };
   } catch { return { entries: {} }; }
 }
 
-function writeReturn(record: LibraryReturnRecord): void {
+function writeReturn(record: LibraryReturnRecord): string {
   const stored = readReturns();
   const id = window.history.state?.[ENTRY_KEY] ?? crypto.randomUUID();
   // Pass only our field. Next copies its own state and keeps ACTION_RESTORE
   // active; spreading __NA/_N would bypass its URL synchronization wrapper.
   window.history.replaceState({ [ENTRY_KEY]: id }, "", window.location.href);
   stored.entries[id] = record;
-  stored.latest = id;
   try { window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored)); }
   catch { /* Navigation still works when session storage is unavailable. */ }
+  return id;
 }
 
 export function rememberLibraryReturn(opener: HTMLElement): void {
@@ -72,13 +74,21 @@ export function rememberLibraryReturn(opener: HTMLElement): void {
       expanded: String(!!document.querySelector('[aria-controls="library-shelf-panel-plates"][aria-expanded="true"]')),
     },
   }, opener);
-  writeReturn({ at: Date.now(), context, piece: new URL(opener.getAttribute("href") ?? "", window.location.href).pathname });
+  pendingSource = writeReturn({ at: Date.now(), context, piece: new URL(opener.getAttribute("href") ?? "", window.location.href).pathname });
+}
+
+/** Bind once on piece entry, so revisiting an older piece never borrows a later capture. */
+export function bindLibraryReturnSource(): void {
+  const source = pendingSource;
+  pendingSource = null;
+  const record = source ? readReturns().entries[source] : undefined;
+  if (record?.piece !== window.location.pathname) return;
+  window.history.replaceState({ [SOURCE_KEY]: source }, "", window.location.href);
 }
 
 /** The piece's explicit Return creates a new entry, unlike browser traversal. */
 export function prepareLibraryReturn(destination: string): void {
-  const stored = readReturns();
-  const record = stored.latest ? stored.entries[stored.latest] : undefined;
+  const record = readReturns().entries[window.history.state?.[SOURCE_KEY]];
   immediateReturn = record?.piece === window.location.pathname && record.context.filters.address === destination
     ? { record, at: Date.now() } : null;
 }

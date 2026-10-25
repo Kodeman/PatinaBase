@@ -1,5 +1,6 @@
 Object.defineProperty(crypto, "randomUUID", { configurable: true, value: () => require("node:crypto").randomUUID() });
 import { captureReturnContext } from "../paper/return-context";
+import * as libraryReturn from "../library-return";
 import { libraryHref, parseLibraryAddress, prepareLibraryReturn, rememberLibraryReturn, restoreLibraryReturn, takeLibraryReturn } from "../library-return";
 
 beforeEach(() => {
@@ -193,12 +194,29 @@ it("marks captures with custom-only state, keeping the Next restore branch enabl
 it("restores the explicit piece Return once into its new history entry", () => {
   const link = opener(); rememberLibraryReturn(link);
   history.pushState({}, "", "/library/1");
+  libraryReturn.bindLibraryReturnSource?.();
   prepareLibraryReturn?.("/library");
   history.pushState({}, "", "/library");
   expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
   expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
   history.pushState({}, "", "/library");
   expect(takeLibraryReturn()).toBeNull();
+});
+it("an older piece entry returns to its own capture after a later same-piece visit", () => {
+  const first = opener(); rememberLibraryReturn(first);
+  history.pushState({}, "", "/library/1");
+  libraryReturn.bindLibraryReturnSource?.();
+  const firstPiece = history.state;
+  history.pushState({}, "", "/library");
+  const second = opener(); second.id = "second-opener";
+  rememberLibraryReturn(second);
+  history.pushState({}, "", "/library/1");
+  libraryReturn.bindLibraryReturnSource?.();
+  history.replaceState(firstPiece, "", "/library/1");
+  libraryReturn.bindLibraryReturnSource?.();
+  prepareLibraryReturn?.("/library");
+  history.pushState({}, "", "/library");
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(first.id);
 });
 it("falls back once at the absolute ten-second ceiling for a never-settling read", () => {
   const link = opener();

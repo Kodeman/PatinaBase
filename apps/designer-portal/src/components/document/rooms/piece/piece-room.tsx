@@ -20,7 +20,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { libraryHref, prepareLibraryReturn } from "@/lib/document/library-return";
+import { bindLibraryReturnSource, libraryHref, prepareLibraryReturn } from "@/lib/document/library-return";
 import { useSearchParams } from "next/navigation";
 import {
   useProduct,
@@ -216,6 +216,7 @@ function firstIncompletePieceFacet(
 }
 
 export function PieceRoom({ productId }: { productId: string }) {
+  useEffect(() => { bindLibraryReturnSource(); }, [productId]);
   const searchParams = useSearchParams();
   const hydrated = useHydrated();
   const { data, isLoading, error, refetch } = useProduct(productId);
