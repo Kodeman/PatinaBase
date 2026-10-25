@@ -22,12 +22,28 @@ async function expectMenuAboveRail(items: Locator) {
           clipTop = Math.max(clipTop, clip.top);
         }
       }
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const describe = (element: Element | null) => {
+        if (!element) return null;
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName, role: element.getAttribute('role'),
+          attributes: Object.fromEntries(Array.from(element.attributes).map(({ name, value }) => [name, value])),
+          zIndex: style.zIndex, position: style.position, pointerEvents: style.pointerEvents,
+          overflowY: style.overflowY, rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+        };
+      };
+      const ancestry = [];
+      for (let parent = hit, depth = 0; parent && depth < 6; parent = parent.parentElement, depth++) ancestry.push(describe(parent));
       const visible = r.bottom <= clipBottom && r.top >= clipTop && r.left >= 0 && r.right <= innerWidth
-        && node.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+        && node.contains(hit);
       return visible ? 'visible' : JSON.stringify({
         label: node.textContent,
         rect: { top: r.top, bottom: r.bottom, left: r.left, right: r.right },
-        clipTop, clipBottom,
+        clipTop, clipBottom, hit: describe(hit), ancestry,
+        button: describe(node), menu: describe(node.closest('[role="menu"]')),
+        menuWrapper: describe(node.closest('[data-radix-popper-content-wrapper]')),
       });
     }, { timeout: 5000 }), { message: 'Menu item fully visible above the bottom rail' }).toBe('visible');
   }

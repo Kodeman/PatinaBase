@@ -1056,7 +1056,7 @@ function RowMenu({
                 // press blurs the focused item to nothing, the blur closes the menu,
                 // and the item is gone before its click (T-60a F3).
                 onMouseDown={(event) => event.preventDefault()}
-                className="z-20 max-h-[var(--radix-popover-content-available-height)] w-[280px] max-w-[var(--radix-popover-content-available-width)] overflow-y-auto border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left outline-none"
+                className="z-40 max-h-[var(--radix-popover-content-available-height)] w-[280px] max-w-[var(--radix-popover-content-available-width)] overflow-y-auto border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left outline-none"
               >
                 {MENU_ITEMS.map(({ act, label: word }, i) => {
                   const gate = row.gates?.[act];
