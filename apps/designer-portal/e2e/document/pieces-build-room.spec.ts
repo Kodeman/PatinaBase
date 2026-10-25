@@ -727,8 +727,15 @@ test.describe('The Build room · focus after each act @1440', () => {
     await menu.getByRole('menuitem', { name: 'Move to room…' }).click();
     await page.getByRole('menu', { name: 'Move to room' }).getByRole('menuitem', { name: /^Kitchen/ }).click();
     await expect(page.locator('[data-rough-in-announce]')).toHaveText('Moved Counter stools to Kitchen.', { timeout: 15_000 });
-    await expect.poll(() => focusedPlace(page, 'data-rough-in-room'), { timeout: 15_000 }).toBe(ROOM.kitchen);
-    expect(await focusedLineId(page)).toBe(stools);
+    await expect.poll(() => page.evaluate(() => {
+      const active = document.activeElement;
+      const line = active?.closest('[data-line-id]');
+      return {
+        lineId: line?.getAttribute('data-line-id') ?? '',
+        roomId: line?.closest('[data-rough-in-room]')?.getAttribute('data-rough-in-room') ?? '',
+        actsFocused: !!active && active === line?.querySelector('button[aria-haspopup="menu"]'),
+      };
+    }), { timeout: 15_000 }).toEqual({ lineId: stools, roomId: ROOM.kitchen, actsFocused: true });
 
     const floorMenu = await openRowMenu(page, floor, 'White oak floor, satin Bona finish');
     await floorMenu.getByRole('menuitem', { name: 'Move to room…' }).click();
