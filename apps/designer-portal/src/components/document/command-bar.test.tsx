@@ -1180,7 +1180,7 @@ it('remembers the selected search result with its query and list position', () =
   mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
   render(<><FindAnythingButton /><CommandBar /></>);
   act(() => openCommandBar('Ellsworth'));
-  const row = screen.getAllByRole('option', { name: /Ellsworth Residence/ }).find((option) => option.dataset.studioSearchKey === 'doc:eng-1')!;
+  const row = within(screen.getByRole('group', { name: 'Results', exact: true })).getByRole('option', { name: /Ellsworth Residence/ });
   const scroll = row.closest('.cmd-scroll') as HTMLElement;
   scroll.scrollTop = 37;
   fireEvent.click(row);
