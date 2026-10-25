@@ -73,8 +73,10 @@ export function LibraryCard({
   onPromote,
   onNominate,
   usedOn = [],
+  round8 = false,
 }: {
   item: LibraryItem;
+  round8?: boolean;
   needsTeaching: boolean;
   /** The jobs this piece is on (usePieceUsage), named in the caption. */
   usedOn?: readonly PieceUse[];
@@ -127,6 +129,11 @@ export function LibraryCard({
           {item.name}
         </Link>
         <p className="t-body-sm library-cap-maker">{sub}</p>
+        {round8 && (
+          <Link href={pieceHref} aria-label={`View reference: ${item.name}`} className="r8-library-reference t-body-sm">
+            View reference
+          </Link>
+        )}
         {shownUses.map((use) => (
           <p
             key={use.projectId}

@@ -6,13 +6,20 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { LibraryRoom } from "../library-room";
 import { LibrarianBar } from "../librarian-bar";
 import { LibraryToolbar, type LibraryShelfLens } from "../library-toolbar";
 import type { LibraryCapabilityFilter } from "../library-configuration-summary";
 
 const mockUseCrossLayerSearch = jest.fn();
+let mockRenderer = "legacy";
+const mockPush = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
+  useLayerCounts: () => ({ data: { personal: 2, studio: 7, catalog: 31 } }),
+  useTeachingQueue: () => ({ data: [] }),
+  useValidationQueue: () => ({ data: [] }),
+  useOrganizations: () => ({ data: [] }),
   useCrossLayerSearch: (options: unknown) => mockUseCrossLayerSearch(options),
 }));
 
@@ -226,5 +233,53 @@ describe("Library lens and Add disclosure", () => {
     expect(screen.getByTestId("active-capability")).toHaveTextContent(
       "modular",
     );
+  });
+});
+
+
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('@/hooks/use-paper-renderer', () => ({ usePaperRenderer: () => ({ renderer: mockRenderer }) }));
+jest.mock('@/lib/help-system/use-document-surface', () => ({ useDocumentSurface: jest.fn() }));
+jest.mock('../../../mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }));
+jest.mock('../../room-shell', () => ({
+  RoomShell: ({ heading, title, action, children }: { heading?: React.ReactNode; title: string; action: React.ReactNode; children: React.ReactNode }) => <main>{heading ?? <h1>{title}</h1>}{action}{children}</main>,
+}));
+jest.mock('../library-shelf', () => ({ LibraryShelf: () => <div data-testid="native-shelf" /> }));
+jest.mock('../capture-extension-prompt', () => ({ CaptureExtensionPrompt: () => null }));
+jest.mock('../capture-sheet', () => ({ CaptureSheet: ({ open }: { open: boolean }) => open ? <div role="dialog" aria-label="Capture a product" /> : null }));
+jest.mock('../import-sheet', () => ({ ImportSheet: ({ open }: { open: boolean }) => open ? <div role="dialog" aria-label="Import product list" /> : null }));
+jest.mock('../deep-analysis-sheet', () => ({ DeepAnalysisSheet: () => null }));
+jest.mock('@/components/products/promotion/promote-to-studio-modal', () => ({ PromoteToStudioModal: () => null }));
+jest.mock('@/components/products/nomination/nominate-to-catalog-modal', () => ({ NominateToCatalogModal: () => null }));
+
+describe('Library renderer boundary', () => {
+  it.each(['legacy', 'pending'])('keeps the existing room while renderer is %s', (renderer) => {
+    mockRenderer = renderer;
+    const { container } = render(<LibraryRoom />);
+    expect(screen.getByRole('heading', { name: 'Resource library' })).toBeInTheDocument();
+    expect(container.querySelector('[data-paper-renderer="round8"]')).toBeNull();
+    expect(screen.queryByText(/Reference prices and lead times/)).not.toBeInTheDocument();
+  });
+
+  it('loads scoped editorial paper with every existing shelf, type, capture, import and compose entrance', async () => {
+    mockRenderer = 'round8';
+    const { container } = render(<LibraryRoom />);
+    const heading = await screen.findByRole('heading', { name: 'A library with a point of view.' });
+    expect(heading.closest('[data-library-room]')).toHaveAttribute('data-paper-renderer', 'round8');
+    expect(heading.closest('.r8-library-intro')).not.toBeNull();
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
+    expect(screen.getByText(/Personal captures, not yet reviewed/)).toBeInTheDocument();
+    expect(screen.getByText(/does not approve it, reserve stock or authorize a purchase/)).toHaveClass('r8-library-note');
+    expect(screen.getAllByRole('tab')).toHaveLength(4);
+    expect(screen.getByRole('button', { name: 'Custom commissions' })).toBeInTheDocument();
+    expect(screen.getByTestId('native-shelf')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Capture/ }));
+    expect(screen.getByRole('dialog', { name: 'Capture a product' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import product list' }));
+    expect(screen.getByRole('dialog', { name: 'Import product list' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create a product record' }));
+    expect(mockPush).toHaveBeenCalledWith('/compose');
   });
 });

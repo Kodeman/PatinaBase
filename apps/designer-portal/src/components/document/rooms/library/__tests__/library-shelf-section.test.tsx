@@ -57,9 +57,10 @@ function piece(i: number) {
   };
 }
 
-function renderShelf() {
+function renderShelf(round8 = false) {
   return render(
     <LibraryShelf
+      round8={round8}
       layer="studio"
       name="Studio library"
       meta="Products shared within your studio"
@@ -148,4 +149,14 @@ describe('groupPieceUsage — the jobs a piece is on', () => {
     );
     expect(grouped['p-1'][0].stage).toBe('project');
   });
+});
+
+
+it('carries round8 presentation into the native shelf without changing image or usage sources', () => {
+  rows = [piece(0)];
+  renderShelf(true);
+  expect(screen.getByRole('link', { name: 'View reference: Piece 0' })).toHaveAttribute('href', '/library/p-0');
+  expect(screen.getByText('Used on Holloway Den')).toBeInTheDocument();
+  expect(usageCalls.at(-1)).toEqual(['p-0']);
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });
