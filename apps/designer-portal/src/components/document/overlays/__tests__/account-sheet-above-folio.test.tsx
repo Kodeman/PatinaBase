@@ -1,3 +1,4 @@
+import React from 'react';
 /**
  * SQ-1113 (R1 walk, finding 1) — the composer's "Set <name>'s rate" opens the
  * Account sheet ABOVE the composer folio (PaperFolioSheet, z-[60]), the same
@@ -94,7 +95,7 @@ describe('Account sheet above the composer folio (SQ-1113)', () => {
     // The sheet is the top modal, and the rate field is inside it.
     const panel = screen.getByRole('dialog', { name: 'Account settings' });
     expect(topActiveModalDialog()).toBe(panel);
-    expect(panel).toContainElement(screen.getByLabelText('Hourly rate for maria'));
+    expect(panel).toContainElement(await screen.findByLabelText('Hourly rate for maria'));
 
     // Esc puts back the sheet alone; focus returns to Set.
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
@@ -117,5 +118,65 @@ describe('Account sheet above the composer folio (SQ-1113)', () => {
     const layer = accountLayer();
     expect(layer).toHaveClass('z-50');
     expect(layer).not.toHaveClass('z-[65]');
+  });
+});
+
+
+describe('Account settings lazy body', () => {
+  const nativeLazy = React.lazy;
+  afterEach(() => jest.restoreAllMocks());
+
+  it('keeps the shell and opening focus through loading to loaded, then returns to its opener', async () => {
+    let resolve!: () => void;
+    const gate = new Promise<void>((done) => { resolve = done; });
+    const loads = jest.fn();
+    jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => {
+      loads();
+      return gate.then(load);
+    }));
+    render(<ComposerStack onFolioClose={jest.fn()} aboveFolio />);
+    expect(loads).not.toHaveBeenCalled();
+    const opener = screen.getByRole('button', { name: 'Set Maria Obi’s rate' });
+    opener.focus();
+    fireEvent.click(opener);
+
+    const panel = screen.getByRole('dialog', { name: 'Account settings' });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading studio settings');
+    await waitFor(() => expect(panel).toHaveFocus());
+    await act(async () => resolve());
+    expect(panel).toContainElement(await screen.findByLabelText('Hourly rate for maria'));
+    expect(panel).toHaveFocus();
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('contains a rejected chunk in the same shell and retries with a fresh loader', async () => {
+    let reject!: (error: Error) => void;
+    let resolveRetry!: () => void;
+    const first = new Promise<void>((_resolve, fail) => { reject = fail; });
+    const retry = new Promise<void>((done) => { resolveRetry = done; });
+    let attempt = 0;
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => {
+      const gate = attempt++ === 0 ? first : retry;
+      return gate.then(load);
+    }));
+    render(<ComposerStack onFolioClose={jest.fn()} aboveFolio />);
+    const opener = screen.getByRole('button', { name: 'Set Maria Obi’s rate' });
+    fireEvent.click(opener);
+    const panel = screen.getByRole('dialog', { name: 'Account settings' });
+    await act(async () => reject(new Error('ChunkLoadError')));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Studio settings could not be loaded.');
+    expect(screen.getByRole('dialog', { name: 'Account settings' })).toBe(panel);
+    const retryButton = screen.getByRole('button', { name: 'Try again' });
+    retryButton.focus();
+    fireEvent.click(retryButton);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading studio settings');
+    expect(panel).toContainElement(document.activeElement as HTMLElement);
+    await act(async () => resolveRetry());
+    expect(panel).toContainElement(await screen.findByLabelText('Hourly rate for maria'));
+    expect(attempt).toBe(2);
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });

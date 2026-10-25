@@ -17,7 +17,10 @@
  * for free.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { SectionLoadingLine } from './section-loading-line';
+import { ActFailLine } from '@/components/feedback/act-fail-line';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -40,7 +43,6 @@ import { DocSheet } from './overlays/doc-sheet';
 import { PostSheet, openPost } from './overlays/post-sheet';
 import { OrdersLedger } from './orders-ledger';
 import { AccountsBook } from './accounts/accounts-book';
-import { HoursLedger } from './hours-ledger';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useMobileShell } from './mobile/mobile-shell';
@@ -135,7 +137,13 @@ function presenceSentence(others: string[]): string | null {
   return `You and ${others.length} others`;
 }
 
+function createHoursLedger() {
+  return lazy(() => import('./hours-ledger').then((module) => ({ default: module.HoursLedger })));
+}
+
 export function StudioDrawer() {
+  const [HoursBody, setHoursBody] = useState(createHoursLedger);
+  const hoursBodyRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
   // US-19 slice 1 — the printed `Keys ?` act, fail-closed.
@@ -719,7 +727,26 @@ export function StudioDrawer() {
             initialContext={sheetContext}
           />
         )}
-        {open?.key === 'hours' && <HoursLedger initialContext={sheetContext} />}
+        {open?.key === 'hours' && (
+          <div ref={hoursBodyRef} tabIndex={-1}>
+            <ErrorBoundary fallback={(_error, reset) => (
+              <ActFailLine
+                error={new Error('Hours could not be loaded.')}
+                retryKey="hours-load-retry"
+                onRetry={() => {
+                  hoursBodyRef.current?.focus({ preventScroll: true });
+                  // React.lazy caches rejection; retry needs a fresh lazy identity.
+                  setHoursBody(createHoursLedger);
+                  reset();
+                }}
+              />
+            )}>
+              <Suspense fallback={<SectionLoadingLine label="Loading hours" />}>
+                <HoursBody initialContext={sheetContext} />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
+        )}
         {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People
             and Rooms are Rooms (R50/R107), so no generic placeholder branch
             remains. */}

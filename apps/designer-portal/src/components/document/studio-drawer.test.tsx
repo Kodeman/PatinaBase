@@ -1,4 +1,6 @@
+import React from 'react';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -69,6 +71,8 @@ jest.mock('@/lib/document/room-origin', () => ({
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
+    actionShown: jest.fn(),
+    actionInvoked: jest.fn(),
     wayfinding: {
       roomEntered: jest.fn(),
       doorOpened: jest.fn(),
@@ -397,5 +401,67 @@ describe('StudioDrawer — zero shadows (US-28 S1, V20 U-Q12)', () => {
     const bar = screen.getByRole('navigation', { name: 'Studio drawer' });
     expect(bar).not.toHaveClass('doc-elevated');
     expect(bar.className).not.toMatch(/(^|[\s:])(drop-)?shadow(-|\s|$)/);
+  });
+});
+
+
+describe('Hours lazy body', () => {
+  const nativeLazy = React.lazy;
+  afterEach(() => jest.restoreAllMocks());
+
+  it('keeps the shell and opening focus through loading to loaded, then returns to its opener', async () => {
+    let resolve!: () => void;
+    const gate = new Promise<void>((done) => { resolve = done; });
+    const loads = jest.fn();
+    jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => {
+      loads();
+      return gate.then(load);
+    }));
+    render(<StudioDrawer />);
+    expect(loads).not.toHaveBeenCalled();
+    const opener = screen.getByRole('button', { name: 'Ledgers' });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole('button', { name: /^Timesheets/ }));
+    const panel = screen.getByRole('dialog', { name: 'Timesheets' });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading hours');
+    await waitFor(() => expect(panel).toHaveFocus());
+    await act(async () => resolve());
+    expect(panel).toContainElement(await screen.findByText('Hours ledger'));
+    expect(panel).toHaveFocus();
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('contains a rejected chunk in the same shell and retries with a fresh loader', async () => {
+    let reject!: (error: Error) => void;
+    let resolveRetry!: () => void;
+    const first = new Promise<void>((_resolve, fail) => { reject = fail; });
+    const retry = new Promise<void>((done) => { resolveRetry = done; });
+    let attempt = 0;
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => {
+      const gate = attempt++ === 0 ? first : retry;
+      return gate.then(load);
+    }));
+    render(<StudioDrawer />);
+    const opener = screen.getByRole('button', { name: 'Ledgers' });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole('button', { name: /^Timesheets/ }));
+    const panel = screen.getByRole('dialog', { name: 'Timesheets' });
+    await act(async () => reject(new Error('ChunkLoadError')));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hours could not be loaded.');
+    expect(screen.getByRole('dialog', { name: 'Timesheets' })).toBe(panel);
+    const retryButton = screen.getByRole('button', { name: 'Try again' });
+    retryButton.focus();
+    fireEvent.click(retryButton);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading hours');
+    expect(panel).toContainElement(document.activeElement as HTMLElement);
+    await act(async () => resolveRetry());
+    expect(panel).toContainElement(await screen.findByText('Hours ledger'));
+    expect(attempt).toBe(2);
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });
