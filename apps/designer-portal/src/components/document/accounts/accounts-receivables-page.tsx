@@ -164,6 +164,7 @@ function ReceivableRow({
   return (
     <li
       ref={ref}
+      data-invoice-row={invoice.id}
       className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1.5 py-2.5 ${
         highlight ? 'rounded-[4px] bg-[rgba(196,165,123,0.1)]' : ''
       }`}
@@ -250,6 +251,7 @@ function ReceivableRow({
         <button
           type="button"
           onClick={() => onOpenDocument(invoice.project_id)}
+          data-action-key="open-invoice-document"
           className="min-h-11 whitespace-nowrap rounded-[3px] text-[11px] text-[var(--color-clay-ink)] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         >
           Document ↗

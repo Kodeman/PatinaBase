@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Round8PaperFrame, { type Round8Pieces, type Round8PaperFrameProps } from '../round8-paper-frame';
 import type { DocumentFrameSlots } from '../frame-slots';
 import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
+
+import { rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-origin';
 
 // The page owns the data reads; a gate stands in for its read here.
 let roomFilesReady = false;
@@ -320,4 +322,20 @@ describe('Round8PaperFrame', () => {
     expect(container.querySelector('[data-doc-spine]')).toBeNull();
     expect(screen.queryByRole('navigation', { name: 'This paper' })).toBeNull();
   });
+});
+
+
+it('refreshes the mounted JobHead from People to same-job Accounts without replacing the shell', () => {
+  window.sessionStorage.clear();
+  rememberPaperOrigin('doc-1', { path: '/people', search: '?person=person-1' });
+  const { container } = renderFrame();
+  const shell = container.querySelector('[data-document-shell]');
+  expect(screen.getByRole('link', { name: 'Studio contacts' })).toHaveAttribute('href', '/people?person=person-1');
+  act(() => rememberPaperOrigin('doc-1', { path: '/desk', studioOverlay: {
+    overlay: 'books', filter: 'receivables', focusKey: 'invoice-1:open-invoice-document', scrollTop: 67,
+  } }));
+  expect(container.querySelector('[data-document-shell]')).toBe(shell);
+  expect(container.querySelector('[data-job-head-return]')).toHaveAttribute('href', '/desk');
+  fireEvent.click(screen.getByRole('link', { name: 'Studio' }));
+  expect(takeDeskReturn()?.studioOverlay).toMatchObject({ overlay: 'books', filter: 'receivables', focusKey: 'invoice-1:open-invoice-document', scrollTop: 67 });
 });

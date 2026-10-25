@@ -255,7 +255,7 @@ export function PeopleRoom() {
       const rest = new URLSearchParams(params.toString());
       for (const k of keys) rest.delete(k);
       const qs = rest.toString();
-      window.history.replaceState(window.history.state, "", qs ? `/people?${qs}` : "/people");
+      window.history.replaceState(null, "", qs ? `/people?${qs}` : "/people");
     };
     const person = params.get("person");
     const firm = params.get("firm");
@@ -410,7 +410,7 @@ export function PeopleRoom() {
     // Local state owns this address. Next's native History integration updates
     // useSearchParams without queuing a route replacement that can land after
     // a newer choice (including a return to the already-current URL).
-    window.history.replaceState(window.history.state, "", next ? `/people?${next}` : "/people");
+    window.history.replaceState(null, "", next ? `/people?${next}` : "/people");
   }, [view, chip, scope, trade, openPerson, openFirm]);
 
   /**

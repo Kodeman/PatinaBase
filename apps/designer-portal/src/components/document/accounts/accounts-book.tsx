@@ -144,22 +144,26 @@ export function AccountsBook({
     if (!held || !root) return;
     return restoreStudioOverlay(root, held, () => {
       if (held.focusKey === 'folio') return root.querySelector<HTMLElement>('[data-action-key="open-invoice-document"]');
-      const [invoiceId, index] = (held.focusKey ?? '').split(':');
-      const row = root.querySelector<HTMLElement>('[data-invoice-folio-opener="' + CSS.escape(invoiceId ?? '') + '"]')?.closest('li');
-      return row?.querySelectorAll<HTMLElement>('button')[Number(index)] ?? null;
+      const [invoiceId, actionKey] = (held.focusKey ?? '').split(':');
+      const row = root.querySelector<HTMLElement>('[data-invoice-row="' + CSS.escape(invoiceId ?? '') + '"]');
+      if (!row) return null;
+      const action = actionKey ? row.querySelector<HTMLElement>('[data-action-key="' + CSS.escape(actionKey) + '"]') : null;
+      if (action) return action;
+      row.tabIndex = -1;
+      return row;
     }, () => { returnState.current = undefined; });
   }, []);
 
   const openDocument = (projectId: string | null) => {
     if (!projectId) return;
     const root = sheetRef.current;
-    const row = pressed.current?.closest('li');
-    const invoiceId = row?.querySelector<HTMLElement>('[data-invoice-folio-opener]')?.dataset.invoiceFolioOpener;
-    const index = row ? Array.from(row.querySelectorAll('button')).indexOf(pressed.current as HTMLButtonElement) : -1;
+    const row = pressed.current?.closest<HTMLElement>('[data-invoice-row]');
+    const invoiceId = row?.dataset.invoiceRow;
+    const actionKey = pressed.current?.dataset.actionKey;
     rememberPaperOrigin(projectId, { path: '/desk', focusId: 'studio-door-accounts', studioOverlay: {
       overlay: 'books', filter: page, subject: folioId ?? undefined,
       scrollTop: root ? studioOverlayScroll(root).scrollTop : 0,
-      focusKey: folioId ? 'folio' : invoiceId ? invoiceId + ':' + index : undefined,
+      focusKey: folioId ? 'folio' : invoiceId ? invoiceId + ':' + (actionKey ?? '') : undefined,
     } });
     onClose();
     router.push('/doc/' + projectId);
