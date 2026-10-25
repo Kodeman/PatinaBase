@@ -43,6 +43,7 @@ export function RoomShell({
   measure = 'mx-auto max-w-[976px] px-4 sm:px-6',
   backTo,
   backLabel,
+  onBeforeReturn,
   children,
 }: {
   /** The Room's name: the Header line's `.t-d2` heading (e.g. "Resource
@@ -84,6 +85,7 @@ export function RoomShell({
    *  it). */
   backTo?: string;
   backLabel?: string;
+  onBeforeReturn?: (destination: string) => void;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -116,6 +118,7 @@ export function RoomShell({
         if (!backTo) clearRoomOrigin();
         // US-14 — back onto the paper the Room was opened from: a return, not an arrival.
         if (dest.startsWith('/doc/')) suppressNextArrival(dest);
+        onBeforeReturn?.(dest);
         router.push(dest);
       };
       const reduced =
@@ -129,7 +132,7 @@ export function RoomShell({
       leaveTimer.current = window.setTimeout(go, 380);
       return true;
     });
-  }, [router, backTo]);
+  }, [router, backTo, onBeforeReturn]);
 
   // Esc leaves the Room — but only after deeper overlays (the log strip and any
   // open sheet stop the event in the capture / document phase first).

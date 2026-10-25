@@ -63,6 +63,30 @@ test.describe('Library internal return', () => {
       await expect(room.getByRole('searchbox')).toHaveValue(NAME);
       await expect(room.getByRole('button', { name: 'Fold the shelf', exact: true })).toHaveAttribute('aria-expanded', 'true');
       await expect(opener).toBeFocused({ timeout: 10_000 });
+      // Exercise Next's URL synchronization AFTER the custom entry marker write.
+      await room.getByRole('searchbox').fill(NAME + ' 1');
+      await expect(room.locator('[data-library-exact-results]')).toContainText(NAME + ' 1');
+      await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe(NAME + ' 1');
+      await room.getByRole('searchbox').fill(NAME);
+      await expect(room.locator('[data-library-exact-results]')).toContainText(NAME);
+      await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
+      await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+      // A fixture link supplies the exact filtered address (the native Studio
+      // door has no filters). This is a fresh browser navigation, not a return.
+      await page.evaluate((href) => {
+        const link = document.createElement('a'); link.href = href;
+        link.textContent = 'Fresh filtered Library'; link.id = 'fresh-filtered-library';
+        document.body.append(link);
+      }, libraryUrl.href);
+      await page.locator('#fresh-filtered-library').focus();
+      await page.locator('#fresh-filtered-library').press('Enter');
+      await expect(room).toHaveAttribute('data-paper-renderer', 'round8', { timeout: 60_000 });
+      await expect(page).toHaveURL(libraryUrl.href);
+      await expect(room.locator('[data-library-exact-results]')).toContainText(NAME);
+      await expect(room.getByRole('button', { name: /^Show all \d+ pieces$/ })).toBeVisible();
+      await expect(opener).not.toBeFocused();
+      expect(await page.evaluate(() => history.state?.patinaLibraryEntry)).toBeUndefined();
       console.log('[C04b native readback]', JSON.stringify({ products: count(), filters: libraryUrl.search, history: 'replace-only filters; piece Back/Forward', viewport: page.viewportSize() }));
     } finally {
       psqlRun(`DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM products WHERE id::text LIKE '${PREFIX}%' AND (owner_user_id IS DISTINCT FROM '${DESIGNER}' OR name NOT LIKE '${NAME}%')), 'refuse foreign C04b product'; END $$; DELETE FROM products WHERE id::text LIKE '${PREFIX}%' AND owner_user_id='${DESIGNER}' AND name LIKE '${NAME}%';`);
