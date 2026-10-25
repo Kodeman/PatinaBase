@@ -283,10 +283,7 @@ export function RoughInTable({
     onRemove(row);
   }
 
-  /**
-   * The menu hands focus back to the row's `⋯` and the lens says what the
-   * server answered once it has (T-60a F4, F7): nothing is said before.
-   */
+  /** The lens hands focus to the settled destination, or back on refusal. */
   function moveRow(row: RoughInRow, roomId: string) {
     onMove(row, roomId);
   }
@@ -1104,7 +1101,8 @@ function RowMenu({
                           rooms={rooms}
                           currentRoomId={room.id}
                           onChoose={(roomId) => {
-                            close(true);
+                            // The source row will unmount when the move's refetch lands.
+                            close(false);
                             onMove(row, roomId);
                           }}
                           onClose={() => setMoving(false)}

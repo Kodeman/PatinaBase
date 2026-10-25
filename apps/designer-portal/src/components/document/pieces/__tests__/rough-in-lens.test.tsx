@@ -4,7 +4,7 @@
  * its hook, that undo calls restore, that the elevation pane is there, and
  * that nothing here buys, bills or releases. Fixture names are SPEC §4.2's.
  */
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { FfeRoomPlacement } from "@patina/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -610,6 +610,49 @@ describe("RoughInLens — at 1440 with the elevation pane open (F2)", () => {
 });
 
 describe("RoughInLens — focus and announcements (F4, F5)", () => {
+  it.each([false, true])("does not return focus to the source while a move is pending (phone=%s)", async (phone) => {
+    mockMatches.phone = phone;
+    mockState.lines = [L1];
+    let resolveMove!: (value: object) => void;
+    mockAssign.mockImplementation(() => new Promise((resolve) => { resolveMove = resolve; }));
+    const { user, refresh } = setup();
+    const source = within(livingTable()).getByRole("button", { name: "Acts for Custom cabinet" });
+    await user.click(source);
+    await user.click(screen.getByRole("menuitem", { name: "Move to room…" }));
+    await user.click(screen.getByRole("menuitem", { name: "Kitchen" }));
+    expect(source).not.toHaveFocus();
+    expect(screen.queryByRole("menu")).toBeNull();
+    await act(async () => { resolveMove({}); });
+    expect(source).not.toHaveFocus();
+    mockState.lines = [{ ...L1, project_room_id: KITCHEN }];
+    refresh();
+    await waitFor(() => expect(within(screen.getByRole("region", { name: "Kitchen" }))
+      .getByRole("button", { name: "Acts for Custom cabinet" })).toHaveFocus());
+  });
+
+  it.each([false, true])("returns focus to the source and shows the refusal when a move fails (phone=%s)", async (phone) => {
+    mockMatches.phone = phone;
+    mockState.lines = [L1];
+    let rejectMove!: (reason: Error) => void;
+    mockAssign.mockImplementation(() => new Promise((_resolve, reject) => { rejectMove = reject; }));
+    const { user, refresh } = setup();
+    const source = within(livingTable()).getByRole("button", { name: "Acts for Custom cabinet" });
+    await user.click(source);
+    await user.click(screen.getByRole("menuitem", { name: "Move to room…" }));
+    await user.click(screen.getByRole("menuitem", { name: "Kitchen" }));
+    expect(source).not.toHaveFocus();
+    const error = Object.assign(new Error("Labor moves with its piece."), { code: "23514" });
+    await act(async () => {
+      mockAssignState.isError = true;
+      mockAssignState.error = error;
+      rejectMove(error);
+    });
+    refresh();
+    await waitFor(() => expect(source).toHaveFocus());
+    expect(screen.getByRole("alert")).toHaveTextContent("Labor moves with its piece.");
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
   it.each([false, true])("focuses the moved line when placements arrive after lines (phone=%s)", async (phone) => {
     mockMatches.phone = phone;
     mockState.lines = [L1];
@@ -629,6 +672,7 @@ describe("RoughInLens — focus and announcements (F4, F5)", () => {
     await waitFor(() => expect(document.querySelector("[data-rough-in-announce]"))
       .toHaveTextContent("Moved Custom cabinet to Kitchen."));
     expect(within(livingTable()).getByRole("button", { name: "Acts for Custom cabinet" })).toBe(original);
+    expect(original).not.toHaveFocus();
     mockState.placements = [{ ...mockState.placements[0], projectRoomId: KITCHEN }];
     refresh();
     const moved = within(screen.getByRole("region", { name: "Kitchen" }))

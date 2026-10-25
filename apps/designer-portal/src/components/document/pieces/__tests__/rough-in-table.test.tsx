@@ -373,12 +373,12 @@ describe("RoughInTable row menu", () => {
     expect(items[0]).toHaveFocus();
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
     expect(props.onMove).toHaveBeenCalledWith(LIVING[0], "kitchen");
-    // T-60a F4/F7: nothing is said before the server answers (the lens says
-    // it), and the hand stays on the acted line, never the entry row.
+    // The lens owns focus after settlement; the source row is about to leave.
     expect(screen.getByRole("status")).not.toHaveTextContent(/Moved/);
     expect(
       screen.getByRole("button", { name: "Acts for Custom cabinet" }),
-    ).toHaveFocus();
+    ).not.toHaveFocus();
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("Move to room… works by touch, and Esc steps back out", async () => {
