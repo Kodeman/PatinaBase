@@ -92,6 +92,17 @@ BEGIN
       AND revision.designer_client_id IS NOT DISTINCT FROM pr.designer_client_id
       AND revision.studio_id IS NOT DISTINCT FROM pr.studio_id
       AND project.studio_id IS NOT DISTINCT FROM pr.studio_id
+      -- 00867 recorded-tenant seat rule, not person-pair co-membership.
+      AND ((project.studio_id IS NULL AND pr.designer_id = auth.uid())
+        OR EXISTS (
+          SELECT 1
+          FROM public.organization_members AS seat
+          JOIN public.organizations AS studio ON studio.id = seat.organization_id
+          WHERE seat.organization_id = project.studio_id
+            AND seat.user_id = auth.uid()
+            AND seat.status = 'active'
+            AND seat.role <> 'guest'
+            AND studio.status = 'active'))
       AND revision.status = 'accepted'
       AND revision.project_id IS NOT NULL
     ORDER BY revision.accepted_at DESC NULLS LAST,
