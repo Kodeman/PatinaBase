@@ -729,7 +729,7 @@ export function RoughInLens({
    * A move keeps focus on the line in its new room; a refusal leaves it on
    * the line's `⋯` and prints the named refusal (F7).
    */
-  function moveLine(row: RoughInRow, roomId: string) {
+  function moveLine(row: RoughInRow, roomId: string, sourcePlaceId: string) {
     if (!byId.has(row.id)) return;
     setNotice(null);
     const to = {
@@ -741,6 +741,8 @@ export function RoughInLens({
         if (refusal === null) setAnnouncement(text);
         if (movedIds.length > 0)
           requestFocus({ lineId: row.id, placeId: roomId });
+        else if (refusal !== null)
+          requestFocus({ lineId: row.id, placeId: sourcePlaceId });
       },
     );
   }
@@ -946,7 +948,7 @@ export function RoughInLens({
                 onAdd={(line) => addLine(placeItem, line)}
                 onUpdate={updateLine}
                 onRemove={(row) => removeLine(row, placeItem)}
-                onMove={moveLine}
+                onMove={(row, roomId) => moveLine(row, roomId, placeItem.id)}
                 onFill={(row) => openFill(row, placeItem)}
                 onAlsoPlace={(row) => openAlsoPlace(row, placeItem)}
                 onPaste={(text) =>
