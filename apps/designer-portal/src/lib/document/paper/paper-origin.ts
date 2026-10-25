@@ -40,25 +40,8 @@ export interface StudioOverlayState {
   focusKey?: string;
 }
 
-/** Stored convenience data is untrusted; malformed overlays return to the Desk. */
-export function parseStudioOverlay(value: unknown): StudioOverlayState | null {
-  if (!value || typeof value !== 'object') return null;
-  const held = value as Partial<StudioOverlayState>;
-  if (held.overlay !== 'books' && held.overlay !== 'post' && held.overlay !== 'search') return null;
-  for (const key of ['subject', 'filter', 'query', 'focusKey'] as const) {
-    if (held[key] !== undefined && typeof held[key] !== 'string') return null;
-  }
-  if (held.scrollTop !== undefined &&
-      (typeof held.scrollTop !== 'number' || !Number.isFinite(held.scrollTop) || held.scrollTop < 0)) return null;
-  return {
-    overlay: held.overlay,
-    ...(held.subject !== undefined ? { subject: held.subject } : {}),
-    ...(held.filter !== undefined ? { filter: held.filter } : {}),
-    ...(held.query !== undefined ? { query: held.query } : {}),
-    ...(held.scrollTop !== undefined ? { scrollTop: held.scrollTop } : {}),
-    ...(held.focusKey !== undefined ? { focusKey: held.focusKey } : {}),
-  };
-}
+export { parseStudioOverlay } from './desk-return';
+import { parseStudioOverlay } from './desk-return';
 
 export interface PaperOrigin extends Partial<StudioOverlayState> {
   /** The job this origin belongs to; another job's origin never answers. */
@@ -239,4 +222,51 @@ export function canReturnToPaperOrigin(origin: PaperOrigin): boolean {
   const previous = nav.entries().find((entry) => entry.index === nav.currentEntry!.index - 1);
   return previous?.key === origin.historyKey &&
     previous.url === new URL(paperOriginHref(origin), window.location.origin).href;
+}
+
+/** All three studio sheets keep their own scroll region; the paper never moves. */
+export function studioOverlayScroll(root: HTMLElement): HTMLElement {
+  return root.closest<HTMLElement>('[data-doc-sheet-scroll-region]') ?? root.querySelector<HTMLElement>('.cmd-scroll') ?? root;
+}
+
+/** One bounded landing, yielding to the reader while async rows arrive. */
+export function restoreStudioOverlay(root: HTMLElement, held: StudioOverlayState, target: () => HTMLElement | null, onRestored?: () => void): () => void {
+  const scroll = studioOverlayScroll(root);
+  let frame = 0;
+  let stopped = false;
+  const hands = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+  const stop = () => {
+    stopped = true;
+    cancelAnimationFrame(frame);
+    observer.disconnect();
+    clearTimeout(deadline);
+    hands.forEach((hand) => window.removeEventListener(hand, stop, true));
+    document.removeEventListener('focusin', onFocus, true);
+  };
+  const onFocus = (event: FocusEvent) => {
+    // Native sheet/palette open focus precedes this landing, not a reader move.
+    if (event.target !== scroll && event.target !== root && !(event.target instanceof HTMLElement && event.target.matches('[data-studio-search-input]'))) stop();
+  };
+  const land = (last = false) => {
+    if (stopped) return;
+    const row = target();
+    const top = held.scrollTop ?? 0;
+    if (!row || (!last && scroll.scrollHeight - scroll.clientHeight < top)) return;
+    stop();
+    row.focus({ preventScroll: true });
+    scroll.scrollTop = top;
+    onRestored?.();
+  };
+  const observer = new MutationObserver(() => land());
+  const deadline = window.setTimeout(() => { land(true); stop(); }, 3000);
+  hands.forEach((hand) => window.addEventListener(hand, stop, { capture: true, passive: true }));
+  document.addEventListener('focusin', onFocus, true);
+  // Let the native sheet's opening focus settle first.
+  frame = requestAnimationFrame(() => {
+    frame = requestAnimationFrame(() => {
+      observer.observe(root, { childList: true, subtree: true });
+      land();
+    });
+  });
+  return stop;
 }

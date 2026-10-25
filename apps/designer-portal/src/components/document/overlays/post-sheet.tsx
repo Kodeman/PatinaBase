@@ -26,7 +26,8 @@
  * the act site (R83), never a toast.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { rememberPaperOrigin, restoreStudioOverlay, studioOverlayScroll, parseStudioOverlay, type StudioOverlayState } from '@/lib/document/paper/paper-origin';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -65,8 +66,8 @@ const PAGES: { key: PostPage; label: string }[] = [
 ];
 
 /** Open the Post from anywhere in the document model (the sheet listens). */
-export function openPost() {
-  window.dispatchEvent(new CustomEvent('document:open-post'));
+export function openPost(studioReturn?: StudioOverlayState) {
+  window.dispatchEvent(new CustomEvent('document:open-post', { detail: studioReturn }));
 }
 
 export function PostSheet() {
@@ -74,6 +75,8 @@ export function PostSheet() {
   const qc = useQueryClient();
   // The bell's dot counts the Record's unread — so tapping it lands there.
   const [open, setOpen] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const returnState = useRef<StudioOverlayState | null>(null);
   const [page, setPage] = useState<PostPage>('record');
   const [markReadError, setMarkReadError] = useState<string | null>(null);
 
@@ -96,14 +99,24 @@ export function PostSheet() {
   useSheetSurfaceKey(open ? 'the-post' : null);
 
   useEffect(() => {
-    const onOpen = () => {
-      setPage('record');
+    const onOpen = (event: Event) => {
+      const held = parseStudioOverlay((event as CustomEvent).detail);
+      returnState.current = held?.overlay === 'post' ? held : null;
+      setPage(held?.filter === 'letters' ? 'letters' : 'record');
       setMarkReadError(null);
       setOpen(true);
     };
     window.addEventListener('document:open-post', onOpen);
     return () => window.removeEventListener('document:open-post', onOpen);
   }, []);
+
+  useEffect(() => {
+    const root = sheetRef.current;
+    const held = returnState.current;
+    if (!open || !root || !held) return;
+    returnState.current = null;
+    return restoreStudioOverlay(root, held, () => root.querySelector<HTMLElement>('[data-studio-post-key="' + CSS.escape(held.focusKey ?? '') + '"]'));
+  }, [open]);
 
   // The one dated ledger: both feeds merged, newest first.
   const record = useMemo(
@@ -190,7 +203,12 @@ export function PostSheet() {
     void markProcurementReadIds(unreadProcurementIds);
   }
 
-  const navigate = (href: string) => {
+  const navigate = (href: string, focusKey: string) => {
+    const docId = /^\/doc\/([^/?#]+)/.exec(href)?.[1];
+    if (docId) rememberPaperOrigin(docId, { path: '/desk', focusId: 'studio-door-the-post', studioOverlay: {
+      overlay: 'post', filter: page, subject: focusKey, focusKey,
+      scrollTop: sheetRef.current ? studioOverlayScroll(sheetRef.current).scrollTop : 0,
+    } });
     setOpen(false);
     if (href.startsWith('http')) {
       window.location.href = href;
@@ -204,13 +222,13 @@ export function PostSheet() {
       if (item.source === 'inbox') void markRead([item.id]);
       else void markProcurementReadIds([item.id]);
     }
-    if (item.row.href) navigate(item.row.href);
+    if (item.row.href) navigate(item.row.href, item.key);
   }
 
   function openLetter(m: InboxMessage) {
     // The People Room's Threads view marks the conversation read on open (its
     // own last_read_at path) — the Letter just carries the designer there.
-    navigate(letterHref(m));
+    navigate(letterHref(m), m.thread_id);
   }
 
   return (
@@ -222,7 +240,7 @@ export function PostSheet() {
       pageLabel={page === 'record' ? 'The Record' : 'Letters'}
       helpKey={DOCUMENT_SURFACE_KEYS.thePost}
     >
-      <div data-overlay-post className="mx-auto max-w-xl">
+      <div ref={sheetRef} data-overlay-post className="mx-auto max-w-xl">
         {/* Mark all read rides quietly under the head; the page links follow. */}
         {page === 'record' && unreadCount > 0 && (
           <div className="mb-1 flex justify-end">
@@ -336,6 +354,7 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
         onClick={onOpen}
         data-testid="post-record-row"
         data-overlay-post-row="record"
+        data-studio-post-key={item.key}
         data-cross-reference={isCrossRef ? 'true' : undefined}
         className="group block min-h-11 w-full px-1 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] motion-reduce:transition-none"
       >

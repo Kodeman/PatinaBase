@@ -10,6 +10,7 @@
  * real DOM click on the real DocumentAction opens the real CommandBar.
  */
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -1171,4 +1172,18 @@ describe('B03 — the palette a screen reader can drive', () => {
       screen.queryByRole('dialog', { name: 'Studio search' }),
     ).not.toBeInTheDocument();
   });
+});
+
+import { readPaperOrigin } from '@/lib/document/paper/paper-origin';
+it('remembers the selected search result with its query and list position', () => {
+  window.sessionStorage.clear();
+  mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
+  render(<><FindAnythingButton /><CommandBar /></>);
+  act(() => openCommandBar('Ellsworth'));
+  const row = screen.getAllByRole('option', { name: /Ellsworth Residence/ }).find((option) => option.dataset.studioSearchKey === 'doc:eng-1')!;
+  const scroll = row.closest('.cmd-scroll') as HTMLElement;
+  scroll.scrollTop = 37;
+  fireEvent.click(row);
+  expect(mockPush).toHaveBeenCalledWith('/doc/eng-1');
+  expect(readPaperOrigin('eng-1')).toMatchObject({ kind: 'studio-overlay', overlay: 'search', query: 'Ellsworth', subject: 'eng-1', focusKey: 'doc:eng-1', scrollTop: 37 });
 });
