@@ -85,7 +85,42 @@ function SpecEditor() {
   );
 }
 
-type Sheet = "editor" | "embedded";
+function PendingEditor() {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  const pending = useRef<Promise<void> | null>(null);
+  const registration = useRef<ReturnType<typeof registerBoardOwnerAutosave> | null>(null);
+  useEffect(() => {
+    const waitPending = () => pending.current ?? Promise.resolve();
+    const handle = registerBoardOwnerAutosave(OWNER, {
+      getSnapshot: () => ({ dirty: !!pending.current, flushing: !!pending.current, error: null }),
+      flush: waitPending,
+      waitPending,
+    });
+    registration.current = handle;
+    return handle.unregister;
+  }, []);
+  return <>
+    <input aria-label="Pending finish" value={value} onChange={(event) => setValue(event.target.value)}
+      onBlur={() => {
+        pending.current = mockMutateAsync(value).then(
+          () => { pending.current = null; registration.current?.notify(); },
+          (reason: unknown) => {
+            pending.current = null;
+            setError("The save was refused.");
+            registration.current?.notify();
+            throw reason;
+          },
+        );
+        // The pane handles its error; waitPending independently reports refusal.
+        void pending.current!.catch(() => {});
+        registration.current?.notify();
+      }} />
+    {error ? <p role="alert">{error}</p> : null}
+  </>;
+}
+
+type Sheet = "editor" | "embedded" | "pending";
 
 function Paper({
   withOpener = true,
@@ -126,7 +161,7 @@ function Paper({
             <p data-testid="address">
               {address.lens}|{address.room}|{address.line}
             </p>
-            <SpecEditor />
+            {sheet === "pending" ? <PendingEditor /> : <SpecEditor />}
             <button type="button">Save</button>
             <button type="button" onClick={() => navigate({ lens: "price" })}>
               Price lens
@@ -691,6 +726,180 @@ describe("UnfoldInstrument", () => {
     expect(flush).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["current entry", "held entry"])("a stale Navigation API %s follows no-API Back parity without guessing a history delta", async (stale) => {
+    const staleEntry = { key: "stale", index: 0, url: window.location.href };
+    const navigation = Object.defineProperty(Object.assign(new EventTarget(), {
+      entries: () => [staleEntry],
+    }), "currentEntry", {
+      get: () => stale === "current entry" ? staleEntry : { ...staleEntry, url: window.location.href },
+    });
+    Object.defineProperty(window, "navigation", { value: navigation, configurable: true });
+    try {
+      const flush = jest.fn().mockRejectedValue(new Error("The save failed."));
+      registerBoardOwnerAutosave(OWNER, {
+        getSnapshot: () => ({ dirty: true, flushing: false, error: "The save failed." }),
+        flush,
+      });
+      render(<Paper />);
+      const opener = screen.getByRole("button", { name: "Open sofa" });
+      fireEvent.click(opener);
+      if (stale === "current entry") expect(navigation.currentEntry.url).not.toBe(window.location.href);
+      else expect(navigation.entries()[0].url).not.toBe(window.location.href);
+      const length = window.history.length;
+      const go = jest.spyOn(window.history, "go");
+      const push = jest.spyOn(window.history, "pushState");
+      const replace = jest.spyOn(window.history, "replaceState");
+
+      fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(UNFOLD_UNSAVED_MESSAGE);
+      act(() => window.history.back());
+      await waitFor(() => expect(region()).toBeNull());
+      await settle();
+
+      expect(region()).toBeNull();
+      expect(window.location.search).toBe("?sheet=call");
+      expect(document.activeElement).toBe(opener);
+      expect(go).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
+      expect(window.history.length).toBe(length);
+      expect(flush).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (window as { navigation?: unknown }).navigation;
+    }
+  });
+
+  it.each(["absent", "stale"])("a late refusal after %s-API Back reveals the same inert pending pane with its draft and alert", async (api) => {
+    if (api === "stale") Object.defineProperty(window, "navigation", { configurable: true, value: Object.assign(new EventTarget(), {
+      currentEntry: { url: "https://example.test/stale", index: 0, key: "stale" }, entries: () => [],
+    }) });
+    let reject!: (reason: Error) => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    try {
+      render(<Paper sheet="pending" />);
+      fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+      const field = screen.getByRole("textbox", { name: "Pending finish" });
+      fireEvent.change(field, { target: { value: "Kept linen" } });
+      fireEvent.blur(field);
+      act(() => window.history.back());
+      await waitFor(() => expect(region()).toBeNull());
+      const retained = field.closest("section[hidden]");
+      expect(retained).toHaveAttribute("inert");
+      expect(screen.queryByRole("textbox", { name: "Pending finish" })).toBeNull();
+      await act(async () => { reject(new Error("refused")); });
+      const alert = await screen.findByRole("alert");
+      expect(screen.getByRole("textbox", { name: "Pending finish" })).toBe(field);
+      expect(field).toHaveValue("Kept linen");
+      expect(document.querySelectorAll('[aria-label="Pending finish"]')).toHaveLength(1);
+      await waitFor(() => expect(alert).toHaveFocus());
+      expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+      expect(window.location.search).toContain(`line=${LINE}`);
+    } finally {
+      delete (window as { navigation?: unknown }).navigation;
+    }
+  });
+
+  it("a retained older refusal cannot reopen a clean newer line after its fold", async () => {
+    let reject!: (reason: Error) => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    render(<Paper sheet="pending" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const older = screen.getByRole("textbox", { name: "Pending finish" });
+    fireEvent.change(older, { target: { value: "Older linen" } });
+    fireEvent.blur(older);
+    await back();
+    const otherLine = "0a9b8c7d-aaaa-4bbb-8ccc-ddddeeee0002";
+    act(() => openUnfold(
+      { kind: "pieces", lens: "spec", room: ROOM, line: otherLine },
+      { documentId: DOC, chapter: "ffe", room: ROOM, line: otherLine }, null,
+    ));
+    const newer = screen.getByRole("textbox", { name: "Pending finish" });
+    expect(newer).not.toBe(older);
+    await back();
+    // A clean pane has no write to recover, even while an older one is out.
+    expect(newer).not.toBeInTheDocument();
+    expect(older).toBeInTheDocument();
+    await act(async () => { reject(new Error("older refused")); });
+    expect(region()).toBeNull();
+    expect(older).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(window.location.search).toBe("?sheet=call");
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("a superseding line stays visible until the retained older refusal is disposed", async () => {
+    let reject!: (reason: Error) => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    render(<Paper sheet="pending" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const older = screen.getByRole("textbox", { name: "Pending finish" });
+    fireEvent.change(older, { target: { value: "Older linen" } });
+    fireEvent.blur(older);
+    await back();
+    const otherLine = "0a9b8c7d-aaaa-4bbb-8ccc-ddddeeee0002";
+    act(() => openUnfold(
+      { kind: "pieces", lens: "price", room: ROOM, line: otherLine },
+      { documentId: DOC, chapter: "ffe", room: ROOM, line: otherLine }, null,
+    ));
+    const newer = screen.getByRole("textbox", { name: "Pending finish" });
+    newer.focus();
+    expect(older.closest("section")).toHaveAttribute("hidden");
+    expect(older.closest("section")).toHaveAttribute("inert");
+    await act(async () => { reject(new Error("older refused")); });
+    expect(older).not.toBeInTheDocument();
+    expect(newer).toHaveFocus();
+    expect(newer).toHaveValue("");
+    expect(window.location.search).toContain(`line=${otherLine}`);
+    expect(window.location.search).toContain("lens=price");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("late-refusal alert focus waits for the active modal dialog to close", async () => {
+    let reject!: (reason: Error) => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    render(<Paper sheet="pending" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const field = screen.getByRole("textbox", { name: "Pending finish" });
+    fireEvent.change(field, { target: { value: "Kept linen" } });
+    fireEvent.blur(field);
+    await back();
+    await settle();
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.tabIndex = -1;
+    document.body.appendChild(dialog);
+    try {
+      dialog.focus();
+      await act(async () => { reject(new Error("refused")); });
+      const alert = await screen.findByRole("alert");
+      await settle();
+      expect(dialog).toHaveFocus();
+      expect(screen.getByRole("textbox", { name: "Pending finish" })).toBe(field);
+      expect(field).toHaveValue("Kept linen");
+      dialog.remove();
+      await waitFor(() => expect(alert).toHaveFocus());
+    } finally { dialog.remove(); }
+  });
+
+  it("disposes a hidden pending pane silently after late success", async () => {
+    let resolve!: () => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((done) => { resolve = done; }));
+    render(<Paper sheet="pending" />);
+    const opener = screen.getByRole("button", { name: "Open sofa" });
+    fireEvent.click(opener);
+    const field = screen.getByRole("textbox", { name: "Pending finish" });
+    fireEvent.change(field, { target: { value: "Saved linen" } });
+    fireEvent.blur(field);
+    act(() => window.history.back());
+    await waitFor(() => expect(field.closest("section")).toHaveAttribute("hidden"));
+    await act(async () => { resolve(); });
+    await waitFor(() => expect(field).not.toBeInTheDocument());
+    expect(region()).toBeNull();
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
   it("SQ-1901 F1: a held Back with no activation goes forward to its entry and goes on Back once", async () => {
     const browser = browserNavigation();
     try {
@@ -752,12 +961,12 @@ describe("UnfoldInstrument", () => {
     }
   });
 
-  it("a Back the Navigation API can cancel never moves, then goes on once the save lands", async () => {
+  it.each([["fresh", "saved"], ["stale", "saved"], ["stale", "failed"]])("%s API cross-route Back stays held until the save is %s", async (entry, outcome) => {
     // Its `navigate` event fires ahead of Next's popstate listener, which
     // unmounts the sheet on a Back to another route.
     const navigation = Object.assign(new EventTarget(), {
-      currentEntry: { index: 2, key: "standing" },
-      entries: () => [{ index: 0, key: "desk" }, { index: 2, key: "standing" }],
+      currentEntry: { index: 2, key: "standing", get url() { return entry === "stale" ? new URL("/desk", window.location.href).href : window.location.href; } },
+      entries: () => [{ index: 0, key: "desk", url: new URL("/desk", window.location.href).href }, { index: 2, key: "standing", url: window.location.href }],
     });
     Object.defineProperty(window, "navigation", {
       value: navigation,
@@ -774,7 +983,7 @@ describe("UnfoldInstrument", () => {
       return event.defaultPrevented;
     };
     try {
-      const { finish } = pendingBuffer();
+      const { finish, fail } = pendingBuffer();
       render(<Paper />);
       fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
       const unfolded = window.location.href;
@@ -788,6 +997,14 @@ describe("UnfoldInstrument", () => {
       expect(window.location.href).toBe(unfolded);
       expect(push).not.toHaveBeenCalled();
 
+      if (outcome === "failed") {
+        await act(async () => fail());
+        expect(await screen.findByRole("alert")).toHaveTextContent(UNFOLD_UNSAVED_MESSAGE);
+        expect(window.location.href).toBe(unfolded);
+        expect(region()).toBeInTheDocument();
+        expect(go).not.toHaveBeenCalled();
+        return;
+      }
       await act(async () => finish());
       await waitFor(() => expect(go).toHaveBeenCalledWith(-2));
       expect(go).toHaveBeenCalledTimes(1);
