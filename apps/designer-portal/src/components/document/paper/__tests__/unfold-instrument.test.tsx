@@ -85,7 +85,42 @@ function SpecEditor() {
   );
 }
 
-type Sheet = "editor" | "embedded";
+function PendingEditor() {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  const pending = useRef<Promise<void> | null>(null);
+  const registration = useRef<ReturnType<typeof registerBoardOwnerAutosave> | null>(null);
+  useEffect(() => {
+    const waitPending = () => pending.current ?? Promise.resolve();
+    const handle = registerBoardOwnerAutosave(OWNER, {
+      getSnapshot: () => ({ dirty: !!pending.current, flushing: !!pending.current, error: null }),
+      flush: waitPending,
+      waitPending,
+    });
+    registration.current = handle;
+    return handle.unregister;
+  }, []);
+  return <>
+    <input aria-label="Pending finish" value={value} onChange={(event) => setValue(event.target.value)}
+      onBlur={() => {
+        pending.current = mockMutateAsync(value).then(
+          () => { pending.current = null; registration.current?.notify(); },
+          (reason: unknown) => {
+            pending.current = null;
+            setError("The save was refused.");
+            registration.current?.notify();
+            throw reason;
+          },
+        );
+        // The pane handles its error; waitPending independently reports refusal.
+        void pending.current!.catch(() => {});
+        registration.current?.notify();
+      }} />
+    {error ? <p role="alert">{error}</p> : null}
+  </>;
+}
+
+type Sheet = "editor" | "embedded" | "pending";
 
 function Paper({
   withOpener = true,
@@ -126,7 +161,7 @@ function Paper({
             <p data-testid="address">
               {address.lens}|{address.room}|{address.line}
             </p>
-            <SpecEditor />
+            {sheet === "pending" ? <PendingEditor /> : <SpecEditor />}
             <button type="button">Save</button>
             <button type="button" onClick={() => navigate({ lens: "price" })}>
               Price lens
@@ -732,6 +767,54 @@ describe("UnfoldInstrument", () => {
     } finally {
       delete (window as { navigation?: unknown }).navigation;
     }
+  });
+
+  it.each(["absent", "stale"])("a late refusal after %s-API Back reveals the same inert pending pane with its draft and alert", async (api) => {
+    if (api === "stale") Object.defineProperty(window, "navigation", { configurable: true, value: Object.assign(new EventTarget(), {
+      currentEntry: { url: "https://example.test/stale", index: 0, key: "stale" }, entries: () => [],
+    }) });
+    let reject!: (reason: Error) => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    try {
+      render(<Paper sheet="pending" />);
+      fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+      const field = screen.getByRole("textbox", { name: "Pending finish" });
+      fireEvent.change(field, { target: { value: "Kept linen" } });
+      fireEvent.blur(field);
+      act(() => window.history.back());
+      await waitFor(() => expect(region()).toBeNull());
+      const retained = field.closest("section[hidden]");
+      expect(retained).toHaveAttribute("inert");
+      expect(screen.queryByRole("textbox", { name: "Pending finish" })).toBeNull();
+      await act(async () => { reject(new Error("refused")); });
+      const alert = await screen.findByRole("alert");
+      expect(screen.getByRole("textbox", { name: "Pending finish" })).toBe(field);
+      expect(field).toHaveValue("Kept linen");
+      expect(document.querySelectorAll('[aria-label="Pending finish"]')).toHaveLength(1);
+      await waitFor(() => expect(alert).toHaveFocus());
+      expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+      expect(window.location.search).toContain(`line=${LINE}`);
+    } finally {
+      delete (window as { navigation?: unknown }).navigation;
+    }
+  });
+
+  it("disposes a hidden pending pane silently after late success", async () => {
+    let resolve!: () => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((done) => { resolve = done; }));
+    render(<Paper sheet="pending" />);
+    const opener = screen.getByRole("button", { name: "Open sofa" });
+    fireEvent.click(opener);
+    const field = screen.getByRole("textbox", { name: "Pending finish" });
+    fireEvent.change(field, { target: { value: "Saved linen" } });
+    fireEvent.blur(field);
+    act(() => window.history.back());
+    await waitFor(() => expect(field.closest("section")).toHaveAttribute("hidden"));
+    await act(async () => { resolve(); });
+    await waitFor(() => expect(field).not.toBeInTheDocument());
+    expect(region()).toBeNull();
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
   });
 
   it("SQ-1901 F1: a held Back with no activation goes forward to its entry and goes on Back once", async () => {
