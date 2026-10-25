@@ -6,6 +6,7 @@ const JOB = 'f0180000-0000-4000-8000-000000000010';
 const ROOM = 'f0180000-0000-4000-8000-000000000011';
 
 async function expectMenuAboveRail(items: Locator) {
+  await expect(items.first()).toBeVisible();
   for (const item of await items.all()) {
     await expect.poll(() => item.evaluate((node) => {
       const r = node.getBoundingClientRect();
@@ -46,14 +47,27 @@ test.describe('phone Rough-in acts', () => {
           if (keyboard) { await item.focus(); await page.keyboard.press('Enter'); }
           else await item.tap();
         };
+        const openActs = async () => {
+          const trigger = acts();
+          await trigger.focus();
+          await trigger.evaluate((button) => {
+            const body = button.closest('[data-drafting-stock]')!.querySelector('main, section[aria-labelledby]')!;
+            const rail = document.querySelector('[data-testid="mobile-bar"]')!.getBoundingClientRect();
+            const bottom = Math.min(body.getBoundingClientRect().bottom, rail.top);
+            body.scrollTop += button.getBoundingClientRect().bottom - bottom + 8;
+          });
+          if (keyboard) await page.keyboard.press('Enter');
+          else await trigger.tap();
+        };
         for (const action of ['Fill with a product', 'Also place in…', 'Remove']) {
-          await activate(acts());
+          await openActs();
           await expectMenuAboveRail(page.getByRole('menuitem'));
           await activate(page.getByRole('menuitem', { name: action, exact: true }));
           if (action === 'Remove') {
             await expect.poll(() => rowRoom()).toBe('');
             await activate(sheet.getByRole('button', { name: 'Undo', exact: true }));
             await expect.poll(() => rowRoom()).toBe(ROOM);
+            await expect(acts()).toBeVisible();
           } else {
             const tool = sheet.locator(`[data-rough-in-tool="${action.startsWith('Fill') ? 'fill' : 'alsoPlace'}"]`);
             await expect(tool).toBeVisible();
@@ -61,7 +75,7 @@ test.describe('phone Rough-in acts', () => {
           }
         }
         for (const room of ['Living Room', 'Dining Room', 'Bedroom']) {
-          await activate(acts());
+          await openActs();
           await activate(page.getByRole('menuitem', { name: 'Move to room…', exact: true }));
           await expectMenuAboveRail(page.getByRole('menuitem'));
           const menu = page.getByRole('menu', { name: 'Move to room', exact: true });
@@ -72,10 +86,13 @@ test.describe('phone Rough-in acts', () => {
           } else {
             const target = room === 'Dining Room' ? 'f0180000-0000-4000-8000-000000000012' : 'f0180000-0000-4000-8000-000000000013';
             await expect.poll(() => rowRoom()).toBe(target);
-            await activate(acts());
+            await expect(sheet.getByRole('region', { name: room, exact: true }).getByRole('button', { name: `Acts for ${name}`, exact: true })).toBeVisible();
+            await expect(acts()).toBeFocused();
+            await openActs();
             await activate(page.getByRole('menuitem', { name: 'Move to room…', exact: true }));
             await activate(page.getByRole('menu', { name: 'Move to room', exact: true }).getByRole('menuitem', { name: 'Living Room', exact: true }));
             await expect.poll(() => rowRoom()).toBe(ROOM);
+            await expect(acts()).toBeFocused();
           }
         }
       }
