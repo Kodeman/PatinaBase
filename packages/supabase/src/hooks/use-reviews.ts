@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { boundedIn } from '../lib/bounded-in';
 import { emailDeliveryKeys } from './use-email-delivery';
 
 const getSupabase = () => createBrowserClient();
@@ -242,19 +243,18 @@ export function useCompletedProjectsWithoutReview() {
 
       const dcPromise =
         designerIds.length > 0 && clientIds.length > 0
-          ? supabase
+          ? boundedIn(clientIds as string[], (chunk) => supabase
               .from('designer_clients')
               .select(
                 `id, designer_id, client_id, client_email, client_name,
                  client:profiles!client_id(id, full_name, email)`
               )
               .in('designer_id', designerIds)
-              .in('client_id', clientIds)
-          : Promise.resolve({ data: [], error: null });
+              .in('client_id', chunk))
+          : Promise.resolve([]);
 
-      const [reviewsRes, dcRes] = await Promise.all([reviewsPromise, dcPromise]);
+      const [reviewsRes, clients] = await Promise.all([reviewsPromise, dcPromise]);
       if (reviewsRes.error) throw reviewsRes.error;
-      if (dcRes.error) throw dcRes.error;
 
       const reviewedIds = new Set(
         ((reviewsRes.data ?? []) as { project_id: string }[]).map((r) => r.project_id)
@@ -263,7 +263,7 @@ export function useCompletedProjectsWithoutReview() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dcByPair = new Map<string, any>();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const dc of (dcRes.data ?? []) as any[]) {
+      for (const dc of clients as any[]) {
         if (dc.designer_id && dc.client_id) {
           dcByPair.set(`${dc.designer_id}|${dc.client_id}`, dc);
         }
