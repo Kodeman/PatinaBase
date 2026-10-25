@@ -104,6 +104,38 @@ test.describe('phone Rough-in acts', () => {
       await page.screenshot({ path: info.outputPath('phone-menu-actions.png') });
       expect(rowRoom()).toBe(ROOM);
     });
+
+    test(`short viewport contains and scrolls the expanded menu${legacy ? ' @renderer-off' : ''}`, async ({ authenticatedPage: page }, info) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width: info.project.name === 'webkit-iphone' ? 390 : 320, height: 664 });
+      await page.goto(legacy ? `/doc/${JOB}/pieces?lens=rough&room=${ROOM}` : `/doc/${JOB}?unfold=pieces&lens=rough&room=${ROOM}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+      const sheet = page.getByTestId('build-room');
+      await expect(sheet).toBeVisible({ timeout: 60_000 });
+      if (!legacy) await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/, { timeout: 30_000 });
+      const trigger = sheet.getByRole('button', { name: 'Acts for F01 Living Room selection 36', exact: true });
+      await trigger.click();
+      await page.getByRole('menuitem', { name: 'Move to room…', exact: true }).click();
+      await page.setViewportSize({ width: info.project.name === 'webkit-iphone' ? 390 : 320, height: 320 });
+      const menu = page.getByRole('menu', { name: 'Acts for F01 Living Room selection 36', exact: true });
+      await expect.poll(() => menu.evaluate((node) => {
+        const r = node.getBoundingClientRect();
+        const viewport = window.visualViewport!;
+        const rail = document.querySelector('[data-testid="mobile-bar"]')!.getBoundingClientRect();
+        return { fits: r.top >= viewport.offsetTop && r.bottom <= Math.min(viewport.offsetTop + viewport.height, rail.top), scrolls: node.scrollHeight > node.clientHeight };
+      }), { message: 'Expanded menu fits the short visual viewport above the rail and scrolls internally' }).toEqual({ fits: true, scrolls: true });
+      for (const item of await menu.getByRole('menuitem').all()) {
+        await item.focus();
+        await expectMenuAboveRail(item);
+      }
+      const here = menu.getByRole('menuitem', { name: /Living Room/ });
+      await here.scrollIntoViewIfNeeded();
+      await here.tap();
+      await expect(page.getByRole('menu', { name: 'Move to room', exact: true })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+      await page.screenshot({ path: info.outputPath('short-viewport-menu.png') });
+    });
   }
 });
 

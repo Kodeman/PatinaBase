@@ -977,9 +977,7 @@ function RowMenu({
   const stock = buttonRef.current?.closest<HTMLElement>(
     "[data-drafting-stock]",
   );
-  const boundary = stock?.querySelector<HTMLElement>(
-    "main, section[aria-labelledby]",
-  );
+  const railSpace = stock ? parseFloat(getComputedStyle(stock).paddingBottom) || 0 : 0;
 
   return (
     <Popover.Root
@@ -1010,8 +1008,8 @@ function RowMenu({
               asChild
               align="end"
               sideOffset={4}
-              collisionBoundary={boundary}
-              collisionPadding={8}
+              collisionBoundary={stock}
+              collisionPadding={{ top: 8, right: 8, bottom: railSpace + 8, left: 8 }}
               sticky="always"
               onOpenAutoFocus={(event) => {
                 event.preventDefault();
@@ -1033,7 +1031,7 @@ function RowMenu({
                 // press blurs the focused item to nothing, the blur closes the menu,
                 // and the item is gone before its click (T-60a F3).
                 onMouseDown={(event) => event.preventDefault()}
-                className="z-20 w-[280px] max-w-[var(--radix-popover-content-available-width)] border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left outline-none"
+                className="z-20 max-h-[var(--radix-popover-content-available-height)] w-[280px] max-w-[var(--radix-popover-content-available-width)] overflow-y-auto border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left outline-none"
               >
                 {MENU_ITEMS.map(({ act, label: word }, i) => {
                   const gate = row.gates?.[act];
