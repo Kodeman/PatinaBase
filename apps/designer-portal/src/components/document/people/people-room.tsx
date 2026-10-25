@@ -54,6 +54,7 @@ import type { PeopleView, PeopleViewProps } from "./types";
 import type { PeopleDirectorySeat } from "@patina/supabase";
 import {
   EngineNudgeLine,
+  PEOPLE_SUB_ROOMS,
   SubRoomFilters,
   peopleSubRoomOf,
   peopleViewFromParam,
@@ -63,6 +64,17 @@ import { useDocumentSurface } from "@/lib/help-system/use-document-surface";
 import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { useMobilePrimaryAction } from "../mobile/mobile-shell";
+import { usePaperRenderer } from "@/hooks/use-paper-renderer";
+import { rememberPaperOrigin } from "@/lib/document/paper/paper-origin";
+
+const PEOPLE_MEANINGS = [
+  ["Saved contact", "A name and ways to reach someone in the studio’s directory. Saving a contact grants no job access."],
+  ["Trade account", "The studio’s commercial relationship with a firm. An account is not a job appointment or permission to buy."],
+  ["Appointment", "A recorded seat on a particular job, with its own role and dates. A directory role does not appoint someone."],
+  ["Permitted work copy", "The specific work shared with a recipient. A copy is not access to the whole job or permission to change it."],
+  ["Consent", "Permission for a particular communication channel. Consent does not confer job authority."],
+  ["Authority", "An explicit grant for a particular act, subject to its limits, expiry and revocation. Neither a contact nor an appointment creates it."],
+] as const;
 
 // R21 dissolve — `/people?view=<key>` still receives every permanent redirect
 // off the retired zone tree. `peopleViewFromParam` owns that stable key map.
@@ -73,6 +85,8 @@ import { useMobilePrimaryAction } from "../mobile/mobile-shell";
 export function PeopleRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.people); // R89 — scope help to the People room
   const router = useRouter();
+  const { renderer } = usePaperRenderer();
+  const round8 = renderer === "round8";
   // US-28 — the Room opens on the view its address names (a sub-room walked
   // to from More or ⌘K), so the address writer below never sees a stale
   // "directory" on the first commit and strips `?view=` before it is read.
@@ -219,6 +233,7 @@ export function PeopleRoom() {
   const openDirectoryPerson = useCallback((id: string, role: PartyRole) => {
     setView("directory");
     if (isFieldRosterRole(role)) {
+      answeredCardRef.current.person = id;
       setOpenParty({ id, role });
       return;
     }
@@ -289,7 +304,6 @@ export function PeopleRoom() {
         return;
       }
       deepLinkHandledRef.current = true;
-      answeredCardRef.current.person = person;
       openDirectoryPerson(person, resolved);
     } else if (firm) {
       // `?firm=` names a company card by its own rolodex id — the same shape
@@ -297,7 +311,6 @@ export function PeopleRoom() {
       // Same wait, and the same forward resolution (PR-o).
       if (!all) return;
       deepLinkHandledRef.current = true;
-      answeredCardRef.current.firm = firm;
       setView("directory");
       if (all.some((p) => p.person_id === firm)) setOpenFirm(firm);
       else setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
@@ -431,23 +444,25 @@ export function PeopleRoom() {
     setPendingThreadId(null);
     setNotice(null);
     if (person) {
-      answered.person = person;
       setOpenFirm(null);
       const row = all.find((p) => p.person_id === person);
       if (row) {
         openDirectoryPerson(person, row.role);
       } else {
+        answered.person = person;
         setView("directory");
         setDeepLinkUnresolved({ kind: "person", id: person, role: null });
       }
     } else if (firm) {
-      answered.firm = firm;
       setOpenPerson(null);
       setView("directory");
       if (all.some((p) => p.person_id === firm)) setOpenFirm(firm);
-      else setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
+      else {
+        answered.firm = firm;
+        setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
+      }
     }
-  }, [personParam, firmParam, all, openDirectoryPerson]);
+  }, [personParam, firmParam, all, openDirectoryPerson, openPerson?.id, openFirm]);
 
   useEffect(() => {
     if (!deepLinkHandledRef.current) return;
@@ -596,6 +611,12 @@ export function PeopleRoom() {
       return;
     }
     if (seat.project_id) {
+      if (round8) {
+        rememberPaperOrigin(seat.project_id, {
+          path: "/people",
+          search: window.location.search,
+        });
+      }
       router.push(`/doc/${encodeURIComponent(seat.project_id)}?sheet=call`);
       return;
     }
@@ -710,9 +731,14 @@ export function PeopleRoom() {
     </DocumentAction>
   );
 
+  if (renderer === "pending") {
+    return <p role="status" className={`${measure} t-body py-8`}>Opening People…</p>;
+  }
+
   return (
+    <div data-paper-renderer={round8 ? "round8" : undefined} data-people-renderer={renderer}>
     <RoomShell
-      title={subRoom ? subRoom.name : "Studio contacts"}
+      title={subRoom ? subRoom.name : round8 ? "People" : "Studio contacts"}
       topLevel
       measure={measure}
       heading={
@@ -730,6 +756,12 @@ export function PeopleRoom() {
               {subRoom.name}
             </h1>
           </>
+        ) : round8 ? (
+          <div className="min-w-0 py-3">
+            <p className="t-meta uppercase tracking-[0.12em] text-[var(--ink-subtle)]">The studio / relationships</p>
+            <h1 className="m-0 font-heading text-[36px] font-normal leading-tight text-[var(--text-primary)]">People</h1>
+            <p className="t-body-sm mt-2 max-w-[60ch]">The people and firms around the work. Their appointments, shared work and authority stay with each job.</p>
+          </div>
         ) : undefined
       }
       count={
@@ -777,6 +809,34 @@ export function PeopleRoom() {
         data-people-sub-room={subRoom?.key}
         className={measure}
       >
+        {round8 && (
+          <>
+            <nav aria-label="People resources" className="flex flex-wrap gap-x-5 gap-y-1 border-b border-[var(--border-default)] py-3">
+              {[{ key: "directory", name: "Directory" }, ...PEOPLE_SUB_ROOMS.flatMap((room) => room.views)].map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  aria-current={view === option.key && !recordOpen ? "page" : undefined}
+                  className="t-body-sm min-h-11 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] aria-[current=page]:underline"
+                  onClick={() => nav.goView(option.key as PeopleView)}
+                >
+                  {option.name}
+                </button>
+              ))}
+            </nav>
+            <details className="border-b border-[var(--border-default)] py-3">
+              <summary className="t-body-sm min-h-11 cursor-pointer content-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]">Contacts, accounts and permissions — different records</summary>
+              <dl className="my-4 grid gap-x-8 gap-y-4 min-[600px]:grid-cols-2 min-[1180px]:grid-cols-3">
+                {PEOPLE_MEANINGS.map(([term, meaning]) => (
+                  <div key={term}>
+                    <dt className="t-body-sm font-medium">{term}</dt>
+                    <dd className="t-body-sm m-0 mt-1 max-w-[55ch] text-[var(--ink-subtle)]">{meaning}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          </>
+        )}
         {!recordOpen && !subRoom && (
           <AskBar value={ask} onChange={setAsk} onAsk={askEngine} />
         )}
@@ -841,5 +901,6 @@ export function PeopleRoom() {
         {announcement}
       </p>
     </RoomShell>
+    </div>
   );
 }
