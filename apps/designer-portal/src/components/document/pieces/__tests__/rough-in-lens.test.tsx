@@ -340,6 +340,8 @@ describe("RoughInLens — the hooks", () => {
     expect(Object.fromEntries(destination.searchParams)).toEqual({
       projectId: PROJECT,
       roomId: LIVING,
+      assignmentScope: "room",
+      fill: JSON.stringify({ placeholderSelectionId: "l3", assignmentScope: "room", roomId: LIVING, quantity: 2, itemType: "fixed", disposition: "candidate" }),
       q: "knob",
       returnTo: "/doc/doc-1?unfold=pieces&lens=rough-in&room=room-living#ffe",
     });
@@ -896,4 +898,24 @@ it("round-8 rough reading keeps the existing instrument", () => {
   expect(reading).toHaveClass("hidden", "[[data-paper-renderer=round8]_&]:block");
   expect(mockBuild).not.toHaveBeenCalled();
   expect(mockBatch).not.toHaveBeenCalled();
+});
+
+it("full Library carries the same selected allowance Fill payload as inline", async () => {
+  mockState.lines = [line("a1", "Pendant allowance", {
+    item_type: "allowance", quantity: 4, assignment_scope: "throughout",
+    project_room_id: null, design_disposition: "selected",
+    budget_min_cents: 20000, budget_max_cents: 60000,
+  })];
+  const { user } = setup();
+  await user.click(screen.getByRole("button", { name: "Acts for Pendant allowance" }));
+  await user.click(screen.getByRole("menuitem", { name: "Fill with a product" }));
+  await user.type(screen.getByRole("combobox", { name: "Fill Pendant allowance with a product" }), "knob");
+  await user.click(await screen.findByRole("option", { name: /Search.*Library/i }));
+  const params = new URL(mockPush.mock.calls[0][0], window.location.origin).searchParams;
+  expect(params.get("assignmentScope")).toBe("throughout");
+  expect(JSON.parse(params.get("fill")!)).toEqual({
+    placeholderSelectionId: "a1", assignmentScope: "throughout", roomId: null,
+    quantity: 4, itemType: "allowance", budgetMinCents: 20000, budgetMaxCents: 60000,
+    disposition: "selected",
+  });
 });
