@@ -173,7 +173,9 @@ for (const fill of [true, false]) {
   test(fill ? 'full Library fills the same selected four-unit allowance and legacy Pieces opens that line' : 'full Library add from Throughout remains Throughout', async ({ authenticatedPage: page }, testInfo) => {
     test.setTimeout(240_000);
     expect(count()).toBe('0');
-    psqlRun(readFileSync(path.join(__dirname, 'configured-placement-fixture.sql'), 'utf8'));
+    // The actor's command receipts outlive each test's project/item cleanup.
+    psqlRun(readFileSync(path.join(__dirname, 'configured-placement-fixture.sql'), 'utf8')
+      .replace('c04-initial-need', `c04-${testInfo.testId}-${testInfo.retry}`));
     try {
       const placeholder = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}';`);
       psqlRun(`UPDATE public.project_ffe_items SET project_room_id=NULL, assignment_scope='throughout', quantity=4, item_type='allowance', budget_min_cents=20000, budget_max_cents=60000, design_disposition='selected' WHERE id='${placeholder}';`);
