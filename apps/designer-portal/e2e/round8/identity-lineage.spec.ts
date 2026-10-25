@@ -85,6 +85,7 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
       await expect(chapter).toContainText('F02 revised agreement: preserve the piano alcove.');
       await expect(chapter).not.toContainText('F02 original agreement: retain the piano.');
     }
+    expect(psqlScalar(`SELECT count(*) FROM public.proposals WHERE id IN ('${id('23')}', '${id('24')}') AND studio_id = 'f0180000-0000-4000-8000-000000000001'`)).toBe('2');
     expect(psqlScalar(`SELECT proposal_id FROM public.projects WHERE id = '${id('17')}'`)).toBe(id('24'));
     expect(psqlScalar(`SELECT project_id IS NULL FROM public.proposals WHERE id = '${id('23')}'`)).toBe('t');
   });
