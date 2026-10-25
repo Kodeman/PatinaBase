@@ -32,6 +32,7 @@ export function FullScreenViewerShell({
   showHeader = true,
   actionKey = 'close-full-screen-viewer',
   contentClassName,
+  returnFocusTo,
 }: {
   title: string;
   meta?: string;
@@ -41,15 +42,21 @@ export function FullScreenViewerShell({
   showHeader?: boolean;
   actionKey?: string;
   contentClassName?: string;
+  returnFocusTo?: HTMLElement | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef(onClose);
+  const returnFocusRef = useRef(returnFocusTo);
   const titleId = useId();
 
   useEffect(() => {
     closeRef.current = onClose;
   }, [onClose]);
+
+  useEffect(() => {
+    returnFocusRef.current = returnFocusTo;
+  }, [returnFocusTo]);
 
   useEffect(() => {
     const activeElement = document.activeElement;
@@ -80,7 +87,9 @@ export function FullScreenViewerShell({
       window.cancelAnimationFrame(focusFrame);
       document.removeEventListener('keydown', onKeyDown, true);
       unlockBodyScroll();
-      const focusTarget = restoreRef.current;
+      const focusTarget = returnFocusRef.current?.isConnected
+        ? returnFocusRef.current
+        : restoreRef.current;
       restoreRef.current = null;
       if (!focusTarget?.isConnected) return;
       window.requestAnimationFrame(() => {
