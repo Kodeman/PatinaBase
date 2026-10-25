@@ -26,7 +26,8 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   `));
 
   // Cold next-dev compilation can full-reload the active Desk while WebKit is
-  // navigating away. Compile both authenticated entries before any browser owns
-  // an HMR connection; the tests still perform their real reads and arrivals.
-  await warmAuthenticatedRoutes(config, ['/desk', '/doc/f0180000-0000-4000-8000-000000000010']);
+  // navigating away. Compile the entries before any browser owns an HMR
+  // connection; the tests still perform their real reads and arrivals.
+  const document = '/doc/f0180000-0000-4000-8000-000000000010';
+  await warmAuthenticatedRoutes(config, ['/desk', document, `${document}/pieces`, '/library']);
 }

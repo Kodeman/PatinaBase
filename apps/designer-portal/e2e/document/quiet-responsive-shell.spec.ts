@@ -2,6 +2,7 @@ import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
 import { adminDb } from "../helpers/supabase-admin";
 import { quiet, scrollTo, settle } from "../helpers/lens";
 import { psqlRun, psqlScalar } from "../helpers/psql";
+import { warmAuthenticatedRoutes } from "../helpers/warm-authenticated-routes";
 
 const SENT_PROPOSAL_ID = "b0000000-0000-0000-0000-000000000002";
 /**
@@ -15,6 +16,14 @@ const SENT_PROPOSAL_ID = "b0000000-0000-0000-0000-000000000002";
 const DRAFT_PROPOSAL_ID = "d0c10000-0000-0000-0000-0000000000b2";
 
 test.describe.configure({ mode: "serial" });
+
+test.beforeAll(async ({}, testInfo) => {
+  // Compile before a browser connects to HMR, so a cold document cannot reload its Desk mid-navigation.
+  await warmAuthenticatedRoutes(testInfo.config, [
+    "/desk",
+    `/doc/${SENT_PROPOSAL_ID}`,
+  ]);
+});
 
 async function openDocument(page: AuthenticatedPage, width: number) {
   await page.setViewportSize({ width, height: 900 });
