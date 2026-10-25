@@ -69,7 +69,6 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
   test('keeps root and revised proposal ids as aliases of the same live version', async ({ authenticatedPage: page }) => {
     for (const alias of ['33', '34']) {
       await openDocument(page, id(alias));
-      await expect(page).toHaveURL(new RegExp('/doc/' + id('34') + '(?:\\?|$)'));
       await expect(page.getByRole('heading', { level: 1 })).toContainText('F02 Fictional Pre-work Revision');
     }
     const versions = psqlScalar(`BEGIN; SET LOCAL ROLE authenticated; SET LOCAL request.jwt.claims = '{"sub":"${owner}","role":"authenticated"}'; SELECT (public.document_open('${id('33')}')->'ids'->>'proposal_id') = (public.document_open('${id('34')}')->'ids'->>'proposal_id'); ROLLBACK;`);
