@@ -62,6 +62,7 @@ import {
   isProposalAutosaveSnapshotClean,
   subscribeToProposalAutosaves,
   waitPendingBoardOwnerAutosaves,
+  type ProposalAutosaveHandle,
   type ProposalAutosaveSnapshot,
 } from "@/lib/proposal-autosave-registry";
 
@@ -388,6 +389,7 @@ export function UnfoldInstrument({
   const activeSession = useRef<{ id: number; address: UnfoldAddress } | null>(null);
   const nextSession = useRef(0);
   const recoverySequence = useRef(0);
+  const retainedWrites = useRef(new Set<ProposalAutosaveHandle>());
   const recovering = useRef<number | null>(null);
   const recoveryFocus = useRef(false);
   const mounted = useRef(false);
@@ -412,7 +414,7 @@ export function UnfoldInstrument({
     activeSession.current = null;
     if (!previous) return;
     const pending = ownerKind && ownerId
-      ? waitPendingBoardOwnerAutosaves({ kind: ownerKind, id: ownerId })
+      ? waitPendingBoardOwnerAutosaves({ kind: ownerKind, id: ownerId }, retainedWrites.current)
       : null;
     if (!pending) {
       setSessions((held) => held.filter((entry) => entry.id !== previous.id));

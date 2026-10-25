@@ -124,14 +124,17 @@ export function registerBoardOwnerAutosave(
   return registerProposalAutosave(owner, handle);
 }
 
-/** Capture only this owner's currently flushing, explicitly wait-only handles. */
+/** Capture in-flight writes once per retaining instrument, never flushing edits. */
 export function waitPendingBoardOwnerAutosaves(
   owner: BoardOwnerRef,
+  retained = new Set<ProposalAutosaveHandle>(),
 ): Promise<PromiseSettledResult<void>[]> | null {
   const handles = [...(handlesByProposal.get(autosaveOwnerKey(owner))?.values() ?? [])]
-    .filter((handle) => handle.waitPending && handle.getSnapshot().flushing);
+    .filter((handle) => !retained.has(handle) && handle.waitPending && handle.getSnapshot().flushing);
   if (handles.length === 0) return null;
-  return Promise.allSettled(handles.map((handle) => handle.waitPending!()));
+  for (const handle of handles) retained.add(handle);
+  return Promise.allSettled(handles.map((handle) => handle.waitPending!()))
+    .finally(() => { for (const handle of handles) retained.delete(handle); });
 }
 
 export function subscribeToProposalAutosaves(

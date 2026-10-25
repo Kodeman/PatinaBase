@@ -43,7 +43,7 @@ jest.mock('../../hooks/use-feature-flags', () => ({
 }));
 
 import { waitFor } from '@testing-library/react';
-import { nextSubjectQueryClient, queryClient, retireQueryClient } from '../react-query';
+import { enterInlineErrorSurface, nextSubjectQueryClient, queryClient, retireQueryClient } from '../react-query';
 import {
   firedOn,
   resetTeachingBoundaries,
@@ -60,6 +60,42 @@ describe('React Query error surfaces', () => {
     mockLogError.mockClear();
     mockIsAuthError.mockReset().mockReturnValue(false);
     mockHandleAuthExpiry.mockReset().mockReturnValue(false);
+  });
+
+  it.each([
+    ['/desk', undefined, true],
+    ['/doc/other-job', 'inline', true],
+    ['/doc/job-1?unfold=pieces', undefined, false],
+    ['/doc/job-1/pieces', 'inline', false],
+    ['/desk', 'silent', false],
+  ] as const)('late job refusal at %s with %s metadata toasts=%s', async (destination, errorSurface, toasts) => {
+    const original = window.location.href;
+    window.history.replaceState(null, '', '/doc/job-1?unfold=pieces');
+    const leaveInlineSurface = enterInlineErrorSurface();
+    const failure = new Error('late spec refusal');
+    let reject!: (reason: Error) => void;
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => { started = resolve; });
+    const pending = new Promise<void>((_resolve, fail) => { reject = fail; });
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      mutationKey: ['late-spec-write'],
+      meta: errorSurface ? { errorSurface } : undefined,
+      mutationFn: () => { started(); return pending; },
+      retry: false,
+    });
+    const result = mutation.execute(undefined).catch((error: unknown) => error);
+    try {
+      await ready;
+      window.history.replaceState(null, '', destination);
+      reject(failure);
+      expect(await result).toBe(failure);
+      expect(mockLogError).toHaveBeenCalled();
+      if (toasts) expect(mockShowErrorToast).toHaveBeenCalledWith(failure);
+      else expect(mockShowErrorToast).not.toHaveBeenCalled();
+    } finally {
+      leaveInlineSurface();
+      window.history.replaceState(null, '', original);
+    }
   });
 
   it('logs but does not toast a query explicitly marked as a silent background lookup', async () => {

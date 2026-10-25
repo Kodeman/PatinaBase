@@ -799,6 +799,89 @@ describe("UnfoldInstrument", () => {
     }
   });
 
+  it("a retained older refusal cannot reopen a clean newer line after its fold", async () => {
+    let reject!: (reason: Error) => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    render(<Paper sheet="pending" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const older = screen.getByRole("textbox", { name: "Pending finish" });
+    fireEvent.change(older, { target: { value: "Older linen" } });
+    fireEvent.blur(older);
+    await back();
+    const otherLine = "0a9b8c7d-aaaa-4bbb-8ccc-ddddeeee0002";
+    act(() => openUnfold(
+      { kind: "pieces", lens: "spec", room: ROOM, line: otherLine },
+      { documentId: DOC, chapter: "ffe", room: ROOM, line: otherLine }, null,
+    ));
+    const newer = screen.getByRole("textbox", { name: "Pending finish" });
+    expect(newer).not.toBe(older);
+    await back();
+    // A clean pane has no write to recover, even while an older one is out.
+    expect(newer).not.toBeInTheDocument();
+    expect(older).toBeInTheDocument();
+    await act(async () => { reject(new Error("older refused")); });
+    expect(region()).toBeNull();
+    expect(older).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(window.location.search).toBe("?sheet=call");
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("a superseding line stays visible until the retained older refusal is disposed", async () => {
+    let reject!: (reason: Error) => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    render(<Paper sheet="pending" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const older = screen.getByRole("textbox", { name: "Pending finish" });
+    fireEvent.change(older, { target: { value: "Older linen" } });
+    fireEvent.blur(older);
+    await back();
+    const otherLine = "0a9b8c7d-aaaa-4bbb-8ccc-ddddeeee0002";
+    act(() => openUnfold(
+      { kind: "pieces", lens: "price", room: ROOM, line: otherLine },
+      { documentId: DOC, chapter: "ffe", room: ROOM, line: otherLine }, null,
+    ));
+    const newer = screen.getByRole("textbox", { name: "Pending finish" });
+    newer.focus();
+    expect(older.closest("section")).toHaveAttribute("hidden");
+    expect(older.closest("section")).toHaveAttribute("inert");
+    await act(async () => { reject(new Error("older refused")); });
+    expect(older).not.toBeInTheDocument();
+    expect(newer).toHaveFocus();
+    expect(newer).toHaveValue("");
+    expect(window.location.search).toContain(`line=${otherLine}`);
+    expect(window.location.search).toContain("lens=price");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("late-refusal alert focus waits for the active modal dialog to close", async () => {
+    let reject!: (reason: Error) => void;
+    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    render(<Paper sheet="pending" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
+    const field = screen.getByRole("textbox", { name: "Pending finish" });
+    fireEvent.change(field, { target: { value: "Kept linen" } });
+    fireEvent.blur(field);
+    await back();
+    await settle();
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.tabIndex = -1;
+    document.body.appendChild(dialog);
+    try {
+      dialog.focus();
+      await act(async () => { reject(new Error("refused")); });
+      const alert = await screen.findByRole("alert");
+      await settle();
+      expect(dialog).toHaveFocus();
+      expect(screen.getByRole("textbox", { name: "Pending finish" })).toBe(field);
+      expect(field).toHaveValue("Kept linen");
+      dialog.remove();
+      await waitFor(() => expect(alert).toHaveFocus());
+    } finally { dialog.remove(); }
+  });
+
   it("disposes a hidden pending pane silently after late success", async () => {
     let resolve!: () => void;
     mockMutateAsync.mockReturnValue(new Promise<void>((done) => { resolve = done; }));
