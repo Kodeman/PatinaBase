@@ -1,4 +1,13 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
 import path from 'node:path';
 import { test, expect } from '../fixtures/auth';
 import { psqlRun, psqlScalar } from '../helpers/psql';
@@ -93,9 +102,12 @@ test.describe('C04 configured placement', () => {
       await expect(sheet).toBeVisible();
       let lost = false;
       await page.route('**/rest/v1/rpc/place_product_in_project_v2', async (route) => {
-        const request = route.request().postDataJSON().p_request;
+        const body = route.request().postDataJSON();
+        const request = body.p_request;
         requests.push(request);
+        const canonical = canonicalJson(body);
         const attempt = { rpc: 'place_product_in_project_v2', attempt: requests.length, idempotencyKey: request.idempotencyKey };
+        console.log('[C04 browser request]', JSON.stringify({ ...attempt, body, canonical, sha256: createHash('sha256').update(canonical).digest('hex'), previousRequestEqual: requests.length > 1 ? canonicalJson(requests[0]) === canonicalJson(request) : null }));
         console.log('[C04 native attempt]', JSON.stringify({ ...attempt, transport: 'route.fetch reaches backend' }));
         const response = await route.fetch();
         console.log('[C04 native response]', JSON.stringify({ ...attempt, transport: 'route.fetch backend response', status: response.status(), body: (await response.text()).slice(0, 4000) }));
