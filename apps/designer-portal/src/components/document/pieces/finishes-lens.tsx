@@ -228,7 +228,11 @@ export function FinishesLens({ docId, projectId, room }: FinishesLensProps) {
   }
 
   return (
-    <div data-testid="finishes-lens" className="flex flex-col gap-8 py-6">
+    <div data-testid="finishes-lens" className="flex flex-col gap-8 py-6 [[data-paper-renderer=round8]_&_thead]:bg-[var(--sheet-row-hover)] [[data-paper-renderer=round8]_&_th]:font-normal">
+      <header data-round8-lens="finishes" className="hidden border-b border-[var(--sheet-rule-strong)] pb-4 [[data-paper-renderer=round8]_&]:block">
+        <h3 className="font-heading text-[24px] font-normal leading-[1.2] text-[var(--sheet-ink)]">Room finishes</h3>
+        <p className="mt-2 max-w-[72ch] font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-muted)]">Paint and finish surfaces belong to the room. They stay separate from a piece’s upholstery or wood finish.</p>
+      </header>
       <datalist id={sheensId}>
         {SHEENS.map((sheen) => (
           <option key={sheen} value={sheen} />
@@ -244,6 +248,7 @@ export function FinishesLens({ docId, projectId, room }: FinishesLensProps) {
           sheensId={sheensId}
         />
       ))}
+      <p className="hidden font-sans text-[12px] leading-[1.5] text-[var(--sheet-ink-muted)] [[data-paper-renderer=round8]_&]:block">Screen swatches are illustrative. Confirm the finish with a physical sample.</p>
       <div className="flex flex-col gap-1">
         <a
           href={finishesPrintHref(docId, room)}

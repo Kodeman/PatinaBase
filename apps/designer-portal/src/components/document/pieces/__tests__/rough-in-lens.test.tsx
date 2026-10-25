@@ -788,3 +788,13 @@ describe("RoughInLens — a filled allowance keeps its ceiling (F8, Q12)", () =>
     });
   });
 });
+
+
+it("round-8 rough reading keeps the existing instrument", () => {
+  setup();
+  const reading = screen.getByText("Preliminary selections").closest("header");
+  expect(reading).toHaveAttribute("data-round8-lens", "rough");
+  expect(reading).toHaveClass("hidden", "[[data-paper-renderer=round8]_&]:block");
+  expect(mockBuild).not.toHaveBeenCalled();
+  expect(mockBatch).not.toHaveBeenCalled();
+});
