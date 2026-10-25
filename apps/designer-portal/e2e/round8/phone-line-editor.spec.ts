@@ -34,6 +34,56 @@ for (const width of [320, 390]) {
     test.use({ viewport: { width, height: 844 }, hasTouch: true });
     test.setTimeout(240_000);
 
+    if (width === 390) test('superseded pending refusal notifies once by line name without taking the newer line', async ({ authenticatedPage: page }) => {
+      await page.addInitScript(() => Object.defineProperty(window, 'navigation', { configurable: true, value: undefined }));
+      const lineA = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 02' AND removed_at IS NULL;`);
+      const lineB = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 03' AND removed_at IS NULL;`);
+      expect(lineA).toMatch(/^[0-9a-f-]{36}$/);
+      expect(lineB).toMatch(/^[0-9a-f-]{36}$/);
+      await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+      await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+      const older = await openLine(page, lineA);
+      const original = finishOf(lineA);
+      let release = () => {};
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      let started = false;
+      let writes = 0;
+      await page.route(specWrite, async route => {
+        if (route.request().method() !== 'PATCH') return route.continue();
+        started = true;
+        writes++;
+        await gate;
+        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'XX000', message: 'SQ-2024 superseded refusal' }) });
+      });
+      try {
+        const finish = older.getByRole('textbox', { name: 'Finish' });
+        await finish.fill('Superseded linen');
+        await finish.press('Enter');
+        await expect.poll(() => started).toBe(true);
+        await page.evaluate(() => history.back());
+        await expect(instrument(page)).toHaveCount(0);
+        await expect(page.locator('[data-unfold-retained]')).toHaveCount(1);
+        const newer = await openLine(page, lineB);
+        const newerHeading = newer.getByRole('heading', { level: 2 });
+        await expect(newerHeading).toBeFocused();
+        release();
+        const notifications = page.getByRole('region', { name: 'Notifications (F8)' });
+        const notification = notifications.getByText("Your change to F01 Living Room selection 02 wasn't saved.", { exact: true });
+        await expect(notification).toBeVisible();
+        await expect(notification).toHaveCount(1);
+        await expect(page.locator('[data-unfold-retained]')).toHaveCount(0);
+        await expect(newerHeading).toBeFocused();
+        await expect(instrument(page)).toBeVisible();
+        expect(new URL(page.url()).searchParams.get('line')).toBe(lineB);
+        expect(finishOf(lineA), 'refusal leaves the acknowledged row unchanged').toBe(original);
+        expect(writes, 'one user act issues one write and one notification').toBe(1);
+      } finally {
+        release();
+        await page.unroute(specWrite);
+      }
+    });
+
     for (const leaveJob of [false, true]) {
       test(`absent API late refusal ${leaveJob ? 'uses the existing off-job error surface' : 'recovers the draft and focused alert'}`, async ({ authenticatedPage: page }, testInfo) => {
         await page.addInitScript(() => Object.defineProperty(window, 'navigation', { configurable: true, value: undefined }));

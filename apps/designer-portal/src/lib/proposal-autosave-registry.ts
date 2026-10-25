@@ -28,6 +28,8 @@ export interface ProposalAutosaveHandle {
   flush: () => Promise<void>;
   /** Wait only for an existing write; unlike flush, never send buffered edits. */
   waitPending?: () => Promise<void>;
+  /** Names a pending refusal when its original inline editor was superseded. */
+  failureMessage?: string;
 }
 
 interface ProposalAutosaveRegistration {
@@ -128,12 +130,16 @@ export function registerBoardOwnerAutosave(
 export function waitPendingBoardOwnerAutosaves(
   owner: BoardOwnerRef,
   retained = new Set<ProposalAutosaveHandle>(),
-): Promise<PromiseSettledResult<void>[]> | null {
+): Promise<(PromiseSettledResult<void> & { failureMessage?: string })[]> | null {
   const handles = [...(handlesByProposal.get(autosaveOwnerKey(owner))?.values() ?? [])]
     .filter((handle) => !retained.has(handle) && handle.waitPending && handle.getSnapshot().flushing);
   if (handles.length === 0) return null;
   for (const handle of handles) retained.add(handle);
   return Promise.allSettled(handles.map((handle) => handle.waitPending!()))
+    .then((results) => results.map((result, index) => ({
+      ...result,
+      ...(handles[index].failureMessage ? { failureMessage: handles[index].failureMessage } : {}),
+    })))
     .finally(() => { for (const handle of handles) retained.delete(handle); });
 }
 

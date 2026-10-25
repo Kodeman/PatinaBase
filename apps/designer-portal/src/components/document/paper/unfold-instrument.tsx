@@ -37,6 +37,7 @@ import {
   type ReactNode,
 } from "react";
 import type { BoardOwnerRef } from "@patina/types";
+import { showErrorToast } from "@/lib/error-handler";
 import { escapeIsHeld } from "@/components/document/pieces/build-room-shell";
 import { topActiveModalDialog } from "@/components/document/overlays/active-dialog";
 import {
@@ -432,6 +433,15 @@ export function UnfoldInstrument({
         recoveryFocus.current = true;
         openUnfold(previous.address, context ?? { documentId: /^\/doc\/([^/]+)/.exec(pathname)?.[1] ?? "" }, null);
       } else {
+        // The newer sheet owns focus. Its predecessor can no longer show an
+        // inline refusal, but the same-job MutationCache still stays silent.
+        if (superseded && window.location.pathname === pathname) {
+          for (const result of results) {
+            if (result.status === "rejected") {
+              showErrorToast(new Error(result.failureMessage ?? "Your change wasn't saved."));
+            }
+          }
+        }
         setSessions((held) => held.filter((entry) => entry.id !== previous.id));
       }
     });

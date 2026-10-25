@@ -220,7 +220,9 @@ const currentJobPath = (): string | undefined =>
     : window.location.pathname.match(/^\/doc\/[^/]+/)?.[0];
 
 // Create mutation cache with error handling
-const createMutationCache = (isRetired: () => boolean) => new MutationCache({
+const createMutationCache = (isRetired: () => boolean) => {
+  const notifiedOffJobErrors = new WeakSet<object>();
+  return new MutationCache({
   // PQ15 / O3 — under the default networkMode 'online' an offline mutation
   // pauses and runs by itself on reconnect. Ticks and edits may wait like
   // that; a send or a money write must not fire minutes later. This runs
@@ -251,6 +253,14 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
       mutationKey: mutation.options.mutationKey,
       meta: mutation.meta,
     });
+
+    // Nested wrappers rethrow the same refusal (e.g. project vitals → update).
+    // Claim it only on the off-job toast path, never on inline/silent paths.
+    if (leftJob && !silentErrorSurface && error !== null &&
+        (typeof error === 'object' || typeof error === 'function')) {
+      if (notifiedOffJobErrors.has(error)) return;
+      notifiedOffJobErrors.add(error);
+    }
 
     // Handle auth errors. An expired session routes to sign-in (so a failed
     // write doesn't leave the user staring at a generic toast on a dead
@@ -315,6 +325,7 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
     }
   },
 });
+};
 
 /**
  * Records the boundary in memory (anchors read it), then, only while the

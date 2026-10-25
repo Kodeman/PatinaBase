@@ -19,6 +19,12 @@ import {
 } from "@/lib/proposal-autosave-registry";
 
 // The real write path of the FF&E sheet (SpecFieldsPane → this hook).
+const mockShowErrorToast = jest.fn();
+jest.mock("../../../../lib/error-handler", () => ({
+  showErrorToast: (error: unknown) => mockShowErrorToast({
+    message: jest.requireActual("../../../../lib/error-handler").getErrorMessage(error),
+  }),
+}));
 const mockMutateAsync = jest.fn();
 jest.mock("@patina/supabase", () => {
   const mutation = {
@@ -96,6 +102,7 @@ function PendingEditor() {
       getSnapshot: () => ({ dirty: !!pending.current, flushing: !!pending.current, error: null }),
       flush: waitPending,
       waitPending,
+      failureMessage: "Your change to Living Room sofa wasn't saved.",
     });
     registration.current = handle;
     return handle.unregister;
@@ -271,6 +278,7 @@ describe("UnfoldInstrument", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", `/doc/${DOC}?sheet=call`);
     resetProposalAutosaveRegistryForTests();
+    mockShowErrorToast.mockReset();
     mockMutateAsync.mockReset();
     window.scrollTo = jest.fn();
     window.scrollBy = jest.fn();
@@ -799,7 +807,7 @@ describe("UnfoldInstrument", () => {
     }
   });
 
-  it("a retained older refusal cannot reopen a clean newer line after its fold", async () => {
+  it("a retained older refusal notifies once by line name without reopening a folded newer line", async () => {
     let reject!: (reason: Error) => void;
     mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
     render(<Paper sheet="pending" />);
@@ -824,12 +832,15 @@ describe("UnfoldInstrument", () => {
     expect(older).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(window.location.search).toBe("?sheet=call");
+    expect(mockShowErrorToast).toHaveBeenCalledTimes(1);
+    expect(mockShowErrorToast).toHaveBeenCalledWith({ message: "Your change to Living Room sofa wasn't saved." });
     expect(mockMutateAsync).toHaveBeenCalledTimes(1);
   });
 
-  it("a superseding line stays visible until the retained older refusal is disposed", async () => {
+  it.each([false, true])("a superseding line keeps focus and the older refusal notifies exactly once (succeeds=%s)", async (succeeds) => {
+    let resolve!: () => void;
     let reject!: (reason: Error) => void;
-    mockMutateAsync.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    mockMutateAsync.mockReturnValue(new Promise<void>((done, fail) => { resolve = done; reject = fail; }));
     render(<Paper sheet="pending" />);
     fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
     const older = screen.getByRole("textbox", { name: "Pending finish" });
@@ -845,7 +856,9 @@ describe("UnfoldInstrument", () => {
     newer.focus();
     expect(older.closest("section")).toHaveAttribute("hidden");
     expect(older.closest("section")).toHaveAttribute("inert");
-    await act(async () => { reject(new Error("older refused")); });
+    await act(async () => { if (succeeds) resolve(); else reject(new Error("older refused")); });
+    expect(mockShowErrorToast).toHaveBeenCalledTimes(succeeds ? 0 : 1);
+    if (!succeeds) expect(mockShowErrorToast).toHaveBeenCalledWith({ message: "Your change to Living Room sofa wasn't saved." });
     expect(older).not.toBeInTheDocument();
     expect(newer).toHaveFocus();
     expect(newer).toHaveValue("");
