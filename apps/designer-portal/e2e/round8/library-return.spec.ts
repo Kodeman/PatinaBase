@@ -85,7 +85,8 @@ test.describe('Library internal return', () => {
       await expect(page).toHaveURL(libraryUrl.href);
       await expect(room.locator('[data-library-exact-results]')).toContainText(NAME);
       await expect(room.getByRole('button', { name: /^Show all \d+ pieces$/ })).toBeVisible();
-      await expect(opener).not.toBeFocused();
+      await expect(opener).toHaveCount(0);
+      expect(await page.evaluate(() => document.activeElement?.id ?? '')).not.toBe(`library-piece-${PREFIX}000000000001-reference`);
       expect(await page.evaluate(() => history.state?.patinaLibraryEntry)).toBeUndefined();
       console.log('[C04b native readback]', JSON.stringify({ products: count(), filters: libraryUrl.search, history: 'replace-only filters; piece Back/Forward', viewport: page.viewportSize() }));
     } finally {
