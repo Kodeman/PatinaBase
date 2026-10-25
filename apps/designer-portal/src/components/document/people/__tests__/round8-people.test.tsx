@@ -1,4 +1,5 @@
 /** Round-8 shell with mocked existing data/action-owner boundaries. */
+import { StrictMode } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { PeopleRoom } from "../people-room";
 jest.mock("@/hooks/use-paper-renderer", () => ({ usePaperRenderer: () => ({ renderer: mockRenderer }) }));
@@ -176,6 +177,24 @@ test("directory to person to job preserves the exact People return address", () 
   expect(window.sessionStorage.getItem("patina:paper-origin:v1")).not.toBeNull();
   const origin = JSON.parse(window.sessionStorage.getItem("patina:paper-origin:v1")!)[0];
   expect(origin).toMatchObject({ docId: "job-1", kind: "people", path: "/people", search: "?role=crew&scope=mine&trade=electrical&person=card-dana" });
+});
+
+test.each([
+  ["round8", "person", "card-dana", "person-card"],
+  ["round8", "firm", "firm-northgate", "company-card"],
+  ["legacy", "person", "card-dana", "person-card"],
+  ["legacy", "firm", "firm-northgate", "company-card"],
+])("%s warm return preserves the %s address while opening its card", (renderer, key, id, card) => {
+  mockRenderer = renderer;
+  window.history.replaceState({}, "", `/people?${key}=${id}`);
+  render(<StrictMode><PeopleRoom /></StrictMode>);
+  expect(screen.getByTestId(card)).toBeInTheDocument();
+  for (const [href] of mockReplace.mock.calls) {
+    expect(new URL(href, window.location.origin).searchParams.get(key)).toBe(id);
+  }
+  fireEvent.click(screen.getByRole("button", { name: "Back to Studio contacts" }));
+  expect(screen.getByTestId("directory-view")).toBeInTheDocument();
+  expect(mockReplace).toHaveBeenLastCalledWith("/people", { scroll: false });
 });
 
 test("legacy keeps the existing shell and unresolved renderer mounts no subview", () => {

@@ -233,6 +233,7 @@ export function PeopleRoom() {
   const openDirectoryPerson = useCallback((id: string, role: PartyRole) => {
     setView("directory");
     if (isFieldRosterRole(role)) {
+      answeredCardRef.current.person = id;
       setOpenParty({ id, role });
       return;
     }
@@ -303,7 +304,6 @@ export function PeopleRoom() {
         return;
       }
       deepLinkHandledRef.current = true;
-      answeredCardRef.current.person = person;
       openDirectoryPerson(person, resolved);
     } else if (firm) {
       // `?firm=` names a company card by its own rolodex id — the same shape
@@ -311,7 +311,6 @@ export function PeopleRoom() {
       // Same wait, and the same forward resolution (PR-o).
       if (!all) return;
       deepLinkHandledRef.current = true;
-      answeredCardRef.current.firm = firm;
       setView("directory");
       if (all.some((p) => p.person_id === firm)) setOpenFirm(firm);
       else setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
@@ -445,23 +444,25 @@ export function PeopleRoom() {
     setPendingThreadId(null);
     setNotice(null);
     if (person) {
-      answered.person = person;
       setOpenFirm(null);
       const row = all.find((p) => p.person_id === person);
       if (row) {
         openDirectoryPerson(person, row.role);
       } else {
+        answered.person = person;
         setView("directory");
         setDeepLinkUnresolved({ kind: "person", id: person, role: null });
       }
     } else if (firm) {
-      answered.firm = firm;
       setOpenPerson(null);
       setView("directory");
       if (all.some((p) => p.person_id === firm)) setOpenFirm(firm);
-      else setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
+      else {
+        answered.firm = firm;
+        setDeepLinkUnresolved({ kind: "firm", id: firm, role: null });
+      }
     }
-  }, [personParam, firmParam, all, openDirectoryPerson]);
+  }, [personParam, firmParam, all, openDirectoryPerson, openPerson?.id, openFirm]);
 
   useEffect(() => {
     if (!deepLinkHandledRef.current) return;
