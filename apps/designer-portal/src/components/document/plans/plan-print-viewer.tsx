@@ -31,6 +31,7 @@ export interface PlanPrintViewerProps {
   /** The revision that superseded this one, when it isn't current. */
   supersededBy: string | null;
   onClose: () => void;
+  returnFocusTo?: HTMLElement | null;
 }
 
 export function PlanPrintViewer({
@@ -42,6 +43,7 @@ export function PlanPrintViewer({
   isCurrent,
   supersededBy,
   onClose,
+  returnFocusTo,
 }: PlanPrintViewerProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [settled, setSettled] = useState(false);
@@ -107,6 +109,7 @@ export function PlanPrintViewer({
       title={title}
       meta={`${sheetTitle} · filed ${fmtDay(filedAt)}`}
       onClose={onClose}
+      returnFocusTo={returnFocusTo}
       actionKey="close-plan-print-viewer"
     >
       {!isCurrent && supersededBy && (

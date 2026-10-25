@@ -18,7 +18,7 @@
  * paper, not tabular data (D4 · zero shadows throughout).
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   useReissuePlanTransmittalLink,
   useRevokePlanTransmittalLink,
@@ -419,6 +419,7 @@ export function PlanRoomSet({
 /** Issue rows are frozen snapshots, never reconstructed from the current set. */
 export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
   const [openIssuePrintId, setOpenIssuePrintId] = useState<string | null>(null);
+  const issuePrintOpener = useRef<HTMLElement | null>(null);
   const snapshot = bundle.issuePrints.find(
     (print) => print.id === openIssuePrintId,
   );
@@ -490,7 +491,10 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
                           actionKey="open-issued-print"
                           variant="tertiary"
                           disabled={!available}
-                          onClick={() => setOpenIssuePrintId(print.id)}
+                          onClick={(event) => {
+                            issuePrintOpener.current = event.currentTarget;
+                            setOpenIssuePrintId(print.id);
+                          }}
                         >
                           Open issued print
                         </DocumentAction>
@@ -529,6 +533,7 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
       {openPrint && snapshot && (
         <PlanPrintViewer
           key={snapshot.id}
+          returnFocusTo={issuePrintOpener.current}
           sheetNumber={snapshot.sheet_number}
           sheetTitle={snapshot.sheet_title}
           revLetter={snapshot.rev_letter}
