@@ -13,6 +13,7 @@
  */
 import { render, screen } from '@testing-library/react';
 import { PeopleRoom } from '../people-room';
+jest.mock('@/hooks/use-paper-renderer', () => ({ usePaperRenderer: () => ({ renderer: 'legacy' }) }));
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
