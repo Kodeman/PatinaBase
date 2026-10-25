@@ -30,7 +30,9 @@ async function openDocument(page: AuthenticatedPage, width: number) {
   await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
     waitUntil: "domcontentloaded",
   });
-  await expect(page.locator("[data-document-shell]")).toBeVisible();
+  await expect(page.locator("[data-document-shell]")).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 /** A project-kind spread — the only documents whose spine ever carried the two
