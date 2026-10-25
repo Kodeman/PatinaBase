@@ -691,6 +691,49 @@ describe("UnfoldInstrument", () => {
     expect(flush).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["current entry", "held entry"])("a stale Navigation API %s follows no-API Back parity without guessing a history delta", async (stale) => {
+    const staleEntry = { key: "stale", index: 0, url: window.location.href };
+    const navigation = Object.defineProperty(Object.assign(new EventTarget(), {
+      entries: () => [staleEntry],
+    }), "currentEntry", {
+      get: () => stale === "current entry" ? staleEntry : { ...staleEntry, url: window.location.href },
+    });
+    Object.defineProperty(window, "navigation", { value: navigation, configurable: true });
+    try {
+      const flush = jest.fn().mockRejectedValue(new Error("The save failed."));
+      registerBoardOwnerAutosave(OWNER, {
+        getSnapshot: () => ({ dirty: true, flushing: false, error: "The save failed." }),
+        flush,
+      });
+      render(<Paper />);
+      const opener = screen.getByRole("button", { name: "Open sofa" });
+      fireEvent.click(opener);
+      if (stale === "current entry") expect(navigation.currentEntry.url).not.toBe(window.location.href);
+      else expect(navigation.entries()[0].url).not.toBe(window.location.href);
+      const length = window.history.length;
+      const go = jest.spyOn(window.history, "go");
+      const push = jest.spyOn(window.history, "pushState");
+      const replace = jest.spyOn(window.history, "replaceState");
+
+      fireEvent.click(screen.getByRole("button", { name: "Return to the room" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(UNFOLD_UNSAVED_MESSAGE);
+      act(() => window.history.back());
+      await waitFor(() => expect(region()).toBeNull());
+      await settle();
+
+      expect(region()).toBeNull();
+      expect(window.location.search).toBe("?sheet=call");
+      expect(document.activeElement).toBe(opener);
+      expect(go).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
+      expect(window.history.length).toBe(length);
+      expect(flush).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (window as { navigation?: unknown }).navigation;
+    }
+  });
+
   it("SQ-1901 F1: a held Back with no activation goes forward to its entry and goes on Back once", async () => {
     const browser = browserNavigation();
     try {
@@ -756,8 +799,8 @@ describe("UnfoldInstrument", () => {
     // Its `navigate` event fires ahead of Next's popstate listener, which
     // unmounts the sheet on a Back to another route.
     const navigation = Object.assign(new EventTarget(), {
-      currentEntry: { index: 2, key: "standing" },
-      entries: () => [{ index: 0, key: "desk" }, { index: 2, key: "standing" }],
+      currentEntry: { index: 2, key: "standing", get url() { return window.location.href; } },
+      entries: () => [{ index: 0, key: "desk", url: new URL("/desk", window.location.href).href }, { index: 2, key: "standing", url: window.location.href }],
     });
     Object.defineProperty(window, "navigation", {
       value: navigation,

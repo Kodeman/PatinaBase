@@ -150,6 +150,7 @@ interface TraverseNavigateEvent extends Event {
 interface NavigationEntryLike {
   key?: string;
   index: number;
+  url: string;
 }
 interface NavigationLike extends EventTarget {
   currentEntry: NavigationEntryLike | null;
@@ -198,10 +199,14 @@ function resumeDistance(
 function heldBack(
   to: string = window.location.href,
 ): ({ hold: BackHold } & Standing) | null {
+  // Some Navigation API implementations do not track History API pushes or
+  // replaces. Stale keys cannot safely hold a traversal: use no-API parity.
+  if (navigationApi()?.currentEntry?.url !== window.location.href) return null;
   const { href, pathname, search } = new URL(to);
   for (const hold of backHolds) {
     const standing = hold.standing();
     if (!standing || standing.url === href) continue;
+    if (keyedEntry(standing.key)?.url !== standing.url) continue;
     // Still unfolded on the same document: a re-address, not a leave.
     if (
       new URL(standing.url).pathname === pathname &&
