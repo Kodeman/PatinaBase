@@ -26,6 +26,8 @@ export interface ProposalAutosaveSnapshot extends ProposalAutosaveBufferSnapshot
 export interface ProposalAutosaveHandle {
   getSnapshot: () => ProposalAutosaveBufferSnapshot;
   flush: () => Promise<void>;
+  /** Wait only for an existing write; unlike flush, never send buffered edits. */
+  waitPending?: () => Promise<void>;
 }
 
 interface ProposalAutosaveRegistration {
@@ -120,6 +122,16 @@ export function registerBoardOwnerAutosave(
   handle: ProposalAutosaveHandle,
 ): ProposalAutosaveRegistration {
   return registerProposalAutosave(owner, handle);
+}
+
+/** Capture only this owner's currently flushing, explicitly wait-only handles. */
+export function waitPendingBoardOwnerAutosaves(
+  owner: BoardOwnerRef,
+): Promise<PromiseSettledResult<void>[]> | null {
+  const handles = [...(handlesByProposal.get(autosaveOwnerKey(owner))?.values() ?? [])]
+    .filter((handle) => handle.waitPending && handle.getSnapshot().flushing);
+  if (handles.length === 0) return null;
+  return Promise.allSettled(handles.map((handle) => handle.waitPending!()));
 }
 
 export function subscribeToProposalAutosaves(
