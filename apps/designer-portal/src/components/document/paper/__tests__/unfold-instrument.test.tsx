@@ -795,11 +795,11 @@ describe("UnfoldInstrument", () => {
     }
   });
 
-  it("a Back the Navigation API can cancel never moves, then goes on once the save lands", async () => {
+  it.each([["fresh", "saved"], ["stale", "saved"], ["stale", "failed"]])("%s API cross-route Back stays held until the save is %s", async (entry, outcome) => {
     // Its `navigate` event fires ahead of Next's popstate listener, which
     // unmounts the sheet on a Back to another route.
     const navigation = Object.assign(new EventTarget(), {
-      currentEntry: { index: 2, key: "standing", get url() { return window.location.href; } },
+      currentEntry: { index: 2, key: "standing", get url() { return entry === "stale" ? new URL("/desk", window.location.href).href : window.location.href; } },
       entries: () => [{ index: 0, key: "desk", url: new URL("/desk", window.location.href).href }, { index: 2, key: "standing", url: window.location.href }],
     });
     Object.defineProperty(window, "navigation", {
@@ -817,7 +817,7 @@ describe("UnfoldInstrument", () => {
       return event.defaultPrevented;
     };
     try {
-      const { finish } = pendingBuffer();
+      const { finish, fail } = pendingBuffer();
       render(<Paper />);
       fireEvent.click(screen.getByRole("button", { name: "Open sofa" }));
       const unfolded = window.location.href;
@@ -831,6 +831,14 @@ describe("UnfoldInstrument", () => {
       expect(window.location.href).toBe(unfolded);
       expect(push).not.toHaveBeenCalled();
 
+      if (outcome === "failed") {
+        await act(async () => fail());
+        expect(await screen.findByRole("alert")).toHaveTextContent(UNFOLD_UNSAVED_MESSAGE);
+        expect(window.location.href).toBe(unfolded);
+        expect(region()).toBeInTheDocument();
+        expect(go).not.toHaveBeenCalled();
+        return;
+      }
       await act(async () => finish());
       await waitFor(() => expect(go).toHaveBeenCalledWith(-2));
       expect(go).toHaveBeenCalledTimes(1);

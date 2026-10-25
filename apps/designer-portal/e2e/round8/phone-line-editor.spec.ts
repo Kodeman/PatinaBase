@@ -160,8 +160,22 @@ for (const width of [320, 390]) {
           if (method === 'Return') {
             await instrument(page).getByRole('button', { name: /Return to the room/ }).tap();
           } else {
-            // Same-route traversal is the guaranteed Navigation API hold.
-            await page.evaluate(() => history.back());
+            // Observe the browser-owned route identity before Back changes location.
+            let signal: unknown = null;
+            await page.exposeBinding('__sq2009SameRoute', (_source, value: unknown) => { signal = value; });
+            await page.evaluate(() => {
+              const w = window as unknown as { navigation?: EventTarget; __sq2009SameRoute: (value: unknown) => Promise<void> };
+              const observe = (event: Event) => {
+                const traversal = event as Event & { navigationType: string; destination: { url: string } };
+                if (traversal.navigationType !== 'traverse') return;
+                void w.__sq2009SameRoute({ destinationPathname: new URL(traversal.destination.url).pathname, locationPathname: location.pathname });
+                w.navigation?.removeEventListener('navigate', observe);
+              };
+              w.navigation?.addEventListener('navigate', observe);
+              history.back();
+            });
+            await expect.poll(() => signal).not.toBeNull();
+            await testInfo.attach('same-route-destination', { body: Buffer.from(JSON.stringify(signal)), contentType: 'application/json' });
           }
           if (method === 'Back' && !usableNavigation) {
             testInfo.annotations.push({ type: 'residual', description: 'Stale or absent Navigation API: Back folds before acknowledgement (legacy no-API parity, SQ-2009 lead ruling)' });

@@ -508,6 +508,8 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
             if (traversal.navigationType !== 'traverse' || traversal.destination.url !== desk) return;
             void (w[binding] as (value: boolean, signal: unknown) => Promise<void>)(event.cancelable, {
               sameDocument: traversal.destination.sameDocument ?? null,
+              destinationPathname: new URL(traversal.destination.url).pathname,
+              locationPathname: location.pathname,
               navigationType: traversal.navigationType,
               hashChange: traversal.hashChange ?? null,
             });

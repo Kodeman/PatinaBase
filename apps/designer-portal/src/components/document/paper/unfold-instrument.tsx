@@ -198,15 +198,17 @@ function resumeDistance(
  */
 function heldBack(
   to: string = window.location.href,
+  checkEntry = true,
 ): ({ hold: BackHold } & Standing) | null {
   // Some Navigation API implementations do not track History API pushes or
-  // replaces. Stale keys cannot safely hold a traversal: use no-API parity.
-  if (navigationApi()?.currentEntry?.url !== window.location.href) return null;
+  // replaces. Same-route stale keys use no-API parity; a cancelable
+  // cross-route departure still retains its mounted save barrier.
+  if (checkEntry && navigationApi()?.currentEntry?.url !== window.location.href) return null;
   const { href, pathname, search } = new URL(to);
   for (const hold of backHolds) {
     const standing = hold.standing();
     if (!standing || standing.url === href) continue;
-    if (keyedEntry(standing.key)?.url !== standing.url) continue;
+    if (checkEntry && keyedEntry(standing.key)?.url !== standing.url) continue;
     // Still unfolded on the same document: a re-address, not a leave.
     if (
       new URL(standing.url).pathname === pathname &&
@@ -543,7 +545,13 @@ export function UnfoldInstrument({
       if (navigationType !== "traverse" || !event.cancelable || from == null) {
         return;
       }
-      if (heldBack(to.url)?.hold !== hold) return;
+      let sameRoute = false;
+      try {
+        sameRoute = new URL(to.url).pathname === window.location.pathname;
+      } catch {
+        // An unavailable destination keeps the existing traversal behaviour.
+      }
+      if (heldBack(to.url, sameRoute)?.hold !== hold) return;
       event.preventDefault();
       destination.current = {
         url: to.url,
