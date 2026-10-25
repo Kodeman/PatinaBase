@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 function makeChain(result: { data: unknown; error: unknown }) {
   const calls: Array<[string, unknown[]]> = [];
   const chain: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'is', 'not', 'order']) {
+  for (const method of ['select', 'eq', 'is', 'not', 'order', 'range']) {
     chain[method] = (...args: unknown[]) => {
       calls.push([method, args]);
       return chain;

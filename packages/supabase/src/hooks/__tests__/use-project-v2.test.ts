@@ -32,6 +32,7 @@ interface MockBuilder {
   limit: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   single: any;
+  range: any;
   then: (resolve: (value: BuilderResult) => unknown) => Promise<unknown>;
   __chain: Array<{ method: string; args: unknown[] }>;
   __resultQueue: BuilderResult[];
@@ -60,6 +61,7 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
   builder.is = record('is');
   builder.order = record('order');
   builder.limit = record('limit');
+  builder.range = record('range');
 
   const takeResult = (): BuilderResult =>
     builder.__resultQueue.length > 0
