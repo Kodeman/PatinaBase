@@ -197,9 +197,14 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
       if (filters?.itemType) query = query.eq('item_type', filters.itemType);
       if (filters?.purchaseOrderId) query = query.eq('purchase_order_id', filters.purchaseOrderId);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data ?? [];
+      const pageSize = 1000;
+      const items = [];
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await query.range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        items.push(...(data ?? []));
+        if ((data?.length ?? 0) < pageSize) return items;
+      }
     },
     enabled: !!projectId,
   });

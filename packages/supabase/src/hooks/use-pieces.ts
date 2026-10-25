@@ -169,14 +169,21 @@ export function useRemovedProjectLines(projectId: string) {
     queryKey: projectFfeRemovedKey(projectId),
     queryFn: async (): Promise<ProjectFfeItemRow[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (getSupabase() as any)
+      const query = (getSupabase() as any)
         .from('project_ffe_items')
         .select('*')
         .eq('project_id', projectId)
         .not('removed_at', 'is', null)
-        .order('removed_at', { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as ProjectFfeItemRow[];
+        .order('removed_at', { ascending: false })
+        .order('id', { ascending: true });
+      const pageSize = 1000;
+      const items: ProjectFfeItemRow[] = [];
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await query.range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        items.push(...((data ?? []) as unknown as ProjectFfeItemRow[]));
+        if ((data?.length ?? 0) < pageSize) return items;
+      }
     },
     enabled: !!projectId,
   });
