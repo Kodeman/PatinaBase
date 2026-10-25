@@ -187,11 +187,14 @@ export function SpecLens({
     if (focusRequest > 0) headingRef.current?.focus();
   }, [focusRequest]);
 
-  /** Pointer selection reveals a stacked pane; keyboard selection keeps its line control. */
+  /** Pointer/phone selection reveals the pane; wide-screen keyboard selection keeps its line. */
   const choose = (id: string, focusPane = true) => {
     setChosenId(id);
     onChooseLine?.(id);
-    if (focusPane && stacked(listRef.current)) setFocusRequest((n) => n + 1);
+    if (
+      (focusPane || window.matchMedia?.(STACKED_QUERY).matches) &&
+      stacked(listRef.current)
+    ) setFocusRequest((n) => n + 1);
   };
 
   const allLines = useMemo(

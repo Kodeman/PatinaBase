@@ -847,6 +847,19 @@ describe("at 390 (a14, F9)", () => {
     expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 767.98px)");
   });
 
+  it("reveals the phone pane for keyboard activation", async () => {
+    setStacked(true);
+    renderLens();
+    await pane();
+    screen.getByRole("list", { name: "Lines" }).parentElement!.style.order = "3";
+    const row = rowFor("Countertop for custom cabinets");
+    row.focus();
+    fireEvent.click(row, { detail: 0 });
+    const section = await pane();
+    await waitFor(() => expect(within(section).getByRole("heading", { level: 2 })).toHaveFocus());
+    expect(row).toHaveAttribute("aria-current", "true");
+  });
+
   it("leaves focus on the list at 1440, where the pane sits beside it", async () => {
     setStacked(false);
     renderLens();
