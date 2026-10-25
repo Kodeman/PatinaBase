@@ -28,7 +28,7 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
     // Exact fictional IDs only; refuse cleanup if any owner is not our fixture actor.
     psqlRun(`BEGIN;
       DO $$ BEGIN
-        IF EXISTS (SELECT 1 FROM public.projects WHERE id IN ('${id('15')}', '${id('16')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
+        IF EXISTS (SELECT 1 FROM public.projects WHERE id IN ('${id('15')}', '${id('16')}', '${id('17')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
         OR EXISTS (SELECT 1 FROM public.proposals WHERE id IN ('${id('13')}', '${id('23')}', '${id('24')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
         OR EXISTS (SELECT 1 FROM public.designer_clients WHERE id IN ('${id('12')}', '${id('22')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
         OR EXISTS (SELECT 1 FROM public.leads WHERE id IN ('${id('10')}', '${id('11')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
@@ -40,7 +40,7 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
       UPDATE public.proposals SET status = 'draft', project_id = NULL
         WHERE id IN ('${id('13')}', '${id('23')}', '${id('24')}');
       SET LOCAL session_replication_role = origin;
-      DELETE FROM public.projects WHERE id IN ('${id('15')}', '${id('16')}');
+      DELETE FROM public.projects WHERE id IN ('${id('15')}', '${id('16')}', '${id('17')}');
       DELETE FROM public.proposals WHERE id = '${id('24')}';
       DELETE FROM public.proposals WHERE id IN ('${id('13')}', '${id('23')}');
       DELETE FROM public.designer_clients WHERE id IN ('${id('12')}', '${id('22')}');
@@ -57,6 +57,9 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
       await openDocument(page, id(alias));
       await expect(page).toHaveURL(new RegExp(`/doc/${id('15')}(?:\\?|$)`));
       await expect(page.getByRole('heading', { level: 1 })).toContainText('F02 Fictional Commission');
+      const chapter = page.locator('[data-paper-chapter="brief"] [data-brief-agreement-chapter]');
+      await expect(chapter).toContainText('F02 original accepted inquiry: keep the piano.');
+      await expect(chapter).toContainText('F02 original agreement: retain the piano.');
     }
     expect(psqlScalar(`SELECT project_description FROM public.leads WHERE id = '${id('11')}'`)).toBe('F02 original accepted inquiry: keep the piano.');
     expect(psqlScalar(`SELECT lead_id FROM public.designer_clients WHERE id = '${id('12')}'`)).toBe(id('11'));
@@ -66,7 +69,11 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
   test('keeps root and revised proposal ids as aliases of the same live version', async ({ authenticatedPage: page }) => {
     for (const alias of ['23', '24']) {
       await openDocument(page, id(alias));
+      await expect(page).toHaveURL(new RegExp('/doc/' + id('17') + '(?:\\?|$)'));
       await expect(page.getByRole('heading', { level: 1 })).toContainText('F02 Fictional Revision');
+      const chapter = page.locator('[data-paper-chapter="brief"] [data-brief-agreement-chapter]');
+      await expect(chapter).toContainText('F02 revised agreement: preserve the piano alcove.');
+      await expect(chapter).not.toContainText('F02 original agreement: retain the piano.');
     }
     const versions = psqlScalar(`BEGIN; SET LOCAL ROLE authenticated; SET LOCAL request.jwt.claims = '{"sub":"${owner}","role":"authenticated"}'; SELECT (public.document_open('${id('23')}')->'ids'->>'proposal_id') = (public.document_open('${id('24')}')->'ids'->>'proposal_id'); ROLLBACK;`);
     expect(versions).toBe('t');
@@ -76,6 +83,9 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
     await openDocument(page, id('16'));
     await expect(page.getByRole('heading', { level: 1 })).toContainText('F03 Fictional Direct Project');
     await expect(page.locator('[data-document-paper]')).not.toContainText('F02 original');
+    const chapter = page.locator('[data-paper-chapter="brief"] [data-brief-agreement-chapter]');
+    await expect(chapter).toContainText('No original brief is linked to this document.');
+    await expect(chapter).toContainText('No agreement is linked to this document.');
     expect(psqlScalar(`SELECT proposal_id IS NULL FROM public.projects WHERE id = '${id('16')}'`)).toBe('t');
     await page.screenshot({ path: test.info().outputPath('f03-direct.png'), fullPage: true });
   });

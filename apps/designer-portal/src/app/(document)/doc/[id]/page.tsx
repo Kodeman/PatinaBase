@@ -4275,7 +4275,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // → the captured facts recap; Direction/Proposal → the proposal blocks.
           let body: ReactNode = null;
           if (s.key === 'brief') {
-            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />;
+            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} designerClientId={designerClientId} />;
           } else if (s.key === 'discovery') {
             body = (
               <DiscoveryRecap
@@ -4437,21 +4437,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         section: spreadSection,
         stageLine,
         fileDrop: sectionFileDrop,
-        brief:
-          row.lead_id || unfoldProposalId ? (
-            <>
-              {row.lead_id ? (
-                <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />
-              ) : null}
-              <DiscoveryRecap
-                clientProfileId={row.client_profile_id}
-                engagementKind={row.engagement_kind}
-                engagementId={row.engagement_id}
-                proposalId={row.proposal_id}
-              />
-              {unfoldProposalId ? <ProposalBlocksReadOnly proposalId={unfoldProposalId} /> : null}
-            </>
+        brief: {
+          brief: <BriefRecap designerClientId={designerClientId} leadId={row.lead_id} />,
+          discovery: row.lead_id || unfoldProposalId ? (
+            <DiscoveryRecap
+              clientProfileId={row.client_profile_id}
+              engagementKind={row.engagement_kind}
+              engagementId={row.engagement_id}
+              proposalId={row.proposal_id}
+            />
           ) : null,
+          agreement: unfoldProposalId ? <ProposalBlocksReadOnly proposalId={unfoldProposalId} /> : null,
+        },
         design: (workRoom: import('@/components/document/paper/chapters/ffe-work-room').WorkRoom) => (
           <Suspense fallback={<p role="status">Reading room evidence…</p>}>
             <DesignChapter
