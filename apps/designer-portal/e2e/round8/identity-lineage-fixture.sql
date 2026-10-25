@@ -27,4 +27,17 @@ INSERT INTO public.projects (id, name, created_by, designer_id, studio_id, statu
 UPDATE public.proposals SET project_id = 'f2740000-0000-4000-8000-000000000015' WHERE id = 'f2740000-0000-4000-8000-000000000013';
 INSERT INTO public.projects (id, name, created_by, designer_id, studio_id, status) VALUES
  ('f2740000-0000-4000-8000-000000000016', 'F03 Fictional Direct Project', 'f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000001', 'active');
+-- Import a legacy revised agreement into a project so both old proposal aliases
+-- exercise the mounted chapter, not only the pre-work proposal surface.
+SET LOCAL session_replication_role = replica;
+UPDATE public.proposals SET status = 'accepted', description = 'F02 revised agreement: preserve the piano alcove.'
+  WHERE id = 'f2740000-0000-4000-8000-000000000024';
+UPDATE public.proposals SET description = 'F02 original agreement: retain the piano.'
+  WHERE id = 'f2740000-0000-4000-8000-000000000013';
+SET LOCAL session_replication_role = origin;
+SELECT set_config('app.proposal_activation_id', 'f2740000-0000-4000-8000-000000000024', true);
+INSERT INTO public.projects (id, name, created_by, designer_id, studio_id, status, proposal_id) VALUES
+ ('f2740000-0000-4000-8000-000000000017', 'F02 Fictional Revision', 'f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000001', 'active', 'f2740000-0000-4000-8000-000000000024');
+UPDATE public.proposals SET project_id = 'f2740000-0000-4000-8000-000000000017'
+  WHERE id = 'f2740000-0000-4000-8000-000000000024';
 COMMIT;

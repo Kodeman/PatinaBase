@@ -35,6 +35,7 @@ import {
 } from '@/components/document/paper/contents-margin';
 import { openUnfold } from '@/components/document/paper/unfold-instrument';
 import type { WorkRoom } from '@/components/document/paper/chapters/ffe-work-room';
+import { BriefAgreementChapter, type BriefAgreementChapterProps } from '@/components/document/paper/chapters/brief-agreement-chapter';
 import { FfeChapter } from '@/components/document/paper/chapters/ffe-chapter';
 import { Round8MarginContext } from '@/components/document/paper/margin-layout';
 import { JobHead } from '@/components/document/paper/job-head';
@@ -78,7 +79,7 @@ export interface Round8Pieces {
     onDragLeave: () => void;
     onDrop: (event: DragEvent<HTMLElement>) => void;
   };
-  brief: ReactNode;
+  brief: BriefAgreementChapterProps | null;
   roomFiles: ReactNode;
   design?: (workRoom: WorkRoom) => ReactNode;
   scheduleSpine: ReactNode;
@@ -131,7 +132,7 @@ function chapterBodies(
   const stage = <T,>(project: T, install: T, care: T) =>
     pieces.section === 'install' ? install : pieces.section === 'care' ? care : project;
   return {
-    brief: pieces.brief,
+    brief: pieces.brief ? <BriefAgreementChapter {...pieces.brief} /> : null,
     design: pieces.design ? pieces.design(workRoom) : pieces.roomFiles,
     approvals: slots.approvals,
     schedule: (
