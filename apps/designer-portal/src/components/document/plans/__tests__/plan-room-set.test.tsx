@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { PlanRoomBundle } from '@patina/supabase';
 import { PlanRoomSet } from '../plan-room-set';
 
@@ -166,6 +166,69 @@ it('retains frozen print identity, hash, content and recipient holdings when cur
   expect(JSON.stringify(original)).toBe(before);
   expect(advanced.issuePrints).toBe(original.issuePrints);
   expect(advanced.transmittals).toBe(original.transmittals);
+});
+
+it('opens each issue’s own frozen title when two issues reuse the same print', async () => {
+  const original = historyBundle();
+  const bundle: PlanRoomBundle = {
+    ...original,
+    issues: [
+      ...original.issues,
+      {
+        ...original.issues[0],
+        id: 'issue-2',
+        issue_number: 2,
+        issued_at: '2026-10-04T12:00:00Z',
+      },
+    ],
+    issuePrints: [
+      ...original.issuePrints,
+      {
+        ...original.issuePrints[0],
+        id: 'snapshot-2',
+        issue_id: 'issue-2',
+        sheet_title: 'Later frozen title',
+      },
+    ],
+  };
+  const before = JSON.stringify(bundle);
+  mockRead.mockReset().mockResolvedValue({
+    data: { storage_path: 'private/issued-a.pdf' },
+  });
+  mockSign.mockReset().mockResolvedValue({
+    data: { signedUrl: 'https://local.test/issued-a' },
+  });
+  render(<PlanIssueHistory bundle={bundle} />);
+
+  for (const [issueNumber, title, otherTitle] of [
+    [2, 'Later frozen title', 'Frozen title'],
+    [1, 'Frozen title', 'Later frozen title'],
+  ] as const) {
+    const summary = screen.getByText(
+      new RegExp(`Issue ${issueNumber} · For building`),
+    );
+    fireEvent.click(summary);
+    const issue = summary.closest('details')!;
+    fireEvent.click(
+      within(issue).getByRole('button', { name: 'Open issued print' }),
+    );
+    const viewer = within(screen.getByRole('dialog'));
+    expect(
+      viewer.getByText(new RegExp(`^${title} · filed`)),
+    ).toBeInTheDocument();
+    expect(
+      viewer.queryByText(new RegExp(`^${otherTitle} · filed`)),
+    ).toBeNull();
+    expect(await viewer.findByTitle('A-1 · Rev A')).toHaveAttribute(
+      'src',
+      'https://local.test/issued-a',
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  }
+  expect(mockRead).toHaveBeenCalledTimes(2);
+  expect(mockSign).toHaveBeenCalledTimes(2);
+  expect(JSON.stringify(bundle)).toBe(before);
 });
 
 it('fetches exact issued bytes only on demand and retries without refiling', async () => {
