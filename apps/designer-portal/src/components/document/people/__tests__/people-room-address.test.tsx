@@ -11,6 +11,7 @@
  */
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PeopleRoom } from "../people-room";
+jest.mock("@/hooks/use-paper-renderer", () => ({ usePaperRenderer: () => ({ renderer: "legacy" }) }));
 
 const mockReplace = jest.fn();
 /** CR9-1 — the seat the stubbed person card hands back to the Room. */
@@ -182,9 +183,7 @@ describe("the address", () => {
       "crew",
     );
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/people?role=crew", {
-        scroll: false,
-      }),
+      expect(window.location.search).toBe("?role=crew"),
     );
   });
 
