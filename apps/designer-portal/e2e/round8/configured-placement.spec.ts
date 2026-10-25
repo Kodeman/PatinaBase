@@ -237,3 +237,50 @@ for (const fill of [true, false]) {
     }
   });
 }
+
+
+test('sourcing-result Place fills the Throughout placeholder from the native Library handoff', async ({ authenticatedPage: page }, testInfo) => {
+  test.setTimeout(240_000);
+  expect(count()).toBe('0');
+  psqlRun(readFileSync(path.join(__dirname, 'configured-placement-fixture.sql'), 'utf8')
+    .replace('c04-initial-need', `c04-sourcing-${testInfo.testId}-${testInfo.retry}`));
+  try {
+    const placeholder = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}';`);
+    psqlRun(`UPDATE public.project_ffe_items SET project_room_id=NULL, assignment_scope='throughout', quantity=4, item_type='allowance', budget_min_cents=20000, budget_max_cents=60000, design_disposition='selected' WHERE id='${placeholder}';`);
+    await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
+    await page.goto(`/doc/${JOB}/pieces?lens=rough&room=throughout`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('textbox', { name: 'New line in Throughout', exact: true })).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+    await page.getByRole('button', { name: 'Acts for C04 existing need', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Fill with a product', exact: true }).click();
+    await page.locator('[data-library-inline-search] input').fill('C04 Fictional');
+    await page.getByRole('option', { name: 'Search the Library for "C04 Fictional" →', exact: true }).click();
+    await expect(page).toHaveURL(/\/library\?/);
+    expect(JSON.parse(new URL(page.url()).searchParams.get('fill')!)).toMatchObject({ placeholderSelectionId: placeholder, assignmentScope: 'throughout' });
+    const library = page.locator('[data-library-room]');
+    await expect(async () => {
+      const all = library.getByRole('tab', { name: /^All shelves/ });
+      await all.focus(); await all.press('ArrowRight');
+      await expect(library.getByRole('tab', { name: /^Personal,/ })).toHaveAttribute('aria-selected', 'true');
+    }).toPass({ timeout: 30_000 });
+    await library.getByRole('searchbox', { name: 'Find a product or ask a sourcing question' }).fill('C04 Fictional');
+    await library.getByRole('button', { name: 'Ask a sourcing question' }).click();
+    const sourcing = library.locator('[data-library-engine-results]');
+    await sourcing.getByRole('button', { name: 'C04 Fictional Configuration House', exact: true }).click();
+    const result = sourcing.getByRole('listitem').filter({ hasText: NAME });
+    await expect(result).toBeVisible({ timeout: 60_000 });
+    await result.getByRole('button', { name: 'Place', exact: true }).click();
+    await expect(result.getByText('placed ✓', { exact: true })).toBeVisible();
+    await expect.poll(count).toBe('1');
+    const row = JSON.parse(psqlScalar(`SELECT json_build_object('id', id, 'scope', assignment_scope, 'room', project_room_id, 'quantity', quantity, 'type', item_type, 'disposition', design_disposition, 'min', budget_min_cents, 'max', budget_max_cents) FROM public.project_ffe_items WHERE project_id='${JOB}' AND product_id='${PRODUCT}';`));
+    expect(row).toEqual({ id: placeholder, scope: 'throughout', room: null, quantity: 4, type: 'allowance', disposition: 'selected', min: 20000, max: 60000 });
+    expect(psqlScalar(`SELECT count(*) FROM public.project_ffe_items WHERE project_id='${JOB}';`)).toBe('1');
+    console.log('[SQ-2045 sourcing native readback]', JSON.stringify(row));
+    await page.screenshot({ path: testInfo.outputPath('sourcing-filled-placeholder.png'), fullPage: true });
+  } finally {
+    cleanup();
+    expect(count()).toBe('0');
+    expect(psqlScalar(`SELECT count(*) FROM public.projects WHERE id='${JOB}';`)).toBe('0');
+    expect(psqlScalar(`SELECT count(*) FROM public.products WHERE id='${PRODUCT}';`)).toBe('0');
+  }
+});

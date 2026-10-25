@@ -1,7 +1,7 @@
 import { createElement, type PropsWithChildren } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { usePlaceInDocument } from '../use-place-in-document';
+import { readFillPlacementIntent, usePlaceInDocument } from '../use-place-in-document';
 
 const mockPlace = jest.fn();
 jest.mock('@patina/supabase', () => ({
@@ -83,7 +83,23 @@ it('fills the stable allowance through native V2 without candidate defaults repl
     placeholderSelectionId: 'allowance-1', assignmentScope: 'throughout' as const, roomId: null,
     quantity: 4, itemType: 'allowance' as const, budgetMinCents: 20000, budgetMaxCents: 60000, disposition: 'selected' as const,
   };
-  await act(async () => { await result.current.mutateAsync({ ...request, fill, duplicateMode: 'create' }); });
+  await act(async () => { await result.current.mutateAsync({ ...request, fill }); });
   expect(mockPlace).toHaveBeenCalledWith(expect.objectContaining({ ...fill, productId: request.piece.id, duplicateMode: 'reuse', configurationId: request.configurationId }));
   expect(mockPlace.mock.calls[0][0]).not.toHaveProperty('name');
+});
+
+const fillIntent = {
+  placeholderSelectionId: 'allowance-1', assignmentScope: 'throughout' as const, roomId: null,
+  quantity: 4, itemType: 'allowance' as const, disposition: 'selected' as const,
+};
+it.each(['hold', 'create'] as const)('honors explicit %s instead of filling the placeholder', async (duplicateMode) => {
+  mockPlace.mockResolvedValue({ outcome: duplicateMode === 'hold' ? 'held' : 'created' });
+  const { result } = setup();
+  await act(async () => { await result.current.mutateAsync({ ...request, fill: fillIntent, duplicateMode }); });
+  expect(mockPlace.mock.calls[0][0]).toMatchObject({ duplicateMode, name: request.piece.name, disposition: 'candidate' });
+  expect(mockPlace.mock.calls[0][0]).not.toHaveProperty('placeholderSelectionId');
+});
+it('only an absent Fill parameter means no Fill', () => {
+  expect(readFillPlacementIntent(null)).toBeUndefined();
+  expect(() => readFillPlacementIntent('')).toThrow('The Fill context could not be read');
 });
