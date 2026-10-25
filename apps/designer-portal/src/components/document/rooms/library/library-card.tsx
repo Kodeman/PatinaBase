@@ -114,6 +114,7 @@ export function LibraryCard({
     <article className="library-plate" data-library-card={item.id}>
       <Link
         href={pieceHref}
+        id={`library-piece-${item.id}-plate`}
         aria-label={`Open ${item.name}`}
         className="plate library-plate-mat"
       >
@@ -125,12 +126,12 @@ export function LibraryCard({
       </Link>
 
       <div className="cap">
-        <Link href={pieceHref} className="name t-d4 library-hit">
+        <Link id={`library-piece-${item.id}-name`} href={pieceHref} className="name t-d4 library-hit">
           {item.name}
         </Link>
         <p className="t-body-sm library-cap-maker">{sub}</p>
         {round8 && (
-          <Link href={pieceHref} aria-label={`View reference: ${item.name}`} className="r8-library-reference t-body-sm">
+          <Link id={`library-piece-${item.id}-reference`} href={pieceHref} aria-label={`View reference: ${item.name}`} className="r8-library-reference t-body-sm">
             View reference
           </Link>
         )}

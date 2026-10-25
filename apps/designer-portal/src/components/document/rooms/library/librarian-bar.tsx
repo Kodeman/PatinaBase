@@ -13,10 +13,16 @@ import { FieldSearch } from './field-search';
 
 export function LibrarianBar({
   onPlaced,
+  query: controlledQuery,
+  onQueryChange,
 }: {
   onPlaced?: (pieceName: string, whereName: string) => void;
+  query?: string;
+  onQueryChange?: (query: string) => void;
 }) {
-  const [query, setQuery] = useState('');
+  const [localQuery, setLocalQuery] = useState('');
+  const query = controlledQuery ?? localQuery;
+  const setQuery = onQueryChange ?? setLocalQuery;
   const [asking, setAsking] = useState<string | null>(null);
 
   const ask = (event?: FormEvent) => {

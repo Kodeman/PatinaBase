@@ -237,7 +237,7 @@ describe("Library lens and Add disclosure", () => {
 });
 
 
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }), useSearchParams: () => new URLSearchParams(window.location.search) }));
 jest.mock('@/hooks/use-paper-renderer', () => ({ usePaperRenderer: () => ({ renderer: mockRenderer }) }));
 jest.mock('@/lib/help-system/use-document-surface', () => ({ useDocumentSurface: jest.fn() }));
 jest.mock('../../../mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }));
@@ -281,5 +281,32 @@ describe('Library renderer boundary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add to library' }));
     fireEvent.click(screen.getByRole('button', { name: 'Create a product record' }));
     expect(mockPush).toHaveBeenCalledWith('/compose');
+  });
+});
+
+
+describe("Library address ownership", () => {
+  beforeEach(() => {
+    mockRenderer = "legacy";
+    mockUseCrossLayerSearch.mockReturnValue({ data: { rows: [], byLayer: { personal: [], studio: [], catalog: [] } }, isLoading: false, isError: false });
+    window.history.replaceState({}, "", "/library?shelf=studio&capability=modular&q=oak%20linen");
+  });
+  afterEach(() => window.history.replaceState({}, "", "/library"));
+  it("reads the shelf capability and omnibox query from a returning URL", () => {
+    render(<LibraryRoom />);
+    expect(screen.getByRole("tab", { name: "Studio, 7 products" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Modular" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("searchbox")).toHaveValue("oak linen");
+  });
+  it("replaces the current entry for filter and query edits without history spam", () => {
+    const length = history.length;
+    render(<LibraryRoom />);
+    fireEvent.click(screen.getByRole("tab", { name: "Personal, 2 products" }));
+    expect(new URLSearchParams(location.search).get("shelf")).toBe("personal");
+    fireEvent.click(screen.getByRole("button", { name: "Variants" }));
+    expect(new URLSearchParams(location.search).get("capability")).toBe("variant");
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "walnut & oak" } });
+    expect(new URLSearchParams(location.search).get("q")).toBe("walnut & oak");
+    expect(history.length).toBe(length);
   });
 });
