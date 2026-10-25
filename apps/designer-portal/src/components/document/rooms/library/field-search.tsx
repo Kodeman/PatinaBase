@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useCrossLayerSearch, type LayerProductRow } from '@patina/supabase';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 
@@ -25,6 +26,7 @@ const LAYER_ORDER: Array<'personal' | 'studio' | 'catalog'> = [
 
 export function FieldSearch({ query }: { query: string }) {
   const [debounced, setDebounced] = useState('');
+  const searchParams = useSearchParams();
 
   // Preserve the quiet debounce, but clear immediately so stale matches do not
   // linger after the single omnibox is emptied.
@@ -105,7 +107,8 @@ export function FieldSearch({ query }: { query: string }) {
               {group.rows.map((row) => (
                 <li key={row.id}>
                   <Link
-                    href={`/library/${row.id}`}
+                    id={`library-match-${row.id}`}
+                    href={`/library/${row.id}${searchParams.size ? `?${searchParams.toString()}` : ""}`}
                     className="group flex min-h-11 items-center gap-3 border-b border-[var(--doc-ink-border)] py-2 hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
                   >
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-[var(--card-edge)] bg-[var(--paper-doc)]">

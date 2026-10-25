@@ -10,7 +10,7 @@
  * default) reads the three and lays them out newest first.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useLayerProducts,
   useCaptureVenueLabels,
@@ -62,6 +62,7 @@ export function LibraryShelf({
   onNominate,
   capability = "all",
   round8 = false,
+  restoreExpanded = false,
 }: {
   layer: LibraryShelfLens;
   name: string;
@@ -76,6 +77,7 @@ export function LibraryShelf({
   onNominate?: (productId: string) => void;
   capability?: LibraryCapabilityFilter;
   round8?: boolean;
+  restoreExpanded?: boolean;
 }) {
   // One read per shelf, each enabled only when this lens shows it.
   const reads = {
@@ -101,7 +103,8 @@ export function LibraryShelf({
   );
 
   // Past one screen the shelf folds: only the visible slice needs per-piece metadata.
-  const [unfolded, setUnfolded] = useState(false);
+  const [unfolded, setUnfolded] = useState(restoreExpanded);
+  useEffect(() => { if (restoreExpanded) setUnfolded(true); }, [restoreExpanded]);
   const folds = visibleItems.length > SHELF_FOLD_AT;
   const shownItems =
     folds && !unfolded ? visibleItems.slice(0, SHELF_FOLD_AT) : visibleItems;

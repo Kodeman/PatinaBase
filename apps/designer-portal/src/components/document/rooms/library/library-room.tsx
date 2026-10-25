@@ -9,9 +9,9 @@
  * compresses teaching to one quiet line. No mock data, nothing gamified.
  */
 
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { usePaperRenderer } from "@/hooks/use-paper-renderer";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useLayerCounts,
   useTeachingQueue,
@@ -34,8 +34,10 @@ import { useDocumentSurface } from "@/lib/help-system/use-document-surface";
 import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { useMobilePrimaryAction } from "../../mobile/mobile-shell";
-import type { LibraryCapabilityFilter } from "./library-configuration-summary";
 import { subscribeToLibraryCapture } from "./library-capture-events";
+
+import { libraryHref, parseLibraryAddress, rememberLibraryReturn, restoreLibraryReturn, takeLibraryReturn } from "@/lib/document/library-return";
+import type { ReturnContext } from "@/lib/document/paper/return-context";
 
 const Round8LibraryEditorial = lazy(() => import("./round8-library-editorial"));
 
@@ -61,6 +63,22 @@ const SHELF_COPY: Record<LibraryShelfLens, { name: string; meta: string }> = {
 export function LibraryRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.library); // R89 — scope help to the Library room
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const address = parseLibraryAddress(searchParams);
+  const { shelf: activeLayer, capability: activeCapability } = address;
+  const updateAddress = (patch: Partial<typeof address>) => {
+    const params = new URLSearchParams(window.location.search);
+    window.history.replaceState(null, "", libraryHref(params, { ...parseLibraryAddress(params), ...patch }) + window.location.hash);
+  };
+  const returnContext = useRef<ReturnContext | null | undefined>(undefined);
+  const [returnExpanded, setReturnExpanded] = useState(false);
+  useEffect(() => {
+    if (returnContext.current === undefined) returnContext.current = takeLibraryReturn();
+    const context = returnContext.current;
+    if (!context) return;
+    setReturnExpanded(context.filters.expanded === "true");
+    return restoreLibraryReturn(context);
+  }, []);
   const { renderer } = usePaperRenderer();
   const round8 = renderer === "round8";
   const { data: counts } = useLayerCounts();
@@ -112,10 +130,6 @@ export function LibraryRoom() {
     return subscribeToLibraryCapture(openCapture);
   }, []);
   const [importOpen, setImportOpen] = useState(false);
-  // library-p1: the Library opens on every shelf, not the personal one.
-  const [activeLayer, setActiveLayer] = useState<LibraryShelfLens>("all");
-  const [activeCapability, setActiveCapability] =
-    useState<LibraryCapabilityFilter>("all");
   const [deep, setDeep] = useState<{ id: string; name: string } | null>(null);
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [nominateVendorId, setNominateVendorId] = useState<string | null>(null);
@@ -177,8 +191,14 @@ export function LibraryRoom() {
   );
   const content = (
     <>
-      <div className="mx-auto max-w-[1240px] px-4 sm:px-9">
+      <div className="mx-auto max-w-[1240px] px-4 sm:px-9" onClickCapture={(event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const link = (event.target as Element).closest<HTMLAnchorElement>("a[href]");
+        if (link?.origin === window.location.origin && /^\/library\/[^/]+$/.test(link.pathname) && link.target !== "_blank") rememberLibraryReturn(link);
+      }}>
         <LibrarianBar
+          query={address.q}
+          onQueryChange={(q) => updateAddress({ q })}
           onPlaced={(pieceName, whereName) =>
             setToast(
               `Placed “${pieceName}” into ${whereName}.`,
@@ -191,11 +211,11 @@ export function LibraryRoom() {
         <LibraryToolbar
           activeLayer={activeLayer}
           counts={counts ?? null}
-          onLayerChange={setActiveLayer}
+          onLayerChange={(shelf) => updateAddress({ shelf })}
           onCompose={enterCompose}
           onImport={() => setImportOpen(true)}
           activeCapability={activeCapability}
-          onCapabilityChange={setActiveCapability}
+          onCapabilityChange={(capability) => updateAddress({ capability })}
         />
 
         <LibraryShelf
@@ -208,6 +228,7 @@ export function LibraryRoom() {
             teachingIds={teachingIds}
             validationIds={validationIds}
             capability={activeCapability}
+            restoreExpanded={returnExpanded}
             round8={round8}
             onDeep={(id, name) => setDeep({ id, name })}
             onPromote={(id) => setPromoteId(id)}
