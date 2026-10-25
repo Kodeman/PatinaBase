@@ -130,9 +130,17 @@ for (const width of [320, 390]) {
       await instrument(page).getByRole('button', { name: /Return to the room/ }).click();
       await expect(instrument(page)).toHaveCount(0);
 
+      let staleNavigation = false;
       for (const method of ['Return', 'Back'] as const) {
         pane = await openLine(page, line);
         finish = pane.getByRole('textbox', { name: 'Finish' });
+        const capability = await page.evaluate(() => {
+          const navigation = (window as unknown as { navigation?: { currentEntry?: { url: string } } }).navigation;
+          return { url: location.href, entryUrl: navigation?.currentEntry?.url ?? null };
+        });
+        const usableNavigation = capability.entryUrl === capability.url;
+        staleNavigation ||= capability.entryUrl !== null && !usableNavigation;
+        await testInfo.attach(`${method}-navigation-${width}`, { body: Buffer.from(JSON.stringify(capability)), contentType: 'application/json' });
         let release = () => {};
         const gate = new Promise<void>(resolve => { release = resolve; });
         let started = false;
@@ -152,32 +160,86 @@ for (const width of [320, 390]) {
           if (method === 'Return') {
             await instrument(page).getByRole('button', { name: /Return to the room/ }).tap();
           } else {
-            // Same-route traversal is the guaranteed Navigation API hold.
-            await page.evaluate(() => history.back());
+            // Observe the browser-owned route identity before Back changes location.
+            let signal: unknown = null;
+            await page.exposeBinding('__sq2009SameRoute', (_source, value: unknown) => { signal = value; });
+            await page.evaluate(() => {
+              const w = window as unknown as { navigation?: EventTarget; __sq2009SameRoute: (value: unknown) => Promise<void> };
+              const observe = (event: Event) => {
+                const traversal = event as Event & { navigationType: string; destination: { url: string } };
+                if (traversal.navigationType !== 'traverse') return;
+                void w.__sq2009SameRoute({ destinationPathname: new URL(traversal.destination.url).pathname, locationPathname: location.pathname });
+                w.navigation?.removeEventListener('navigate', observe);
+              };
+              w.navigation?.addEventListener('navigate', observe);
+              history.back();
+            });
+            await expect.poll(() => signal).not.toBeNull();
+            await testInfo.attach('same-route-destination', { body: Buffer.from(JSON.stringify(signal)), contentType: 'application/json' });
           }
-          await expect(instrument(page), `${method} waits for the mounted row writer`).toHaveAttribute('data-unfold-state', 'saving');
-          await expect(instrument(page)).toBeVisible();
-          await expect(finish).toHaveValue(saved);
+          if (method === 'Back' && !usableNavigation) {
+            testInfo.annotations.push({ type: 'residual', description: 'Stale or absent Navigation API: Back folds before acknowledgement (legacy no-API parity, SQ-2009 lead ruling)' });
+            await expect(instrument(page), 'unusable Navigation API Back folds before acknowledgement').toHaveCount(0);
+            await expect(opener).toBeFocused();
+          } else {
+            await expect(instrument(page), `${method} waits for the mounted row writer`).toHaveAttribute('data-unfold-state', 'saving');
+            await expect(instrument(page)).toBeVisible();
+            await expect(finish).toHaveValue(saved);
+          }
         } finally { release(); }
         await expect.poll(() => finishOf(line)).toBe(saved);
-        if (method === 'Back' && !hasNavigation) {
-          testInfo.annotations.push({ type: 'residual', description: 'WP-11 no-Navigation-API Back traversal (Wave 1 accepted)' });
-          await expect(instrument(page), 'WP-11 retains the sheet without Navigation API').toHaveCount(1);
-          await expect(finish, 'the acknowledged draft remains intact').toHaveValue(saved);
-          expect(writes, 'Back never duplicates or replays the save').toBe(writesBeforeAcknowledgement);
-          await instrument(page).getByRole('button', { name: /Return to the room/ }).tap();
-          await expect(instrument(page), 'explicit Return closes the residual sheet').toHaveCount(0);
-          expect(writes, 'explicit Return never replays the acknowledged save').toBe(writesBeforeAcknowledgement);
-        } else {
-          if (method === 'Back' && testInfo.project.name === 'webkit-iphone') {
-            testInfo.annotations.push({ type: 'known-defect', description: 'WebKit Back after acknowledgement leaves unfold sheet open — inherited, see lead follow-up' });
-            test.fail(true, 'Inherited WebKit unfold Back defect reproduced on f71225a72');
-          }
-          await expect(instrument(page), `${method} completes after acknowledgement`).toHaveCount(0);
-        }
+        await expect(instrument(page), `${method} completes after acknowledgement`).toHaveCount(0);
+        expect(writes, `${method} never duplicates or replays the save`).toBe(writesBeforeAcknowledgement);
         await expect(opener, `${method} returns focus to the room opener`).toBeFocused();
         expect(new URL(page.url()).searchParams.has('unfold'), 'the closed sheet leaves no unfold address').toBe(false);
         await page.unroute(specWrite);
+        if (method === 'Back' && !usableNavigation) {
+          const acknowledgedWrites = writes;
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          await expect(page.locator('[data-arrival-ready]')).toHaveCount(1);
+          await expect(instrument(page)).toHaveCount(0);
+          expect(finishOf(line)).toBe(saved);
+          expect(writes, 'reload after an early fold never replays the acknowledged save').toBe(acknowledgedWrites);
+        }
+      }
+
+      if (staleNavigation) {
+        pane = await openLine(page, line);
+        finish = pane.getByRole('textbox', { name: 'Finish' });
+        const acknowledged = finishOf(line);
+        const abandoned = `Late refusal ${width}`;
+        let release = () => {};
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        let started = false;
+        await page.route(specWrite, async route => {
+          if (route.request().method() !== 'PATCH') return route.continue();
+          started = true;
+          await gate;
+          await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'SQ-2009 late refusal', code: 'XX000' }) });
+        });
+        const refused = page.waitForResponse(response => response.request().method() === 'PATCH' && specWrite(new URL(response.url())) && response.status() === 500);
+        const handled = page.waitForEvent('console', message => message.type() === 'error' && message.text().includes('Error:') && message.text().includes('SQ-2009 late refusal'));
+        try {
+          await finish.fill(abandoned);
+          await finish.press('Enter');
+          await expect.poll(() => started).toBe(true);
+          await page.evaluate(() => history.back());
+          await expect(instrument(page), 'stale API permits Back before a later refusal').toHaveCount(0);
+          await expect(opener).toBeFocused();
+        } finally { release(); }
+        await refused;
+        await handled;
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        await page.unroute(specWrite);
+        expect(finishOf(line), 'late refusal never changes the acknowledged row').toBe(acknowledged);
+        const boundary = await page.evaluate(draft => ({
+          visibleAlerts: Array.from(document.querySelectorAll<HTMLElement>('[role="alert"]')).filter(node => node.getClientRects().length > 0).map(node => node.textContent),
+          draftKept: Array.from(document.querySelectorAll<HTMLInputElement>('input')).some(input => input.value === draft),
+          unfolded: !!document.querySelector('[data-unfold-instrument]'),
+        }), abandoned);
+        expect(boundary, 'current silent-loss boundary requires paired repair before integration').toEqual({ visibleAlerts: [], draftKept: false, unfolded: false });
+        await testInfo.attach('stale-api-late-failure-boundary', { body: Buffer.from(JSON.stringify(boundary)), contentType: 'application/json' });
+        testInfo.annotations.push({ type: 'residual', description: `silent-loss: late failed save after stale-API Back; paired repair required before integration (SQ-2015): ${JSON.stringify(boundary)}` });
       }
 
       await page.goto(`/doc/${JOB}?unfold=pieces&lens=spec&room=${ROOM}&line=00000000-0000-4000-8000-000000000099`, { waitUntil: 'domcontentloaded' });
