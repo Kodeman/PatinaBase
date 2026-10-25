@@ -1,0 +1,462 @@
+-- B01 real Postgres oracle; run only inside scope_composition_isolated.sql.
+CREATE FUNCTION pg_temp.assert_true(ok boolean, name text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',name; END IF;
+  RAISE NOTICE 'PASS: %',name;
+END;
+$$;
+CREATE FUNCTION pg_temp.expect_error(command text, state text, message text, name text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+  BEGIN EXECUTE command;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS actual_state = RETURNED_SQLSTATE, actual_message = MESSAGE_TEXT;
+  END;
+  PERFORM pg_temp.assert_true(actual_state = state AND
+    (message IS NULL OR strpos(actual_message,message)>0), name ||
+    format(' [expected %s/%s, got %s/%s]',state,message,actual_state,actual_message));
+END;
+$$;
+
+-- Assert shipped privileges BEFORE any temporary execution grant (F2).
+DO $$ DECLARE f record; role_name text; BEGIN
+ FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname='public' AND p.proname IN ('apply_service_arrangement','can_author_scope_proposal','can_compose_project_plan',
+ '_assert_scope_composition_enabled','_normalize_scope_package_parts','_guard_scope_package_storage','_scope_arrangement_effect','_guard_scope_immutable') LOOP
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated'] LOOP
+   PERFORM pg_temp.assert_true(NOT has_function_privilege(role_name,f.signature,'EXECUTE'), role_name||' shipped no execute '||f.signature);
+  END LOOP;
+  PERFORM pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM pg_proc p,aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
+    WHERE p.oid=f.signature::oid AND acl.grantee=0 AND acl.privilege_type='EXECUTE'), 'PUBLIC no execute '||f.signature);
+ END LOOP;
+END $$;
+DO $$ DECLARE t text; r text; BEGIN
+ FOREACH t IN ARRAY ARRAY['project_scope_editions','project_scope_edition_packages','project_scope_edition_phases',
+  'project_scope_edition_signers','project_commercial_execution_order','proposal_service_arrangement_applications','service_arrangements'] LOOP
+  FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+   PERFORM pg_temp.assert_true(NOT has_table_privilege(r,'public.'||t,'TRUNCATE'),r||' no truncate '||t);
+  END LOOP;
+ END LOOP;
+END $$;
+-- END shipped ACL assertions
+
+-- Fictional fixture, refused rather than overwriting a pre-existing identity.
+SELECT pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM auth.users WHERE id::text LIKE 'f8680000-%'), 'fixture starts absent');
+SET LOCAL session_replication_role = replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT ('f8680000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  'scope-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated'
+FROM generate_series(1,5) n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT id,email,'Scope fixture',true FROM auth.users WHERE id::text LIKE 'f8680000-%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+('f8681000-0000-4000-8000-000000000001','design_studio','Scope A','scope-b01-a','active'),
+('f8681000-0000-4000-8000-000000000002','design_studio','Scope B','scope-b01-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+('f8680000-0000-4000-8000-000000000001','f8681000-0000-4000-8000-000000000001','owner','active'),
+('f8680000-0000-4000-8000-000000000001','f8681000-0000-4000-8000-000000000002','owner','active'),
+('f8680000-0000-4000-8000-000000000002','f8681000-0000-4000-8000-000000000001','member','active'),
+('f8680000-0000-4000-8000-000000000003','f8681000-0000-4000-8000-000000000002','member','active'),
+('f8680000-0000-4000-8000-000000000004','f8681000-0000-4000-8000-000000000001','guest','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT p.id,r.id,p.id FROM public.profiles p CROSS JOIN public.roles r
+WHERE p.id::text LIKE 'f8680000-%' AND r.name='studio_owner';
+INSERT INTO public.designer_clients(id,designer_id,client_id,client_name,client_email,status,source)
+VALUES ('f8682000-0000-4000-8000-000000000001','f8680000-0000-4000-8000-000000000001',
+'f8680000-0000-4000-8000-000000000005','Scope client','scope-5@test.invalid','active','direct');
+INSERT INTO public.proposals(id,designer_id,designer_client_id,client_id,title,total_amount,status,valid_until,studio_id)
+SELECT ('f8683000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+'f8680000-0000-4000-8000-000000000001','f8682000-0000-4000-8000-000000000001',
+'f8680000-0000-4000-8000-000000000005','Scope draft',0,'draft',now()+interval '30 days',
+CASE WHEN n=3 THEN NULL ELSE 'f8681000-0000-4000-8000-000000000001'::uuid END
+FROM generate_series(1,4)n;
+INSERT INTO public.projects(id,name,designer_id,created_by,client_id,studio_id,status) VALUES
+('f8684000-0000-4000-8000-000000000001','Scope job','f8680000-0000-4000-8000-000000000001',
+'f8680000-0000-4000-8000-000000000001','f8680000-0000-4000-8000-000000000005','f8681000-0000-4000-8000-000000000001','active');
+SET LOCAL session_replication_role = origin;
+SELECT set_config('request.jwt.claim.sub','f8680000-0000-4000-8000-000000000001',true);
+
+CREATE FUNCTION pg_temp.part(label text, key text DEFAULT NULL) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object('kind','scope_package','partKey',label,'title',label,'payload',
+   jsonb_build_object('label',label,'inclusion','included','responsibilities',jsonb_build_object(
+    'design','studio','purchasing','client','payer','client','fabrication_contract','gc','installation','gc'))
+    || CASE WHEN key IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('packageKey',key) END);
+$$;
+CREATE FUNCTION pg_temp.save(parts jsonb) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.upsert_agreement_parts('f8683000-0000-4000-8000-000000000001',parts,'B01 test');
+$$;
+SELECT pg_temp.assert_true((SELECT NOT enabled FROM public.server_capabilities WHERE key='scope_editions'), 'capability ships false');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(pg_temp.part('Kitchen')))$q$,
+'55000','scope_editions_inactive','inactive upsert refuses packages');
+SELECT pg_temp.expect_error($q$INSERT INTO public.proposal_agreement_parts(proposal_id,position,kind,part_key,title,payload)
+VALUES ('f8683000-0000-4000-8000-000000000001',1,'scope_package','raw','Raw',pg_temp.part('Raw','pkg.raw')->'payload')$q$,
+'55000','scope_editions_inactive','inactive direct storage refuses packages');
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000001','fixture-a',gen_random_uuid())$q$,
+'55000','scope_editions_inactive','inactive arrangement refuses restored-call execution');
+-- Local-only activation; the enclosing transaction always rolls this back.
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SELECT pg_temp.assert_true(public.can_author_scope_proposal('f8683000-0000-4000-8000-000000000001'), 'recorded studio owner admitted');
+SELECT pg_temp.save(jsonb_build_array(pg_temp.part('#K'),pg_temp.part('Étage'),pg_temp.part('---'),pg_temp.part('漢字'),pg_temp.part(repeat('A',200)),pg_temp.part('Kitchen'),pg_temp.part('Kitchen two','pkg.kitchen-2')));
+SELECT pg_temp.assert_true((SELECT array_agg(payload->>'packageKey' ORDER BY position) =
+ ARRAY['pkg.k','pkg.tage','pkg.package','pkg.package-2','pkg.'||repeat('a',56),'pkg.kitchen','pkg.kitchen-2']
+ FROM public.proposal_agreement_parts WHERE proposal_id='f8683000-0000-4000-8000-000000000001'), 'canonical keys normalization and collision');
+SELECT pg_temp.save(jsonb_build_array(pg_temp.part('Kitchen'),pg_temp.part('Reserved','pkg.kitchen')));
+SELECT pg_temp.assert_true((SELECT payload->>'packageKey'='pkg.kitchen-2' FROM public.proposal_agreement_parts
+ WHERE proposal_id='f8683000-0000-4000-8000-000000000001' AND position=1), 'allocator reserves later explicit keys');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(pg_temp.part('Bad','PKG.Bad')))$q$,'23514','scope_package_key_invalid','caller key never repaired');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(pg_temp.part('A','pkg.a'),pg_temp.part('B','pkg.a')))$q$,'23514','scope_package_key_duplicate','duplicate package key refused');
+DO $$ DECLARE slot text; BEGIN
+ FOREACH slot IN ARRAY ARRAY['design','purchasing','payer','fabrication_contract','installation'] LOOP
+   PERFORM pg_temp.expect_error(format('SELECT pg_temp.save(jsonb_build_array(%L::jsonb))',
+      pg_temp.part('Missing') #- ARRAY['payload','responsibilities',slot]),'23514','scope_package_responsibilities_invalid','missing slot '||slot);
+ END LOOP;
+END $$;
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(jsonb_set(pg_temp.part('Bad'),'{payload,responsibilities,payer}','"designer"')))$q$,
+'23514','scope_package_responsibilities_invalid','unknown responsibility refused');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(jsonb_set(pg_temp.part('Conditional'),'{payload,inclusion}','"conditional"')))$q$,
+'23514','scope_package_condition_required','conditional package needs condition');
+
+INSERT INTO public.proposal_phases(id,proposal_id,name,phase_key,fee_cents,sort_order,lane,duration_days) VALUES
+('f8685000-0000-4000-8000-000000000001','f8683000-0000-4000-8000-000000000001','Design','concept_development',0,1,'main',5),
+('f8685000-0000-4000-8000-000000000002','f8683000-0000-4000-8000-000000000002','Foreign','concept_development',0,1,'main',5);
+CREATE FUNCTION pg_temp.bound_part(id uuid, slot text DEFAULT 'design') RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_set(pg_temp.part('Bound','pkg.bound'),'{payload,serviceBindings}',jsonb_build_object(slot,jsonb_build_array(id)));
+$$;
+SELECT pg_temp.save(jsonb_build_array(pg_temp.bound_part('f8685000-0000-4000-8000-000000000001')));
+SELECT pg_temp.assert_true((SELECT payload#>>'{serviceBindings,design,0}'='f8685000-0000-4000-8000-000000000001'
+ FROM public.proposal_agreement_parts WHERE proposal_id='f8683000-0000-4000-8000-000000000001'), 'own proposal typed binding preserved');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(pg_temp.bound_part('f8685000-0000-4000-8000-000000000002')))$q$,
+'23514','scope_package_phase_unknown','foreign proposal binding denied');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(pg_temp.bound_part('f8685000-0000-4000-8000-000000000099')))$q$,
+'23514','scope_package_phase_unknown','unknown phase denied');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(jsonb_set(pg_temp.bound_part('f8685000-0000-4000-8000-000000000001'),'{payload,serviceBindings,design}',
+'["f8685000-0000-4000-8000-000000000001","f8685000-0000-4000-8000-000000000001"]')))$q$,
+'23514','scope_package_phase_shared','duplicate phase denied');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save(jsonb_build_array(pg_temp.bound_part('f8685000-0000-4000-8000-000000000001','installation')))$q$,
+'23514','scope_package_binding_slot_not_owed','binding cannot discharge another party slot');
+-- Direct-role probes retain the shipped business-table privileges.
+SELECT pg_temp.assert_true(has_table_privilege('service_role','public.proposal_agreement_parts','INSERT')
+ AND has_table_privilege('service_role','public.proposal_agreement_parts','UPDATE')
+ AND has_table_privilege('service_role','public.proposal_agreement_parts','DELETE'), 'service role retains shipped part DML');
+DO $$ DECLARE schema_name text := (SELECT nspname FROM pg_namespace WHERE oid=pg_my_temp_schema()); BEGIN
+ EXECUTE format('GRANT USAGE ON SCHEMA %I TO service_role, authenticated, anon, agent_reader, agent_writer',schema_name);
+ EXECUTE format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %I TO service_role, authenticated, anon, agent_reader, agent_writer',schema_name);
+END $$;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.expect_error($q$INSERT INTO public.proposal_agreement_parts(proposal_id,position,kind,part_key,title,payload)
+ VALUES ('f8683000-0000-4000-8000-000000000001',3,'scope_package','Unattested','Unattested',pg_temp.part('Unattested','pkg.unattested')->'payload')$q$,
+ '42501','scope_parts_sanctioned_writer_required','no-marker direct insert refused with restored grants');
+SELECT pg_temp.expect_error($q$UPDATE public.proposal_agreement_parts SET payload=payload
+ WHERE proposal_id='f8683000-0000-4000-8000-000000000001'$q$,
+ '42501','scope_parts_sanctioned_writer_required','no-marker direct update refused with restored grants');
+SELECT pg_temp.expect_error($q$DELETE FROM public.proposal_agreement_parts WHERE proposal_id='f8683000-0000-4000-8000-000000000001'$q$,
+ '42501','scope_parts_sanctioned_writer_required','no-marker direct delete refused with restored grants');
+SELECT set_config('app.scope_parts_writer','f8683000-0000-4000-8000-000000000002',true);
+SELECT pg_temp.expect_error($q$UPDATE public.proposal_agreement_parts SET payload=payload
+ WHERE proposal_id='f8683000-0000-4000-8000-000000000001'$q$,
+ '42501','scope_parts_sanctioned_writer_required','wrong-proposal marker refused');
+SELECT set_config('app.scope_parts_writer','',true);
+RESET ROLE;
+-- SQ-2003: even a matching caller-set marker cannot impersonate a native writer.
+DO $$ DECLARE role_name text; operation text; command text; message text; BEGIN
+ FOREACH role_name IN ARRAY ARRAY['service_role','authenticated','anon','agent_reader','agent_writer'] LOOP
+  FOREACH operation IN ARRAY ARRAY['INSERT','UPDATE','DELETE'] LOOP
+   message := CASE WHEN has_table_privilege(role_name,'public.proposal_agreement_parts',operation)
+    THEN 'scope_parts_sanctioned_writer_required' ELSE 'permission denied for table proposal_agreement_parts' END;
+   command := CASE operation
+    WHEN 'INSERT' THEN $q$INSERT INTO public.proposal_agreement_parts(proposal_id,position,kind,part_key,title,payload)
+     VALUES ('f8683000-0000-4000-8000-000000000001',3,'scope_package','Self marker','Self marker',pg_temp.part('Self marker','pkg.self-marker')->'payload')$q$
+    WHEN 'UPDATE' THEN $q$UPDATE public.proposal_agreement_parts SET payload=payload
+     WHERE proposal_id='f8683000-0000-4000-8000-000000000001'$q$
+    WHEN 'DELETE' THEN $q$DELETE FROM public.proposal_agreement_parts
+     WHERE proposal_id='f8683000-0000-4000-8000-000000000001'$q$ END;
+   EXECUTE format('SET LOCAL ROLE %I',role_name);
+   PERFORM set_config('app.scope_parts_writer','f8683000-0000-4000-8000-000000000001',true);
+   PERFORM pg_temp.expect_error(command,'42501',message,'self-marker '||role_name||' '||lower(operation)||' refused');
+   RESET ROLE;
+  END LOOP;
+ END LOOP;
+ PERFORM set_config('app.scope_parts_writer','',true);
+END $$;
+-- END self-marker role matrix
+SET LOCAL ROLE service_role;
+INSERT INTO public.proposal_agreement_parts(id,proposal_id,position,kind,part_key,title,payload)
+ VALUES ('f8689000-0000-4000-8000-000000000002','f8683000-0000-4000-8000-000000000001',3,'clause','Legacy service','Legacy service','{"body":"Legacy"}');
+UPDATE public.proposal_agreement_parts SET title='Legacy service updated'
+ WHERE id='f8689000-0000-4000-8000-000000000002';
+SELECT pg_temp.assert_true((SELECT title='Legacy service updated' FROM public.proposal_agreement_parts
+ WHERE id='f8689000-0000-4000-8000-000000000002'), 'service role non-scope insert and update unaffected');
+DELETE FROM public.proposal_agreement_parts WHERE id='f8689000-0000-4000-8000-000000000002';
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.proposal_agreement_parts
+ WHERE id='f8689000-0000-4000-8000-000000000002'), 'service role non-scope delete unaffected');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT NOT prosecdef AND proconfig @> ARRAY['search_path=public, pg_temp']
+ FROM pg_proc WHERE oid='public._guard_scope_package_storage()'::regprocedure), 'scope storage guard is invoker with pinned search path');
+DO $$ DECLARE signature regprocedure; BEGIN
+ FOREACH signature IN ARRAY ARRAY['public.upsert_agreement_parts(uuid,jsonb,text)'::regprocedure,
+  'public.materialize_standard_parts(uuid)'::regprocedure,'public.discard_agreement_parts(uuid)'::regprocedure] LOOP
+  PERFORM pg_temp.assert_true((SELECT native.prosecdef AND native.proowner=guard.proowner
+   FROM pg_proc native CROSS JOIN pg_proc guard WHERE native.oid=signature
+   AND guard.oid='public._guard_scope_package_storage()'::regprocedure), 'native writer shares guard owner '||signature);
+ END LOOP;
+END $$;
+SELECT pg_temp.assert_true((SELECT array_agg(p.proname::text ORDER BY p.proname)=
+ ARRAY['discard_agreement_parts','materialize_standard_parts','upsert_agreement_parts']
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname='public' AND p.prosrc ~ $re$set_config[[:space:]]*\([[:space:]]*'app\.scope_parts_writer'$re$),
+ 'only three native public bodies set scope writer marker');
+-- Fixture-only direct mutations attest after locking/rechecking the draft.
+SELECT id FROM public.proposals WHERE id='f8683000-0000-4000-8000-000000000001' AND status='draft' FOR UPDATE;
+SELECT set_config('app.scope_parts_writer','f8683000-0000-4000-8000-000000000001',true);
+CREATE TEMP TABLE saved_fingerprint AS
+ SELECT public._commercial_document_fingerprint(ap.proposal_id) fingerprint,
+   to_jsonb(ap) - 'created_at' - 'updated_at' part
+ FROM public.proposal_agreement_parts ap WHERE proposal_id='f8683000-0000-4000-8000-000000000001';
+UPDATE public.proposal_agreement_parts SET payload=payload
+ WHERE proposal_id='f8683000-0000-4000-8000-000000000001';
+SELECT pg_temp.assert_true((SELECT fingerprint = public._commercial_document_fingerprint('f8683000-0000-4000-8000-000000000001')
+ FROM saved_fingerprint), 'unchanged binding keeps native fingerprint');
+UPDATE public.proposal_agreement_parts SET payload=payload-'serviceBindings'
+ WHERE proposal_id='f8683000-0000-4000-8000-000000000001';
+SELECT pg_temp.assert_true((SELECT (to_jsonb(ap)-'created_at'-'updated_at') = jsonb_set(sf.part,'{payload}',(sf.part->'payload')-'serviceBindings')
+ FROM public.proposal_agreement_parts ap CROSS JOIN saved_fingerprint sf
+ WHERE ap.proposal_id='f8683000-0000-4000-8000-000000000001'), 'binding control holds all other hashed inputs fixed including id');
+SELECT pg_temp.assert_true((SELECT fingerprint <> public._commercial_document_fingerprint('f8683000-0000-4000-8000-000000000001')
+ FROM saved_fingerprint), 'service binding alone changes native fingerprint');
+-- END binding fingerprint assertions
+SELECT pg_temp.save(jsonb_build_array(jsonb_set(pg_temp.part('Bound','pkg.bound'),'{payload,serviceBindings}','{}')));
+SELECT pg_temp.assert_true((SELECT NOT (payload ? 'serviceBindings') FROM public.proposal_agreement_parts WHERE proposal_id='f8683000-0000-4000-8000-000000000001'), 'empty service bindings stored absent');
+
+-- F6: direct storage uses the same canonical representation as upsert.
+SELECT set_config('app.scope_parts_writer','f8683000-0000-4000-8000-000000000001',true);
+INSERT INTO public.proposal_agreement_parts(id,proposal_id,position,kind,part_key,title,payload)
+VALUES ('f8689000-0000-4000-8000-000000000001','f8683000-0000-4000-8000-000000000001',2,'scope_package','Direct','Direct',
+ (pg_temp.part('Direct','pkg.direct')->'payload') || '{"serviceBindings":{}}');
+SELECT pg_temp.assert_true((SELECT NOT(payload ? 'serviceBindings') FROM public.proposal_agreement_parts
+ WHERE id='f8689000-0000-4000-8000-000000000001'), 'direct insert stores empty bindings absent');
+-- END direct normalization assertions
+SELECT pg_temp.expect_error($q$INSERT INTO public.proposal_agreement_parts(proposal_id,position,kind,part_key,title,payload)
+ VALUES ('f8683000-0000-4000-8000-000000000001',3,'scope_package','Duplicate','Duplicate',pg_temp.part('Duplicate','pkg.direct')->'payload')$q$,
+ '23514','scope_package_key_duplicate','storage sibling key duplicate refused');
+SELECT pg_temp.expect_error($q$UPDATE public.proposal_agreement_parts SET proposal_id='f8683000-0000-4000-8000-000000000002'
+ WHERE id='f8689000-0000-4000-8000-000000000001'$q$,
+ '23514','scope_package_proposal_move_forbidden','scope package move refused even with source marker');
+-- Exercise the index independently of the sibling-check trigger.
+SET CONSTRAINTS ALL IMMEDIATE;
+ALTER TABLE public.proposal_agreement_parts DISABLE TRIGGER guard_scope_package_storage;
+SELECT pg_temp.expect_error($q$INSERT INTO public.proposal_agreement_parts(proposal_id,position,kind,part_key,title,payload)
+ VALUES ('f8683000-0000-4000-8000-000000000001',3,'scope_package','Index duplicate','Index duplicate',pg_temp.part('Index duplicate','pkg.direct')->'payload')$q$,
+ '23505','proposal_scope_package_key_unique','unique index independently rejects duplicate packageKey');
+ALTER TABLE public.proposal_agreement_parts ENABLE TRIGGER guard_scope_package_storage;
+DELETE FROM public.proposal_agreement_parts WHERE id='f8689000-0000-4000-8000-000000000001';
+SELECT set_config('app.scope_parts_writer','',true);
+SELECT pg_temp.save(jsonb_build_array(pg_temp.bound_part('f8685000-0000-4000-8000-000000000001')));
+SELECT set_config('app.scope_parts_writer','f8683000-0000-4000-8000-000000000001',true);
+SELECT pg_temp.expect_error($q$INSERT INTO public.proposal_agreement_parts(proposal_id,position,kind,part_key,title,payload)
+ VALUES ('f8683000-0000-4000-8000-000000000001',2,'scope_package','Shared','Shared',
+ jsonb_set(pg_temp.bound_part('f8685000-0000-4000-8000-000000000001'),'{payload,packageKey}','"pkg.shared"')->'payload')$q$,
+ '23514','scope_package_phase_shared','storage sibling phase binding duplicate refused');
+
+SELECT set_config('app.scope_parts_writer','',true);
+-- Test assertion helpers carry no application authority.
+DO $$ DECLARE schema_name text := (SELECT nspname FROM pg_namespace WHERE oid=pg_my_temp_schema()); BEGIN
+ EXECUTE format('GRANT USAGE ON SCHEMA %I TO authenticated, anon',schema_name);
+ EXECUTE format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %I TO authenticated, anon',schema_name);
+END $$;
+-- Authenticated grants restored only for this rolled-back test of body authority.
+GRANT EXECUTE ON FUNCTION public.apply_service_arrangement(uuid,text,uuid) TO authenticated;
+INSERT INTO public.phase_templates(slug,label,is_system,phases) VALUES
+('scope-b01','Scope fixture',true,'[{"name":"Concept","phase_key":"concept_development","duration_weeks":1,"fee_cents":0}]');
+INSERT INTO public.service_arrangements(arrangement_key,version,phase_template_slug,parts) VALUES
+('fixture-a',1,'scope-b01',jsonb_build_array(pg_temp.part('Preset','pkg.preset'))),
+('fixture-b',1,'scope-b01',jsonb_build_array(pg_temp.part('Other','pkg.other'))),
+('fixture-invalid',1,'scope-b01',jsonb_build_array(pg_temp.part('Bad','INVALID')));
+SELECT set_config('request.jwt.claim.sub','f8680000-0000-4000-8000-000000000003',true);
+SELECT pg_temp.assert_true(public._can_author_proposal('f8680000-0000-4000-8000-000000000001'), 'dual studio fixture reaches legacy helper');
+SELECT pg_temp.assert_true(NOT public.can_compose_project_plan('f8684000-0000-4000-8000-000000000001'), 'dual studio job predicate denies B only');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a',gen_random_uuid())$q$,
+'42501','scope_proposal_access_denied','dual studio arrangement denial');
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','f8680000-0000-4000-8000-000000000004',true);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a',gen_random_uuid())$q$,
+'42501','scope_proposal_access_denied','guest arrangement denial');
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','',true);
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a',gen_random_uuid())$q$,
+'42501','scope_proposal_access_denied','anonymous body denial');
+SELECT set_config('request.jwt.claim.sub','f8680000-0000-4000-8000-000000000002',true);
+SELECT pg_temp.assert_true(public.can_compose_project_plan('f8684000-0000-4000-8000-000000000001'), 'A member job predicate admitted');
+SELECT pg_temp.assert_true(NOT public.can_author_scope_proposal('f8683000-0000-4000-8000-000000000003'), 'studio-less proposal denies comember');
+SET LOCAL ROLE authenticated;
+SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a','f8686000-0000-4000-8000-000000000001');
+SELECT pg_temp.assert_true((public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a','f8686000-0000-4000-8000-000000000001')->>'replayed')::boolean, 'same request replay');
+SELECT pg_temp.assert_true((public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a','f8686000-0000-4000-8000-000000000002')->>'replayed')::boolean, 'same arrangement alias');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=2 FROM public.proposal_phases WHERE proposal_id='f8683000-0000-4000-8000-000000000002'), 'alias creates no duplicate phases');
+SELECT pg_temp.assert_true((SELECT count(*)=2 AND count(DISTINCT effect_hash)=1 FROM public.proposal_service_arrangement_applications WHERE proposal_id='f8683000-0000-4000-8000-000000000002'), 'alias durable receipt shares effect');
+-- F5: state changes do not revoke a currently-authorized durable replay.
+CREATE TEMP TABLE sent_replay_before AS SELECT
+ (SELECT count(*) FROM public.proposal_phases WHERE proposal_id='f8683000-0000-4000-8000-000000000002') phases,
+ (SELECT count(*) FROM public.proposal_agreement_parts WHERE proposal_id='f8683000-0000-4000-8000-000000000002') parts,
+ (SELECT count(*) FROM public.proposal_service_arrangement_applications WHERE proposal_id='f8683000-0000-4000-8000-000000000002') receipts;
+-- Fixture state transition, not a send/consumer acceptance test.
+SET LOCAL session_replication_role=replica;
+UPDATE public.proposals SET status='sent' WHERE id='f8683000-0000-4000-8000-000000000002';
+SET LOCAL session_replication_role=origin;
+DO $$ DECLARE result jsonb; BEGIN
+ BEGIN
+  result := public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a','f8686000-0000-4000-8000-000000000001');
+ EXCEPTION WHEN OTHERS THEN result := jsonb_build_object('error',SQLSTATE); END;
+ PERFORM pg_temp.assert_true(result @> '{"replayed":true,"arrangementVersion":1}'::jsonb
+   AND result->'phaseIds'=to_jsonb((SELECT phase_ids FROM public.proposal_service_arrangement_applications
+    WHERE proposal_id='f8683000-0000-4000-8000-000000000002' AND request_id='f8686000-0000-4000-8000-000000000001'))
+   AND result->'partKeys'=to_jsonb((SELECT part_keys FROM public.proposal_service_arrangement_applications
+    WHERE proposal_id='f8683000-0000-4000-8000-000000000002' AND request_id='f8686000-0000-4000-8000-000000000001')),
+   'sent identical request returns recorded result');
+END $$;
+SELECT pg_temp.assert_true((SELECT phases=(SELECT count(*) FROM public.proposal_phases WHERE proposal_id='f8683000-0000-4000-8000-000000000002')
+ AND parts=(SELECT count(*) FROM public.proposal_agreement_parts WHERE proposal_id='f8683000-0000-4000-8000-000000000002')
+ AND receipts=(SELECT count(*) FROM public.proposal_service_arrangement_applications WHERE proposal_id='f8683000-0000-4000-8000-000000000002')
+ FROM sent_replay_before), 'sent identical replay creates no rows');
+-- END sent replay assertions
+INSERT INTO public.service_arrangements(arrangement_key,version,phase_template_slug,parts) VALUES
+ ('fixture-a',2,'scope-b01',jsonb_build_array(pg_temp.part('Preset v2','pkg.preset-v2'))),
+ ('fixture-b',2,'scope-b01',jsonb_build_array(pg_temp.part('Other v2','pkg.other-v2')));
+SELECT pg_temp.assert_true((public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a','f8686000-0000-4000-8000-000000000003')
+ @> '{"replayed":true,"arrangementVersion":1}'::jsonb), 'sent alias remains bound to applied version after new version published');
+SELECT pg_temp.assert_true((SELECT count(*)=3 AND min(arrangement_version)=1 AND max(arrangement_version)=1
+ FROM public.proposal_service_arrangement_applications WHERE proposal_id='f8683000-0000-4000-8000-000000000002'), 'receipt and aliases record original version');
+SELECT pg_temp.expect_error($q$UPDATE public.service_arrangements SET parts='[]' WHERE arrangement_key='fixture-a' AND version=1$q$,
+ '23514','scope_record_immutable','published arrangement version immutable');
+SELECT pg_temp.expect_error($q$DELETE FROM public.service_arrangements WHERE arrangement_key='fixture-a' AND version=2$q$,
+ '23514','scope_record_immutable','published arrangement version cannot be deleted');
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-b',gen_random_uuid())$q$,
+ '23514','arrangement_already_applied','sent different composition refused');
+SET LOCAL session_replication_role=replica;
+UPDATE public.proposals SET status='draft' WHERE id='f8683000-0000-4000-8000-000000000002';
+UPDATE public.proposals SET status='sent' WHERE id='f8683000-0000-4000-8000-000000000004';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000004','fixture-a',gen_random_uuid())$q$,
+ '23514','scope_arrangement_draft_request_required','sent new composition refused');
+SELECT pg_temp.expect_error($q$SELECT public.upsert_agreement_parts('f8683000-0000-4000-8000-000000000004',jsonb_build_array(pg_temp.part('Sent')),'Sent test')$q$,
+ '42501','draft proposal','sent upsert refuses at locked draft recheck');
+SELECT pg_temp.expect_error($q$SELECT public.discard_agreement_parts('f8683000-0000-4000-8000-000000000004')$q$,
+ '42501','draft proposal','sent discard refuses at locked draft recheck');
+SELECT pg_temp.expect_error($q$SELECT public.materialize_standard_parts('f8683000-0000-4000-8000-000000000004')$q$,
+ '42501','draft proposal','sent materialize refuses at locked draft recheck');
+SELECT pg_temp.assert_true(COALESCE(current_setting('app.scope_parts_writer',true),'')='', 'sent refusals leave no writer marker');
+
+SET LOCAL session_replication_role=replica;
+UPDATE public.proposals SET status='draft' WHERE id='f8683000-0000-4000-8000-000000000004';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-b',gen_random_uuid())$q$,
+'23514','arrangement_already_applied','different arrangement refused');
+SELECT public.discard_agreement_parts('f8683000-0000-4000-8000-000000000002');
+SELECT pg_temp.assert_true(current_setting('app.scope_parts_writer',true)='', 'discard clears writer marker');
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-b',gen_random_uuid())$q$,
+'23514','arrangement_already_applied','discard never permits arrangement switch');
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a',gen_random_uuid())$q$,
+'40001','arrangement_effect_changed','discard makes replay drift refuse');
+SELECT set_config('request.jwt.claim.sub','f8680000-0000-4000-8000-000000000001',true);
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000004','fixture-invalid',gen_random_uuid())$q$,
+'23514','scope_package_key_invalid','invalid arrangement rolls back');
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.proposal_phases WHERE proposal_id='f8683000-0000-4000-8000-000000000004')
+ AND NOT EXISTS(SELECT 1 FROM public.proposal_phase_template_applications WHERE proposal_id='f8683000-0000-4000-8000-000000000004'), 'rollback leaves no phases or native receipt');
+
+REVOKE ALL ON FUNCTION public.apply_service_arrangement(uuid,text,uuid) FROM authenticated;
+
+SET LOCAL ROLE anon;
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000001','fixture-a',gen_random_uuid())$q$,'42501',NULL,'anon direct RPC denied');
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000001','fixture-a',gen_random_uuid())$q$,'42501',NULL,'authenticated direct RPC denied');
+SELECT pg_temp.expect_error($q$INSERT INTO public.server_capabilities(key,enabled) VALUES ('scope-test',true)$q$,'42501',NULL,'authenticated cannot activate capability');
+SELECT pg_temp.expect_error($q$INSERT INTO public.proposal_agreement_parts(proposal_id,position,kind,part_key,title,payload) VALUES ('f8683000-0000-4000-8000-000000000001',99,'scope_package','denied','Denied','{}')$q$,'42501',NULL,'authenticated direct storage denied');
+RESET ROLE;
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.project_scope_editions) AND NOT EXISTS(SELECT 1 FROM public.project_scope_edition_signers), 'no fabricated legacy scope or signer backfill');
+-- A disabled capability also protects removal and kind changes of stored packages.
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
+SELECT pg_temp.expect_error($q$DELETE FROM public.proposal_agreement_parts WHERE proposal_id='f8683000-0000-4000-8000-000000000001'$q$,
+'55000','scope_editions_inactive','inactive delete refuses stored package removal');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.save('[]')$q$,
+'55000','scope_editions_inactive','inactive empty upsert refuses stored package removal');
+SELECT pg_temp.expect_error($q$UPDATE public.proposal_agreement_parts SET kind='text' WHERE proposal_id='f8683000-0000-4000-8000-000000000001'$q$,
+'55000','scope_editions_inactive','inactive reclassification refuses stored package removal');
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SELECT set_config('request.jwt.claim.sub','f8680000-0000-4000-8000-000000000005',true);
+SELECT pg_temp.assert_true(NOT public.can_author_scope_proposal('f8683000-0000-4000-8000-000000000001')
+ AND NOT public.can_compose_project_plan('f8684000-0000-4000-8000-000000000001'), 'client receives no composition authority');
+SELECT set_config('request.jwt.claim.sub','f8680000-0000-4000-8000-000000000001',true);
+SELECT pg_temp.assert_true(public.can_author_scope_proposal('f8683000-0000-4000-8000-000000000003'), 'studio-less owner admitted');
+SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000004','fixture-b',gen_random_uuid());
+SELECT pg_temp.assert_true(EXISTS(SELECT 1 FROM public.proposal_service_arrangement_applications
+ WHERE proposal_id='f8683000-0000-4000-8000-000000000004' AND arrangement_key='fixture-b' AND arrangement_version=2), 'fresh draft selects latest immutable arrangement version');
+SELECT pg_temp.assert_true(COALESCE(current_setting('app.scope_parts_writer',true),'')=''
+ AND EXISTS(SELECT 1 FROM public.proposal_agreement_parts WHERE proposal_id='f8683000-0000-4000-8000-000000000004'
+  AND kind='scope_package' AND payload->>'packageKey'='pkg.other-v2')
+ AND (SELECT count(*)=3 FROM public.proposal_service_arrangement_applications
+  WHERE proposal_id='f8683000-0000-4000-8000-000000000002' AND arrangement_version=1),
+ 'arrangement delegation preserves native scope writes replay receipts and marker cleanup');
+-- Bare phase-template callers retain append-by-slug semantics.
+INSERT INTO public.phase_templates(slug,label,is_system,phases) VALUES
+('scope-b01-other','Scope other fixture',true,'[{"name":"Other","phase_key":"concept_development","duration_weeks":1,"fee_cents":0}]');
+SELECT public.apply_phase_template('f8683000-0000-4000-8000-000000000003','scope-b01',gen_random_uuid());
+SELECT public.apply_phase_template('f8683000-0000-4000-8000-000000000003','scope-b01-other',gen_random_uuid());
+SELECT pg_temp.assert_true((SELECT count(*)=2 FROM public.proposal_phases
+ WHERE proposal_id='f8683000-0000-4000-8000-000000000003'), 'native different template slug still appends');
+
+SELECT pg_temp.assert_true((public.materialize_standard_parts('f8683000-0000-4000-8000-000000000003')->>'materialized')::boolean,
+ 'native materialize still seeds legacy parts');
+SELECT pg_temp.assert_true(current_setting('app.scope_parts_writer',true)='', 'materialize clears writer marker');
+SELECT pg_temp.assert_true((public.discard_agreement_parts('f8683000-0000-4000-8000-000000000003')->>'discarded')::integer=9,
+ 'native discard still removes legacy parts');
+SELECT pg_temp.assert_true(current_setting('app.scope_parts_writer',true)='', 'legacy discard clears writer marker');
+SELECT pg_temp.assert_true((SELECT pg_get_functiondef('public._guard_scope_package_storage()'::regprocedure) !~* 'FOR (UPDATE|SHARE|NO KEY UPDATE|KEY SHARE)'),
+ 'scope storage trigger takes no row locks');
+-- Synthetic editions exercise schema only, not countersigning/minting (B02).
+INSERT INTO public.project_commercial_documents(id,project_id,proposal_id,document_kind,created_by) VALUES
+('f8687000-0000-4000-8000-000000000001','f8684000-0000-4000-8000-000000000001',
+'f8683000-0000-4000-8000-000000000001','design_services','f8680000-0000-4000-8000-000000000001');
+INSERT INTO public.project_scope_editions(id,project_id,edition_number,kind,commercial_document_id,source_proposal_id,
+ agreement_fingerprint,effective_at,content,content_hash,status) VALUES
+('f8688000-0000-4000-8000-000000000001','f8684000-0000-4000-8000-000000000001',1,'baseline',
+'f8687000-0000-4000-8000-000000000001','f8683000-0000-4000-8000-000000000001','fixture-only',now(),'{}','fixture-only','active');
+CREATE FUNCTION pg_temp.insert_package(responsibilities jsonb, key text DEFAULT 'pkg.fixture') RETURNS void LANGUAGE sql AS $$
+ INSERT INTO public.project_scope_edition_packages(edition_id,package_key,label,inclusion,responsibilities)
+ VALUES ('f8688000-0000-4000-8000-000000000001',key,'Fixture','included',responsibilities);
+$$;
+DO $$ DECLARE slot text; valid jsonb := pg_temp.part('Fixture')#>'{payload,responsibilities}'; BEGIN
+ FOREACH slot IN ARRAY ARRAY['design','purchasing','payer','fabrication_contract','installation'] LOOP
+  PERFORM pg_temp.expect_error(format('SELECT pg_temp.insert_package(%L::jsonb)',valid-slot),
+   '23514',NULL,'edition child requires slot '||slot);
+  PERFORM pg_temp.expect_error(format('SELECT pg_temp.insert_package(%L::jsonb)',jsonb_set(valid,ARRAY[slot],'null')),
+   '23514',NULL,'edition child rejects null slot '||slot);
+ END LOOP;
+ PERFORM pg_temp.expect_error(format('SELECT pg_temp.insert_package(%L::jsonb)',valid||'{"extra":"none"}'),
+  '23514',NULL,'edition child rejects extra slot');
+ PERFORM pg_temp.expect_error(format('SELECT pg_temp.insert_package(%L::jsonb)',valid||'{"payer":"designer"}'),
+  '23514',NULL,'edition child rejects unknown party kind');
+END $$;
+SELECT pg_temp.insert_package(pg_temp.part('Fixture')#>'{payload,responsibilities}');
+SELECT pg_temp.expect_error($q$UPDATE public.project_scope_edition_packages SET package_key='pkg.changed'$q$,
+'23514','scope_record_immutable','agreed package key immutable');
+SELECT pg_temp.expect_error($q$DELETE FROM public.project_scope_edition_packages$q$,
+'23514','scope_record_immutable','agreed package cannot be deleted');
+SELECT pg_temp.expect_error($q$UPDATE public.project_scope_editions SET status='stale'$q$,
+'23514','scope_record_immutable','edition transition needs scoped setting');
+SELECT set_config('app.scope_edition_id','f8688000-0000-4000-8000-000000000001',true);
+SELECT pg_temp.expect_error($q$UPDATE public.project_scope_editions SET status='stale',content='{"tampered":true}'$q$,
+'23514','scope_record_immutable','transition cannot rewrite signed content');
+UPDATE public.project_scope_editions SET status='stale',stale_at=now(),stale_reason='fixture',
+ stale_commercial_document_id='f8687000-0000-4000-8000-000000000001',stale_execution_seq=1;
+SELECT pg_temp.expect_error($q$UPDATE public.project_scope_editions SET status='active'$q$,
+'23514','scope_record_immutable','stale edition cannot reactivate');
+UPDATE public.project_scope_editions SET status='superseded',superseded_at=now();
+SELECT pg_temp.assert_true((SELECT status='superseded' AND content='{}'::jsonb FROM public.project_scope_editions
+ WHERE id='f8688000-0000-4000-8000-000000000001'), 'allowed edition transitions preserve content');
+SELECT pg_temp.expect_error($q$DELETE FROM public.project_scope_editions$q$,
+'23514','scope_record_immutable','edition cannot be deleted');
+\echo B01 scope composition assertions complete
