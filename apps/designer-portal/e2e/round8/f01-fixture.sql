@@ -74,7 +74,7 @@ ON CONFLICT (user_id, organization_id) DO UPDATE SET role = 'owner', status = 'a
 -- Profile provisioning creates a personal studio before the explicit F01 seat.
 -- Keep one active seat so native proposal inserts can derive the F01 studio.
 -- Retain the inactive membership for the fixture teardown's owned-org lookup.
-SET LOCAL request.jwt.claims = '{"role":"service_role"}';
+SET LOCAL ROLE service_role;
 UPDATE public.organization_members AS member
 SET status = 'removed'
 FROM public.organizations AS org
@@ -87,7 +87,7 @@ WHERE member.organization_id = org.id
     SELECT 1 FROM public.organization_members AS other
     WHERE other.organization_id = org.id AND other.user_id <> member.user_id
   );
-SET LOCAL request.jwt.claims = '{}';
+RESET ROLE;
 DO $$ BEGIN
   IF (SELECT array_agg(organization_id ORDER BY organization_id)
       FROM public.organization_members
