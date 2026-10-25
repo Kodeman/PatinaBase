@@ -839,7 +839,7 @@ describe("at 390 (a14, F9)", () => {
     setStacked(true);
     renderLens();
     await pane();
-    fireEvent.click(rowFor("Countertop for custom cabinets"));
+    fireEvent.click(rowFor("Countertop for custom cabinets"), { detail: 1 });
     const section = await pane();
     const heading = within(section).getByRole("heading", { level: 2 });
     await waitFor(() => expect(heading).toHaveFocus());
@@ -1254,9 +1254,28 @@ describe("fitted Spec editor (C03)", () => {
     await pane();
     const list = screen.getByRole("list", { name: "Lines" }).parentElement!;
     list.style.order = "3";
-    fireEvent.click(rowFor("Countertop for custom cabinets"));
+    fireEvent.click(rowFor("Countertop for custom cabinets"), { detail: 1 });
     await waitFor(() => expect(within(screen.getByTestId("spec-fields-pane")).getByRole("heading", { level: 2 })).toHaveFocus());
   });
+
+  it.each(["0", "3"])(
+    "keeps keyboard activation on the line control when rendered list order is %s",
+    async (order) => {
+      renderLens();
+      await pane();
+      screen.getByRole("list", { name: "Lines" }).parentElement!.style.order = order;
+      const row = rowFor("Countertop for custom cabinets");
+      row.focus();
+      // Enter/Space and assistive activation dispatch a click without a pointer count.
+      fireEvent.click(row, { detail: 0 });
+      const section = await pane();
+      expect(within(section).getByRole("heading", { level: 2 })).toHaveTextContent(
+        "Countertop for custom cabinets · ×2",
+      );
+      expect(row).toHaveAttribute("aria-current", "true");
+      expect(row).toHaveFocus();
+    },
+  );
 
   it("reports a missing addressed stable ID even when the room has no lines", async () => {
     mockItems.data = [];
