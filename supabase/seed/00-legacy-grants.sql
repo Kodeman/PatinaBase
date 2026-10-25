@@ -24360,6 +24360,120 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.server_capabilities FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_author_scope_proposal(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_compose_project_plan(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_scope_immutable() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_scope_editions FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_scope_edition_packages FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_scope_edition_phases FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_scope_edition_signers FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_commercial_execution_order FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.proposal_service_arrangement_applications FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.service_arrangements FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_scope_composition_enabled() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._normalize_scope_package_parts(uuid,jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_scope_package_storage() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._scope_arrangement_effect(uuid,uuid[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00868_round8_scope_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_service_arrangement(uuid,text,uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00873_round8_placement_retry_idempotency.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_in_project_v2_00438_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00873_round8_placement_retry_idempotency.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.place_product_in_project_v2(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00873_round8_placement_retry_idempotency.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_in_project_v2(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

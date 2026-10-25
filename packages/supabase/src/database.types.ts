@@ -18290,6 +18290,62 @@ export type Database = {
           },
         ]
       }
+      project_commercial_execution_order: {
+        Row: {
+          commercial_document_id: string
+          execution_seq: number
+          legacy_order: boolean
+          predecessor_document_id: string | null
+          project_id: string
+          recorded_at: string
+        }
+        Insert: {
+          commercial_document_id: string
+          execution_seq: number
+          legacy_order?: boolean
+          predecessor_document_id?: string | null
+          project_id: string
+          recorded_at?: string
+        }
+        Update: {
+          commercial_document_id?: string
+          execution_seq?: number
+          legacy_order?: boolean
+          predecessor_document_id?: string | null
+          project_id?: string
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_commercial_execution_order_commercial_document_id_fkey"
+            columns: ["commercial_document_id"]
+            isOneToOne: true
+            referencedRelation: "project_commercial_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_commercial_execution_order_predecessor_document_id_fkey"
+            columns: ["predecessor_document_id"]
+            isOneToOne: false
+            referencedRelation: "project_commercial_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_commercial_execution_order_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_commercial_execution_order_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_decision_authorities: {
         Row: {
           assigned_at: string
@@ -21732,6 +21788,270 @@ export type Database = {
           },
         ]
       }
+      project_scope_edition_packages: {
+        Row: {
+          condition_text: string | null
+          design_owed_since: number | null
+          edition_id: string
+          inclusion: string
+          installation_owed_since: number | null
+          label: string
+          override_of: string | null
+          package_key: string
+          provenance: Json
+          responsibilities: Json
+          room_ids: string[]
+        }
+        Insert: {
+          condition_text?: string | null
+          design_owed_since?: number | null
+          edition_id: string
+          inclusion: string
+          installation_owed_since?: number | null
+          label: string
+          override_of?: string | null
+          package_key: string
+          provenance?: Json
+          responsibilities: Json
+          room_ids?: string[]
+        }
+        Update: {
+          condition_text?: string | null
+          design_owed_since?: number | null
+          edition_id?: string
+          inclusion?: string
+          installation_owed_since?: number | null
+          label?: string
+          override_of?: string | null
+          package_key?: string
+          provenance?: Json
+          responsibilities?: Json
+          room_ids?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_scope_edition_packages_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_editions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_scope_edition_phases: {
+        Row: {
+          bound_in_edition: number | null
+          edition_id: string
+          package_key: string | null
+          project_phase_id: string | null
+          service_slot: string | null
+          source_proposal_phase_id: string
+        }
+        Insert: {
+          bound_in_edition?: number | null
+          edition_id: string
+          package_key?: string | null
+          project_phase_id?: string | null
+          service_slot?: string | null
+          source_proposal_phase_id: string
+        }
+        Update: {
+          bound_in_edition?: number | null
+          edition_id?: string
+          package_key?: string | null
+          project_phase_id?: string | null
+          service_slot?: string | null
+          source_proposal_phase_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_scope_edition_phases_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_edition_phases_edition_id_package_key_fkey"
+            columns: ["edition_id", "package_key"]
+            isOneToOne: false
+            referencedRelation: "project_scope_edition_packages"
+            referencedColumns: ["edition_id", "package_key"]
+          },
+        ]
+      }
+      project_scope_edition_signers: {
+        Row: {
+          edition_id: string
+          household_person_id: string | null
+          policy_revision: number
+          profile_id: string | null
+          required: boolean
+          slot: string
+        }
+        Insert: {
+          edition_id: string
+          household_person_id?: string | null
+          policy_revision: number
+          profile_id?: string | null
+          required: boolean
+          slot: string
+        }
+        Update: {
+          edition_id?: string
+          household_person_id?: string | null
+          policy_revision?: number
+          profile_id?: string | null
+          required?: boolean
+          slot?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_scope_edition_signers_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_edition_signers_household_person_id_fkey"
+            columns: ["household_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_edition_signers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_edition_signers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_scope_editions: {
+        Row: {
+          agreement_fingerprint: string
+          commercial_document_id: string
+          content: Json
+          content_hash: string
+          created_at: string
+          edition_number: number
+          effective_at: string
+          id: string
+          kind: string
+          predecessor_edition_id: string | null
+          project_id: string
+          source_proposal_id: string
+          stale_at: string | null
+          stale_commercial_document_id: string | null
+          stale_execution_seq: number | null
+          stale_reason: string | null
+          status: string
+          superseded_at: string | null
+          superseded_by_edition_id: string | null
+        }
+        Insert: {
+          agreement_fingerprint: string
+          commercial_document_id: string
+          content: Json
+          content_hash: string
+          created_at?: string
+          edition_number: number
+          effective_at: string
+          id?: string
+          kind: string
+          predecessor_edition_id?: string | null
+          project_id: string
+          source_proposal_id: string
+          stale_at?: string | null
+          stale_commercial_document_id?: string | null
+          stale_execution_seq?: number | null
+          stale_reason?: string | null
+          status: string
+          superseded_at?: string | null
+          superseded_by_edition_id?: string | null
+        }
+        Update: {
+          agreement_fingerprint?: string
+          commercial_document_id?: string
+          content?: Json
+          content_hash?: string
+          created_at?: string
+          edition_number?: number
+          effective_at?: string
+          id?: string
+          kind?: string
+          predecessor_edition_id?: string | null
+          project_id?: string
+          source_proposal_id?: string
+          stale_at?: string | null
+          stale_commercial_document_id?: string | null
+          stale_execution_seq?: number | null
+          stale_reason?: string | null
+          status?: string
+          superseded_at?: string | null
+          superseded_by_edition_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_scope_editions_commercial_document_id_fkey"
+            columns: ["commercial_document_id"]
+            isOneToOne: true
+            referencedRelation: "project_commercial_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_editions_predecessor_edition_id_fkey"
+            columns: ["predecessor_edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_editions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_scope_editions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_editions_source_proposal_id_fkey"
+            columns: ["source_proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_editions_stale_commercial_document_id_fkey"
+            columns: ["stale_commercial_document_id"]
+            isOneToOne: false
+            referencedRelation: "project_commercial_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_scope_editions_superseded_by_edition_id_fkey"
+            columns: ["superseded_by_edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_editions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_sections: {
         Row: {
           created_at: string | null
@@ -24045,6 +24365,71 @@ export type Database = {
           },
         ]
       }
+      proposal_service_arrangement_applications: {
+        Row: {
+          arrangement_key: string
+          arrangement_version: number
+          created_at: string
+          created_by: string
+          effect_hash: string
+          part_keys: string[]
+          phase_ids: string[]
+          proposal_id: string
+          request_id: string
+        }
+        Insert: {
+          arrangement_key: string
+          arrangement_version: number
+          created_at?: string
+          created_by: string
+          effect_hash: string
+          part_keys: string[]
+          phase_ids: string[]
+          proposal_id: string
+          request_id: string
+        }
+        Update: {
+          arrangement_key?: string
+          arrangement_version?: number
+          created_at?: string
+          created_by?: string
+          effect_hash?: string
+          part_keys?: string[]
+          phase_ids?: string[]
+          proposal_id?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_service_arrangement__arrangement_key_arrangement__fkey"
+            columns: ["arrangement_key", "arrangement_version"]
+            isOneToOne: false
+            referencedRelation: "service_arrangements"
+            referencedColumns: ["arrangement_key", "version"]
+          },
+          {
+            foreignKeyName: "proposal_service_arrangement_applications_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_service_arrangement_applications_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_service_arrangement_applications_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposal_service_rates: {
         Row: {
           created_at: string
@@ -24282,6 +24667,7 @@ export type Database = {
           discount_amount: number | null
           discount_percent: number | null
           document_kind: string
+          drafted_against_scope_edition_id: string | null
           feedback_enabled: boolean
           id: string
           issued_on_paper: boolean
@@ -24335,6 +24721,7 @@ export type Database = {
           discount_amount?: number | null
           discount_percent?: number | null
           document_kind?: string
+          drafted_against_scope_edition_id?: string | null
           feedback_enabled?: boolean
           id?: string
           issued_on_paper?: boolean
@@ -24388,6 +24775,7 @@ export type Database = {
           discount_amount?: number | null
           discount_percent?: number | null
           document_kind?: string
+          drafted_against_scope_edition_id?: string | null
           feedback_enabled?: boolean
           id?: string
           issued_on_paper?: boolean
@@ -24457,6 +24845,13 @@ export type Database = {
             columns: ["designer_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_drafted_against_scope_edition_id_fkey"
+            columns: ["drafted_against_scope_edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_editions"
             referencedColumns: ["id"]
           },
           {
@@ -27277,6 +27672,50 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      server_capabilities: {
+        Row: {
+          enabled: boolean
+          key: string
+        }
+        Insert: {
+          enabled?: boolean
+          key: string
+        }
+        Update: {
+          enabled?: boolean
+          key?: string
+        }
+        Relationships: []
+      }
+      service_arrangements: {
+        Row: {
+          arrangement_key: string
+          parts: Json
+          phase_template_slug: string
+          version: number
+        }
+        Insert: {
+          arrangement_key: string
+          parts: Json
+          phase_template_slug: string
+          version: number
+        }
+        Update: {
+          arrangement_key?: string
+          parts?: Json
+          phase_template_slug?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_arrangements_phase_template_slug_fkey"
+            columns: ["phase_template_slug"]
+            isOneToOne: false
+            referencedRelation: "phase_templates"
+            referencedColumns: ["slug"]
           },
         ]
       }
@@ -37063,6 +37502,7 @@ export type Database = {
         Args: { p_context: string; p_proposal_id: string }
         Returns: undefined
       }
+      _assert_scope_composition_enabled: { Args: never; Returns: undefined }
       _backfill_ffe_item_library_images: { Args: never; Returns: number }
       _board_deck_import_assert_lease: {
         Args: { p_import_id: string; p_lease_owner: string }
@@ -37416,6 +37856,7 @@ export type Database = {
           discount_amount: number | null
           discount_percent: number | null
           document_kind: string
+          drafted_against_scope_edition_id: string | null
           feedback_enabled: boolean
           id: string
           issued_on_paper: boolean
@@ -37806,6 +38247,7 @@ export type Database = {
           discount_amount: number | null
           discount_percent: number | null
           document_kind: string
+          drafted_against_scope_edition_id: string | null
           feedback_enabled: boolean
           id: string
           issued_on_paper: boolean
@@ -38368,6 +38810,7 @@ export type Database = {
           discount_amount: number | null
           discount_percent: number | null
           document_kind: string
+          drafted_against_scope_edition_id: string | null
           feedback_enabled: boolean
           id: string
           issued_on_paper: boolean
@@ -38443,6 +38886,10 @@ export type Database = {
         Returns: Json
       }
       _move_invoice_line_internal_metadata: { Args: never; Returns: undefined }
+      _normalize_scope_package_parts: {
+        Args: { p_parts: Json; p_proposal_id: string }
+        Returns: Json
+      }
       _paper_signature_metadata: {
         Args: {
           p_paper_signed_on: string
@@ -38473,10 +38920,6 @@ export type Database = {
         Returns: Json
       }
       _place_product_in_project_v2_00444_impl: {
-        Args: { p_request: Json }
-        Returns: Json
-      }
-      _place_product_in_project_v2_00446_impl: {
         Args: { p_request: Json }
         Returns: Json
       }
@@ -38905,6 +39348,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: string
       }
+      _scope_arrangement_effect: {
+        Args: { p_phase_ids: string[]; p_proposal_id: string }
+        Returns: string
+      }
       _scope_change_requester_can_author: {
         Args: { p_actor: string; p_owner: string }
         Returns: boolean
@@ -38937,6 +39384,7 @@ export type Database = {
           discount_amount: number | null
           discount_percent: number | null
           document_kind: string
+          drafted_against_scope_edition_id: string | null
           feedback_enabled: boolean
           id: string
           issued_on_paper: boolean
@@ -39882,6 +40330,14 @@ export type Database = {
         Returns: undefined
       }
       apply_scope_change: { Args: { p_request_id: string }; Returns: undefined }
+      apply_service_arrangement: {
+        Args: {
+          p_arrangement_key: string
+          p_proposal_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       apply_starvation_decay: { Args: never; Returns: Json }
       apply_taste_refit: {
         Args: {
@@ -40212,6 +40668,7 @@ export type Database = {
           discount_amount: number | null
           discount_percent: number | null
           document_kind: string
+          drafted_against_scope_edition_id: string | null
           feedback_enabled: boolean
           id: string
           issued_on_paper: boolean
@@ -40414,9 +40871,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_author_scope_proposal: {
+        Args: { p_proposal_id: string }
+        Returns: boolean
+      }
       can_buy_for_project: { Args: { p_project_id: string }; Returns: boolean }
       can_client_read_issued_board_media: {
         Args: { p_object_name: string }
+        Returns: boolean
+      }
+      can_compose_project_plan: {
+        Args: { p_project_id: string }
         Returns: boolean
       }
       can_dispatch_proposal_send: {
@@ -44098,6 +44563,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      margin_note_tenant_admits: {
+        Args: {
+          p_author: string
+          p_designer_client_id: string
+          p_project_id: string
+          p_proposal_id: string
+        }
+        Returns: boolean
+      }
       mark_arrival: {
         Args: { p_engagement_id?: string; p_scope: string }
         Returns: string
@@ -47084,6 +47558,7 @@ export type Database = {
               discount_amount: number | null
               discount_percent: number | null
               document_kind: string
+              drafted_against_scope_edition_id: string | null
               feedback_enabled: boolean
               id: string
               issued_on_paper: boolean
@@ -47151,6 +47626,7 @@ export type Database = {
               discount_amount: number | null
               discount_percent: number | null
               document_kind: string
+              drafted_against_scope_edition_id: string | null
               feedback_enabled: boolean
               id: string
               issued_on_paper: boolean
