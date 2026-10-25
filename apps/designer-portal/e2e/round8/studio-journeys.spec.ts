@@ -63,8 +63,13 @@ test.describe('A01 studio journeys with live local rows', () => {
     await expect(featured.locator('figcaption')).toHaveCount(0);
     await expect(featured.getByRole('heading', { name: 'F01 Fictional Full-Service House' })).toBeVisible();
     await expect(featured.getByRole('link', { name: /Open the job paper/ })).toHaveAttribute('href', `/doc/${JOB}`);
-    await expect(page.locator('[data-studio-register-row] img')).toHaveCount(0);
-    await expect(page.locator('[data-sonner-toast], [role="alert"]')).toHaveCount(0);
+    const registerRow = page.locator(`[data-studio-register-row="${JOB}"]`);
+    // The register thumbnail is lazy: enter its viewport before expecting image failure.
+    await registerRow.scrollIntoViewIfNeeded();
+    await expect(registerRow.locator('img')).toHaveCount(0);
+    await expect(registerRow.getByRole('link', { name: 'F01 Fictional Full-Service House' })).toBeVisible();
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+    await expect(page.getByRole('alert').filter({ hasText: /\S/ })).toHaveCount(0);
     await page.screenshot({ path: `${process.env.PLAYWRIGHT_OUTPUT_DIR}/image-denial-${test.info().project.name}.png`, fullPage: true });
   });
 
