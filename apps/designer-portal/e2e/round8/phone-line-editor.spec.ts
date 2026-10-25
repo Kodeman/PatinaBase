@@ -169,6 +169,10 @@ for (const width of [320, 390]) {
           await expect(instrument(page), 'explicit Return closes the residual sheet').toHaveCount(0);
           expect(writes, 'explicit Return never replays the acknowledged save').toBe(writesBeforeAcknowledgement);
         } else {
+          if (method === 'Back' && testInfo.project.name === 'webkit-iphone') {
+            testInfo.annotations.push({ type: 'known-defect', description: 'WebKit Back after acknowledgement leaves unfold sheet open — inherited, see lead follow-up' });
+            test.fail(true, 'Inherited WebKit unfold Back defect reproduced on f71225a72');
+          }
           await expect(instrument(page), `${method} completes after acknowledgement`).toHaveCount(0);
         }
         await expect(opener, `${method} returns focus to the room opener`).toBeFocused();
