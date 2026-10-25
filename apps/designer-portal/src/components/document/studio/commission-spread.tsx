@@ -7,7 +7,7 @@
  * in its place. Below 1180 the spread is one column, the picture first.
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { CommissionPlate } from '@/hooks/use-commission-plates';
 import { DocumentAction } from '@/components/document/document-action';
 
@@ -29,24 +29,33 @@ export function CommissionPlateImage({
   plate,
   name,
   className,
+  fallback,
+  children,
 }: {
   plate: CommissionPlate | undefined;
   name: string;
   className: string;
+  fallback?: ReactNode;
+  children?: ReactNode;
 }) {
-  if (plate) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  if (plate && plate.url !== failedUrl) {
     return (
-      <img
-        src={plate.url}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        className={`block bg-[var(--bg-warm)] object-cover ${className}`}
-      />
+      <>
+        <img
+          src={plate.url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedUrl(plate.url)}
+          className={`block bg-[var(--bg-warm)] object-cover ${className}`}
+        />
+        {children}
+      </>
     );
   }
-  // Typographic fallback: the job's initial, set on the warm stock.
-  return (
+  // Optional imagery never blocks the job; a new cover URL can try again.
+  return fallback ?? (
     <span
       aria-hidden="true"
       className={`grid place-items-center bg-[var(--bg-warm)] font-heading italic text-[var(--color-forest)] ${className}`}
@@ -75,25 +84,25 @@ export function CommissionSpread({
       {job && (
         <section aria-labelledby="studio-featured-job" data-studio-featured={job.jobId}>
           <figure className="relative">
-            {plate ? (
-              <CommissionPlateImage
-                plate={plate}
-                name={job.name}
-                className="aspect-[1.52] w-full max-[599px]:aspect-[1.2]"
-              />
-            ) : (
-              <span
-                aria-hidden="true"
-                className="flex aspect-[1.52] w-full items-end bg-[var(--bg-warm)] p-6 font-heading text-[clamp(38px,4vw,58px)] leading-[1.15] text-[var(--ink)] max-[599px]:aspect-[1.2]"
-              >
-                {job.name}
-              </span>
-            )}
-            {plate && (
-              <figcaption className="r8-small absolute bottom-3 left-4 bg-[var(--paper)] px-2 py-1">
-                {`${job.name} · ${PLATE_WORD[plate.source]}`}
-              </figcaption>
-            )}
+            <CommissionPlateImage
+              plate={plate}
+              name={job.name}
+              className="aspect-[1.52] w-full max-[599px]:aspect-[1.2]"
+              fallback={
+                <span
+                  aria-hidden="true"
+                  className="flex aspect-[1.52] w-full items-end bg-[var(--bg-warm)] p-6 font-heading text-[clamp(38px,4vw,58px)] leading-[1.15] text-[var(--ink)] max-[599px]:aspect-[1.2]"
+                >
+                  {job.name}
+                </span>
+              }
+            >
+              {plate && (
+                <figcaption className="r8-small absolute bottom-3 left-4 bg-[var(--paper)] px-2 py-1">
+                  {`${job.name} · ${PLATE_WORD[plate.source]}`}
+                </figcaption>
+              )}
+            </CommissionPlateImage>
           </figure>
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-[var(--hairline-strong)] pb-5 pt-6">
             <div className="min-w-0">
