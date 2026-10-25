@@ -53,6 +53,7 @@ import { openCommandBar, type OpenLedgerContext } from './command-bar';
 import { openKeys } from './overlays/keys-sheet';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { TesterSlot } from '@/components/tester/tester-slot';
+import { clearHoursMemberScope } from '@/lib/document/open-hours-scope';
 
 /** R93/R107 — the six doors, sourced from the Studio Surface Registry: label,
  *  icon, and weight all come from one place now, so a rename or re-icon
@@ -149,6 +150,11 @@ export function StudioDrawer() {
   // US-19 slice 1 — the printed `Keys ?` act, fail-closed.
   const { value: askThePaperOn } = useFeatureFlag('ask-the-paper');
   const [openLedger, setOpenLedger] = useState<SheetKey | null>(null);
+  useEffect(() => {
+    if (openLedger !== 'hours') return;
+    // A cold or failed lazy body may never consume this open's handoff.
+    return clearHoursMemberScope;
+  }, [openLedger]);
   const [booksOpen, setBooksOpen] = useState(false);
   const [recentBook, setRecentBook] = useState<SheetKey | null>(null);
   // F11 — only a sheet opened from the books menu may restore focus to the
