@@ -33,11 +33,11 @@ import {
   useState,
   useSyncExternalStore,
   type ClipboardEvent,
-  type FocusEvent,
   type HTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import * as Popover from "@radix-ui/react-popover";
 import type { FfeLineUnit } from "@patina/types";
 import { cn } from "@/lib/utils";
 import {
@@ -974,88 +974,124 @@ function RowMenu({
     itemRefs.current[next]?.focus();
   }
 
-  function onBlurWithin(event: FocusEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      setOpen(false);
-      setMoving(false);
-    }
-  }
+  const stock = buttonRef.current?.closest<HTMLElement>(
+    "[data-drafting-stock]",
+  );
+  const boundary = stock?.querySelector<HTMLElement>(
+    "main, section[aria-labelledby]",
+  );
 
   return (
-    <div className="relative inline-block" onBlur={onBlurWithin}>
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label={`Acts for ${label}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        onClick={() => (open ? close(true) : setOpen(true))}
-        className="inline-flex h-[40px] min-w-[44px] items-center justify-center font-mono text-[14px] text-[var(--sheet-ink-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] max-md:h-[44px]"
-      >
-        ⋯
-      </button>
-      {open ? (
-        <ul
-          id={menuId}
-          role="menu"
-          aria-label={`Acts for ${label}`}
-          onKeyDown={onMenuKey}
-          // WebKit never focuses a tapped or clicked button: without this the
-          // press blurs the focused item to nothing, the blur closes the menu,
-          // and the item is gone before its click (T-60a F3).
-          onMouseDown={(event) => event.preventDefault()}
-          className="absolute right-0 top-full z-20 w-[280px] border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left"
-        >
-          {MENU_ITEMS.map(({ act, label: word }, i) => {
-            const gate = row.gates?.[act];
-            const reasonId = `${uid}-${act}-reason`;
-            return (
-              <li role="none" key={act}>
-                <button
-                  ref={(el) => {
-                    itemRefs.current[i] = el;
-                  }}
-                  type="button"
-                  role="menuitem"
-                  aria-disabled={gate ? true : undefined}
-                  aria-describedby={gate ? reasonId : undefined}
-                  aria-haspopup={act === "move" ? "menu" : undefined}
-                  aria-expanded={act === "move" ? moving : undefined}
-                  onClick={() => choose(act)}
-                  className={cn(
-                    "flex min-h-[44px] w-full items-center px-3 text-left font-sans text-[14px] hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay-ink)]",
-                    gate
-                      ? "cursor-not-allowed text-[var(--sheet-ink-faint)]"
-                      : "text-[var(--sheet-ink)]",
-                  )}
-                >
-                  {word}
-                </button>
-                {gate ? (
-                  <p
-                    id={reasonId}
-                    className="max-w-[56ch] px-3 pb-2 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]"
-                  >
-                    {gate}
-                  </p>
-                ) : null}
-                {act === "move" && moving ? (
-                  <MoveToRoomMenu
-                    rooms={rooms}
-                    currentRoomId={room.id}
-                    onChoose={(roomId) => {
-                      close(true);
-                      onMove(row, roomId);
-                    }}
-                    onClose={() => setMoving(false)}
-                  />
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-    </div>
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setMoving(false);
+      }}
+    >
+      <div className="relative inline-block">
+        <Popover.Anchor asChild>
+          <button
+            ref={buttonRef}
+            type="button"
+            aria-label={`Acts for ${label}`}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-controls={open ? menuId : undefined}
+            onClick={() => (open ? close(true) : setOpen(true))}
+            className="inline-flex h-[40px] min-w-[44px] items-center justify-center font-mono text-[14px] text-[var(--sheet-ink-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] max-md:h-[44px]"
+          >
+            ⋯
+          </button>
+        </Popover.Anchor>
+        {open ? (
+          // Escape the Body scroller, but keep the drafting tokens and round-8 scope.
+          <Popover.Portal container={stock}>
+            <Popover.Content
+              asChild
+              align="end"
+              sideOffset={4}
+              collisionBoundary={boundary}
+              collisionPadding={8}
+              sticky="always"
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+                itemRefs.current[0]?.focus();
+              }}
+              onEscapeKeyDown={(event) => {
+                event.preventDefault();
+                if (moving) setMoving(false);
+                else close(true);
+              }}
+              onCloseAutoFocus={(event) => event.preventDefault()}
+              onInteractOutside={(event) => {
+                if (buttonRef.current?.contains(event.target as Node))
+                  event.preventDefault();
+              }}
+            >
+              <ul
+                id={menuId}
+                role="menu"
+                aria-label={`Acts for ${label}`}
+                onKeyDown={onMenuKey}
+                // WebKit never focuses a tapped or clicked button: without this the
+                // press blurs the focused item to nothing, the blur closes the menu,
+                // and the item is gone before its click (T-60a F3).
+                onMouseDown={(event) => event.preventDefault()}
+                className="z-20 w-[280px] max-w-[var(--radix-popover-content-available-width)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left outline-none"
+              >
+                {MENU_ITEMS.map(({ act, label: word }, i) => {
+                  const gate = row.gates?.[act];
+                  const reasonId = `${uid}-${act}-reason`;
+                  return (
+                    <li role="none" key={act}>
+                      <button
+                        ref={(el) => {
+                          itemRefs.current[i] = el;
+                        }}
+                        type="button"
+                        role="menuitem"
+                        aria-disabled={gate ? true : undefined}
+                        aria-describedby={gate ? reasonId : undefined}
+                        aria-haspopup={act === "move" ? "menu" : undefined}
+                        aria-expanded={act === "move" ? moving : undefined}
+                        onClick={() => choose(act)}
+                        className={cn(
+                          "flex min-h-[44px] w-full items-center px-3 text-left font-sans text-[14px] hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay-ink)]",
+                          gate
+                            ? "cursor-not-allowed text-[var(--sheet-ink-faint)]"
+                            : "text-[var(--sheet-ink)]",
+                        )}
+                      >
+                        {word}
+                      </button>
+                      {gate ? (
+                        <p
+                          id={reasonId}
+                          className="max-w-[56ch] px-3 pb-2 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]"
+                        >
+                          {gate}
+                        </p>
+                      ) : null}
+                      {act === "move" && moving ? (
+                        <MoveToRoomMenu
+                          rooms={rooms}
+                          currentRoomId={room.id}
+                          onChoose={(roomId) => {
+                            close(true);
+                            onMove(row, roomId);
+                          }}
+                          onClose={() => setMoving(false)}
+                        />
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Popover.Content>
+          </Popover.Portal>
+        ) : null}
+      </div>
+    </Popover.Root>
   );
 }
