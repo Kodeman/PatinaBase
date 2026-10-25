@@ -186,11 +186,11 @@ const ACT_CLS =
 /** The one heavy act on a surface: a second rule in clay (SPEC §2.5). */
 export const INKED_ACT_CLS = `${ACT_CLS} !text-[color:var(--sheet-ink,#1A1816)] border-b border-[color:var(--color-clay)]`;
 const LABEL_CLS =
-  "font-mono text-[11px] font-medium uppercase leading-none tracking-[.06em] text-[color:var(--sheet-ink-muted,#4A4540)]";
+  "font-mono text-[12px] font-medium uppercase leading-none tracking-[.06em] text-[color:var(--sheet-ink-muted,#4A4540)]";
 const VALUE_CLS =
   "font-sans text-[15px] leading-[1.5] text-[color:var(--sheet-ink,#1A1816)]";
 const INPUT_CLS =
-  "w-full border-0 border-b border-[color:var(--sheet-rule,#D9D4CC)] bg-transparent px-0 py-1 font-sans text-[15px] leading-[1.5] text-[color:var(--sheet-ink,#1A1816)] placeholder:text-[color:var(--sheet-ink-faint,#6B655E)] focus-visible:border-[color:var(--sheet-rule-strong,#1A1816)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--clay-ink)] aria-[invalid=true]:border-[color:var(--color-terracotta-ink)]";
+  "min-h-[44px] min-w-0 w-full border-0 border-b border-[color:var(--sheet-rule,#D9D4CC)] bg-transparent px-0 py-1 font-sans text-[15px] leading-[1.5] text-[color:var(--sheet-ink,#1A1816)] placeholder:text-[color:var(--sheet-ink-faint,#6B655E)] focus-visible:border-[color:var(--sheet-rule-strong,#1A1816)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--clay-ink)] aria-[invalid=true]:border-[color:var(--color-terracotta-ink)]";
 const SENTENCE_CLS =
   "max-w-[56ch] font-sans text-[14px] leading-[1.5] text-[color:var(--sheet-ink,#1A1816)]";
 const REASON_CLS =
@@ -950,7 +950,7 @@ export function SpecFieldsPane({
       ref={paneRef}
       data-testid="spec-fields-pane"
       aria-label={`Spec for ${needLabel}`}
-      className="flex min-w-0 flex-col gap-6"
+      className="flex min-w-0 flex-col gap-6 [overflow-wrap:anywhere]"
     >
       <header className="flex flex-col gap-2">
         <span className={LABEL_CLS}>What we need</span>
@@ -1135,7 +1135,7 @@ export function SpecFieldsPane({
             data-testid="spec-image-drop"
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDrop}
-            className="flex h-[140px] w-[200px] items-center justify-center border border-dashed border-[color:var(--sheet-ink-faint,#6B655E)] p-2 text-center font-mono text-[11px] uppercase leading-[1.4] text-[color:var(--sheet-ink-faint,#6B655E)]"
+            className="flex h-[140px] w-[200px] max-w-full items-center justify-center border border-dashed border-[color:var(--sheet-ink-faint,#6B655E)] p-2 text-center font-mono text-[12px] uppercase leading-[1.4] text-[color:var(--sheet-ink-faint,#6B655E)]"
           >
             {image ? (
               <img

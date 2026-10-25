@@ -92,7 +92,12 @@ const SPEC_COLUMNS =
 /** Below `md` the panes stack, so the fields pane sits above the line list. */
 const STACKED_QUERY = "(max-width: 767.98px)";
 
-function stacked(): boolean {
+function stacked(list: HTMLElement | null): boolean {
+  // The embedded sheet stacks by container width, not the viewport.
+  if (list) {
+    const order = window.getComputedStyle(list).order;
+    if (order) return order === "3";
+  }
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
@@ -175,6 +180,7 @@ export function SpecLens({
   const [announcement, setAnnouncement] = useState("");
   const [focusRequest, setFocusRequest] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Runs after the chosen line's pane mounts, so the heading is its own.
   useEffect(() => {
@@ -185,7 +191,7 @@ export function SpecLens({
   const choose = (id: string) => {
     setChosenId(id);
     onChooseLine?.(id);
-    if (stacked()) setFocusRequest((n) => n + 1);
+    if (stacked(listRef.current)) setFocusRequest((n) => n + 1);
   };
 
   const allLines = useMemo(
@@ -290,8 +296,10 @@ export function SpecLens({
   }
   if (rawLines && lines.length === 0) {
     return (
-      <p className="max-w-[56ch] py-6 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
-        No lines here yet. Add them in Rough in, then spec them here.
+      <p role="status" className="max-w-[56ch] py-6 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
+        {lineMissing
+          ? `${SPEC_LINE_MISSING_SENTENCE} No lines here yet. Add them in Rough in, then spec them here.`
+          : "No lines here yet. Add them in Rough in, then spec them here."}
       </p>
     );
   }
@@ -341,7 +349,7 @@ export function SpecLens({
               type="button"
               aria-current={current ? "true" : undefined}
               onClick={() => choose(line.id)}
-              className={`grid min-h-[var(--row,40px)] w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--sheet-rule)] py-2 text-left hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clay-ink)] ${
+              className={`grid min-h-[44px] w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-[var(--sheet-rule)] py-2 text-left hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clay-ink)] ${
                 memberInset(member, labor) || "pl-2"
               } pr-2 ${current ? "outline outline-1 -outline-offset-1 outline-[var(--sheet-rule-strong)]" : ""}`}
             >
@@ -376,7 +384,7 @@ export function SpecLens({
                   {lineStampLabel(stage)}
                 </span>
               </span>
-              <span className="font-mono text-[11px] tabular-nums text-[var(--sheet-ink-faint)]">
+              <span className="font-mono text-[12px] tabular-nums text-[var(--sheet-ink-faint)]">
                 {specProgressLabel(specProgress(line, specs[line.id]))}
               </span>
             </button>
@@ -392,12 +400,12 @@ export function SpecLens({
   return (
     <div
       data-testid="spec-lens"
-      className="grid grid-cols-1 gap-6 py-6 md:grid-cols-[520px_minmax(0,1fr)] md:gap-x-12"
+      className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 py-6 [overflow-wrap:anywhere] md:grid-cols-[520px_minmax(0,1fr)] md:gap-x-12"
     >
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <div className="order-3 md:order-none md:col-start-1 md:row-start-1">
+      <div ref={listRef} className="order-3 min-w-0 md:order-none md:col-start-1 md:row-start-1">
         {list}
       </div>
       <div className="order-2 md:order-none md:col-start-1 md:row-start-2">
