@@ -187,11 +187,14 @@ export function SpecLens({
     if (focusRequest > 0) headingRef.current?.focus();
   }, [focusRequest]);
 
-  /** Shows a line; at 390 its pane sits above the list, so it takes focus. */
-  const choose = (id: string) => {
+  /** Pointer/phone selection reveals the pane; wide-screen keyboard selection keeps its line. */
+  const choose = (id: string, focusPane = true) => {
     setChosenId(id);
     onChooseLine?.(id);
-    if (stacked(listRef.current)) setFocusRequest((n) => n + 1);
+    if (
+      (focusPane || window.matchMedia?.(STACKED_QUERY).matches) &&
+      stacked(listRef.current)
+    ) setFocusRequest((n) => n + 1);
   };
 
   const allLines = useMemo(
@@ -348,7 +351,7 @@ export function SpecLens({
             <button
               type="button"
               aria-current={current ? "true" : undefined}
-              onClick={() => choose(line.id)}
+              onClick={(event) => choose(line.id, event.detail > 0)}
               className={`grid min-h-[44px] w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-[var(--sheet-rule)] py-2 text-left hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clay-ink)] ${
                 memberInset(member, labor) || "pl-2"
               } pr-2 ${current ? "outline outline-1 -outline-offset-1 outline-[var(--sheet-rule-strong)]" : ""}`}
