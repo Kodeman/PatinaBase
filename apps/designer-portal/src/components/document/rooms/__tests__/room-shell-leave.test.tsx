@@ -49,3 +49,14 @@ it('any other origin is not announced', () => {
   expect(mockPush).toHaveBeenCalledWith('/people');
   expect(consumeSuppressed('/people')).toBe(false);
 });
+
+it('prepares an explicit return immediately before push when supplied', () => {
+  const before = jest.fn(() => expect(mockPush).not.toHaveBeenCalled());
+  render(<RoomShell title="Piece" backTo="/library" backLabel="Library" onBeforeReturn={before}><p>body</p></RoomShell>);
+  fireEvent.click(screen.getAllByRole('button')[0]);
+  expect(before).not.toHaveBeenCalled();
+  act(() => jest.advanceTimersByTime(380));
+  expect(before).toHaveBeenCalledTimes(1);
+  expect(before).toHaveBeenCalledWith('/library');
+  expect(mockPush).toHaveBeenCalledWith('/library');
+});
