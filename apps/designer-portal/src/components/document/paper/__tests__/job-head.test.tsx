@@ -145,3 +145,14 @@ describe('Studio return history', () => {
     expect(takeDeskReturn()).toBeNull();
   });
 });
+
+it('hands the exact overlay to Desk once and clears the consumed job origin', () => {
+  const studioOverlay = { overlay: 'search' as const, subject: 'job', query: 'Holloway', scrollTop: 48, focusKey: 'doc:job' };
+  rememberPaperOrigin('job', { path: '/desk', focusId: 'studio-find', studioOverlay });
+  render(<JobHead returnTo={{ href: '/desk', label: 'Studio' }} origin={readPaperOrigin('job')} jobName="Job" />);
+  fireEvent.click(screen.getByRole('link', { name: 'Studio' }));
+  expect(mockPush).toHaveBeenCalledWith('/desk');
+  expect(takeDeskReturn()).toMatchObject({ docId: 'job', anchor: 'studio-find', studioOverlay });
+  expect(takeDeskReturn()).toBeNull();
+  expect(readPaperOrigin('job').kind).toBe('deep-link');
+});

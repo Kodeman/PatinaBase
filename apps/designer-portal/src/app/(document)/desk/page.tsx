@@ -41,6 +41,7 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useLoadingRegister } from '@/components/loading';
 import {
   openCommandBar,
+  openLedger,
   captureLeadPending,
   openProjectPending,
 } from '@/components/document/command-bar';
@@ -74,6 +75,8 @@ import {
 import { type CapturedLead } from '@/components/document/overlays/capture-lead-sheet';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { openPost } from '@/components/document/overlays/post-sheet';
+import type { StudioOverlayState } from '@/lib/document/paper/paper-origin';
 import { takeDeskReturn } from '@/lib/document/paper/desk-return';
 
 // F6 — Back keeps the place. The Desk holds its scroll offset (and the row
@@ -546,6 +549,7 @@ export default function DeskPage() {
   const bodyShown = useRef(false);
   const returnTaken = useRef(false);
   const returnPlace = useRef<DeskPlace | null>(null);
+  const returnOverlay = useRef<StudioOverlayState | null>(null);
   const stopRestoring = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     if (arrivalRoot && deskBody) bodyShown.current = true;
@@ -556,6 +560,7 @@ export default function DeskPage() {
     // ref; StrictMode's effect rehearsal keeps it without taking twice.
     if (!returnTaken.current) {
       const intent = takeDeskReturn();
+      returnOverlay.current = intent?.studioOverlay ?? null;
       const held = intent ? heldDeskPlace() : null;
       returnPlace.current = intent ? {
         anchor: intent.anchor,
@@ -565,6 +570,7 @@ export default function DeskPage() {
       returnTaken.current = true;
     }
     const cancelReturn = () => {
+      returnOverlay.current = null;
       returnPlace.current = null;
       stopRestoring.current?.();
     };
@@ -640,6 +646,25 @@ export default function DeskPage() {
     stopRestoring.current = settle;
     grow.observe(deskBody);
     return stop;
+  }, [arrivalRoot, deskBody]);
+  useEffect(() => {
+    if (!arrivalRoot || !deskBody || !returnOverlay.current) return;
+    let frame = 0;
+    const deadline = performance.now() + 3000;
+    const reopen = () => {
+      const held = returnOverlay.current;
+      if (!held || performance.now() > deadline) return;
+      if (document.documentElement.matches('.arr-pre, .arr-on, .arr-press')) {
+        frame = requestAnimationFrame(reopen);
+        return;
+      }
+      returnOverlay.current = null;
+      if (held.overlay === 'books') openLedger('accounts', { page: held.filter, invoiceId: held.subject, studioReturn: held });
+      else if (held.overlay === 'post') openPost(held);
+      else openCommandBar(held.query, held);
+    };
+    frame = requestAnimationFrame(reopen);
+    return () => cancelAnimationFrame(frame);
   }, [arrivalRoot, deskBody]);
   const notePress = (event: ReactMouseEvent<HTMLElement>) => {
     const target = event.target as Element | null;

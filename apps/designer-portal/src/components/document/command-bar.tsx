@@ -27,6 +27,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { rememberPaperOrigin, restoreStudioOverlay, type StudioOverlayState } from '@/lib/document/paper/paper-origin';
 import { queryClient } from '@/lib/react-query';
 import { documentEngagementQueryOptions } from '@/hooks/use-document-state';
 import type { LucideIcon } from 'lucide-react';
@@ -346,6 +347,7 @@ export function openOpenProject() {
  *  validates its own page set (Orders: ledger/week/receiving/vendors; Accounts:
  *  ledger/receivables/earnings). */
 export interface OpenLedgerContext {
+  studioReturn?: StudioOverlayState;
   page?: string;
   vendorId?: string;
   projectId?: string;
@@ -372,10 +374,10 @@ export function openLedger(name: string, context?: OpenLedgerContext) {
 /** Open the command bar from a click affordance (the Desk's "Find anything").
  *  `query` pre-types the palette — the Desk's stage phrases open ⌘K already
  *  filtered to that stage. */
-export function openCommandBar(query?: string) {
+export function openCommandBar(query?: string, studioReturn?: StudioOverlayState) {
   window.dispatchEvent(
     new CustomEvent('document:open-command-bar', {
-      detail: query ? { query } : undefined,
+      detail: query || studioReturn ? { query, studioReturn } : undefined,
     }),
   );
 }
@@ -475,6 +477,7 @@ export function CommandBar() {
   // The query a doorway asked the palette to open with, read and cleared by
   // the open effect.
   const pendingQueryRef = useRef<string | null>(null);
+  const pendingReturnRef = useRef<StudioOverlayState | null>(null);
   // R97 — skip the mount emission so we only announce real open/close transitions.
   const didMountRef = useRef(false);
 
@@ -509,7 +512,9 @@ export function CommandBar() {
     // palette (the Desk's stage phrases): it is stashed rather than set here
     // because the open effect below clears the query on every open.
     const onAffordance = (event: Event) => {
-      const query = (event as CustomEvent<{ query?: string }>).detail?.query;
+      const detail = (event as CustomEvent<{ query?: string; studioReturn?: StudioOverlayState }>).detail;
+      const query = detail?.query;
+      pendingReturnRef.current = detail?.studioReturn ?? null;
       pendingQueryRef.current = typeof query === 'string' ? query : null;
       if (!open) documentEvents.commandBar.opened({ source: 'affordance' });
       setOpen(true);
@@ -540,7 +545,7 @@ export function CommandBar() {
       pendingQueryRef.current = null;
       setActive(0);
       setAsking(null);
-      setSearchAll(false);
+      setSearchAll(pendingReturnRef.current?.filter === 'all');
       setRecent(readRecentDocumentsInHand());
       requestAnimationFrame(() => inputRef.current?.focus());
       return;
@@ -1697,6 +1702,18 @@ export function CommandBar() {
     setActive((a) => Math.min(a, Math.max(0, flatRows.length - 1)));
   }, [flatRows.length]);
 
+  useEffect(() => {
+    const held = pendingReturnRef.current;
+    const root = dialogRef.current;
+    if (!open || !held || !root || query !== (held.query ?? '')) return;
+    pendingReturnRef.current = null;
+    return restoreStudioOverlay(root, held, () => {
+      const row = root.querySelector<HTMLElement>('[data-studio-search-key="' + CSS.escape(held.focusKey ?? '') + '"]');
+      if (row) setActive(Number(row.dataset.studioSearchIndex));
+      return row;
+    });
+  }, [open, query]);
+
   const choose = (row: PaletteRow, index: number) => {
     if (row.kind === 'engine') {
       setAsking(query.trim()); // answer inline; don't close the bar
@@ -1720,6 +1737,13 @@ export function CommandBar() {
         weight: row.kind === 'room' ? 'room' : 'sheet',
         source: 'palette',
       });
+    }
+    if (row.kind === 'document' && row.prefetchHref) {
+      const docId = /^\/doc\/([^/?#]+)/.exec(row.prefetchHref)?.[1];
+      if (docId) rememberPaperOrigin(docId, { path: '/desk', focusId: 'studio-find', studioOverlay: {
+        overlay: 'search', subject: docId, query, filter: searchAll ? 'all' : undefined,
+        focusKey: row.key, scrollTop: dialogRef.current?.querySelector('.cmd-scroll')?.scrollTop ?? 0,
+      } });
     }
     setOpen(false);
     row.run();
@@ -1826,6 +1850,7 @@ export function CommandBar() {
           aria-label="Studio search"
           placeholder="Search project files, contacts and tools…"
           className="field-control shrink-0 placeholder:text-[var(--text-muted)]"
+          data-studio-search-input=""
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -1923,6 +1948,8 @@ export function CommandBar() {
                           <button
                             type="button"
                             id={optionId(index)}
+                            data-studio-search-key={row.key}
+                            data-studio-search-index={index}
                             role="option"
                             aria-selected={index === active}
                             onPointerEnter={() => {

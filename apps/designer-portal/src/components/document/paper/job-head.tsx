@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { requestUnfoldDeparture } from './unfold-instrument';
 import { useRouter } from 'next/navigation';
-import { canReturnToPaperOrigin, markDeskReturn, type PaperOrigin } from '@/lib/document/paper/paper-origin';
+import { canReturnToPaperOrigin, clearPaperOrigin, markDeskReturn, type PaperOrigin } from '@/lib/document/paper/paper-origin';
 import type { ReactNode } from 'react';
 
 export interface JobHeadProps {
@@ -29,11 +29,12 @@ export function JobHead({ returnTo, origin, jobName, context }: JobHeadProps) {
       <Link
         href={returnTo.href}
         onClick={(event) => {
-          if (!origin || (origin.kind !== 'desk' && origin.kind !== 'deep-link') ||
+          if (!origin || (origin.kind !== 'desk' && origin.kind !== 'deep-link' && origin.kind !== 'studio-overlay') ||
               event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           requestUnfoldDeparture(() => {
             markDeskReturn(origin);
+            if (origin.kind === 'studio-overlay') clearPaperOrigin(origin.docId);
             if (canReturnToPaperOrigin(origin)) router.back();
             else router.push('/desk');
           });
