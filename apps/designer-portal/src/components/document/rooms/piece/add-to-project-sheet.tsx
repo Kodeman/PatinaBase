@@ -15,7 +15,7 @@ import { DocumentAction } from "../../document-action";
 import { RoomSheet } from "../room-sheet";
 import {
   usePlaceInDocument,
-  readFillPlacementIntent,
+  buildDocumentPlacementRequest,
   type PlaceablePiece,
 } from "@/hooks/use-place-in-document";
 import { productEvents } from "@/lib/analytics/events";
@@ -42,9 +42,6 @@ export function AddToProjectSheet({
   const [duplicateMode, setDuplicateMode] = useState<FfeDuplicateMode>("reuse");
   const requestKey = useRef<{ fingerprint: string; key: string } | null>(null);
   const contextualProjectId = searchParams.get("projectId");
-  const contextualRoomId = searchParams.get("roomId");
-  const contextualScope = searchParams.get("assignmentScope");
-  const contextualBoardId = searchParams.get("boardId");
   const returnTo = searchParams.get("returnTo");
 
   useEffect(() => {
@@ -71,19 +68,12 @@ export function AddToProjectSheet({
     setBusy(projectId);
     setErr(null);
     try {
-      const fill = contextualProjectId === projectId
-        ? readFillPlacementIntent(searchParams.get("fill")) : undefined;
-      const request = {
+      const request = buildDocumentPlacementRequest({
         projectId,
         piece,
         configurationId,
-        assignmentScope: contextualProjectId === projectId && contextualRoomId ? "room" as const
-          : contextualProjectId === projectId && contextualScope === "throughout" ? "throughout" as const : "unassigned" as const,
-        roomId: contextualProjectId === projectId ? contextualRoomId : null,
-        boardId: contextualProjectId === projectId ? contextualBoardId : null,
         duplicateMode,
-        ...(fill ? { fill } : {}),
-      };
+      }, searchParams);
       const fingerprint = JSON.stringify(request);
       if (requestKey.current?.fingerprint !== fingerprint) {
         requestKey.current = {

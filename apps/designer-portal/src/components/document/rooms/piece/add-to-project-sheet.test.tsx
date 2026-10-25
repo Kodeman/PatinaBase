@@ -132,3 +132,22 @@ it('returns a legacy Pieces detour to Spec at the placed ID rather than a stale 
   fireEvent.click(screen.getByRole('button', { name: /Lake house/i }));
   await waitFor(() => expect(push).toHaveBeenCalledWith('/doc/project-1/pieces?lens=spec&ffeItemId=new-1#ffe'));
 });
+
+it.each([['hold', 'Hold for review'], ['create', 'Create separate requirement']])('honors %s on the Fill target without a fill payload', async (duplicateMode, label) => {
+  params = new URLSearchParams({ projectId: 'project-1', assignmentScope: 'throughout', fill: JSON.stringify(fillIntent) });
+  place.mockReset().mockResolvedValue({ outcome: duplicateMode === 'hold' ? 'held' : 'created' });
+  openSheet();
+  fireEvent.click(screen.getByRole('button', { name: label }));
+  fireEvent.click(screen.getByRole('button', { name: /Lake house/i }));
+  await waitFor(() => expect(place).toHaveBeenCalled());
+  expect(place.mock.calls[0][0]).toMatchObject({ duplicateMode, assignmentScope: 'throughout', roomId: null });
+  expect(place.mock.calls[0][0]).not.toHaveProperty('fill');
+});
+it('refuses an empty Fill parameter instead of placing an ordinary candidate', async () => {
+  params = new URLSearchParams({ projectId: 'project-1', fill: '' });
+  place.mockReset();
+  openSheet();
+  fireEvent.click(screen.getByRole('button', { name: /Lake house/i }));
+  await screen.findByText(/Fill context could not be read/);
+  expect(place).not.toHaveBeenCalled();
+});

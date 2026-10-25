@@ -18,7 +18,7 @@ export type FillPlacementIntent = Pick<PlaceProductInProjectRequest,
 
 /** URL context is only intent; native V2 still validates the line and its authority. */
 export function readFillPlacementIntent(value: string | null): FillPlacementIntent | undefined {
-  if (!value) return undefined;
+  if (value === null) return undefined;
   try {
     const fill = JSON.parse(value);
     if (!fill || typeof fill.placeholderSelectionId !== 'string' || !fill.placeholderSelectionId ||
@@ -56,6 +56,28 @@ export interface PlaceablePiece {
   price_retail?: number | null;
 }
 
+export function buildDocumentPlacementRequest(
+  request: {
+    projectId: string;
+    piece: PlaceablePiece;
+    configurationId?: string | null;
+    duplicateMode?: FfeDuplicateMode;
+  },
+  context?: Pick<URLSearchParams, 'get'>,
+) {
+  const isOrigin = context?.get('projectId') === request.projectId;
+  const roomId = isOrigin ? context!.get('roomId') : null;
+  const fill = isOrigin ? readFillPlacementIntent(context!.get('fill')) : undefined;
+  return {
+    ...request,
+    assignmentScope: (roomId ? 'room'
+      : isOrigin && context!.get('assignmentScope') === 'throughout' ? 'throughout' : 'unassigned') as FfeAssignmentScope,
+    roomId,
+    boardId: isOrigin ? context!.get('boardId') : null,
+    ...(fill && (!request.duplicateMode || request.duplicateMode === 'reuse') ? { fill } : {}),
+  };
+}
+
 export function usePlaceInDocument() {
   const place = usePlaceProductInProjectV2();
   const queryClient = useQueryClient();
@@ -85,17 +107,18 @@ export function usePlaceInDocument() {
       idempotencyKey?: string;
       fill?: FillPlacementIntent;
     }) => {
+      const activeFill = duplicateMode === 'reuse' ? fill : undefined;
       const result = await place.mutateAsync({
         projectId,
         productId: piece.id,
-        ...(fill ? {} : { name: piece.name }),
+        ...(activeFill ? {} : { name: piece.name }),
         itemType: 'fixed',
         assignmentScope,
         roomId,
         boardId,
         disposition: 'candidate',
-        duplicateMode: fill ? 'reuse' : duplicateMode,
-        ...fill,
+        duplicateMode,
+        ...activeFill,
         configurationId,
         roleConfigurationIdentity: 'default',
         source: 'engine',

@@ -7,6 +7,7 @@
  */
 
 import { useState, type FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { EngineResults } from '@/components/document/engine/engine-results';
 import { DocumentAction } from '../../document-action';
 import { FieldSearch } from './field-search';
@@ -20,6 +21,7 @@ export function LibrarianBar({
   query?: string;
   onQueryChange?: (query: string) => void;
 }) {
+  const placementContext = useSearchParams();
   const [localQuery, setLocalQuery] = useState('');
   const query = controlledQuery ?? localQuery;
   const setQuery = onQueryChange ?? setLocalQuery;
@@ -86,7 +88,7 @@ export function LibrarianBar({
           <h2 id="library-engine-results" className="eb">
             Sourcing answer
           </h2>
-          <EngineResults query={asking} inDocument={null} onPlaced={onPlaced} />
+          <EngineResults query={asking} inDocument={null} placementContext={placementContext} onPlaced={onPlaced} />
         </section>
       )}
     </div>
