@@ -22,14 +22,14 @@ async function expectMenuAboveRail(items: Locator) {
           clipTop = Math.max(clipTop, clip.top);
         }
       }
-      return {
-        visible: r.bottom <= clipBottom && r.top >= clipTop && r.left >= 0 && r.right <= innerWidth
-          && node.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)),
+      const visible = r.bottom <= clipBottom && r.top >= clipTop && r.left >= 0 && r.right <= innerWidth
+        && node.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+      return visible ? 'visible' : JSON.stringify({
         label: node.textContent,
         rect: { top: r.top, bottom: r.bottom, left: r.left, right: r.right },
         clipTop, clipBottom,
-      };
-    }, { timeout: 5000 }), { message: 'Menu item fully visible above the bottom rail' }).toMatchObject({ visible: true });
+      });
+    }, { timeout: 5000 }), { message: 'Menu item fully visible above the bottom rail' }).toBe('visible');
   }
 }
 
@@ -122,8 +122,14 @@ test.describe('phone Rough-in acts', () => {
         const r = node.getBoundingClientRect();
         const viewport = window.visualViewport!;
         const rail = document.querySelector('[data-testid="mobile-bar"]')!.getBoundingClientRect();
-        return { fits: r.top >= viewport.offsetTop && r.bottom <= Math.min(viewport.offsetTop + viewport.height, rail.top), scrolls: node.scrollHeight > node.clientHeight };
-      }), { message: 'Expanded menu fits the short visual viewport above the rail and scrolls internally' }).toEqual({ fits: true, scrolls: true });
+        const fits = r.top >= viewport.offsetTop && r.bottom <= Math.min(viewport.offsetTop + viewport.height, rail.top);
+        const scrolls = node.scrollHeight > node.clientHeight;
+        return fits && scrolls ? 'fits-and-scrolls' : JSON.stringify({
+          fits, scrolls, top: r.top, bottom: r.bottom, railTop: rail.top,
+          viewportTop: viewport.offsetTop, viewportHeight: viewport.height,
+          scrollHeight: node.scrollHeight, clientHeight: node.clientHeight,
+        });
+      }), { message: 'Expanded menu fits the short visual viewport above the rail and scrolls internally' }).toBe('fits-and-scrolls');
       for (const item of await menu.getByRole('menuitem').all()) {
         await item.focus();
         await expectMenuAboveRail(item);
