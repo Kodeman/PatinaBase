@@ -40,6 +40,12 @@ for (const width of [320, 390]) {
       await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
       await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
       await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+      const hasNavigation = await page.evaluate(() => 'navigation' in window);
+      await testInfo.attach('navigation-capability', {
+        body: Buffer.from(JSON.stringify({ project: testInfo.project.name, navigation: hasNavigation })),
+        contentType: 'application/json',
+      });
+      const opener = page.locator(`[data-pieces-room="${ROOM}"]`).getByRole('link', { name: /Edit room selections/ });
       let writes = 0;
       page.on('request', request => {
         if (request.method() === 'PATCH' && specWrite(new URL(request.url()))) writes++;
@@ -137,10 +143,12 @@ for (const width of [320, 390]) {
           await route.continue();
         });
         const saved = `${method} saved ${width}`;
+        let writesBeforeAcknowledgement = writes;
         try {
           await finish.fill(saved);
           await finish.press('Enter');
           await expect.poll(() => started).toBe(true);
+          writesBeforeAcknowledgement = writes;
           if (method === 'Return') {
             await instrument(page).getByRole('button', { name: /Return to the room/ }).tap();
           } else {
@@ -152,7 +160,19 @@ for (const width of [320, 390]) {
           await expect(finish).toHaveValue(saved);
         } finally { release(); }
         await expect.poll(() => finishOf(line)).toBe(saved);
-        await expect(instrument(page), `${method} completes after acknowledgement`).toHaveCount(0);
+        if (method === 'Back' && !hasNavigation) {
+          testInfo.annotations.push({ type: 'residual', description: 'WP-11 no-Navigation-API Back traversal (Wave 1 accepted)' });
+          await expect(instrument(page), 'WP-11 retains the sheet without Navigation API').toHaveCount(1);
+          await expect(finish, 'the acknowledged draft remains intact').toHaveValue(saved);
+          expect(writes, 'Back never duplicates or replays the save').toBe(writesBeforeAcknowledgement);
+          await instrument(page).getByRole('button', { name: /Return to the room/ }).tap();
+          await expect(instrument(page), 'explicit Return closes the residual sheet').toHaveCount(0);
+          expect(writes, 'explicit Return never replays the acknowledged save').toBe(writesBeforeAcknowledgement);
+        } else {
+          await expect(instrument(page), `${method} completes after acknowledgement`).toHaveCount(0);
+        }
+        await expect(opener, `${method} returns focus to the room opener`).toBeFocused();
+        expect(new URL(page.url()).searchParams.has('unfold'), 'the closed sheet leaves no unfold address').toBe(false);
         await page.unroute(specWrite);
       }
 
