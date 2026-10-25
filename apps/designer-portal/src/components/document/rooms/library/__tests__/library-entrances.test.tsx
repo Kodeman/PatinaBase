@@ -1,3 +1,4 @@
+Object.defineProperty(crypto, "randomUUID", { configurable: true, value: () => require("node:crypto").randomUUID() });
 import { rememberLibraryReturn } from "@/lib/document/library-return";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { useState } from "react";
