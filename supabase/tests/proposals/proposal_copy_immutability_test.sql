@@ -551,12 +551,15 @@ INSERT INTO fingerprint_column_contract VALUES
    -- 00813's `studio_id` says which studio's team reads a job-less proposal's
    -- lines. The database stamps it, the client never sees or signs it, so it
    -- is access state, not payload.
+   -- 00868's `drafted_against_scope_edition_id` records the C2 scope edition
+   -- the draft was based on, not authored commercial payload. 00868 left
+   -- the fingerprint untouched, so this draft-time provenance stays out.
    ARRAY['project_id','status','sent_at','viewed_at','accepted_at','declined_at',
          'decline_reason','updated_at','client_feedback','signed_at','signed_by_name',
          'signed_ip','last_nudged_at','nudge_count','proposal_send_dispatch_id',
          'document_kind','commercial_state','superseded_at','superseded_reason',
          'replacement_proposal_id','issued_on_paper','paper_issued_by','subject',
-         'studio_id']),
+         'studio_id','drafted_against_scope_edition_id']),
   ('proposal_sections', 'section',
    ARRAY['id','proposal_id','type','title','body','metadata','sort_order'],
    ARRAY['created_at','updated_at']),
