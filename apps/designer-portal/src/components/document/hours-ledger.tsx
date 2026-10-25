@@ -97,6 +97,7 @@ import {
 import type { TimeRateRole } from "@patina/supabase";
 import {
   HOURS_MEMBER_SCOPE_EVENT,
+  clearHoursMemberScope,
   hoursMemberScopePending,
   type HoursMemberScopeDetail,
 } from "@/lib/document/open-hours-scope";
@@ -236,8 +237,7 @@ export function HoursLedger({
   const [showEntries, setShowEntries] = useState(false);
 
   useEffect(() => {
-    hoursMemberScopePending.userId = null;
-    hoursMemberScopePending.name = null;
+    clearHoursMemberScope();
   }, []);
 
   // A person handed to a sheet that is already open. The drawer remounts
@@ -247,8 +247,7 @@ export function HoursLedger({
     const onMemberScope = (event: Event) => {
       const detail = (event as CustomEvent<HoursMemberScopeDetail>).detail;
       if (!detail?.userId) return;
-      hoursMemberScopePending.userId = null;
-      hoursMemberScopePending.name = null;
+      clearHoursMemberScope();
       setMemberScope({ id: detail.userId, name: detail.name });
       setLensProjectId(null);
       setShowEntries(false);

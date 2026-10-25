@@ -8,6 +8,12 @@ import {
   within,
 } from '@testing-library/react';
 import { StudioDrawer } from './studio-drawer';
+import {
+  hoursMemberScopePending,
+  openHoursForMember,
+} from '@/lib/document/open-hours-scope';
+
+let mockNativeHours = false;
 
 const mockPush = jest.fn();
 const mockPrefetch = jest.fn();
@@ -44,6 +50,43 @@ jest.mock('@patina/supabase', () => ({
   useUnreadInboxCount: () => ({ data: 0 }),
   useProcurementUnreadCount: () => ({ data: 0 }),
   useUnseenShipped: () => ({ data: mockUnseenFeedback }),
+  useClients: () => ({ data: [] }),
+  useCreateTimeEntry: () => ({ mutateAsync: jest.fn() }),
+  useUpdateTimeEntry: () => ({ mutateAsync: jest.fn() }),
+  useTimeEntryLedger: () => ({ data: [] }),
+  useProjectPricingStudio: () => ({ isSuccess: true, data: 'studio-1' }),
+  useStampProjectPricingStudio: () => ({ mutateAsync: jest.fn() }),
+  useStudioHoursRollup: () => ({ data: [] }),
+  filterProjectUnbilledEntries: () => [],
+  isInvoiceEligibleTimeEntry: () => false,
+}));
+
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQuery: () => ({ data: [], refetch: jest.fn() }),
+}));
+
+jest.mock('@/hooks/use-viewer-studio', () => ({
+  useViewerStudio: () => ({
+    organizations: [],
+    studio: { id: 'studio-1', name: 'Studio' },
+    candidates: [],
+    selectStudio: jest.fn(),
+    isOwnerOrAdmin: true,
+    isSettled: true,
+  }),
+  useInternalTimeStudio: () => ({ studio: null }),
+}));
+
+jest.mock('./time-capture', () => ({
+  ...jest.requireActual('./time-capture'),
+  useBillableIntent: () => ({ isSettled: false }),
+  RateRoleChip: () => null,
+  BillablePill: () => null,
+}));
+
+jest.mock('./commercial/project-authority-band', () => ({
+  ProjectAuthorityBandForProject: () => null,
 }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
@@ -73,6 +116,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
     actionInvoked: jest.fn(),
+    time: { scopeViewed: jest.fn() },
     wayfinding: {
       roomEntered: jest.fn(),
       doorOpened: jest.fn(),
@@ -98,7 +142,11 @@ jest.mock('./accounts/accounts-book', () => ({
 }));
 
 jest.mock('./hours-ledger', () => ({
-  HoursLedger: () => <div>Hours ledger</div>,
+  HoursLedger: (props: Record<string, unknown>) => {
+    if (!mockNativeHours) return <div>Hours ledger</div>;
+    const { HoursLedger } = jest.requireActual('./hours-ledger');
+    return <HoursLedger {...props} />;
+  },
 }));
 
 jest.mock('./account/account-nameplate', () => ({
@@ -407,7 +455,72 @@ describe('StudioDrawer — zero shadows (US-28 S1, V20 U-Q12)', () => {
 
 describe('Hours lazy body', () => {
   const nativeLazy = React.lazy;
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mockNativeHours = false;
+    hoursMemberScopePending.userId = null;
+    hoursMemberScopePending.name = null;
+  });
+
+  it.each(['project', 'ordinary', 'other book', 'unmount'])(
+    'discards an abandoned lazy member handoff before the next %s open',
+    async (nextOpen) => {
+      mockNativeHours = true;
+      let resolve!: () => void;
+      const gate = new Promise<void>((done) => { resolve = done; });
+      jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => gate.then(load)));
+      const view = render(<StudioDrawer />);
+
+      act(() => openHoursForMember('member-A', 'Teammate A'));
+      expect(screen.getByRole('status')).toHaveTextContent('Loading hours');
+      expect(hoursMemberScopePending.userId).toBe('member-A');
+      if (nextOpen === 'other book') {
+        act(() => window.dispatchEvent(new CustomEvent('document:open-ledger', {
+          detail: 'orders',
+        })));
+        expect(screen.getByText('Orders ledger')).toBeInTheDocument();
+      } else if (nextOpen === 'unmount') {
+        view.unmount();
+        render(<StudioDrawer />);
+      } else {
+        fireEvent.keyDown(screen.getByRole('dialog', { name: 'Timesheets' }), { key: 'Escape' });
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      }
+
+      act(() => window.dispatchEvent(new CustomEvent('document:open-ledger', {
+        detail: nextOpen === 'ordinary' ? 'hours' : {
+          name: 'hours', context: { projectId: 'project-B' },
+        },
+      })));
+      await act(async () => resolve());
+      const lens = await screen.findByRole('group', { name: 'Time ledger scope' });
+      // Native HoursLedger's memberScope is null, and its landingScope comes
+      // from this open, not from the abandoned person's module handoff.
+      expect(within(lens).queryByRole('button', { name: 'Teammate A' })).not.toBeInTheDocument();
+      expect(within(lens).getByRole('button', {
+        name: nextOpen === 'ordinary' ? 'My time' : 'This project',
+      })).toHaveAttribute('aria-current', 'true');
+    },
+  );
+
+  it('keeps a delayed member landing and switches the mounted sheet to the next member', async () => {
+    mockNativeHours = true;
+    let resolve!: () => void;
+    const gate = new Promise<void>((done) => { resolve = done; });
+    jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => gate.then(load)));
+    render(<StudioDrawer />);
+    act(() => openHoursForMember('member-A', 'Teammate A'));
+    const panel = screen.getByRole('dialog', { name: 'Timesheets' });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading hours');
+    await act(async () => resolve());
+    const lens = await screen.findByRole('group', { name: 'Time ledger scope' });
+    expect(within(lens).getByRole('button', { name: 'Teammate A' })).toHaveAttribute('aria-current', 'true');
+    act(() => openHoursForMember('member-B', 'Teammate B'));
+    expect(screen.getByRole('dialog', { name: 'Timesheets' })).toBe(panel);
+    expect(within(lens).queryByRole('button', { name: 'Teammate A' })).not.toBeInTheDocument();
+    expect(within(lens).getByRole('button', { name: 'Teammate B' })).toHaveAttribute('aria-current', 'true');
+    expect(hoursMemberScopePending).toEqual({ userId: null, name: null });
+  });
 
   it('keeps the shell and opening focus through loading to loaded, then returns to its opener', async () => {
     let resolve!: () => void;
