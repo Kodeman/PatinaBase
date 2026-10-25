@@ -49,24 +49,42 @@ for (const width of [320, 390]) {
       const geometry = await pane.evaluate(node => {
         const input = node.querySelector<HTMLInputElement>('input[aria-label="Finish"]')!;
         const image = node.querySelector<HTMLElement>('[data-testid="spec-image-drop"]')!;
-        const body = node.closest<HTMLElement>('section.overflow-y-auto')!;
+        const scrolling = document.scrollingElement!;
+        const scrollTraps: string[] = [];
+        for (let ancestor = node.parentElement; ancestor && ancestor !== scrolling; ancestor = ancestor.parentElement) {
+          if (/^(auto|scroll)$/.test(getComputedStyle(ancestor).overflowY) && ancestor.scrollHeight > ancestor.clientHeight + 1) {
+            scrollTraps.push(ancestor.tagName);
+          }
+        }
         return {
           target: input.getBoundingClientRect().height,
           paneWidth: node.clientWidth, paneScroll: node.scrollWidth,
           image: image.getBoundingClientRect().width,
-          bodyOverflow: getComputedStyle(body).overflowY,
-          bodyHeight: body.clientHeight, bodyScroll: body.scrollHeight,
+          widest: Math.max(...Array.from(node.querySelectorAll('*'), element => element.getBoundingClientRect().width)),
+          scrollTraps,
           labelSize: getComputedStyle(node.querySelector('[role="group"][aria-label="Finish"] > span')!).fontSize,
-          pageWidth: document.documentElement.clientWidth, pageScroll: document.documentElement.scrollWidth,
+          pageWidth: scrolling.clientWidth, pageScroll: scrolling.scrollWidth,
         };
       });
       expect(geometry.target, 'fitted text controls have 44px touch targets').toBeGreaterThanOrEqual(44);
       expect(geometry.labelSize, 'painted operational labels meet the 12px floor').toBe('12px');
       expect(geometry.paneScroll, 'editor content fits rather than hiding overflow').toBeLessThanOrEqual(geometry.paneWidth + 1);
       expect(geometry.image).toBeLessThanOrEqual(geometry.paneWidth);
-      expect(geometry.bodyOverflow).toBe('auto');
-      expect(geometry.bodyScroll).toBeGreaterThan(geometry.bodyHeight);
-      expect(geometry.pageScroll).toBeLessThanOrEqual(geometry.pageWidth + 1);
+      expect(geometry.widest).toBeLessThanOrEqual(geometry.pageWidth);
+      expect(geometry.pageScroll).toBeLessThanOrEqual(geometry.pageWidth);
+      // Lead C03 ruling: containment is horizontal on continuous paper (R8-02).
+      // The page owns vertical scroll; a nested overflowing body is a phone scroll trap.
+      expect(geometry.scrollTraps).toEqual([]);
+      await finish.focus();
+      await expect(finish).toBeFocused();
+      await expect.poll(() => finish.evaluate(input => {
+        const rect = input.getBoundingClientRect();
+        const viewport = window.visualViewport;
+        const top = viewport?.offsetTop ?? 0;
+        const left = viewport?.offsetLeft ?? 0;
+        return rect.top >= top - 1 && rect.bottom <= top + (viewport?.height ?? innerHeight) + 1 &&
+          rect.left >= left - 1 && rect.right <= left + (viewport?.width ?? innerWidth) + 1;
+      }), { message: 'focused field is inside the visual viewport' }).toBe(true);
       await testInfo.attach(`editor-${width}`, { body: await page.screenshot(), contentType: 'image/png' });
 
       const original = finishOf(line);
@@ -76,7 +94,7 @@ for (const width of [320, 390]) {
         : route.continue());
       await finish.fill(draft);
       await finish.press('Enter');
-      await expect(pane.getByRole('alert')).toContainText('C03 forced refusal');
+      await expect(pane.getByRole('alert')).toHaveText('The field was not saved.');
       await expect(finish).toHaveValue(draft);
       await expect(finish).toBeFocused();
       await instrument(page).getByRole('button', { name: /Return to the room/ }).tap();
