@@ -907,6 +907,19 @@ describe("F6–F7: the landing waits for the reads, then yields to the reader", 
     );
   }
 
+  it("waits for a refetch before treating a cached missing line as gone", async () => {
+    const answer = delayLines();
+    client.setQueryData(["project-ffe-items", "delayed"], [mockLines[0]]);
+    renderChapter(`unfold=pieces&lens=spec&room=${ROOM}&line=${SECOND}`);
+    const title = await screen.findByText("Sheet title");
+    await waitFor(() => expect(client.isFetching()).toBeGreaterThan(0));
+    expect(lineButton(FIRST)).not.toBeNull();
+    expect(document.activeElement).toBe(title);
+    await answer(mockLines);
+    await waitFor(() => expect(document.activeElement).toBe(lineButton(SECOND)));
+    expect(lineButton(SECOND)).toHaveAttribute("aria-current", "true");
+  });
+
   it("F6: the deadline starts only once the reads answer, so delayed data still lands", async () => {
     const timers = jest.spyOn(window, "setTimeout");
     const clears = jest.spyOn(window, "clearTimeout");

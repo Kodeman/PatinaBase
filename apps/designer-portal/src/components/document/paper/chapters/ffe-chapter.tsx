@@ -27,7 +27,7 @@
  * resolving under both renderers.
  */
 
-import { useIsFetching, type Query } from '@tanstack/react-query';
+import { useIsFetching, useQueryClient, type Query } from '@tanstack/react-query';
 import {
   lazy,
   Suspense,
@@ -233,6 +233,7 @@ function useSheetLanding(
   hostRef: RefObject<HTMLDivElement | null>,
   { lens, room, line }: UnfoldAddress,
 ): () => boolean {
+  const queryClient = useQueryClient();
   const settled = useIsFetching({ predicate: isLandingRead }) === 0;
   const settledRef = useRef(settled);
   const lineRef = useRef(line);
@@ -318,6 +319,7 @@ function useSheetLanding(
     const landAt = (fallback: boolean): boolean => {
       if (addressed) {
         if (landOnLine(addressed)) return true;
+        if (!fallback && queryClient.isFetching({ predicate: isLandingRead }) > 0) return false;
         const shown = host.querySelector('[data-spec-line-missing]:not(:empty)')
           ? host
               .querySelector('[data-line-id] [aria-current="true"]')
@@ -442,6 +444,6 @@ function useSheetLanding(
       stop();
       latchRef.current = NOT_MOVED;
     };
-  }, [hostRef, lens, room]);
+  }, [hostRef, lens, room, queryClient]);
   return readerHasMoved;
 }
