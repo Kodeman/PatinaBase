@@ -104,14 +104,13 @@ function respond(mode: "answer" | "hang" | "fail", rows: () => unknown[], what: 
 
 function from(name: string) {
   if (name === "project_ffe_items") {
-    // Its query ends in three orders and is awaited as it stands.
     const pieces = {
       select: () => pieces,
       eq: () => pieces,
       is: () => pieces,
       order: () => pieces,
-      then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-        respond(piecesMode, () => pieceRows, "pieces").then(resolve, reject),
+      range: (start: number, end: number) =>
+        respond(piecesMode, () => pieceRows.slice(start, end + 1), "pieces"),
     };
     return pieces;
   }

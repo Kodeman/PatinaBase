@@ -10,6 +10,11 @@
  */
 import { render, screen, within } from '@testing-library/react';
 
+// Help surfaces are outside this suite; PostSheet reaches the ESM help barrel.
+jest.mock('@/lib/help-system/use-sheet-surface-key', () => ({
+  useSheetSurfaceKey: () => {},
+}));
+
 let mockTeammatePersonaFlag = { value: true, isLoading: false };
 let mockOneVoice = false;
 const mockLeads = jest.fn();
