@@ -298,6 +298,24 @@ describe("RoughInTable keys", () => {
 });
 
 describe("RoughInTable row menu", () => {
+  it("escapes the scrolling Body but retains the drafting stock and submenu focus", async () => {
+    const { props, view, user } = setup();
+    view.rerender(
+      <div data-drafting-stock="">
+        <main data-testid="scrolling-body"><RoughInTable {...props} /></main>
+      </div>,
+    );
+    const trigger = screen.getByRole("button", { name: "Acts for Custom cabinet" });
+    await user.click(trigger);
+    const menu = screen.getByRole("menu", { name: "Acts for Custom cabinet" });
+    expect(screen.getByTestId("scrolling-body")).not.toContainElement(menu);
+    expect(menu.closest("[data-drafting-stock]")).toBeTruthy();
+    await user.keyboard("{ArrowDown}{Enter}");
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("menuitem", { name: "Move to room…" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(trigger).toHaveFocus();
+  });
   it("carries Fill with a product, Move to room…, Also place in…, Remove", async () => {
     const { props, user } = setup();
     const trigger = screen.getByRole("button", {

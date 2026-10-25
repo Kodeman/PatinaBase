@@ -1,8 +1,89 @@
+import type { Locator } from '@playwright/test';
 import { test, expect } from '../fixtures/auth';
 import { psqlScalar } from '../helpers/psql';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const ROOM = 'f0180000-0000-4000-8000-000000000011';
+
+async function expectMenuAboveRail(items: Locator) {
+  for (const item of await items.all()) {
+    await expect.poll(() => item.evaluate((node) => {
+      const r = node.getBoundingClientRect();
+      const rail = document.querySelector('[data-testid="mobile-bar"]');
+      const railRect = rail?.getBoundingClientRect();
+      const bottom = railRect?.height ? railRect.top : innerHeight;
+      let clipBottom = bottom;
+      let clipTop = 0;
+      for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+        if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflowY)) {
+          const clip = parent.getBoundingClientRect();
+          clipBottom = Math.min(clipBottom, clip.bottom);
+          clipTop = Math.max(clipTop, clip.top);
+        }
+      }
+      return r.bottom <= clipBottom && r.top >= clipTop && r.left >= 0 && r.right <= innerWidth
+        && node.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    }), { message: `Menu item fully visible above the bottom rail: ${await item.textContent()}` }).toBe(true);
+  }
+}
+
+test.describe('phone Rough-in acts', () => {
+  test.use({ hasTouch: true });
+  for (const legacy of [false, true]) {
+    test(`every parent and Move action is visible and activatable${legacy ? ' @renderer-off' : ''}`, async ({ authenticatedPage: page }, info) => {
+      test.setTimeout(240_000);
+      await page.setViewportSize({ width: info.project.name === 'webkit-iphone' ? 390 : 320, height: 664 });
+      await page.goto(legacy ? `/doc/${JOB}/pieces?lens=rough&room=${ROOM}` : `/doc/${JOB}?unfold=pieces&lens=rough&room=${ROOM}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+      const sheet = page.getByTestId('build-room');
+      await expect(sheet).toBeVisible({ timeout: 60_000 });
+      if (!legacy) await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/, { timeout: 30_000 });
+      const name = 'F01 Living Room selection 36';
+      const acts = () => sheet.getByRole('button', { name: `Acts for ${name}`, exact: true });
+      const rowRoom = () => psqlScalar(`SELECT project_room_id FROM public.project_ffe_items WHERE project_id='${JOB}' AND name='${name}' AND removed_at IS NULL`);
+      for (const keyboard of [true, false]) {
+        const activate = async (item: Locator) => {
+          if (keyboard) { await item.focus(); await page.keyboard.press('Enter'); }
+          else await item.tap();
+        };
+        for (const action of ['Fill with a product', 'Also place in…', 'Remove']) {
+          await activate(acts());
+          await expectMenuAboveRail(page.getByRole('menuitem'));
+          await activate(page.getByRole('menuitem', { name: action, exact: true }));
+          if (action === 'Remove') {
+            await expect.poll(() => rowRoom()).toBe('');
+            await activate(sheet.getByRole('button', { name: 'Undo', exact: true }));
+            await expect.poll(() => rowRoom()).toBe(ROOM);
+          } else {
+            const tool = sheet.locator(`[data-rough-in-tool="${action.startsWith('Fill') ? 'fill' : 'alsoPlace'}"]`);
+            await expect(tool).toBeVisible();
+            await activate(tool.getByRole('button', { name: 'Close', exact: true }));
+          }
+        }
+        for (const room of ['Living Room', 'Dining Room', 'Bedroom']) {
+          await activate(acts());
+          await activate(page.getByRole('menuitem', { name: 'Move to room…', exact: true }));
+          await expectMenuAboveRail(page.getByRole('menuitem'));
+          const menu = page.getByRole('menu', { name: 'Move to room', exact: true });
+          await activate(menu.getByRole('menuitem', { name: room === 'Living Room' ? /Living Room/ : room, exact: true }));
+          if (room === 'Living Room') {
+            await expect(menu).toHaveCount(0);
+            await page.keyboard.press('Escape');
+          } else {
+            const target = room === 'Dining Room' ? 'f0180000-0000-4000-8000-000000000012' : 'f0180000-0000-4000-8000-000000000013';
+            await expect.poll(() => rowRoom()).toBe(target);
+            await activate(acts());
+            await activate(page.getByRole('menuitem', { name: 'Move to room…', exact: true }));
+            await activate(page.getByRole('menu', { name: 'Move to room', exact: true }).getByRole('menuitem', { name: 'Living Room', exact: true }));
+            await expect.poll(() => rowRoom()).toBe(ROOM);
+          }
+        }
+      }
+      await page.screenshot({ path: info.outputPath('phone-menu-actions.png') });
+      expect(rowRoom()).toBe(ROOM);
+    });
+  }
+});
 
 const readings = [
   { lens: 'rough', button: 'Preliminary selections', title: 'Preliminary selections' },
@@ -44,19 +125,7 @@ test('four specialized lenses retain the room and native instruments', async ({ 
       await expect(menu.getByRole('menuitem')).toHaveCount(3);
       await expect(menu).toContainText('Dining Room');
       await expect(menu).toContainText('Bedroom');
-      // Inherited absolute row menus may exceed the Body scroller on phone.
-      // Record the actual geometry; this presentation slice does not repair it.
-      const geometry = await menu.getByRole('menuitem').last().evaluate((node) => {
-        const r = node.getBoundingClientRect();
-        let visibleBottom = innerHeight;
-        for (let parent = node.parentElement; parent; parent = parent.parentElement) {
-          if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflowY)) {
-            visibleBottom = Math.min(visibleBottom, parent.getBoundingClientRect().bottom);
-          }
-        }
-        return { bottom: r.bottom, visibleBottom, clipped: r.bottom > visibleBottom };
-      });
-      await info.attach('rough-move-menu-disposition', { body: JSON.stringify({ ...geometry, disposition: 'Inherited menu positioning unchanged; not claimed fixed.' }), contentType: 'application/json' });
+      await expectMenuAboveRail(page.getByRole('menuitem'));
       await page.screenshot({ path: info.outputPath('rough-move-menu.png') });
       await page.keyboard.press('Escape');
       await page.keyboard.press('Escape');
