@@ -51,10 +51,13 @@ export function NextConversation({
       {recorded && (
         <p data-desk-visit role="status" className="t-body-sm pb-4 text-[var(--ink-faint)] [overflow-wrap:anywhere]">
           {`${recorded.name} recorded · just now · `}
+          {/* The visit line disappears on remount; return to the persisted inquiry's row. */}
           <DocumentAction
+            id={`studio-recorded-${recorded.id}`}
             actionKey="desk-visit-open-brief"
             variant="tertiary"
             href={`/doc/${recorded.id}`}
+            onClick={() => onLeave(`studio-inquiry-${recorded.id}`, recorded.id)}
             aria-label={`Open the brief — ${recorded.name}`}
           >
             Open the brief
