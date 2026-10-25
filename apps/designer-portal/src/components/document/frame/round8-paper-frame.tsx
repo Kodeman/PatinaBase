@@ -23,7 +23,7 @@ import '@/components/document/paper/round8.css';
 import {
   Fragment,
   useEffect,
-  useMemo,
+  useState,
   type ComponentProps,
   type ComponentType,
   type DragEvent,
@@ -49,6 +49,7 @@ import {
   paperOriginHref,
   paperOriginLabel,
   readPaperOrigin,
+  subscribePaperOrigin,
 } from '@/lib/document/paper/paper-origin';
 import type { DocumentFrameSlots } from './frame-slots';
 import type { LegacyDocumentFrame } from './legacy-document-frame';
@@ -178,7 +179,13 @@ export default function Round8PaperFrame({
 }: Round8PaperFrameProps) {
   // Mounted after hydration only (the page holds the first paint), so the
   // tab's remembered origin can be read here.
-  const origin = useMemo(() => readPaperOrigin(docId), [docId]);
+  const [origin, setOrigin] = useState(() => readPaperOrigin(docId));
+  useEffect(() => {
+    const refresh = () => setOrigin(readPaperOrigin(docId));
+    const unsubscribe = subscribePaperOrigin(docId, refresh);
+    refresh();
+    return unsubscribe;
+  }, [docId]);
   useEffect(() => {
     onCommitted(true);
   }, [onCommitted]);

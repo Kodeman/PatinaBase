@@ -17,6 +17,17 @@
 import { originLabel } from "@/lib/document/room-origin";
 
 const PAPER_ORIGIN_KEY = "patina:paper-origin:v1";
+const PAPER_ORIGIN_CHANGED = 'patina:paper-origin-changed';
+
+/** Same-tab storage writes do not emit a native storage event. */
+export function subscribePaperOrigin(docId: string, onChange: () => void): () => void {
+  const changed = (event: Event) => {
+    const changedDocId = (event as CustomEvent<string | undefined>).detail;
+    if (!changedDocId || changedDocId === docId) onChange();
+  };
+  window.addEventListener(PAPER_ORIGIN_CHANGED, changed);
+  return () => window.removeEventListener(PAPER_ORIGIN_CHANGED, changed);
+}
 export { markDeskReturn, takeDeskReturn } from './desk-return';
 
 /** Origins kept per tab, most recent last. */
@@ -110,6 +121,7 @@ export function rememberPaperOrigin(
     const kept = readStore().filter((held) => held.docId !== docId);
     const store = [...kept, origin].slice(-MAX_REMEMBERED);
     window.sessionStorage.setItem(PAPER_ORIGIN_KEY, JSON.stringify(store));
+    window.dispatchEvent(new CustomEvent(PAPER_ORIGIN_CHANGED, { detail: docId }));
   } catch {
     /* private mode / disabled storage — the job returns to the Studio */
   }
@@ -189,6 +201,7 @@ export function clearPaperOrigin(docId?: string): void {
     } else {
       window.sessionStorage.removeItem(PAPER_ORIGIN_KEY);
     }
+    window.dispatchEvent(new CustomEvent(PAPER_ORIGIN_CHANGED, { detail: docId }));
   } catch {
     /* no-op */
   }

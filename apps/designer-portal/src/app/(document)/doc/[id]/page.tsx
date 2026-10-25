@@ -122,6 +122,7 @@ import { VisitsBlock } from '@/components/document/visits-block';
 import { InstallWindowCeremony } from '@/components/document/schedule/install-window-ceremony';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
+import { SectionLoadingLine } from '@/components/document/section-loading-line';
 import {
   CareBand,
   type CloseoutState,
@@ -4438,8 +4439,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         stageLine,
         fileDrop: sectionFileDrop,
         brief: {
-          brief: <BriefRecap designerClientId={designerClientId} leadId={row.lead_id} />,
-          discovery: row.lead_id || unfoldProposalId ? (
+          brief: projectIsLoading ? <SectionLoadingLine label="Opening the brief" /> : projectIsError ? (
+            <p role="alert" className="t-body-sm">The original brief could not be read.</p>
+          ) : <BriefRecap designerClientId={designerClientId} leadId={row.lead_id} />,
+          discovery: projectIsLoading ? <SectionLoadingLine label="Opening discovery notes" /> : projectIsError ? (
+            <p role="alert" className="t-body-sm">Discovery notes could not be read.</p>
+          ) : row.lead_id || unfoldProposalId ? (
             <DiscoveryRecap
               clientProfileId={row.client_profile_id}
               engagementKind={row.engagement_kind}
@@ -4447,7 +4452,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               proposalId={row.proposal_id}
             />
           ) : null,
-          agreement: unfoldProposalId ? <ProposalBlocksReadOnly proposalId={unfoldProposalId} /> : null,
+          agreement: projectIsLoading ? <SectionLoadingLine label="Opening the agreement record" /> : projectIsError ? (
+            <p role="alert" className="t-body-sm">The agreement record could not be read.</p>
+          ) : unfoldProposalId ? <ProposalBlocksReadOnly proposalId={unfoldProposalId} /> : null,
         },
         design: (workRoom: import('@/components/document/paper/chapters/ffe-work-room').WorkRoom) => (
           <Suspense fallback={<p role="status">Reading room evidence…</p>}>
