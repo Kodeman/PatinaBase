@@ -990,7 +990,7 @@ function RowMenu({
       }}
     >
       <div className="relative inline-block">
-        <Popover.Anchor asChild>
+        <Popover.Trigger asChild>
           <button
             ref={buttonRef}
             type="button"
@@ -998,12 +998,11 @@ function RowMenu({
             aria-haspopup="menu"
             aria-expanded={open}
             aria-controls={open ? menuId : undefined}
-            onClick={() => (open ? close(true) : setOpen(true))}
             className="inline-flex h-[40px] min-w-[44px] items-center justify-center font-mono text-[14px] text-[var(--sheet-ink-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] max-md:h-[44px]"
           >
             ⋯
           </button>
-        </Popover.Anchor>
+        </Popover.Trigger>
         {open ? (
           // Escape the Body scroller, but keep the drafting tokens and round-8 scope.
           <Popover.Portal container={stock}>
@@ -1024,10 +1023,6 @@ function RowMenu({
                 else close(true);
               }}
               onCloseAutoFocus={(event) => event.preventDefault()}
-              onInteractOutside={(event) => {
-                if (buttonRef.current?.contains(event.target as Node))
-                  event.preventDefault();
-              }}
             >
               <ul
                 id={menuId}
@@ -1038,7 +1033,7 @@ function RowMenu({
                 // press blurs the focused item to nothing, the blur closes the menu,
                 // and the item is gone before its click (T-60a F3).
                 onMouseDown={(event) => event.preventDefault()}
-                className="z-20 w-[280px] max-w-[var(--radix-popover-content-available-width)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left outline-none"
+                className="z-20 w-[280px] max-w-[var(--radix-popover-content-available-width)] border border-[var(--sheet-rule-strong)] bg-[var(--sheet)] py-1 text-left outline-none"
               >
                 {MENU_ITEMS.map(({ act, label: word }, i) => {
                   const gate = row.gates?.[act];

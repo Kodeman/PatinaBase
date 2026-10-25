@@ -22,9 +22,14 @@ async function expectMenuAboveRail(items: Locator) {
           clipTop = Math.max(clipTop, clip.top);
         }
       }
-      return r.bottom <= clipBottom && r.top >= clipTop && r.left >= 0 && r.right <= innerWidth
-        && node.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
-    }), { message: `Menu item fully visible above the bottom rail: ${await item.textContent()}` }).toBe(true);
+      return {
+        visible: r.bottom <= clipBottom && r.top >= clipTop && r.left >= 0 && r.right <= innerWidth
+          && node.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)),
+        label: node.textContent,
+        rect: { top: r.top, bottom: r.bottom, left: r.left, right: r.right },
+        clipTop, clipBottom,
+      };
+    }, { timeout: 5000 }), { message: 'Menu item fully visible above the bottom rail' }).toMatchObject({ visible: true });
   }
 }
 
