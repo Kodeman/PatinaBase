@@ -56,6 +56,23 @@ afterEach(() => {
 });
 
 describe('FullScreenViewerShell', () => {
+  it('closes by the Back to the document button and restores its opener', async () => {
+    const onClose = jest.fn();
+    render(<ViewerHarness onClose={onClose} onChildEscape={jest.fn()} />);
+
+    const opener = screen.getByRole('button', { name: 'Open floor plan' });
+    opener.focus();
+    fireEvent.click(opener);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the document' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(document.body.style.overflow).toBe('');
+  });
+
   it('labels and contains the viewer, closes once on Escape, unlocks scroll, and restores focus', async () => {
     const onClose = jest.fn();
     const onChildEscape = jest.fn();
