@@ -29,8 +29,8 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
     psqlRun(`BEGIN;
       DO $$ BEGIN
         IF EXISTS (SELECT 1 FROM public.projects WHERE id IN ('${id('15')}', '${id('16')}', '${id('17')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
-        OR EXISTS (SELECT 1 FROM public.proposals WHERE id IN ('${id('13')}', '${id('23')}', '${id('24')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
-        OR EXISTS (SELECT 1 FROM public.designer_clients WHERE id IN ('${id('12')}', '${id('22')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
+        OR EXISTS (SELECT 1 FROM public.proposals WHERE id IN ('${id('13')}', '${id('23')}', '${id('24')}', '${id('33')}', '${id('34')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
+        OR EXISTS (SELECT 1 FROM public.designer_clients WHERE id IN ('${id('12')}', '${id('22')}', '${id('32')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
         OR EXISTS (SELECT 1 FROM public.leads WHERE id IN ('${id('10')}', '${id('11')}') AND designer_id IS DISTINCT FROM '${owner}'::uuid)
         THEN RAISE EXCEPTION 'Nonfixture owner: refusing cleanup'; END IF;
       END $$;
@@ -38,12 +38,12 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
       -- Replica mode is transaction-local and touches only the ownership-checked fixture IDs.
       SET LOCAL session_replication_role = replica;
       UPDATE public.proposals SET status = 'draft', project_id = NULL
-        WHERE id IN ('${id('13')}', '${id('23')}', '${id('24')}');
+        WHERE id IN ('${id('13')}', '${id('23')}', '${id('24')}', '${id('33')}', '${id('34')}');
       SET LOCAL session_replication_role = origin;
       DELETE FROM public.projects WHERE id IN ('${id('15')}', '${id('16')}', '${id('17')}');
-      DELETE FROM public.proposals WHERE id = '${id('24')}';
-      DELETE FROM public.proposals WHERE id IN ('${id('13')}', '${id('23')}');
-      DELETE FROM public.designer_clients WHERE id IN ('${id('12')}', '${id('22')}');
+      DELETE FROM public.proposals WHERE id IN ('${id('24')}', '${id('34')}');
+      DELETE FROM public.proposals WHERE id IN ('${id('13')}', '${id('23')}', '${id('33')}');
+      DELETE FROM public.designer_clients WHERE id IN ('${id('12')}', '${id('22')}', '${id('32')}');
       DELETE FROM public.leads WHERE id IN ('${id('10')}', '${id('11')}');
       COMMIT;`);
     expect(psqlScalar("SELECT count(*) FROM public.leads WHERE id::text LIKE 'f2740000-%'" )).toBe('0');
@@ -67,16 +67,23 @@ test.describe('F02/F03 existing mounted identity and lineage', () => {
   });
 
   test('keeps root and revised proposal ids as aliases of the same live version', async ({ authenticatedPage: page }) => {
-    for (const alias of ['23', '24']) {
+    for (const alias of ['33', '34']) {
       await openDocument(page, id(alias));
-      await expect(page).toHaveURL(new RegExp('/doc/' + id('17') + '(?:\\?|$)'));
-      await expect(page.getByRole('heading', { level: 1 })).toContainText('F02 Fictional Revision');
-      const chapter = page.locator('[data-paper-chapter="brief"] [data-brief-agreement-chapter]');
-      await expect(chapter).toContainText('F02 revised agreement: preserve the piano alcove.');
-      await expect(chapter).not.toContainText('F02 original agreement: retain the piano.');
+      await expect(page).toHaveURL(new RegExp('/doc/' + id('34') + '(?:\\?|$)'));
+      await expect(page.getByRole('heading', { level: 1 })).toContainText('F02 Fictional Pre-work Revision');
     }
-    const versions = psqlScalar(`BEGIN; SET LOCAL ROLE authenticated; SET LOCAL request.jwt.claims = '{"sub":"${owner}","role":"authenticated"}'; SELECT (public.document_open('${id('23')}')->'ids'->>'proposal_id') = (public.document_open('${id('24')}')->'ids'->>'proposal_id'); ROLLBACK;`);
+    const versions = psqlScalar(`BEGIN; SET LOCAL ROLE authenticated; SET LOCAL request.jwt.claims = '{"sub":"${owner}","role":"authenticated"}'; SELECT (public.document_open('${id('33')}')->'ids'->>'proposal_id') = (public.document_open('${id('34')}')->'ids'->>'proposal_id'); ROLLBACK;`);
     expect(versions).toBe('t');
+  });
+
+  test('shows the revised agreement in the mounted project chapter', async ({ authenticatedPage: page }) => {
+    // SQ-2006 owns the stale post-activation root alias; open the real project here.
+    await openDocument(page, id('17'));
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('F02 Fictional Revision');
+    const chapter = page.locator('[data-paper-chapter="brief"] [data-brief-agreement-chapter]');
+    await expect(chapter).toContainText('F02 revised agreement: preserve the piano alcove.');
+    await expect(chapter).not.toContainText('F02 original agreement: retain the piano.');
+    expect(psqlScalar(`SELECT proposal_id FROM public.projects WHERE id = '${id('17')}'`)).toBe(id('24'));
   });
 
   test('opens a direct project without forging an agreement or source inquiry', async ({ authenticatedPage: page }) => {

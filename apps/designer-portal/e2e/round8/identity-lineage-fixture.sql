@@ -27,8 +27,14 @@ INSERT INTO public.projects (id, name, created_by, designer_id, studio_id, statu
 UPDATE public.proposals SET project_id = 'f2740000-0000-4000-8000-000000000015' WHERE id = 'f2740000-0000-4000-8000-000000000013';
 INSERT INTO public.projects (id, name, created_by, designer_id, studio_id, status) VALUES
  ('f2740000-0000-4000-8000-000000000016', 'F03 Fictional Direct Project', 'f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000001', 'active');
--- Import a legacy revised agreement into a project so both old proposal aliases
--- exercise the mounted chapter, not only the pre-work proposal surface.
+-- A separate unactivated chain exercises pre-work root/revision aliases.
+INSERT INTO public.designer_clients (id, designer_id, client_name, status) VALUES
+ ('f2740000-0000-4000-8000-000000000032', 'f0180000-0000-4000-8000-000000000002', 'F02 Fictional Pre-work Revision', 'proposal');
+INSERT INTO public.proposals (id, designer_id, title, status, designer_client_id, version, parent_proposal_id) VALUES
+ ('f2740000-0000-4000-8000-000000000033', 'f0180000-0000-4000-8000-000000000002', 'F02 Fictional Pre-work Revision', 'revised', 'f2740000-0000-4000-8000-000000000032', 1, NULL),
+ ('f2740000-0000-4000-8000-000000000034', 'f0180000-0000-4000-8000-000000000002', 'F02 Fictional Pre-work Revision', 'draft', 'f2740000-0000-4000-8000-000000000032', 2, 'f2740000-0000-4000-8000-000000000033');
+-- Import a legacy revised agreement for the mounted project chapter.
+-- Post-activation stale-root resolution is covered separately by SQ-2006.
 SET LOCAL session_replication_role = replica;
 UPDATE public.proposals SET status = 'accepted', description = 'F02 revised agreement: preserve the piano alcove.'
   WHERE id = 'f2740000-0000-4000-8000-000000000024';
