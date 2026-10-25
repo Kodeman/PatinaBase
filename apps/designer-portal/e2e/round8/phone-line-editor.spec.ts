@@ -204,6 +204,7 @@ for (const width of [320, 390]) {
           await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'SQ-2009 late refusal', code: 'XX000' }) });
         });
         const refused = page.waitForResponse(response => response.request().method() === 'PATCH' && specWrite(new URL(response.url())) && response.status() === 500);
+        const handled = page.waitForEvent('console', message => message.type() === 'error' && message.text().includes('Error:') && message.text().includes('SQ-2009 late refusal'));
         try {
           await finish.fill(abandoned);
           await finish.press('Enter');
@@ -213,6 +214,8 @@ for (const width of [320, 390]) {
           await expect(opener).toBeFocused();
         } finally { release(); }
         await refused;
+        await handled;
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
         await page.unroute(specWrite);
         expect(finishOf(line), 'late refusal never changes the acknowledged row').toBe(acknowledged);
         const boundary = await page.evaluate(draft => ({
@@ -220,8 +223,9 @@ for (const width of [320, 390]) {
           draftKept: Array.from(document.querySelectorAll<HTMLInputElement>('input')).some(input => input.value === draft),
           unfolded: !!document.querySelector('[data-unfold-instrument]'),
         }), abandoned);
+        expect(boundary, 'current silent-loss boundary requires paired repair before integration').toEqual({ visibleAlerts: [], draftKept: false, unfolded: false });
         await testInfo.attach('stale-api-late-failure-boundary', { body: Buffer.from(JSON.stringify(boundary)), contentType: 'application/json' });
-        testInfo.annotations.push({ type: 'residual', description: `Late failed save after stale-API Back: ${JSON.stringify(boundary)}` });
+        testInfo.annotations.push({ type: 'residual', description: `silent-loss: late failed save after stale-API Back; paired repair required before integration (SQ-2015): ${JSON.stringify(boundary)}` });
       }
 
       await page.goto(`/doc/${JOB}?unfold=pieces&lens=spec&room=${ROOM}&line=00000000-0000-4000-8000-000000000099`, { waitUntil: 'domcontentloaded' });
