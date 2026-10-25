@@ -8,6 +8,7 @@
  * the Post sheet. The masthead only prints its own shorter word for each.
  */
 
+import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { STUDIO_LEDGERS, STUDIO_ROOMS, type StudioSurface } from '@/lib/document/registry';
 import { openCommandBar, openLedger } from '@/components/document/command-bar';
@@ -81,6 +82,7 @@ export function StudioMasthead({
               <li key={door.key}>
                 <button
                   type="button"
+                  id={`studio-door-${door.key}`}
                   data-studio-door={door.key}
                   onClick={() => openDoor(door.key)}
                   className={`t-body-sm inline-flex min-h-11 items-center border-b-2 border-transparent text-[var(--ink)] transition-colors hover:border-[var(--hairline-strong)] motion-reduce:transition-none ${FOCUS}`}
@@ -102,6 +104,9 @@ export function StudioMasthead({
       </div>
       <div className="mx-auto flex w-full max-w-[var(--r8-studio-measure)] flex-wrap items-center justify-between gap-x-5 gap-y-2 px-[4%] pb-4 max-[599px]:px-4">
         <span className="r8-small text-[var(--ink-faint)]">{dateLabel}</span>
+        <div className="flex flex-wrap items-center gap-x-5">
+          <button type="button" onClick={() => openLedger('hours')} className={'t-body-sm inline-flex min-h-11 items-center ' + FOCUS}>Hours</button>
+          <Link href="/help" className={'t-body-sm inline-flex min-h-11 items-center ' + FOCUS}>Help</Link>
         <form
           role="search"
           onSubmit={find}
@@ -127,6 +132,7 @@ export function StudioMasthead({
             Find
           </button>
         </form>
+        </div>
       </div>
     </header>
   );

@@ -28,9 +28,22 @@ export type PaperOriginKind =
   | "people"
   | "room"
   | "document"
+  | "studio-overlay"
   | "deep-link";
 
-export interface PaperOrigin {
+export interface StudioOverlayState {
+  overlay: 'books' | 'post' | 'search';
+  subject?: string;
+  filter?: string;
+  query?: string;
+  scrollTop?: number;
+  focusKey?: string;
+}
+
+export { parseStudioOverlay } from './desk-return';
+import { parseStudioOverlay } from './desk-return';
+
+export interface PaperOrigin extends Partial<StudioOverlayState> {
   /** The job this origin belongs to; another job's origin never answers. */
   docId: string;
   kind: PaperOriginKind;
@@ -49,6 +62,7 @@ export interface PaperOriginInput {
   search?: string;
   anchorId?: string | null;
   focusId?: string | null;
+  studioOverlay?: StudioOverlayState;
 }
 
 function under(path: string, root: string): boolean {
@@ -77,16 +91,18 @@ export function rememberPaperOrigin(
   from: PaperOriginInput,
 ): void {
   if (typeof window === "undefined" || !docId || !from.path) return;
-  if (isTheJobItself(from.path, docId)) return;
-  const kind = paperOriginKind(from.path);
+  if (!from.studioOverlay && isTheJobItself(from.path, docId)) return;
+  const overlay = from.studioOverlay ? parseStudioOverlay(from.studioOverlay) : null;
+  const kind = overlay ? 'studio-overlay' : paperOriginKind(from.path);
   const origin: PaperOrigin = {
     docId,
     kind,
-    path: from.path,
-    search: from.search ?? "",
+    path: overlay ? '/desk' : from.path,
+    search: overlay ? '' : from.search ?? '',
     anchorId: from.anchorId ?? null,
-    scrollY: kind === "desk" ? null : window.scrollY,
+    scrollY: kind === 'desk' || overlay ? null : window.scrollY,
     focusId: from.focusId ?? null,
+    ...overlay,
     ...(navigation()?.currentEntry?.key ? { historyKey: navigation()!.currentEntry!.key } : {}),
   };
   try {
@@ -125,11 +141,14 @@ function parseHeld(value: unknown): PaperOrigin | null {
   ) {
     return null;
   }
+  const overlay = held.kind === 'studio-overlay' ? parseStudioOverlay(held) : null;
+  if (held.kind === 'studio-overlay' && !overlay) return deepLink(held.docId);
   return {
     docId: held.docId,
-    kind: paperOriginKind(held.path),
-    path: held.path,
-    search: typeof held.search === "string" ? held.search : "",
+    kind: overlay ? 'studio-overlay' : paperOriginKind(held.path),
+    path: overlay ? '/desk' : held.path,
+    search: overlay ? '' : typeof held.search === "string" ? held.search : "",
+    ...overlay,
     anchorId: nullableString(held.anchorId),
     scrollY: typeof held.scrollY === "number" ? held.scrollY : null,
     focusId: nullableString(held.focusId),
@@ -161,10 +180,15 @@ export function readPaperOrigin(docId: string): PaperOrigin {
   }
 }
 
-export function clearPaperOrigin(): void {
+export function clearPaperOrigin(docId?: string): void {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.removeItem(PAPER_ORIGIN_KEY);
+    if (docId) {
+      const kept = readStore().filter((origin) => origin.docId !== docId);
+      window.sessionStorage.setItem(PAPER_ORIGIN_KEY, JSON.stringify(kept));
+    } else {
+      window.sessionStorage.removeItem(PAPER_ORIGIN_KEY);
+    }
   } catch {
     /* no-op */
   }
@@ -176,7 +200,7 @@ export function paperOriginHref(origin: PaperOrigin): string {
 
 /** The return control's words: "← Studio", "← Resource library", … */
 export function paperOriginLabel(origin: PaperOrigin): string {
-  if (origin.kind === "desk" || origin.kind === "deep-link") return "Studio";
+  if (origin.kind === "desk" || origin.kind === "deep-link" || origin.kind === 'studio-overlay') return "Studio";
   if (origin.kind === "people") return "Studio contacts";
   return originLabel(origin.path);
 }
@@ -198,4 +222,51 @@ export function canReturnToPaperOrigin(origin: PaperOrigin): boolean {
   const previous = nav.entries().find((entry) => entry.index === nav.currentEntry!.index - 1);
   return previous?.key === origin.historyKey &&
     previous.url === new URL(paperOriginHref(origin), window.location.origin).href;
+}
+
+/** All three studio sheets keep their own scroll region; the paper never moves. */
+export function studioOverlayScroll(root: HTMLElement): HTMLElement {
+  return root.closest<HTMLElement>('[data-doc-sheet-scroll-region]') ?? root.querySelector<HTMLElement>('.cmd-scroll') ?? root;
+}
+
+/** One bounded landing, yielding to the reader while async rows arrive. */
+export function restoreStudioOverlay(root: HTMLElement, held: StudioOverlayState, target: () => HTMLElement | null, onRestored?: () => void): () => void {
+  const scroll = studioOverlayScroll(root);
+  let frame = 0;
+  let stopped = false;
+  const hands = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+  const stop = () => {
+    stopped = true;
+    cancelAnimationFrame(frame);
+    observer.disconnect();
+    clearTimeout(deadline);
+    hands.forEach((hand) => window.removeEventListener(hand, stop, true));
+    document.removeEventListener('focusin', onFocus, true);
+  };
+  const onFocus = (event: FocusEvent) => {
+    // Native sheet/palette open focus precedes this landing, not a reader move.
+    if (event.target !== scroll && event.target !== root && !(event.target instanceof HTMLElement && event.target.matches('[data-studio-search-input]'))) stop();
+  };
+  const land = (last = false) => {
+    if (stopped) return;
+    const row = target();
+    const top = held.scrollTop ?? 0;
+    if (!row || (!last && scroll.scrollHeight - scroll.clientHeight < top)) return;
+    stop();
+    row.focus({ preventScroll: true });
+    scroll.scrollTop = top;
+    onRestored?.();
+  };
+  const observer = new MutationObserver(() => land());
+  const deadline = window.setTimeout(() => { land(true); stop(); }, 3000);
+  hands.forEach((hand) => window.addEventListener(hand, stop, { capture: true, passive: true }));
+  document.addEventListener('focusin', onFocus, true);
+  // Let the native sheet's opening focus settle first.
+  frame = requestAnimationFrame(() => {
+    frame = requestAnimationFrame(() => {
+      observer.observe(root, { childList: true, subtree: true });
+      land();
+    });
+  });
+  return stop;
 }
