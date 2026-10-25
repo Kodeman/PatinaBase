@@ -6,6 +6,7 @@
  */
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { FfeRoomPlacement } from "@patina/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const mockBatch = jest.fn();
@@ -25,7 +26,8 @@ const mockPush = jest.fn();
 const mockState: {
   lines: Array<Record<string, unknown>>;
   removed: Array<Record<string, unknown>>;
-} = { lines: [], removed: [] };
+  placements: FfeRoomPlacement[];
+} = { lines: [], removed: [], placements: [] };
 
 const EMTEK = {
   id: "p-emtek",
@@ -66,7 +68,7 @@ jest.mock("@patina/supabase", () => ({
     }),
   }),
   useProjectFFEItems: () => ({ data: mockState.lines }),
-  useProjectRoomPlacements: () => ({ data: [] }),
+  useProjectRoomPlacements: () => ({ data: mockState.placements }),
   useRemovedProjectLines: () => ({ data: mockState.removed }),
   useBatchCreateNamedProjectNeeds: () => ({
     mutateAsync: mockBatch,
@@ -144,7 +146,7 @@ function setup(room: string | null = LIVING) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  render(
+  const lens = () => (
     <QueryClientProvider client={client}>
       <RoughInLens
         docId="doc-1"
@@ -152,9 +154,10 @@ function setup(room: string | null = LIVING) {
         rooms={ROOMS}
         room={room}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return { user };
+  const view = render(lens());
+  return { user, refresh: () => view.rerender(lens()) };
 }
 
 function livingTable() {
@@ -166,6 +169,7 @@ beforeEach(() => {
   mockAssign.mockResolvedValue({});
   mockState.lines = [];
   mockState.removed = [];
+  mockState.placements = [];
   mockAssignState.isError = false;
   mockAssignState.error = null;
   for (const id of Object.keys(mockThreads)) delete mockThreads[id];
@@ -606,6 +610,33 @@ describe("RoughInLens — at 1440 with the elevation pane open (F2)", () => {
 });
 
 describe("RoughInLens — focus and announcements (F4, F5)", () => {
+  it.each([false, true])("focuses the moved line when placements arrive after lines (phone=%s)", async (phone) => {
+    mockMatches.phone = phone;
+    mockState.lines = [L1];
+    mockState.placements = [{
+      id: "placement-1", ffeItemId: "l1", projectRoomId: LIVING,
+      quantity: 2, areaNote: null, sortOrder: 0,
+    }];
+    mockAssign.mockImplementation(async () => {
+      mockState.lines = [{ ...L1, project_room_id: KITCHEN }];
+      return {};
+    });
+    const { user, refresh } = setup();
+    const original = screen.getByRole("button", { name: "Acts for Custom cabinet" });
+    await user.click(original);
+    await user.click(screen.getByRole("menuitem", { name: "Move to room…" }));
+    await user.click(screen.getByRole("menuitem", { name: "Kitchen" }));
+    await waitFor(() => expect(document.querySelector("[data-rough-in-announce]"))
+      .toHaveTextContent("Moved Custom cabinet to Kitchen."));
+    expect(within(livingTable()).getByRole("button", { name: "Acts for Custom cabinet" })).toBe(original);
+    mockState.placements = [{ ...mockState.placements[0], projectRoomId: KITCHEN }];
+    refresh();
+    const moved = within(screen.getByRole("region", { name: "Kitchen" }))
+      .getByRole("button", { name: "Acts for Custom cabinet" });
+    expect(original.isConnected).toBe(false);
+    await waitFor(() => expect(moved).toHaveFocus());
+  });
+
   it("UNDO puts focus on the restored line and says so", async () => {
     mockState.lines = [L1, L3];
     const { user } = setup();
