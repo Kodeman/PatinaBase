@@ -8,6 +8,11 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 
+// Help surfaces are outside this suite; PostSheet reaches the ESM help barrel.
+jest.mock('@/lib/help-system/use-sheet-surface-key', () => ({
+  useSheetSurfaceKey: () => {},
+}));
+
 const mockOrgs = jest.fn();
 const mockMembers = jest.fn();
 const mockProjects = jest.fn();
