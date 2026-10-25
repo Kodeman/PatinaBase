@@ -37,7 +37,9 @@ import {
   type ReactNode,
 } from "react";
 import type { BoardOwnerRef } from "@patina/types";
+import { showErrorToast } from "@/lib/error-handler";
 import { escapeIsHeld } from "@/components/document/pieces/build-room-shell";
+import { topActiveModalDialog } from "@/components/document/overlays/active-dialog";
 import {
   captureReturnContext,
   isReturnContext,
@@ -60,6 +62,8 @@ import {
   getProposalAutosaveSnapshot,
   isProposalAutosaveSnapshotClean,
   subscribeToProposalAutosaves,
+  waitPendingBoardOwnerAutosaves,
+  type ProposalAutosaveHandle,
   type ProposalAutosaveSnapshot,
 } from "@/lib/proposal-autosave-registry";
 
@@ -382,6 +386,94 @@ export function UnfoldInstrument({
 
   const contextRef = useRef<ReturnContext | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
+  const [sessions, setSessions] = useState<{ id: number; address: UnfoldAddress }[]>([]);
+  const activeSession = useRef<{ id: number; address: UnfoldAddress } | null>(null);
+  const nextSession = useRef(0);
+  const recoverySequence = useRef(0);
+  const retainedWrites = useRef(new Set<ProposalAutosaveHandle>());
+  const recovering = useRef<number | null>(null);
+  const recoveryFocus = useRef(false);
+  const mounted = useRef(false);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  // Only an early fold with an already-issued write retains a pane. Its own
+  // state remains the draft authority; waiting never initiates another save.
+  useLayoutEffect(() => {
+    const sequence = ++recoverySequence.current;
+    const previous = activeSession.current;
+    if (address) {
+      const id = recovering.current ?? previous?.id ?? ++nextSession.current;
+      recovering.current = null;
+      const current = { id, address };
+      activeSession.current = current;
+      setSessions((held) => [...held.filter((entry) => entry.id !== id), current]);
+      return;
+    }
+    activeSession.current = null;
+    if (!previous) return;
+    const pending = ownerKind && ownerId
+      ? waitPendingBoardOwnerAutosaves({ kind: ownerKind, id: ownerId }, retainedWrites.current)
+      : null;
+    if (!pending) {
+      setSessions((held) => held.filter((entry) => entry.id !== previous.id));
+      return;
+    }
+    const pathname = window.location.pathname;
+    const context = contextRef.current;
+    pending.then((results) => {
+      if (!mounted.current) return;
+      const failed = results.some((result) => result.status === "rejected");
+      const superseded = recoverySequence.current !== sequence || activeSession.current !== null;
+      if (failed && !superseded && window.location.pathname === pathname &&
+          !parseUnfoldSearch(new URLSearchParams(window.location.search), { canSeeMoney })) {
+        recovering.current = previous.id;
+        recoveryFocus.current = true;
+        openUnfold(previous.address, context ?? { documentId: /^\/doc\/([^/]+)/.exec(pathname)?.[1] ?? "" }, null);
+      } else {
+        // The newer sheet owns focus. Its predecessor can no longer show an
+        // inline refusal, but the same-job MutationCache still stays silent.
+        if (superseded && window.location.pathname === pathname) {
+          for (const result of results) {
+            if (result.status === "rejected") {
+              showErrorToast(new Error(result.failureMessage ?? "Your change wasn't saved."));
+            }
+          }
+        }
+        setSessions((held) => held.filter((entry) => entry.id !== previous.id));
+      }
+    });
+  }, [address, parsed, ownerKind, ownerId, canSeeMoney]);
+
+  useEffect(() => {
+    if (!address || !recoveryFocus.current) return;
+    let frame = 0;
+    const focusAlert = () => {
+      if (topActiveModalDialog()) return;
+      const alert = sectionRef.current?.querySelector<HTMLElement>('[role="alert"]');
+      if (!alert) return;
+      alert.tabIndex = -1;
+      alert.focus();
+      recoveryFocus.current = false;
+      observer.disconnect();
+      document.removeEventListener("focusin", schedule);
+    };
+    const schedule = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(focusAlert);
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    document.addEventListener("focusin", schedule);
+    schedule();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      document.removeEventListener("focusin", schedule);
+    };
+  }, [address]);
   const wasOpen = useRef(false);
   // Story #41 — the traversal a held Back or Forward goes on to, and whether
   // the sheet is still traversing back to its entry.
@@ -673,18 +765,23 @@ export function UnfoldInstrument({
     </p>
   );
 
-  if (!address) return announcer;
-
   return (
     <>
       {announcer}
-      <section
-        ref={sectionRef}
+      {sessions.map((session) => {
+        const visible = open && session.id === activeSession.current?.id;
+        return <section
+        key={session.id}
+        ref={visible ? sectionRef : undefined}
+        hidden={!visible}
+        inert={!visible}
+        style={visible ? undefined : { display: "none" }}
         aria-label={label}
-        data-unfold-instrument={kind}
+        data-unfold-instrument={visible ? kind : undefined}
+        data-unfold-retained={!visible || undefined}
         data-unfold-state={closing ? "saving" : "open"}
         aria-busy={closing || undefined}
-        onKeyDown={onKeyDown}
+        onKeyDown={visible ? onKeyDown : undefined}
         className="flex min-h-0 flex-1 flex-col"
       >
         <div className="flex min-h-11 flex-wrap items-center justify-end gap-x-4 border-b border-[var(--sheet-rule-strong)] bg-[var(--sheet-head)] px-4 text-[var(--sheet-ink)] md:px-6">
@@ -709,8 +806,9 @@ export function UnfoldInstrument({
             <span aria-hidden="true">←&nbsp;</span>Return to the room
           </button>
         </div>
-        {children({ address, close, navigate })}
-      </section>
+        {children({ address: session.address, close: visible ? close : () => {}, navigate: visible ? navigate : () => {} })}
+      </section>;
+      })}
     </>
   );
 }

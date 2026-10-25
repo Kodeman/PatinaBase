@@ -372,6 +372,7 @@ function usePaneCloseHold(
   owner: BoardOwnerRef | null,
   paneRef: RefObject<HTMLElement | null>,
   showError: (message: string) => void,
+  needLabel: string,
 ) {
   const inFlight = useRef(new Set<Promise<void>>());
   const unsavedRef = useRef(new Map<string, string>());
@@ -451,6 +452,19 @@ function usePaneCloseHold(
       const [first] = held;
       return first ? { field: first[0], message: first[1] } : null;
     };
+    const waitPending = async () => {
+      const seen = failures.current;
+      while (inFlight.current.size > 0) {
+        await Promise.all([...inFlight.current]);
+      }
+      const held =
+        firstHeld() ??
+        (failures.current !== seen ? lastFailure.current : null);
+      if (!held) return;
+      showErrorRef.current(held.message);
+      fieldControl(paneRef.current, held.field)?.focus();
+      throw new Error(held.message);
+    };
     const registration = registerBoardOwnerAutosave(
       { kind: ownerKind, id: ownerId },
       {
@@ -459,19 +473,9 @@ function usePaneCloseHold(
           flushing: inFlight.current.size > 0,
           error: unsavedRef.current.values().next().value ?? null,
         }),
-        flush: async () => {
-          const seen = failures.current;
-          while (inFlight.current.size > 0) {
-            await Promise.all([...inFlight.current]);
-          }
-          const held =
-            firstHeld() ??
-            (failures.current !== seen ? lastFailure.current : null);
-          if (!held) return;
-          showErrorRef.current(held.message);
-          fieldControl(paneRef.current, held.field)?.focus();
-          throw new Error(held.message);
-        },
+        flush: waitPending,
+        waitPending,
+        failureMessage: `Your change to ${needLabel} wasn't saved.`,
       },
     );
     notify.current = registration.notify;
@@ -479,7 +483,7 @@ function usePaneCloseHold(
       notify.current = () => {};
       registration.unregister();
     };
-  }, [ownerKind, ownerId, paneRef]);
+  }, [ownerKind, ownerId, paneRef, needLabel]);
 
   return { busy, failed, track, mark, clear, unsaved };
 }
@@ -594,7 +598,7 @@ export function SpecFieldsPane({
     : "each";
 
   const paneRef = useRef<HTMLElement>(null);
-  const hold = usePaneCloseHold(autosaveOwner, paneRef, setError);
+  const hold = usePaneCloseHold(autosaveOwner, paneRef, setError, needLabel);
   /** A write's refusal, shown in the pane's alert and handed to the hold. */
   const refused = (fallback: string, format = errorText) => (e: unknown) => {
     const message = format(e, fallback);

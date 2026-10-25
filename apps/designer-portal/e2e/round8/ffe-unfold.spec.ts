@@ -325,7 +325,7 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       expect(refused, 'stale API Back never retries the refused write').toBe(1);
       expect(await sameShell(page), 'stale API Back does not remount the paper').toBe(true);
       await expect(page.getByRole('textbox', { name: 'Finish' })).toHaveCount(0);
-      test.info().annotations.push({ type: 'residual', description: 'silent-loss: stale API Back discards the already-refused draft; paired repair required before integration (SQ-2015)' });
+      test.info().annotations.push({ type: 'residual', description: 'Story #116: Back after an already-visible refusal with no write in flight discards the draft (legacy no-API parity); WP-11 discard-confirmation decision owed.' });
       await page.unroute(specWrite);
       return;
     }
@@ -379,11 +379,13 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
 
     const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
     let sent = 0;
+    page.on('request', request => {
+      if (request.method() === 'PATCH' && specWrite(new URL(request.url()))) sent++;
+    });
     let answer: () => void = () => {};
     const answered = new Promise<void>((resolve) => (answer = resolve));
     await page.route(specWrite, async (route) => {
       if (route.request().method() !== 'PATCH') return route.continue();
-      sent += 1;
       await answered;
       return route.fulfill({
         status: 500,
@@ -416,17 +418,20 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       expect(psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id='${line}';`), 'late refusal leaves the acknowledged row unchanged').toBe(acknowledged);
       expect(sent, 'stale API Back never replays a write').toBe(1);
       expect(await page.evaluate(() => history.length), 'stale API Back grows no history').toBe(length);
-      expect(unfoldParams(page).unfold).toBeNull();
-      expect(await sameShell(page), 'stale API Back does not remount the paper').toBe(true);
-      const boundary = await page.evaluate(draft => ({
-        visibleAlerts: Array.from(document.querySelectorAll<HTMLElement>('[role="alert"]')).filter(node => node.getClientRects().length > 0).map(node => node.textContent),
-        draftKept: Array.from(document.querySelectorAll<HTMLInputElement>('input')).some(input => input.value === draft),
-        unfolded: !!document.querySelector('[data-unfold-instrument]'),
-      }), typed);
-      expect(boundary, 'current silent-loss boundary requires paired repair before integration').toEqual({ visibleAlerts: [], draftKept: false, unfolded: false });
-      await test.info().attach('stale-api-late-failure-boundary', { body: Buffer.from(JSON.stringify(boundary)), contentType: 'application/json' });
-      test.info().annotations.push({ type: 'residual', description: 'silent-loss: stale API Back drops a draft before its late refusal; paired repair required before integration (SQ-2015)' });
+      expect(await sameShell(page), 'recovery does not remount the paper').toBe(true);
+      await expect(instrument(page), 'late refusal resurfaces the same sheet').toBeVisible();
+      await expect(finish).toHaveValue(typed);
+      await expect(pane.getByRole('alert')).toBeVisible();
+      await expect(pane.getByRole('alert'), 'recovery focuses the inline alert').toBeFocused();
+      expect(new URL(page.url()).searchParams.get('line')).toBe(line);
       await page.unroute(specWrite);
+      await finish.press('Enter');
+      await expect.poll(() => psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id='${line}';`)).toBe(typed);
+      await expect(finish).not.toHaveAttribute('aria-invalid', 'true');
+      const recoveredWrites = sent;
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(instrument(page).getByRole('textbox', { name: 'Finish' })).toHaveValue(typed);
+      expect(sent, 'reload never replays the recovered write').toBe(recoveredWrites);
       return;
     }
     await pressBack(page);

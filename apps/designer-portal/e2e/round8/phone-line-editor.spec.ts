@@ -34,6 +34,134 @@ for (const width of [320, 390]) {
     test.use({ viewport: { width, height: 844 }, hasTouch: true });
     test.setTimeout(240_000);
 
+    if (width === 390) test('superseded pending refusal notifies once by line name without taking the newer line', async ({ authenticatedPage: page }) => {
+      await page.addInitScript(() => Object.defineProperty(window, 'navigation', { configurable: true, value: undefined }));
+      const lineA = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 02' AND removed_at IS NULL;`);
+      const lineB = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 03' AND removed_at IS NULL;`);
+      expect(lineA).toMatch(/^[0-9a-f-]{36}$/);
+      expect(lineB).toMatch(/^[0-9a-f-]{36}$/);
+      await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+      await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+      const older = await openLine(page, lineA);
+      const original = finishOf(lineA);
+      let release = () => {};
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      let started = false;
+      let writes = 0;
+      await page.route(specWrite, async route => {
+        if (route.request().method() !== 'PATCH') return route.continue();
+        started = true;
+        writes++;
+        await gate;
+        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'XX000', message: 'SQ-2024 superseded refusal' }) });
+      });
+      try {
+        const finish = older.getByRole('textbox', { name: 'Finish' });
+        await finish.fill('Superseded linen');
+        await finish.press('Enter');
+        await expect.poll(() => started).toBe(true);
+        await page.evaluate(() => history.back());
+        await expect(instrument(page)).toHaveCount(0);
+        await expect(page.locator('[data-unfold-retained]')).toHaveCount(1);
+        const newer = await openLine(page, lineB);
+        const newerHeading = newer.getByRole('heading', { level: 2 });
+        await expect(newerHeading).toBeFocused();
+        release();
+        const notifications = page.getByRole('region', { name: 'Notifications (F8)' });
+        const notification = notifications.getByText("Your change to F01 Living Room selection 02 wasn't saved.", { exact: true });
+        await expect(notification).toBeVisible();
+        await expect(notification).toHaveCount(1);
+        await expect(page.locator('[data-unfold-retained]')).toHaveCount(0);
+        await expect(newerHeading).toBeFocused();
+        await expect(instrument(page)).toBeVisible();
+        expect(new URL(page.url()).searchParams.get('line')).toBe(lineB);
+        expect(finishOf(lineA), 'refusal leaves the acknowledged row unchanged').toBe(original);
+        expect(writes, 'one user act issues one write and one notification').toBe(1);
+      } finally {
+        release();
+        await page.unroute(specWrite);
+      }
+    });
+
+    for (const destination of ['inline', 'off-job', 'returned'] as const) {
+      const leaveJob = destination !== 'inline';
+      test(`absent API late refusal ${destination === 'returned' ? 'toasts once after returning to the same job' : leaveJob ? 'uses the existing off-job error surface' : 'recovers the draft and focused alert'}`, async ({ authenticatedPage: page }, testInfo) => {
+        await page.addInitScript(() => Object.defineProperty(window, 'navigation', { configurable: true, value: undefined }));
+        const line = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 02' AND removed_at IS NULL;`);
+        expect(line).toMatch(/^[0-9a-f-]{36}$/);
+        await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+        await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+        await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+        const pane = await openLine(page, line);
+        const finish = pane.getByRole('textbox', { name: 'Finish' });
+        const original = finishOf(line);
+        const draft = `Absent API ${testInfo.project.name} ${width} ${leaveJob ? 'off-job' : 'recovery'}`;
+        let release = () => {};
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        let writes = 0;
+        page.on('request', request => {
+          if (request.method() === 'PATCH' && specWrite(new URL(request.url()))) writes++;
+        });
+        let started = false;
+        await page.route(specWrite, async route => {
+          if (route.request().method() !== 'PATCH') return route.continue();
+          started = true;
+          await gate;
+          await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'XX000', message: 'SQ-2015 late refusal' }) });
+        });
+        try {
+          await finish.fill(draft);
+          await finish.press('Enter');
+          await expect.poll(() => started).toBe(true);
+          await page.evaluate(() => history.back());
+          await expect(instrument(page)).toHaveCount(0);
+          const retained = page.locator('[data-unfold-retained]');
+          await expect(retained).toHaveCount(1);
+          await expect(retained).toHaveAttribute('hidden', '');
+          await expect(retained).toHaveAttribute('inert', '');
+          await expect(retained).toBeHidden();
+          if (leaveJob) {
+            await page.evaluate(() => (window as unknown as { next: { router: { push: (url: string) => void } } }).next.router.push('/desk'));
+            await expect(page).toHaveURL(/\/desk(?:\?|$)/);
+            await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '');
+            await expect(retained).toHaveCount(0);
+            if (destination === 'returned') {
+              await page.evaluate(job => (window as unknown as { next: { router: { push: (url: string) => void } } }).next.router.push(`/doc/${job}`), JOB);
+              await expect(page).toHaveURL(new RegExp(`/doc/${JOB}(?:\\?|$)`));
+              await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+              await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+              await expect(instrument(page)).toHaveCount(0);
+            }
+          }
+        } finally { release(); }
+        if (leaveJob) {
+          await expect(page.getByRole('region', { name: 'Notifications (F8)' }).getByText('SQ-2015 late refusal', { exact: true }), 'existing MutationCache → showErrorToast tells the designer').toBeVisible();
+          await expect(page.getByRole('region', { name: 'Notifications (F8)' }).getByText('SQ-2015 late refusal', { exact: true })).toHaveCount(1);
+          await expect(instrument(page)).toHaveCount(0);
+          expect(finishOf(line)).toBe(original);
+          expect(writes).toBe(1);
+        } else {
+          await expect(instrument(page)).toBeVisible();
+          await expect(pane).toHaveCount(1);
+          await expect(finish).toHaveValue(draft);
+          await expect(pane.getByRole('alert')).toBeVisible();
+          await expect(pane.getByRole('alert')).toBeFocused();
+          expect(finishOf(line)).toBe(original);
+          expect(writes).toBe(1);
+          await page.unroute(specWrite);
+          await finish.press('Enter');
+          await expect.poll(() => finishOf(line)).toBe(draft);
+          await expect(finish).not.toHaveAttribute('aria-invalid', 'true');
+          expect(writes).toBe(2);
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          await expect(instrument(page).getByRole('textbox', { name: 'Finish' })).toHaveValue(draft);
+          expect(writes, 'reload never replays a recovered draft').toBe(2);
+        }
+        await page.unroute(specWrite);
+      });
+    }
+
     test('touch/keyboard fit, conflict recovery, reload and mounted Return/Back hold', async ({ authenticatedPage: page }, testInfo) => {
       const line = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 01' AND removed_at IS NULL;`);
       expect(line).toMatch(/^[0-9a-f-]{36}$/);
@@ -232,14 +360,18 @@ for (const width of [320, 390]) {
         await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
         await page.unroute(specWrite);
         expect(finishOf(line), 'late refusal never changes the acknowledged row').toBe(acknowledged);
-        const boundary = await page.evaluate(draft => ({
-          visibleAlerts: Array.from(document.querySelectorAll<HTMLElement>('[role="alert"]')).filter(node => node.getClientRects().length > 0).map(node => node.textContent),
-          draftKept: Array.from(document.querySelectorAll<HTMLInputElement>('input')).some(input => input.value === draft),
-          unfolded: !!document.querySelector('[data-unfold-instrument]'),
-        }), abandoned);
-        expect(boundary, 'current silent-loss boundary requires paired repair before integration').toEqual({ visibleAlerts: [], draftKept: false, unfolded: false });
-        await testInfo.attach('stale-api-late-failure-boundary', { body: Buffer.from(JSON.stringify(boundary)), contentType: 'application/json' });
-        testInfo.annotations.push({ type: 'residual', description: `silent-loss: late failed save after stale-API Back; paired repair required before integration (SQ-2015): ${JSON.stringify(boundary)}` });
+        await expect(instrument(page), 'late refusal resurfaces the same sheet').toBeVisible();
+        await expect(finish).toHaveValue(abandoned);
+        await expect(pane.getByRole('alert')).toBeVisible();
+        await expect(pane.getByRole('alert'), 'recovery focuses its inline alert').toBeFocused();
+        expect(new URL(page.url()).searchParams.get('line')).toBe(line);
+        await finish.press('Enter');
+        await expect.poll(() => finishOf(line)).toBe(abandoned);
+        await expect(finish).not.toHaveAttribute('aria-invalid', 'true');
+        const recoveredWrites = writes;
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await expect(instrument(page).getByRole('textbox', { name: 'Finish' })).toHaveValue(abandoned);
+        expect(writes, 'reload never replays the recovered write').toBe(recoveredWrites);
       }
 
       await page.goto(`/doc/${JOB}?unfold=pieces&lens=spec&room=${ROOM}&line=00000000-0000-4000-8000-000000000099`, { waitUntil: 'domcontentloaded' });
