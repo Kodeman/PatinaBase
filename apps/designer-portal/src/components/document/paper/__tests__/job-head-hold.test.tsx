@@ -90,7 +90,12 @@ it('drops a pending Studio departure after the mounted sheet unmounts', async ()
 
 it('holds Studio during keyed same-route restoration with a folded URL and a failed mounted write', async () => {
   const unfolded = window.location.href;
-  const entries = [{ key: 'folded', index: 0 }, { key: 'sheet', index: 1 }];
+  // Native NavigationHistoryEntry URLs must track the address. A missing or
+  // stale URL intentionally uses no-API parity instead of keyed restoration.
+  const entries = [
+    { key: 'folded', index: 0, url: new URL('/doc/p1', unfolded).href },
+    { key: 'sheet', index: 1, url: unfolded },
+  ];
   let current = entries[1];
   const navigation = Object.defineProperties(new EventTarget(), {
     currentEntry: { get: () => current }, entries: { value: () => entries },

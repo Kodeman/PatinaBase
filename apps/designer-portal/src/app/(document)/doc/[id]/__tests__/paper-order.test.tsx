@@ -571,10 +571,33 @@ describe('the round-8 paper order', () => {
     const chapters = Array.from(container.querySelectorAll('[data-paper-chapter]')).map((el) =>
       el.getAttribute('data-paper-chapter'),
     );
-    // Design owns room evidence/empty states even without generated Room Files.
-    // No lead/proposal, visit or Cabinetry content is invented.
-    expect(chapters).toEqual(['design', 'approvals', 'schedule', 'ffe', 'financials', 'closeout', 'record']);
+    // Brief & agreement owns missing-history states even on a direct project;
+    // Design owns room evidence/empty states without generated Room Files.
+    // No visit or Cabinetry content is invented.
+    expect(chapters).toEqual(['brief', 'design', 'approvals', 'schedule', 'ffe', 'financials', 'closeout', 'record']);
     expect(chapters).toEqual(ROUND8_INDEX_KEYS.filter((key) => chapters.includes(key)));
+  });
+
+  it.each([
+    ['lead', 'brief'],
+    ['proposal', 'proposal'],
+  ])('keeps a %s document in its pre-work region, not project chapters', async (kind, section) => {
+    const project = { ...PROJECT_ROW };
+    Object.assign(PROJECT_ROW, {
+      engagement_kind: kind,
+      project_id: null,
+      proposal_id: kind === 'proposal' ? 'proposal-1' : null,
+      lead_id: kind === 'lead' ? 'lead-1' : null,
+      active_section: section,
+    });
+    try {
+      const { container } = await renderRound8();
+      expect(container.querySelector('[data-paper-chapter]')).toBeNull();
+      expect(container.querySelectorAll('[data-active-section]')).toHaveLength(1);
+      expect(container.querySelector('[data-active-section]')).toHaveAttribute('id', `doc-section-${section}`);
+    } finally {
+      Object.assign(PROJECT_ROW, project);
+    }
   });
 
   it('puts every legacy region inside the chapter that carries it', async () => {
