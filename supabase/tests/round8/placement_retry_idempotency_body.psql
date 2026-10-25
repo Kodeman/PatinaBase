@@ -1,5 +1,6 @@
--- SQ-2016 / SQ-2013 / A05, X09: a lost placement response is safely retryable.
+-- SQ-2019 / SQ-2016 / SQ-2013 / A05, X09: a lost placement response is safely retryable.
 -- Reproduces SQ-1985's configured Library request shape without its fixtures.
+-- Include-only .psql body: the bulk SQL runner must not discover it directly.
 -- Run through placement_retry_idempotency_isolated.sql; its transaction owns
 -- migration, fixture and cleanup, including disconnect on assertion failure.
 \set ON_ERROR_STOP on
@@ -232,4 +233,7 @@ DO $$ BEGIN
       OR has_function_privilege(role_name, 'public._place_product_in_project_v2_00444_impl(jsonb)', 'EXECUTE')
   ), 'SQ2016: internal placement chain is not directly executable by API or agent roles';
   RAISE NOTICE 'PASS SQ2016: public and internal grants';
+  ASSERT to_regprocedure('public._place_product_in_project_v2_00446_impl(jsonb)') IS NULL,
+    'SQ2019: orphan placement bridge is retired';
+  RAISE NOTICE 'PASS SQ2019: orphan placement bridge is retired';
 END; $$;

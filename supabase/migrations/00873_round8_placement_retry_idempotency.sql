@@ -10,7 +10,14 @@
 -- signature, helper, or GUC is introduced. Actor/project authorization and
 -- the existing configuration-workflow guard precede every replay. Existing
 -- pre-00873 derived-hash receipts are not rewritten or guessed from state.
+-- Rollout: a lost-response retry spanning this migration can be refused with
+-- 23505 because its old receipt hashes the derived body, without a duplicate
+-- write. Migrate at a quiet time; there is no compatibility fallback.
 -- ═══════════════════════════════════════════════════════════════════════════
+
+-- No native caller or API/agent EXECUTE remains for this obsolete entry,
+-- which bypasses the public receipt owner through the 00444 bridge.
+DROP FUNCTION public._place_product_in_project_v2_00446_impl(jsonb);
 
 CREATE OR REPLACE FUNCTION public.place_product_in_project_v2(p_request jsonb)
 RETURNS jsonb
