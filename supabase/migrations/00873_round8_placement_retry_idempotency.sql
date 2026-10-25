@@ -17,7 +17,7 @@
 
 -- No native caller or API/agent EXECUTE remains for this obsolete entry,
 -- which bypasses the public receipt owner through the 00444 bridge.
-DROP FUNCTION public._place_product_in_project_v2_00446_impl(jsonb);
+DROP FUNCTION IF EXISTS public._place_product_in_project_v2_00446_impl(jsonb);
 
 CREATE OR REPLACE FUNCTION public.place_product_in_project_v2(p_request jsonb)
 RETURNS jsonb
