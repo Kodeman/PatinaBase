@@ -98,7 +98,7 @@ test.describe('C04 configured placement', () => {
         const attempt = { rpc: 'place_product_in_project_v2', attempt: requests.length, idempotencyKey: request.idempotencyKey };
         console.log('[C04 native attempt]', JSON.stringify({ ...attempt, transport: 'route.fetch reaches backend' }));
         const response = await route.fetch();
-        if (!response.ok()) console.error('[C04 native placement error]', JSON.stringify(attempt), response.status(), (await response.text()).slice(0, 4000));
+        console.log('[C04 native response]', JSON.stringify({ ...attempt, transport: 'route.fetch backend response', status: response.status(), body: (await response.text()).slice(0, 4000) }));
         expect(response.ok(), 'the real native placement commits before the response is lost').toBe(true);
         if (!lost) {
           lost = true;
