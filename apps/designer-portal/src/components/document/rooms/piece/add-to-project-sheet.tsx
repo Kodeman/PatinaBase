@@ -98,7 +98,21 @@ export function AddToProjectSheet({
       }[result.outcome];
       onAdded(projectName, outcome);
       onClose();
-      if (returnTo) router.push(returnTo);
+      if (returnTo) {
+        const destination = new URL(returnTo, window.location.origin);
+        if (contextualProjectId === projectId && result.selectionId) {
+          destination.searchParams.delete("land");
+          if (destination.searchParams.get("unfold") === "pieces") {
+            destination.searchParams.delete("ffeItemId");
+            // Only Spec consumes the sheet's line address; Rough-in has no line prop.
+            destination.searchParams.set("lens", "spec");
+            destination.searchParams.set("line", result.selectionId);
+          } else {
+            destination.searchParams.set("ffeItemId", result.selectionId);
+          }
+        }
+        router.push(`${destination.pathname}${destination.search}${destination.hash}`);
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not add to that project.");
     } finally {

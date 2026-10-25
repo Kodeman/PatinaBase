@@ -895,11 +895,15 @@ export function RoughInLens({
             autoFocus
             label={heading}
             onChoose={(product) => void chooseProduct(product, tool, placeItem)}
-            onSearchLibrary={(query) =>
-              router.push(
-                query ? `/library?q=${encodeURIComponent(query)}` : "/library",
-              )
-            }
+            onSearchLibrary={(query) => {
+              const params = new URLSearchParams({
+                projectId,
+                returnTo: window.location.pathname + window.location.search + window.location.hash,
+              });
+              if (placeItem.roomId) params.set("roomId", placeItem.roomId);
+              if (query) params.set("q", query);
+              router.push("/library?" + params.toString());
+            }}
           />
         )}
       </div>
