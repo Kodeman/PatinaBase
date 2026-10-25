@@ -165,7 +165,13 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     await page.screenshot({
       path: info.outputPath('issued-private-viewer.png'),
     });
-    await viewer.getByRole('button', { name: /close/i }).click();
+    await viewer.getByRole('button', { name: 'Back to the document', exact: true }).click();
+    await expect(viewer).toHaveCount(0);
+    await expect(opener).toBeFocused();
+
+    await opener.click();
+    await expect(viewer).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(viewer).toHaveCount(0);
     await expect(opener).toBeFocused();
     expect(frozenRead()).toBe(frozen);
