@@ -146,12 +146,14 @@ beforeEach(() => {
   );
   mockPlans.mockReturnValue(
     ok({
+      issues: [], issuePrints: [], transmittals: [], tokens: [],
       sheets: [
         {
           id: "sheet-1",
           sheet_number: "A-201",
           title: "Room plan",
           current_print_id: "print-current",
+          state: "shared",
         },
       ],
       prints: [
@@ -267,7 +269,7 @@ test("shows current prints once at project level using print identity rather tha
     ),
   ).toBeInTheDocument();
   expect(
-    within(drawings).getByText("Current print 2 · revision B · Oct 23, 2026"),
+    within(drawings).getByText("Current print 2 · revision B · Oct 23, 2026 · Client-shared current"),
   ).toBeInTheDocument();
   expect(screen.getAllByText("A-201 · Room plan")).toHaveLength(1);
   expect(
@@ -325,7 +327,7 @@ test("Room File failure keeps room context and never claims there is no generate
 test("renders honest empty room, survey, concept, capture and drawing states", () => {
   mockScans.mockReturnValue(ok([]) as ReturnType<typeof useProjectRoomScans>);
   mockPlans.mockReturnValue(
-    ok({ sheets: [], prints: [] }) as ReturnType<typeof usePlanRoom>,
+    ok({ sheets: [], prints: [], issues: [], issuePrints: [], transmittals: [], tokens: [] }) as ReturnType<typeof usePlanRoom>,
   );
   const { rerender } = mount();
   expect(
@@ -380,3 +382,10 @@ test("image byte failure stays inline and retries without losing room actions", 
   ).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
+
+ test("keeps private concept provenance and issue history on the project folio without room joins", () => {
+   mount();
+   expect(screen.getByText(/Private room evidence; not product media/)).toBeInTheDocument();
+   expect(screen.getByRole('region', {name: 'Issued print history'})).toBeInTheDocument();
+   expect(screen.getByText('No drawing issues recorded.')).toBeInTheDocument();
+ });
