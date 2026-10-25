@@ -19,3 +19,11 @@ it('keeps command search and registry doors on their existing owners', () => {
   }
   expect(screen.getByRole('button', { name: 'Your account — Leah Designer' })).toBeInTheDocument();
 });
+
+it('keeps hours, account and help reachable without another menu', () => {
+  render(<StudioMasthead studioName="Studio" viewerName="Leah" dateLabel="Today" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Hours' }));
+  expect(openLedger).toHaveBeenCalledWith('hours');
+  expect(screen.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/help');
+  expect(screen.getByRole('button', { name: 'Your account — Leah' })).toBeInTheDocument();
+});

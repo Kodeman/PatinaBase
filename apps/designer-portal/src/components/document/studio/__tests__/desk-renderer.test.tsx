@@ -4,7 +4,7 @@
  * it resolves legacy (the renderer-off path), the round-8 studio when it
  * resolves round 8. Never both.
  */
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode, type Ref } from 'react';
 import { JobHead } from '@/components/document/paper/job-head';
 import { readPaperOrigin } from '@/lib/document/paper/paper-origin';
@@ -77,6 +77,7 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 }));
 jest.mock('@/components/document/command-bar', () => ({
   openCommandBar: jest.fn(),
+  openLedger: jest.fn(),
   captureLeadPending: { value: false },
   openProjectPending: { value: false },
 }));
@@ -293,5 +294,38 @@ describe('desk/page.tsx — one body per renderer decision', () => {
     expect(props.live).toEqual([expect.objectContaining({ engagement_id: 'eng-1' })]);
     expect(props.roster.groups.flatMap((group: { lines: unknown[] }) => group.lines)).toHaveLength(1);
     expect(typeof props.holdPlace).toBe('function');
+  });
+});
+
+jest.mock('@/components/document/overlays/post-sheet', () => ({ openPost: jest.fn() }));
+import { openCommandBar, openLedger } from '@/components/document/command-bar';
+import { openPost } from '@/components/document/overlays/post-sheet';
+
+describe('Desk overlay return owner', () => {
+  beforeEach(() => { jest.clearAllMocks(); mockRenderer.current = { renderer: 'round8' }; });
+  it.each(['books', 'post', 'search'] as const)('reopens %s once after the body commits', async (overlay) => {
+    const studioOverlay = { overlay, subject: 'inv-1', query: 'Holloway', filter: 'ledger', scrollTop: 80, focusKey: 'doc:job' };
+    markDeskReturn({ docId: 'job', kind: 'studio-overlay', focusId: mockAnchorId, anchorId: null, ...studioOverlay });
+    const view = render(<DeskPage />);
+    await screen.findByRole('button', { name: 'Open Holloway Den' });
+    await waitFor(() => expect(overlay === 'books' ? openLedger : overlay === 'post' ? openPost : openCommandBar).toHaveBeenCalledTimes(1));
+    if (overlay === 'books') expect(openLedger).toHaveBeenCalledWith('accounts', { page: 'ledger', invoiceId: 'inv-1', studioReturn: studioOverlay });
+    else if (overlay === 'post') expect(openPost).toHaveBeenCalledWith(studioOverlay);
+    else expect(openCommandBar).toHaveBeenCalledWith('Holloway', studioOverlay);
+    view.unmount();
+    render(<DeskPage />);
+    expect(takeDeskReturn()).toBeNull();
+    expect(overlay === 'books' ? openLedger : overlay === 'post' ? openPost : openCommandBar).toHaveBeenCalledTimes(1);
+  });
+  it('cancels a pending overlay when the reader moves before the body is ready', async () => {
+    mockHydrated = false;
+    markDeskReturn({ docId: 'job', kind: 'studio-overlay', overlay: 'search', focusId: mockAnchorId, anchorId: null });
+    const view = render(<DeskPage />);
+    await screen.findByTestId('round8-desk');
+    fireEvent.keyDown(window, { key: 'Tab' });
+    mockHydrated = true;
+    view.rerender(<DeskPage />);
+    await screen.findByRole('button', { name: 'Open Holloway Den' });
+    expect(openCommandBar).not.toHaveBeenCalled();
   });
 });

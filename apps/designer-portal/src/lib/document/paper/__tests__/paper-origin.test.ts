@@ -136,6 +136,38 @@ describe("paper-origin", () => {
     expect(window.sessionStorage.getItem("patina:desk-return:v1")).toBeNull();
   });
 
+  it.each(['books', 'post', 'search'] as const)('remembers %s overlay state without borrowing window scroll', (overlay) => {
+    window.scrollY = 920;
+    const state = { overlay, subject: 'invoice-7', filter: 'receivables', query: 'oak', scrollTop: 180, focusKey: 'row-7' };
+    rememberPaperOrigin(DOC, { path: `/doc/${DOC}`, studioOverlay: state });
+    expect(readPaperOrigin(DOC)).toMatchObject({
+      kind: 'studio-overlay', path: '/desk', search: '', scrollY: null, ...state,
+    });
+    expect(paperOriginHref(readPaperOrigin(DOC))).toBe('/desk');
+    expect(paperOriginLabel(readPaperOrigin(DOC))).toBe('Studio');
+  });
+
+  it.each([
+    { overlay: 'unknown' },
+    { overlay: 'books', scrollTop: -1 },
+    { overlay: 'post', scrollTop: '100' },
+    { overlay: 'search', query: {} },
+    { overlay: 'books', focusKey: [] },
+  ])('falls back to Desk for malformed overlay data %j', (state) => {
+    window.sessionStorage.setItem('patina:paper-origin:v1', JSON.stringify([
+      { docId: DOC, path: '/people', kind: 'studio-overlay', ...state },
+    ]));
+    expect(readPaperOrigin(DOC)).toMatchObject({ kind: 'deep-link', path: '/desk' });
+  });
+
+  it('clears only the consumed job origin, leaving other jobs intact', () => {
+    rememberPaperOrigin(DOC, { path: '/desk', studioOverlay: { overlay: 'post' } });
+    rememberPaperOrigin('other', { path: '/library' });
+    clearPaperOrigin(DOC);
+    expect(readPaperOrigin(DOC).kind).toBe('deep-link');
+    expect(readPaperOrigin('other').kind).toBe('library');
+  });
+
   it("clears", () => {
     rememberPaperOrigin(DOC, { path: "/library" });
     clearPaperOrigin();

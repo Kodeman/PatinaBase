@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rememberPaperOrigin, restoreStudioOverlay, studioOverlayScroll } from '@/lib/document/paper/paper-origin';
 import { useRouter } from 'next/navigation';
 import {
   computeArAging,
@@ -93,13 +94,13 @@ export function AccountsBook({
   }, [bookInvoices]);
 
   // U-Q16 — the folio this sheet is showing in place of the book, if any.
-  const [folioId, setFolioId] = useState<string | null>(null);
+  const [folioId, setFolioId] = useState<string | null>(initialContext?.studioReturn?.focusKey === 'folio' ? initialContext.studioReturn.subject ?? null : null);
   // The doorway's invoice (/desk?book=accounts&…&invoiceId=) is spent by the
   // first folio this sheet opens: the ledger remounts on "← Accounts", and
   // an unspent doorway would swap the folio straight back in.
   // A new doorway re-arms it; reset during render, not in an effect, which
   // would run after the ledger's own effect had already spent it.
-  const doorwayProp = initialContext?.invoiceId ?? null;
+  const doorwayProp = initialContext?.studioReturn ? null : initialContext?.invoiceId ?? null;
   const [doorwayId, setDoorwayId] = useState<string | null>(doorwayProp);
   const [doorwaySeen, setDoorwaySeen] = useState<string | null>(doorwayProp);
   if (doorwaySeen !== doorwayProp) {
@@ -135,10 +136,33 @@ export function AccountsBook({
       : 'ledger',
   );
 
+  const pressed = useRef<HTMLElement | null>(null);
+  const returnState = useRef(initialContext?.studioReturn);
+  useEffect(() => {
+    const held = returnState.current;
+    const root = sheetRef.current;
+    if (!held || !root) return;
+    return restoreStudioOverlay(root, held, () => {
+      if (held.focusKey === 'folio') return root.querySelector<HTMLElement>('[data-action-key="open-invoice-document"]');
+      const [invoiceId, index] = (held.focusKey ?? '').split(':');
+      const row = root.querySelector<HTMLElement>('[data-invoice-folio-opener="' + CSS.escape(invoiceId ?? '') + '"]')?.closest('li');
+      return row?.querySelectorAll<HTMLElement>('button')[Number(index)] ?? null;
+    }, () => { returnState.current = undefined; });
+  }, []);
+
   const openDocument = (projectId: string | null) => {
     if (!projectId) return;
+    const root = sheetRef.current;
+    const row = pressed.current?.closest('li');
+    const invoiceId = row?.querySelector<HTMLElement>('[data-invoice-folio-opener]')?.dataset.invoiceFolioOpener;
+    const index = row ? Array.from(row.querySelectorAll('button')).indexOf(pressed.current as HTMLButtonElement) : -1;
+    rememberPaperOrigin(projectId, { path: '/desk', focusId: 'studio-door-accounts', studioOverlay: {
+      overlay: 'books', filter: page, subject: folioId ?? undefined,
+      scrollTop: root ? studioOverlayScroll(root).scrollTop : 0,
+      focusKey: folioId ? 'folio' : invoiceId ? invoiceId + ':' + index : undefined,
+    } });
     onClose();
-    router.push(`/doc/${projectId}`);
+    router.push('/doc/' + projectId);
   };
 
   const marginText = margin.data?.mixedCurrencies
@@ -151,7 +175,7 @@ export function AccountsBook({
   if (folioId) {
     const folioInvoice = (invoices ?? []).find((inv) => inv.id === folioId);
     return (
-      <div ref={sheetRef} className="mx-auto max-w-3xl" data-accounts-folio={folioId}>
+      <div ref={sheetRef} onClickCapture={(event) => { pressed.current = (event.target as Element).closest<HTMLElement>('button'); }} className="mx-auto max-w-3xl" data-accounts-folio={folioId}>
         <div className="sh-head money-folio-head">
           <span className="sh-title">
             <ACCOUNTS_ICON className="sh-ic" strokeWidth={1.2} aria-hidden />
@@ -188,7 +212,7 @@ export function AccountsBook({
   }
 
   return (
-    <div ref={sheetRef} className="mx-auto max-w-3xl">
+    <div ref={sheetRef} onClickCapture={(event) => { pressed.current = (event.target as Element).closest<HTMLElement>('button'); }} className="mx-auto max-w-3xl">
       <DocSheetHead
         icon={ACCOUNTS_ICON}
         title="Studio accounts"
