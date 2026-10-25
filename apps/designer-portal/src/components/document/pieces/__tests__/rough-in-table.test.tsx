@@ -298,6 +298,16 @@ describe("RoughInTable keys", () => {
 });
 
 describe("RoughInTable row menu", () => {
+  it("toggles the same trigger without replacing its focused node", async () => {
+    const { user } = setup();
+    const trigger = screen.getByRole("button", { name: "Acts for Custom cabinet" });
+    await user.click(trigger);
+    await user.click(trigger);
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Acts for Custom cabinet" })).toBe(trigger);
+  });
+
   it("escapes the scrolling Body but retains the drafting stock and submenu focus", async () => {
     const { props, view, user } = setup();
     view.rerender(

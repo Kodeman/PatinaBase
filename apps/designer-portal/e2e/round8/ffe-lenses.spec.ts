@@ -1,4 +1,19 @@
-import type { Locator } from '@playwright/test';
+import type { ElementHandle, Locator, Page, TestInfo } from '@playwright/test';
+
+async function recordMenuFocus(page: Page, info: TestInfo, original: ElementHandle, step: string) {
+  const diagnostic = await page.evaluate(({ original, step }) => {
+    const describe = (node: Element | null) => node ? {
+      tag: node.tagName, role: node.getAttribute('role'),
+      name: node.getAttribute('aria-label') ?? node.textContent,
+      attributes: Object.fromEntries(Array.from(node.attributes).map(({ name, value }) => [name, value])),
+      connected: node.isConnected,
+      ancestry: Array.from((function* () { for (let p = node.parentElement, i = 0; p && i < 5; p = p.parentElement, i++) yield p; })()).map(p => ({ tag: p.tagName, attributes: Object.fromEntries(Array.from(p.attributes).map(({ name, value }) => [name, value])) })),
+    } : null;
+    const current = document.querySelector(`button[aria-label="${original.getAttribute('aria-label')}"]`);
+    return { step, active: describe(document.activeElement), original: describe(original), current: describe(current), sameTrigger: original === current };
+  }, { original, step });
+  await info.attach(`${step}-focus.json`, { body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json' });
+}
 import { test, expect } from '../fixtures/auth';
 import { psqlScalar } from '../helpers/psql';
 
@@ -100,6 +115,7 @@ test.describe('phone Rough-in acts', () => {
           await activate(page.getByRole('menuitem', { name: 'Move to room…', exact: true }));
           await expectMenuAboveRail(page.getByRole('menuitem'));
           const menu = page.getByRole('menu', { name: 'Move to room', exact: true });
+          const originalTrigger = await acts().elementHandle();
           await activate(menu.getByRole('menuitem', { name: room === 'Living Room' ? /Living Room/ : room, exact: true }));
           if (room === 'Living Room') {
             await expect(menu).toHaveCount(0);
@@ -108,6 +124,7 @@ test.describe('phone Rough-in acts', () => {
             const target = room === 'Dining Room' ? 'f0180000-0000-4000-8000-000000000012' : 'f0180000-0000-4000-8000-000000000013';
             await expect.poll(() => rowRoom()).toBe(target);
             await expect(sheet.getByRole('region', { name: room, exact: true }).getByRole('button', { name: `Acts for ${name}`, exact: true })).toBeVisible();
+            await recordMenuFocus(page, info, originalTrigger!, 'after-confirmed-move');
             await expect(acts()).toBeFocused();
             await openActs();
             await activate(page.getByRole('menuitem', { name: 'Move to room…', exact: true }));
@@ -131,6 +148,7 @@ test.describe('phone Rough-in acts', () => {
       await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/, { timeout: 30_000 });
       const trigger = sheet.getByRole('button', { name: 'Acts for F01 Living Room selection 36', exact: true });
       await trigger.click();
+      const originalTrigger = await trigger.elementHandle();
       await page.getByRole('menuitem', { name: 'Move to room…', exact: true }).click();
       await page.setViewportSize({ width: info.project.name === 'webkit-iphone' ? 390 : 320, height: 320 });
       const menu = page.getByRole('menu', { name: 'Acts for F01 Living Room selection 36', exact: true });
@@ -155,6 +173,7 @@ test.describe('phone Rough-in acts', () => {
       await here.tap();
       await expect(page.getByRole('menu', { name: 'Move to room', exact: true })).toHaveCount(0);
       await page.keyboard.press('Escape');
+      await recordMenuFocus(page, info, originalTrigger!, 'after-short-escape');
       await expect(trigger).toBeFocused();
       await page.screenshot({ path: info.outputPath('short-viewport-menu.png') });
     });

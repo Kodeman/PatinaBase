@@ -1010,19 +1010,23 @@ function RowMenu({
       }}
     >
       <div className="relative inline-block">
-        <Popover.Trigger asChild>
-          <button
-            ref={buttonRef}
-            type="button"
-            aria-label={`Acts for ${label}`}
-            aria-haspopup="menu"
-            aria-expanded={open}
-            aria-controls={open ? menuId : undefined}
-            className="inline-flex h-[40px] min-w-[44px] items-center justify-center font-mono text-[14px] text-[var(--sheet-ink-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] max-md:h-[44px]"
-          >
-            ⋯
-          </button>
-        </Popover.Trigger>
+        {/* Radix Trigger changes its anchor wrapper when a custom Anchor registers,
+            replacing a freshly moved row's focused button. Keep this node stable. */}
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => {
+            setOpen((value) => !value);
+            setMoving(false);
+          }}
+          aria-label={`Acts for ${label}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls={open ? menuId : undefined}
+          className="inline-flex h-[40px] min-w-[44px] items-center justify-center font-mono text-[14px] text-[var(--sheet-ink-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] max-md:h-[44px]"
+        >
+          ⋯
+        </button>
         <Popover.Anchor virtualRef={anchorRef} />
         {open ? (
           // Escape the Body scroller, but keep the drafting tokens and round-8 scope.
@@ -1043,6 +1047,10 @@ function RowMenu({
                 event.preventDefault();
                 if (moving) setMoving(false);
                 else close(true);
+              }}
+              onInteractOutside={(event) => {
+                if (buttonRef.current?.contains(event.target as Node))
+                  event.preventDefault();
               }}
               onCloseAutoFocus={(event) => event.preventDefault()}
             >
