@@ -319,6 +319,30 @@ describe("RoughInLens — the hooks", () => {
     });
   });
 
+  it("forwards the document project, named room and exact return address to full Library", async () => {
+    window.history.replaceState({}, "", "/doc/doc-1?unfold=pieces&lens=rough-in&room=room-living#ffe");
+    mockState.lines = [L3];
+    const { user } = setup();
+    await user.click(screen.getByRole("button", {
+      name: "Acts for Hardware, 2 knobs for custom cabinet",
+    }));
+    await user.click(screen.getByRole("menuitem", { name: "Fill with a product" }));
+    await user.type(screen.getByRole("combobox", {
+      name: "Fill Hardware, 2 knobs for custom cabinet with a product",
+    }), "knob");
+    await user.click(await screen.findByRole("option", { name: /Search.*Library/i }));
+    const destination = new URL(mockPush.mock.calls[0][0], window.location.origin);
+    expect(destination.pathname).toBe("/library");
+    expect(Object.fromEntries(destination.searchParams)).toEqual({
+      projectId: PROJECT,
+      roomId: LIVING,
+      q: "knob",
+      returnTo: "/doc/doc-1?unfold=pieces&lens=rough-in&room=room-living#ffe",
+    });
+    expect(mockPlace).not.toHaveBeenCalled();
+    window.history.replaceState({}, "", "/");
+  });
+
   it("a pasted list previews, then lands through one batch call", async () => {
     const { user } = setup();
     const entry = within(livingTable()).getByRole("textbox", {
