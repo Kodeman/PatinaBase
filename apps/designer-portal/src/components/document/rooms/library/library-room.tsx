@@ -9,7 +9,8 @@
  * compresses teaching to one quiet line. No mock data, nothing gamified.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { usePaperRenderer } from "@/hooks/use-paper-renderer";
 import { useRouter } from "next/navigation";
 import {
   useLayerCounts,
@@ -36,6 +37,8 @@ import { useMobilePrimaryAction } from "../../mobile/mobile-shell";
 import type { LibraryCapabilityFilter } from "./library-configuration-summary";
 import { subscribeToLibraryCapture } from "./library-capture-events";
 
+const Round8LibraryEditorial = lazy(() => import("./round8-library-editorial"));
+
 const SHELF_COPY: Record<LibraryShelfLens, { name: string; meta: string }> = {
   all: {
     name: "All shelves",
@@ -58,6 +61,8 @@ const SHELF_COPY: Record<LibraryShelfLens, { name: string; meta: string }> = {
 export function LibraryRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.library); // R89 — scope help to the Library room
   const router = useRouter();
+  const { renderer } = usePaperRenderer();
+  const round8 = renderer === "round8";
   const { data: counts } = useLayerCounts();
   const { data: queue } = useTeachingQueue();
   const { data: validationQueue } = useValidationQueue();
@@ -154,13 +159,7 @@ export function LibraryRoom() {
     }
   };
 
-  return (
-    <RoomShell
-      title="Resource library"
-      topLevel
-      measure="mx-auto max-w-[1240px] px-4 sm:px-9"
-      count={total != null ? `${total} pieces` : undefined}
-      action={
+  const action = (
         <DocumentActionGroup
           surfaceKey="library"
           regionKey="room-head"
@@ -175,8 +174,9 @@ export function LibraryRoom() {
             Capture
           </DocumentAction>
         </DocumentActionGroup>
-      }
-    >
+  );
+  const content = (
+    <>
       <div className="mx-auto max-w-[1240px] px-4 sm:px-9">
         <LibrarianBar
           onPlaced={(pieceName, whereName) =>
@@ -208,6 +208,7 @@ export function LibraryRoom() {
             teachingIds={teachingIds}
             validationIds={validationIds}
             capability={activeCapability}
+            round8={round8}
             onDeep={(id, name) => setDeep({ id, name })}
             onPromote={(id) => setPromoteId(id)}
             onNominate={(id) => void handleNominate(id)}
@@ -279,6 +280,25 @@ export function LibraryRoom() {
           {toast}
         </div>
       )}
+    </>
+  );
+  const count = total != null ? `${total} pieces` : undefined;
+  const legacy = (
+    <RoomShell
+      title="Resource library"
+      topLevel
+      measure="mx-auto max-w-[1240px] px-4 sm:px-9"
+      count={count}
+      action={action}
+    >
+      {content}
     </RoomShell>
   );
+  return round8 ? (
+    <Suspense fallback={legacy}>
+      <Round8LibraryEditorial count={count} action={action}>
+        {content}
+      </Round8LibraryEditorial>
+    </Suspense>
+  ) : legacy;
 }
