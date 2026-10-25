@@ -1,0 +1,239 @@
+-- SQ-2019 / SQ-2016 / SQ-2013 / A05, X09: a lost placement response is safely retryable.
+-- Reproduces SQ-1985's configured Library request shape without its fixtures.
+-- Include-only .psql body: the bulk SQL runner must not discover it directly.
+-- Run through placement_retry_idempotency_isolated.sql; its transaction owns
+-- migration, fixture and cleanup, including disconnect on assertion failure.
+\set ON_ERROR_STOP on
+DO $$ BEGIN
+  ASSERT NOT EXISTS (SELECT 1 FROM auth.users WHERE id::text LIKE 'f2013000-%')
+    AND NOT EXISTS (SELECT 1 FROM public.projects WHERE id::text LIKE 'f2013000-%')
+    AND NOT EXISTS (SELECT 1 FROM public.products WHERE id::text LIKE 'f2013000-%'),
+    'SQ2016: fixture starts absent';
+END; $$;
+
+INSERT INTO auth.users (
+  id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+  instance_id, aud, role
+) VALUES (
+  'f2013000-0000-4000-8000-000000000001', 'sq2013@test.invalid', '', now(), now(), now(),
+  '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'
+);
+INSERT INTO public.profiles (id, email, full_name)
+VALUES ('f2013000-0000-4000-8000-000000000001', 'sq2013@test.invalid', 'SQ2013 Designer')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.organizations (id, type, name, slug)
+VALUES ('f2013000-0000-4000-8000-000000000002', 'design_studio', 'SQ2013 Studio', 'sq2013-studio');
+INSERT INTO public.organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES (
+  'f2013000-0000-4000-8000-000000000003', 'f2013000-0000-4000-8000-000000000001',
+  'f2013000-0000-4000-8000-000000000002', 'owner', 'active', now()
+);
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id, status)
+VALUES (
+  'f2013000-0000-4000-8000-000000000010', 'SQ2013 House',
+  'f2013000-0000-4000-8000-000000000001', 'f2013000-0000-4000-8000-000000000001',
+  'f2013000-0000-4000-8000-000000000002', 'active'
+);
+INSERT INTO public.project_rooms (id, project_id, name, sort_order)
+VALUES ('f2013000-0000-4000-8000-000000000011', 'f2013000-0000-4000-8000-000000000010', 'Living room', 0);
+INSERT INTO public.products (
+  id, name, captured_at, layer, owner_user_id, price_trade, price_retail
+) VALUES (
+  'f2013000-0000-4000-8000-000000000020', 'SQ2013 Fictional Material Chair', now(), 'personal',
+  'f2013000-0000-4000-8000-000000000001', 80000, 120000
+);
+INSERT INTO public.product_configurations (
+  id, product_id, owner_user_id, studio_id, project_id, version, schema_revision,
+  evaluation, snapshot, snapshot_hash, is_complete, is_valid
+) VALUES (
+  'f2013000-0000-4000-8000-000000000021', 'f2013000-0000-4000-8000-000000000020',
+  'f2013000-0000-4000-8000-000000000001', 'f2013000-0000-4000-8000-000000000002',
+  'f2013000-0000-4000-8000-000000000010', 1, 1,
+  '{}'::jsonb, '{"selections": []}'::jsonb, repeat('a', 64), true, true
+);
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"f2013000-0000-4000-8000-000000000001","role":"authenticated"}';
+SET LOCAL request.jwt.claim.sub = 'f2013000-0000-4000-8000-000000000001';
+
+DO $$
+DECLARE
+  v_request constant jsonb := '{
+    "projectId":"f2013000-0000-4000-8000-000000000010",
+    "productId":"f2013000-0000-4000-8000-000000000020",
+    "name":"SQ2013 Fictional Material Chair",
+    "itemType":"fixed",
+    "assignmentScope":"room",
+    "roomId":"f2013000-0000-4000-8000-000000000011",
+    "boardId":null,
+    "disposition":"candidate",
+    "duplicateMode":"reuse",
+    "configurationId":"f2013000-0000-4000-8000-000000000021",
+    "roleConfigurationIdentity":"default",
+    "source":"engine",
+    "idempotencyKey":"sq2013-configured-retry"
+  }'::jsonb;
+  v_first jsonb;
+  v_retry jsonb;
+  v_retry_state text;
+  v_retry_error text;
+  v_label text;
+  v_changed jsonb;
+  v_refused boolean;
+  v_plain jsonb;
+  v_plain_first jsonb;
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.project_ffe_items
+    WHERE project_id = (v_request->>'projectId')::uuid
+  ), 'SQ2013: placement starts with no project selections';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.project_ffe_command_idempotency
+    WHERE actor_id = auth.uid() AND idempotency_key = v_request->>'idempotencyKey'
+  ), 'SQ2013: placement starts with no idempotency receipt';
+
+  PERFORM set_config('patina.configuration_spec_workflow', 'sq2016-sentinel', true);
+  v_first := public.place_product_in_project_v2(v_request);
+  ASSERT current_setting('patina.configuration_spec_workflow') = 'sq2016-sentinel',
+    'SQ2016: new configured placement restores the existing workflow mark';
+  SELECT doc_code INTO v_label FROM public.project_ffe_items WHERE id = (v_first->>'selectionId')::uuid;
+  ASSERT v_first->>'outcome' = 'created', 'SQ2013: first configured placement creates a selection';
+  ASSERT EXISTS (
+    SELECT 1 FROM public.project_ffe_specs spec
+    JOIN public.project_ffe_items item ON item.id = spec.ffe_item_id
+    WHERE item.id = (v_first->>'selectionId')::uuid
+      AND item.project_id = (v_request->>'projectId')::uuid
+      AND item.project_room_id = (v_request->>'roomId')::uuid
+      AND item.product_id = (v_request->>'productId')::uuid
+      AND item.design_disposition = 'candidate'
+      AND spec.configuration_id = (v_request->>'configurationId')::uuid
+  ), 'SQ2013: first placement persists the actual configuration, room, product and candidate disposition';
+  RAISE NOTICE 'PASS SQ2013: first configured placement and binding readback';
+
+  -- Both calls receive the SAME immutable jsonb value. Simulates a response
+  -- lost after the first command completed; no client-side request mutation.
+  BEGIN
+    v_retry := public.place_product_in_project_v2(v_request);
+  EXCEPTION WHEN unique_violation THEN
+    GET STACKED DIAGNOSTICS v_retry_state = RETURNED_SQLSTATE, v_retry_error = MESSAGE_TEXT;
+  END;
+  ASSERT v_retry_state IS NULL,
+    format('SQ2013: identical configured placement retry must succeed; got %s: %s', v_retry_state, v_retry_error);
+  ASSERT v_retry = v_first, 'SQ2013: identical retry returns the original placement response';
+  ASSERT (SELECT count(*) = 1 FROM public.project_ffe_items
+          WHERE project_id = (v_request->>'projectId')::uuid),
+    'SQ2013: identical retry does not duplicate the selection';
+  ASSERT (SELECT count(*) = 1 FROM public.project_ffe_command_idempotency
+          WHERE actor_id = auth.uid() AND idempotency_key = v_request->>'idempotencyKey'),
+    'SQ2013: identical retry retains one command receipt';
+  RAISE NOTICE 'PASS SQ2013: identical configured placement retry';
+  ASSERT (SELECT count(*) = 1 FROM public.project_ffe_specs spec
+          JOIN public.project_ffe_items item ON item.id = spec.ffe_item_id
+          WHERE item.project_id = (v_request->>'projectId')::uuid
+            AND spec.configuration_id = (v_request->>'configurationId')::uuid),
+    'SQ2016: identical retry retains exactly one configuration binding';
+  ASSERT (SELECT doc_code = v_label FROM public.project_ffe_items WHERE id = (v_first->>'selectionId')::uuid),
+    'SQ2016: identical retry retains the original item label';
+  ASSERT (SELECT response = v_first AND request_hash = encode(extensions.digest(v_request::text, 'sha256'), 'hex')
+          FROM public.project_ffe_command_idempotency
+          WHERE actor_id = auth.uid() AND idempotency_key = v_request->>'idempotencyKey'),
+    'SQ2016: receipt stores the original caller hash and exact public response';
+  ASSERT current_setting('patina.configuration_spec_workflow') = 'sq2016-sentinel',
+    'SQ2016: configured replay restores the existing workflow mark';
+  RAISE NOTICE 'PASS SQ2016: one binding, stable label, original hash, exact stored response and restored guard';
+
+  -- Every original field participates, including fields normalized by the
+  -- public entry and the resolver's explicit routing choices.
+  FOR v_changed IN SELECT value FROM jsonb_array_elements(jsonb_build_array(
+    v_request || '{"name":"Changed chair"}'::jsonb,
+    v_request || '{"duplicateMode":"create"}'::jsonb,
+    v_request || jsonb_build_object('selectionReferenceId', v_first->>'selectionId'),
+    v_request || '{"roleIdentity":"caller-supplied-role"}'::jsonb,
+    v_request || '{"requestHash":"caller-cannot-override-hash"}'::jsonb
+  )) LOOP
+    v_refused := false;
+    BEGIN
+      PERFORM public.place_product_in_project_v2(v_changed);
+    EXCEPTION WHEN unique_violation THEN v_refused := true;
+    END;
+    ASSERT v_refused, 'SQ2016: same key with any different original field is refused with 23505';
+    ASSERT current_setting('patina.configuration_spec_workflow') = 'sq2016-sentinel',
+      'SQ2016: mismatched-request refusal restores the existing workflow mark';
+  END LOOP;
+  RAISE NOTICE 'PASS SQ2016: five original-body mismatch cases return 23505 without leaking workflow state';
+
+  v_plain := (v_request - 'configurationId') || '{"idempotencyKey":"sq2016-unconfigured-retry"}'::jsonb;
+  v_plain_first := public.place_product_in_project_v2(v_plain);
+  ASSERT v_plain_first->>'outcome' = 'created', 'SQ2016: unconfigured placement creates its own selection';
+  ASSERT public.place_product_in_project_v2(v_plain) = v_plain_first,
+    'SQ2016: identical unconfigured retry replays the exact response';
+  ASSERT (SELECT count(*) = 2 FROM public.project_ffe_items WHERE project_id = (v_request->>'projectId')::uuid),
+    'SQ2016: configured and unconfigured retries leave only their two selections';
+  ASSERT (SELECT count(*) = 2 FROM public.project_ffe_command_idempotency WHERE actor_id = auth.uid()),
+    'SQ2016: configured and unconfigured retries leave only their two receipts';
+  RAISE NOTICE 'PASS SQ2016: unconfigured retry preserves placement behavior';
+END;
+$$;
+RESET ROLE;
+
+-- An unrelated authenticated actor supplies the exact original key and body.
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,instance_id,aud,role)
+VALUES ('f2013000-0000-4000-8000-000000000004','sq2016-other@test.invalid','',now(),now(),now(),
+  '00000000-0000-0000-0000-000000000000','authenticated','authenticated');
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"f2013000-0000-4000-8000-000000000004","role":"authenticated"}';
+SET LOCAL request.jwt.claim.sub = 'f2013000-0000-4000-8000-000000000004';
+DO $$
+DECLARE v_refused boolean := false;
+BEGIN
+  BEGIN
+    PERFORM public.place_product_in_project_v2('{
+      "projectId":"f2013000-0000-4000-8000-000000000010",
+      "productId":"f2013000-0000-4000-8000-000000000020",
+      "name":"SQ2013 Fictional Material Chair","itemType":"fixed",
+      "assignmentScope":"room","roomId":"f2013000-0000-4000-8000-000000000011",
+      "boardId":null,"disposition":"candidate","duplicateMode":"reuse",
+      "configurationId":"f2013000-0000-4000-8000-000000000021",
+      "roleConfigurationIdentity":"default","source":"engine","idempotencyKey":"sq2013-configured-retry"
+    }'::jsonb);
+  EXCEPTION WHEN insufficient_privilege THEN v_refused := true;
+  END;
+  ASSERT v_refused, 'SQ2016: different actor cannot replay the first actor response';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.project_ffe_command_idempotency WHERE actor_id = auth.uid()),
+    'SQ2016: unauthorized replay creates no receipt for the other actor';
+  RAISE NOTICE 'PASS SQ2016: actor/project authorization precedes replay';
+END; $$;
+RESET ROLE;
+INSERT INTO public.organization_members(id,user_id,organization_id,role,status,joined_at)
+VALUES ('f2013000-0000-4000-8000-000000000005','f2013000-0000-4000-8000-000000000004',
+  'f2013000-0000-4000-8000-000000000002','member','active',now());
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE v_second jsonb;
+BEGIN
+  v_second := public.place_product_in_project_v2('{
+    "projectId":"f2013000-0000-4000-8000-000000000010",
+    "name":"Second actor named need","idempotencyKey":"sq2013-configured-retry"
+  }'::jsonb);
+  ASSERT v_second->>'outcome' = 'created', 'SQ2016: authorized second actor owns a separate same-key command';
+  ASSERT (SELECT count(*) = 1 AND bool_and(response = v_second)
+          FROM public.project_ffe_command_idempotency WHERE actor_id = auth.uid()),
+    'SQ2016: actor-scoped receipt contains only the second actor response';
+  RAISE NOTICE 'PASS SQ2016: same key is independently admitted for another authorized actor';
+END; $$;
+RESET ROLE;
+DO $$ BEGIN
+  ASSERT has_function_privilege('authenticated', 'public.place_product_in_project_v2(jsonb)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.place_product_in_project_v2(jsonb)', 'EXECUTE'),
+    'SQ2016: public placement grants remain authenticated-only';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','agent_reader','agent_writer']) role_name
+    WHERE has_function_privilege(role_name, 'public._place_product_in_project_v2_00438_impl(jsonb)', 'EXECUTE')
+      OR has_function_privilege(role_name, 'public._place_product_in_project_v2_00441_wrapper(jsonb)', 'EXECUTE')
+      OR has_function_privilege(role_name, 'public._place_product_in_project_v2_00444_impl(jsonb)', 'EXECUTE')
+  ), 'SQ2016: internal placement chain is not directly executable by API or agent roles';
+  RAISE NOTICE 'PASS SQ2016: public and internal grants';
+  ASSERT to_regprocedure('public._place_product_in_project_v2_00446_impl(jsonb)') IS NULL,
+    'SQ2019: orphan placement bridge is retired';
+  RAISE NOTICE 'PASS SQ2019: orphan placement bridge is retired';
+END; $$;
