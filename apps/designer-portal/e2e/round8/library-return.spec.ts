@@ -79,7 +79,8 @@ test.describe('Library internal return', () => {
         link.textContent = 'Fresh filtered Library'; link.id = 'fresh-filtered-library';
         document.body.append(link);
       }, libraryUrl.href);
-      await page.locator('#fresh-filtered-library').click();
+      await page.locator('#fresh-filtered-library').focus();
+      await page.locator('#fresh-filtered-library').press('Enter');
       await expect(room).toHaveAttribute('data-paper-renderer', 'round8', { timeout: 60_000 });
       await expect(page).toHaveURL(libraryUrl.href);
       await expect(room.locator('[data-library-exact-results]')).toContainText(NAME);
