@@ -418,13 +418,13 @@ export function PlanRoomSet({
 
 /** Issue rows are frozen snapshots, never reconstructed from the current set. */
 export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
-  const [openPrintId, setOpenPrintId] = useState<string | null>(null);
-  const openPrint = bundle.prints.find((print) => print.id === openPrintId);
+  const [openIssuePrintId, setOpenIssuePrintId] = useState<string | null>(null);
+  const snapshot = bundle.issuePrints.find(
+    (print) => print.id === openIssuePrintId,
+  );
+  const openPrint = bundle.prints.find((print) => print.id === snapshot?.print_id);
   const openSheet = bundle.sheets.find(
     (sheet) => sheet.id === openPrint?.sheet_id,
-  );
-  const snapshot = bundle.issuePrints.find(
-    (print) => print.print_id === openPrintId,
   );
   return (
     <section aria-label="Issued print history" className="my-6 min-w-0">
@@ -490,7 +490,7 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
                           actionKey="open-issued-print"
                           variant="tertiary"
                           disabled={!available}
-                          onClick={() => setOpenPrintId(print.print_id)}
+                          onClick={() => setOpenIssuePrintId(print.id)}
                         >
                           Open issued print
                         </DocumentAction>
@@ -528,7 +528,7 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
         ))}
       {openPrint && snapshot && (
         <PlanPrintViewer
-          key={openPrint.id}
+          key={snapshot.id}
           sheetNumber={snapshot.sheet_number}
           sheetTitle={snapshot.sheet_title}
           revLetter={snapshot.rev_letter}
@@ -540,7 +540,7 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
               (print) => print.id === openSheet?.current_print_id,
             )?.rev_letter ?? null
           }
-          onClose={() => setOpenPrintId(null)}
+          onClose={() => setOpenIssuePrintId(null)}
         />
       )}
     </section>
