@@ -1,5 +1,6 @@
+Object.defineProperty(crypto, "randomUUID", { configurable: true, value: () => require("node:crypto").randomUUID() });
 import { captureReturnContext } from "../paper/return-context";
-import { libraryHref, parseLibraryAddress, rememberLibraryReturn, restoreLibraryReturn, takeLibraryReturn } from "../library-return";
+import { libraryHref, parseLibraryAddress, prepareLibraryReturn, rememberLibraryReturn, restoreLibraryReturn, takeLibraryReturn } from "../library-return";
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -38,9 +39,10 @@ it("retains a matching session return across repeated traversals and mismatched 
   expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
   expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
   rememberLibraryReturn(link);
+  const entry = history.state;
   window.history.replaceState({}, "", "/library?shelf=studio");
   expect(takeLibraryReturn()).toBeNull();
-  window.history.replaceState({}, "", "/library");
+  window.history.replaceState(entry, "", "/library");
   expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
 });
 it("retains a normal inspection for thirty minutes then expires", () => {
@@ -78,13 +80,12 @@ it.each(["pointerdown", "touchmove", "wheel", "keydown"])("cancels a late opener
   expect(link).not.toHaveFocus();
   expect(window.scrollTo).not.toHaveBeenCalled();
 });
-it("ignores router scroll and focus before a late opener commits", () => {
+it("ignores router scroll before a late opener commits", () => {
   const link = opener();
   const context = captureReturnContext({ documentId: "library" }, link);
   link.remove();
   restoreLibraryReturn(context);
   window.dispatchEvent(new Event("scroll"));
-  window.dispatchEvent(new Event("focusin"));
   document.body.append(link);
   jest.spyOn(link, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
   jest.advanceTimersByTime(32);
@@ -160,4 +161,70 @@ it("new captures replace the retained opener and expansion", () => {
   rememberLibraryReturn(next);
   expect(takeLibraryReturn()).toMatchObject({ initiatingControlId: next.id, filters: { expanded: "true" } });
   expect(takeLibraryReturn()?.initiatingControlId).toBe(next.id);
+});
+
+it("binds independent openers to same-address entries and refuses fresh navigation", () => {
+  const first = opener();
+  rememberLibraryReturn(first);
+  const firstEntry = history.state;
+  history.pushState({}, "", "/library");
+  expect(takeLibraryReturn()).toBeNull();
+  const second = opener(); second.id = "second-piece";
+  rememberLibraryReturn(second);
+  const secondEntry = history.state;
+  expect(firstEntry).not.toEqual(secondEntry);
+  history.replaceState(firstEntry, "", "/library");
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(first.id);
+  history.replaceState(secondEntry, "", "/library");
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(second.id);
+  history.replaceState(firstEntry, "", "/library");
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(first.id);
+});
+it("marks captures with custom-only state, keeping the Next restore branch enabled", () => {
+  history.replaceState({ __NA: true, __PRIVATE_NEXTJS_INTERNALS_TREE: ["tree"] }, "", "/library");
+  const replace = jest.spyOn(history, "replaceState");
+  rememberLibraryReturn(opener());
+  expect(replace).toHaveBeenCalledTimes(1);
+  const data = replace.mock.calls[0][0];
+  expect(data).toEqual({ patinaLibraryEntry: expect.any(String) });
+  expect(data.__NA || data._N).toBeUndefined();
+  expect(replace).toHaveBeenCalledTimes(1);
+});
+it("restores the explicit piece Return once into its new history entry", () => {
+  const link = opener(); rememberLibraryReturn(link);
+  history.pushState({}, "", "/library/1");
+  prepareLibraryReturn?.("/library");
+  history.pushState({}, "", "/library");
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
+  expect(takeLibraryReturn()?.initiatingControlId).toBe(link.id);
+  history.pushState({}, "", "/library");
+  expect(takeLibraryReturn()).toBeNull();
+});
+it("falls back once at the absolute ten-second ceiling for a never-settling read", () => {
+  const link = opener();
+  const context = captureReturnContext({ documentId: "library", chapter: "library" }, link);
+  link.remove();
+  const section = document.createElement("section"); section.dataset.paperChapter = "library";
+  const heading = document.createElement("h2"); section.append(heading); document.body.append(section);
+  const focus = jest.spyOn(heading, "focus");
+  restoreLibraryReturn(context, 3000, () => false);
+  jest.advanceTimersByTime(9984);
+  expect(heading).not.toHaveFocus();
+  jest.advanceTimersByTime(32);
+  expect(heading).toHaveFocus();
+  jest.advanceTimersByTime(10_000);
+  expect(focus).toHaveBeenCalledTimes(1);
+});
+it("a foreign focus move during the read wait cancels opener and fallback restoration", () => {
+  const link = opener();
+  const context = captureReturnContext({ documentId: "library" }, link);
+  let settled = false;
+  restoreLibraryReturn(context, 3000, () => settled);
+  const reader = document.createElement("button"); document.body.append(reader); reader.focus();
+  settled = true;
+  jest.spyOn(link, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+  jest.advanceTimersByTime(12_000);
+  expect(reader).toHaveFocus();
+  expect(window.scrollTo).not.toHaveBeenCalled();
+  expect(window.scrollBy).not.toHaveBeenCalled();
 });
