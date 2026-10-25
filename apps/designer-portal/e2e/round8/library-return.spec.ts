@@ -41,7 +41,7 @@ test.describe('Library internal return', () => {
       const top = await opener.evaluate(el => el.getBoundingClientRect().top);
       await opener.press('Enter');
       await expect(page).toHaveURL(new RegExp(`/library/${PREFIX}000000000001\\?`), { timeout: 60_000 });
-      const back = page.getByRole('button', { name: /Resource library/ }).first();
+      const back = page.locator('[data-room-header-line]').getByRole('button', { name: /Resource library/ });
       await expect(back).toBeVisible({ timeout: 60_000 });
       await back.click();
       await expect(page).toHaveURL(libraryUrl.href);
@@ -49,7 +49,7 @@ test.describe('Library internal return', () => {
       await expect(room.locator('[data-library-lens="personal"]')).toHaveAttribute('aria-selected', 'true');
       await expect(room.getByRole('button', { name: 'Fixed specification', exact: true })).toHaveAttribute('aria-pressed', 'true');
       await expect(room.getByRole('searchbox')).toHaveValue(NAME);
-      await expect.poll(() => opener.evaluate(el => Math.abs(el.getBoundingClientRect().top - top))).toBeLessThan(3);
+      await expect.poll(() => opener.evaluate((el, originalTop) => Math.abs(el.getBoundingClientRect().top - originalTop), top)).toBeLessThan(3);
       await page.screenshot({ path: testInfo.outputPath('library-return.png'), fullPage: true });
       await opener.press('Enter');
       await expect(page).toHaveURL(new RegExp(`/library/${PREFIX}000000000001\\?`), { timeout: 60_000 });

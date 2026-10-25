@@ -63,7 +63,7 @@ it("restores a late opener with native focus and scroll only once", () => {
   expect(link).toHaveFocus();
   cancel();
 });
-it.each(["pointerdown", "touchstart", "wheel", "keydown", "focusin", "scroll"])("cancels a late opener restore on reader %s", (event) => {
+it.each(["pointerdown", "touchmove", "wheel", "keydown"])("cancels a late opener restore on reader %s", (event) => {
   const link = opener();
   const context = captureReturnContext({ documentId: "library" }, link);
   link.remove();
@@ -74,6 +74,35 @@ it.each(["pointerdown", "touchstart", "wheel", "keydown", "focusin", "scroll"])(
   jest.advanceTimersByTime(4000);
   expect(link).not.toHaveFocus();
   expect(window.scrollTo).not.toHaveBeenCalled();
+});
+it("ignores router scroll and focus before a late opener commits", () => {
+  const link = opener();
+  const context = captureReturnContext({ documentId: "library" }, link);
+  link.remove();
+  restoreLibraryReturn(context);
+  window.dispatchEvent(new Event("scroll"));
+  window.dispatchEvent(new Event("focusin"));
+  document.body.append(link);
+  jest.spyOn(link, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+  jest.advanceTimersByTime(32);
+  expect(link).toHaveFocus();
+});
+it("follows a late layout shift until reader input cancels the anchor", () => {
+  const link = opener();
+  let top = 100;
+  jest.spyOn(link, "getBoundingClientRect").mockImplementation(() => ({ top }) as DOMRect);
+  jest.spyOn(link, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+  const context = captureReturnContext({ documentId: "library" }, link);
+  restoreLibraryReturn(context);
+  jest.advanceTimersByTime(16);
+  top = 900;
+  jest.advanceTimersByTime(16);
+  expect(window.scrollBy).toHaveBeenLastCalledWith({ top: 800, behavior: "auto" });
+  jest.mocked(window.scrollBy).mockClear();
+  window.dispatchEvent(new Event("wheel"));
+  top = 1000;
+  jest.advanceTimersByTime(4000);
+  expect(window.scrollBy).not.toHaveBeenCalled();
 });
 it("stops waiting at the deadline without moving the reader", () => {
   const link = opener();

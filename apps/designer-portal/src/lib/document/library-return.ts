@@ -65,21 +65,29 @@ export function restoreLibraryReturn(context: ReturnContext, timeout = 3000): ()
   let frame = 0;
   let stopped = false;
   const deadline = performance.now() + timeout;
-  const events = ["pointerdown", "touchstart", "wheel", "keydown", "focusin", "scroll"] as const;
+  // Navigation scroll/focus is not reader input. A press (including a
+  // scrollbar drag) or key cancels before any focus or scroll it causes.
+  const events = ["pointerdown", "touchmove", "wheel", "keydown"] as const;
   const stop = () => {
     stopped = true;
     window.cancelAnimationFrame(frame);
     for (const event of events) window.removeEventListener(event, stop, true);
   };
+  let restored: HTMLElement | null = null;
   const attempt = () => {
     if (stopped) return;
     const control = context.initiatingControlId ? document.getElementById(context.initiatingControlId) : null;
     if (control && control.getClientRects().length > 0) {
-      stop();
-      restoreReturnContext(context);
-    } else if (performance.now() < deadline) {
-      frame = window.requestAnimationFrame(attempt);
-    } else stop();
+      const anchor = context.scrollAnchor;
+      // Search results above the card and the router's own scroll can settle
+      // after it mounts. Follow its anchor only until the reader takes over.
+      if (control !== restored || (anchor && control.getBoundingClientRect().top !== anchor.top)) {
+        restoreReturnContext(context);
+        restored = control;
+      }
+    }
+    if (performance.now() < deadline) frame = window.requestAnimationFrame(attempt);
+    else stop();
   };
   for (const event of events) window.addEventListener(event, stop, { capture: true, passive: true });
   frame = window.requestAnimationFrame(attempt);
