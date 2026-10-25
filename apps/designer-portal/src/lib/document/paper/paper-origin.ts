@@ -28,9 +28,39 @@ export type PaperOriginKind =
   | "people"
   | "room"
   | "document"
+  | "studio-overlay"
   | "deep-link";
 
-export interface PaperOrigin {
+export interface StudioOverlayState {
+  overlay: 'books' | 'post' | 'search';
+  subject?: string;
+  filter?: string;
+  query?: string;
+  scrollTop?: number;
+  focusKey?: string;
+}
+
+/** Stored convenience data is untrusted; malformed overlays return to the Desk. */
+export function parseStudioOverlay(value: unknown): StudioOverlayState | null {
+  if (!value || typeof value !== 'object') return null;
+  const held = value as Partial<StudioOverlayState>;
+  if (held.overlay !== 'books' && held.overlay !== 'post' && held.overlay !== 'search') return null;
+  for (const key of ['subject', 'filter', 'query', 'focusKey'] as const) {
+    if (held[key] !== undefined && typeof held[key] !== 'string') return null;
+  }
+  if (held.scrollTop !== undefined &&
+      (typeof held.scrollTop !== 'number' || !Number.isFinite(held.scrollTop) || held.scrollTop < 0)) return null;
+  return {
+    overlay: held.overlay,
+    ...(held.subject !== undefined ? { subject: held.subject } : {}),
+    ...(held.filter !== undefined ? { filter: held.filter } : {}),
+    ...(held.query !== undefined ? { query: held.query } : {}),
+    ...(held.scrollTop !== undefined ? { scrollTop: held.scrollTop } : {}),
+    ...(held.focusKey !== undefined ? { focusKey: held.focusKey } : {}),
+  };
+}
+
+export interface PaperOrigin extends Partial<StudioOverlayState> {
   /** The job this origin belongs to; another job's origin never answers. */
   docId: string;
   kind: PaperOriginKind;
@@ -49,6 +79,7 @@ export interface PaperOriginInput {
   search?: string;
   anchorId?: string | null;
   focusId?: string | null;
+  studioOverlay?: StudioOverlayState;
 }
 
 function under(path: string, root: string): boolean {
@@ -77,16 +108,18 @@ export function rememberPaperOrigin(
   from: PaperOriginInput,
 ): void {
   if (typeof window === "undefined" || !docId || !from.path) return;
-  if (isTheJobItself(from.path, docId)) return;
-  const kind = paperOriginKind(from.path);
+  if (!from.studioOverlay && isTheJobItself(from.path, docId)) return;
+  const overlay = from.studioOverlay ? parseStudioOverlay(from.studioOverlay) : null;
+  const kind = overlay ? 'studio-overlay' : paperOriginKind(from.path);
   const origin: PaperOrigin = {
     docId,
     kind,
-    path: from.path,
-    search: from.search ?? "",
+    path: overlay ? '/desk' : from.path,
+    search: overlay ? '' : from.search ?? '',
     anchorId: from.anchorId ?? null,
-    scrollY: kind === "desk" ? null : window.scrollY,
+    scrollY: kind === 'desk' || overlay ? null : window.scrollY,
     focusId: from.focusId ?? null,
+    ...overlay,
     ...(navigation()?.currentEntry?.key ? { historyKey: navigation()!.currentEntry!.key } : {}),
   };
   try {
@@ -125,11 +158,14 @@ function parseHeld(value: unknown): PaperOrigin | null {
   ) {
     return null;
   }
+  const overlay = held.kind === 'studio-overlay' ? parseStudioOverlay(held) : null;
+  if (held.kind === 'studio-overlay' && !overlay) return deepLink(held.docId);
   return {
     docId: held.docId,
-    kind: paperOriginKind(held.path),
-    path: held.path,
-    search: typeof held.search === "string" ? held.search : "",
+    kind: overlay ? 'studio-overlay' : paperOriginKind(held.path),
+    path: overlay ? '/desk' : held.path,
+    search: overlay ? '' : typeof held.search === "string" ? held.search : "",
+    ...overlay,
     anchorId: nullableString(held.anchorId),
     scrollY: typeof held.scrollY === "number" ? held.scrollY : null,
     focusId: nullableString(held.focusId),
@@ -161,10 +197,15 @@ export function readPaperOrigin(docId: string): PaperOrigin {
   }
 }
 
-export function clearPaperOrigin(): void {
+export function clearPaperOrigin(docId?: string): void {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.removeItem(PAPER_ORIGIN_KEY);
+    if (docId) {
+      const kept = readStore().filter((origin) => origin.docId !== docId);
+      window.sessionStorage.setItem(PAPER_ORIGIN_KEY, JSON.stringify(kept));
+    } else {
+      window.sessionStorage.removeItem(PAPER_ORIGIN_KEY);
+    }
   } catch {
     /* no-op */
   }
@@ -176,7 +217,7 @@ export function paperOriginHref(origin: PaperOrigin): string {
 
 /** The return control's words: "← Studio", "← Resource library", … */
 export function paperOriginLabel(origin: PaperOrigin): string {
-  if (origin.kind === "desk" || origin.kind === "deep-link") return "Studio";
+  if (origin.kind === "desk" || origin.kind === "deep-link" || origin.kind === 'studio-overlay') return "Studio";
   if (origin.kind === "people") return "Studio contacts";
   return originLabel(origin.path);
 }
