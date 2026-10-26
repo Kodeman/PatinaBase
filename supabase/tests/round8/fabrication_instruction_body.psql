@@ -109,6 +109,7 @@ END $$;
 -- END shared runtime
 SELECT pg_temp.fi_actor(1);
 SELECT pg_temp.fi_error($q$SELECT pg_temp.fi_call('direct',ARRAY['k-1'],pg_temp.fi_id(1000))$q$,'55000','scope_editions_inactive','direct capability entry precedes all work');
+SELECT pg_temp.fi_error($q$SELECT pg_temp.fi_call('generic',ARRAY['k-1'],pg_temp.fi_id(1000))$q$,'55000','scope_editions_inactive','generic capability entry precedes all work');
 UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
 -- BEGIN shared setup
 SELECT public.create_external_fulfilment(pg_temp.fi_id(201),pg_temp.fi_id(301),'pkg.cabinets','gc_cabinetry',ARRAY['k-1','k-2'],pg_temp.fi_id(811),pg_temp.fi_id(831),'fi-gc');
@@ -147,8 +148,14 @@ GRANT EXECUTE ON FUNCTION pg_temp.fi_id(integer),pg_temp.fi_actor(integer),pg_te
  pg_temp.fi_error(text,text,text,text),pg_temp.fi_fid(),pg_temp.fi_manifest(text),pg_temp.fi_call(text,text[],uuid,uuid,jsonb,uuid) TO authenticated;
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.fi_call('direct',ARRAY['k-2','k-1'],pg_temp.fi_id(1001),NULL,'{"amountCents":1}');
-SELECT pg_temp.fi_assert((pg_temp.fi_call('generic',ARRAY['k-1','k-2'],pg_temp.fi_id(1001),NULL,'{"amountCents":1}')->>'replayed')::boolean,
- 'cross-route canonical sorted-unit receipt replays without duplicate');
+DO $$ DECLARE receipt jsonb; BEGIN
+ BEGIN
+  receipt:=pg_temp.fi_call('generic',ARRAY['k-1','k-2'],pg_temp.fi_id(1001),NULL,'{"amountCents":1}');
+ EXCEPTION WHEN OTHERS THEN
+  RAISE EXCEPTION 'ASSERTION FAILED: cross-route canonical sorted-unit receipt replays without duplicate: %',SQLERRM;
+ END;
+ PERFORM pg_temp.fi_assert((receipt->>'replayed')::boolean,'cross-route canonical sorted-unit receipt replays without duplicate');
+END $$;
 SELECT pg_temp.fi_actor(3);
 SELECT pg_temp.fi_error($q$SELECT pg_temp.fi_call('direct',ARRAY['k-1','k-2'],pg_temp.fi_id(1001),NULL,'{"amountCents":1}')$q$,'42501','idempotency_key_reused','colleague cannot replay original actor');
 SELECT pg_temp.fi_actor(4);
@@ -157,10 +164,41 @@ SELECT pg_temp.fi_actor(7);
 SELECT pg_temp.fi_error($q$SELECT pg_temp.fi_call('direct',ARRAY['k-1'],pg_temp.fi_id(1003))$q$,'55000','fabrication_instruction_verified_inactive','external seat instruction stays inactive');
 SELECT pg_temp.fi_actor(1);
 RESET ROLE;
+DO $$ DECLARE actor integer; route text; BEGIN
+ FOREACH actor IN ARRAY ARRAY[4,5,6,7] LOOP
+  PERFORM pg_temp.fi_actor(actor);
+  FOREACH route IN ARRAY ARRAY['direct','generic'] LOOP
+   PERFORM pg_temp.fi_error(format('SELECT pg_temp.fi_call(%L,ARRAY[%L],pg_temp.fi_id(1060))',route,'k-1'),
+    CASE WHEN actor=7 THEN '55000' ELSE '42501' END,
+    CASE WHEN actor=7 THEN 'fabrication_instruction_verified_inactive' ELSE 'fabrication_authority_forbidden' END,
+    route||' rejects ineligible actor '||actor);
+  END LOOP;
+ END LOOP;
+ PERFORM pg_temp.fi_actor(3);
+ PERFORM pg_temp.fi_call('direct',ARRAY['k-1'],pg_temp.fi_id(1061));
+ PERFORM pg_temp.fi_call('generic',ARRAY['k-1'],pg_temp.fi_id(1062));
+ PERFORM pg_temp.fi_actor(1);
+END $$;
 SELECT pg_temp.fi_assert((SELECT affected_units=ARRAY['k-1','k-2'] AND amount_cents=200000 AND actor_id=pg_temp.fi_id(1)
  AND manifest_id=pg_temp.fi_manifest() AND authority_id IS NOT NULL AND evidence_level='reported' AND evidence_route='shop_drawing'
  AND jsonb_array_length(coverage)=2 FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.fi_fid() AND client_request_id=pg_temp.fi_id(1001)::text),
  'immutable instruction stores server amount actor sorted units exact manifest grant and coverage');
+SELECT public.create_evidence_manifest(pg_temp.fi_id(201),pg_temp.fi_id(801),'fabrication_instruction',
+ pg_temp.fi_members(NULL,ARRAY[pg_temp.fi_id(701)]),'fi-no-issue');
+SELECT public.create_evidence_manifest(pg_temp.fi_id(201),pg_temp.fi_id(801),'fabrication_instruction',
+ pg_temp.fi_members((SELECT id FROM public.plan_issues WHERE project_id=pg_temp.fi_id(201) AND idempotency_key='fi-issue-1'),ARRAY[pg_temp.fi_id(701)],false),'fi-no-config');
+SELECT public.create_evidence_manifest(pg_temp.fi_id(201),pg_temp.fi_id(802),'fabrication_instruction',
+ pg_temp.fi_members((SELECT id FROM public.plan_issues WHERE project_id=pg_temp.fi_id(201) AND idempotency_key='fi-issue-1'),ARRAY[pg_temp.fi_id(701)]),'fi-wrong-package');
+DO $$ DECLARE route text; BEGIN FOREACH route IN ARRAY ARRAY['direct','generic'] LOOP
+ PERFORM pg_temp.fi_error(format('SELECT pg_temp.fi_call(%L,ARRAY[%L],pg_temp.fi_id(1050),pg_temp.fi_manifest(%L))',route,'k-1','fi-no-issue'),
+  '23514','fabrication_evidence_issue_missing',route||' requires exact issued set member');
+ PERFORM pg_temp.fi_error(format('SELECT pg_temp.fi_call(%L,ARRAY[%L],pg_temp.fi_id(1050),pg_temp.fi_manifest(%L))',route,'k-1','fi-no-config'),
+  '23514','fabrication_evidence_configuration_missing',route||' requires retained configuration identity');
+ PERFORM pg_temp.fi_error(format('SELECT pg_temp.fi_call(%L,ARRAY[%L],pg_temp.fi_id(1050),pg_temp.fi_manifest(%L))',route,'k-1','fi-wrong-package'),
+  '42501','fabrication_instruction_binding',route||' requires exact canonical package');
+ PERFORM pg_temp.fi_error(format('SELECT pg_temp.fi_call(%L,ARRAY[%L],pg_temp.fi_id(1001),NULL,%L)',route,'k-1','{"amountCents":1}'),
+  '42501','idempotency_key_reused',route||' rejects changed-unit receipt replay');
+END LOOP; END $$;
 SELECT public.record_external_fulfilment_event(pg_temp.fi_fid(),'hold',jsonb_build_object('decisionId',pg_temp.fi_id(601)),ARRAY['k-2'],'fi-hold');
 DO $$ DECLARE route text; BEGIN
  FOREACH route IN ARRAY ARRAY['direct','generic'] LOOP
@@ -175,6 +213,28 @@ END $$;
 SELECT public.record_external_fulfilment_event(pg_temp.fi_fid(),'release_hold',jsonb_build_object('releasesEventId',
  (SELECT id FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.fi_fid() AND client_request_id='fi-hold'),'decisionId',pg_temp.fi_id(601)),NULL,'fi-release');
 SELECT pg_temp.fi_call('generic',ARRAY['k-2'],pg_temp.fi_id(1016));
+-- A report never authorizes an amount until independently verified. The newest
+-- verification wins even when it verifies an older report, with tied now().
+SELECT public.record_external_fulfilment_event(pg_temp.fi_fid(),'contract_reported','{"contractAmountCents":900000}',NULL,'fi-unverified');
+SELECT pg_temp.fi_call('direct',ARRAY['k-1'],pg_temp.fi_id(1017));
+DO $$ DECLARE amount jsonb; route text; n integer:=1100; event uuid; BEGIN
+ FOREACH amount IN ARRAY ARRAY['null'::jsonb,'-1'::jsonb,'1.5'::jsonb,'"200000"'::jsonb,'2147483648'::jsonb] LOOP
+  PERFORM public.record_external_fulfilment_event(pg_temp.fi_fid(),'contract_reported',jsonb_build_object('contractAmountCents',amount),NULL,'fi-invalid-'||n);
+  SELECT id INTO event FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.fi_fid() AND client_request_id='fi-invalid-'||n;
+  PERFORM pg_temp.fi_actor(2);
+  PERFORM public.verify_external_fulfilment_event(event,'fi-invalid-verify-'||n);
+  PERFORM pg_temp.fi_actor(1);
+  FOREACH route IN ARRAY ARRAY['direct','generic'] LOOP
+   PERFORM pg_temp.fi_error(format('SELECT pg_temp.fi_call(%L,ARRAY[%L],pg_temp.fi_id(%s),NULL,%L)',route,'k-1',n,'{"amountCents":0}'),
+    '23514','fabrication_amount_unknown',route||' rejects malformed verified amount '||amount::text);
+  END LOOP;
+  n:=n+1;
+ END LOOP;
+END $$;
+SELECT public.record_external_fulfilment_event(pg_temp.fi_fid(),'contract_reported','{"contractAmountCents":200000}',NULL,'fi-amount-restore');
+SELECT pg_temp.fi_actor(2);
+SELECT public.verify_external_fulfilment_event((SELECT id FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.fi_fid() AND client_request_id='fi-amount-restore'),'fi-amount-restore-verify');
+SELECT pg_temp.fi_actor(1);
 -- Latest verification sequence, not event order, UUID, or tied transaction time.
 SELECT public.record_external_fulfilment_event(pg_temp.fi_fid(),'contract_reported','{"contractAmountCents":300000}',NULL,'fi-contract-2');
 SELECT pg_temp.fi_actor(2);
@@ -213,6 +273,33 @@ SELECT public.create_evidence_manifest(pg_temp.fi_id(201),pg_temp.fi_id(801),'fa
  pg_temp.fi_members((SELECT id FROM public.plan_issues WHERE project_id=pg_temp.fi_id(201) AND idempotency_key='fi-issue-2'),ARRAY[pg_temp.fi_id(702)]),'fi-manifest-3');
 SELECT pg_temp.fi_call('generic',ARRAY['k-2'],pg_temp.fi_id(1041),pg_temp.fi_manifest('fi-manifest-3'));
 SELECT pg_temp.fi_error($q$SELECT pg_temp.fi_call('direct',ARRAY['k-1'],pg_temp.fi_id(1042),pg_temp.fi_manifest('fi-manifest-3'))$q$,'23514','fabrication_evidence_insufficient','fresh evidence for one unit does not release another');
+-- Each lifecycle refusal is isolated so a preceding guard cannot mask it.
+CREATE FUNCTION pg_temp.fi_mutation_refused(mutation text,state text,message text,label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE route text;
+BEGIN
+ BEGIN
+  EXECUTE mutation;
+  FOREACH route IN ARRAY ARRAY['direct','generic'] LOOP
+   PERFORM pg_temp.fi_error(format('SELECT pg_temp.fi_call(%L,ARRAY[%L],pg_temp.fi_id(1070),pg_temp.fi_manifest(%L))',route,'k-2','fi-manifest-3'),state,message,route||' '||label);
+  END LOOP;
+  RAISE SQLSTATE 'ZX879';
+ EXCEPTION WHEN SQLSTATE 'ZX879' THEN NULL;
+ END;
+END $$;
+SELECT pg_temp.fi_mutation_refused($q$SELECT public.revoke_fabrication_authority((SELECT id FROM public.project_party_authority WHERE engagement_id=pg_temp.fi_id(811) AND scope='fabrication' AND revoked_at IS NULL),'revoked')$q$,
+ '23514','fabrication_authority_insufficient','revocation immediately refuses a new act');
+SELECT pg_temp.fi_mutation_refused($q$UPDATE public.project_parties SET off_job_at=current_date WHERE id=pg_temp.fi_id(811)$q$,
+ '23514','fabrication_authority_seat_closed','seat close refuses a new act');
+SELECT pg_temp.fi_mutation_refused($q$SET LOCAL session_replication_role=replica; UPDATE public.project_scope_editions SET status='stale' WHERE id=pg_temp.fi_id(301); SET LOCAL session_replication_role=origin$q$,
+ '55000','scope_edition_not_active','stale edition refuses a new act');
+SELECT pg_temp.fi_mutation_refused($q$SET LOCAL session_replication_role=replica; UPDATE public.project_scope_edition_packages SET responsibilities=responsibilities||'{"payer":"studio"}' WHERE edition_id=pg_temp.fi_id(301) AND package_key='pkg.cabinets'; SET LOCAL session_replication_role=origin$q$,
+ '23514','external_rail_studio_liability','studio liability refuses a new act');
+SELECT pg_temp.fi_mutation_refused($q$SET LOCAL session_replication_role=replica; UPDATE public.project_packages SET archived_at=now() WHERE id=pg_temp.fi_id(801); SET LOCAL session_replication_role=origin$q$,
+ '42501','fabrication_instruction_binding','archived canonical package refuses a new act');
+SELECT pg_temp.fi_mutation_refused($q$SET LOCAL session_replication_role=replica; UPDATE public.project_external_fulfilments SET status='cancelled' WHERE id=pg_temp.fi_fid(); SET LOCAL session_replication_role=origin$q$,
+ '55000','fabrication_fulfilment_cancelled','cancelled fulfilment refuses a new act');
+SELECT pg_temp.fi_mutation_refused($q$SET LOCAL session_replication_role=replica; UPDATE public.project_external_fulfilments SET status='installed' WHERE id=pg_temp.fi_fid(); SET LOCAL session_replication_role=origin$q$,
+ '55000','fulfilment_terminal','installed fulfilment refuses a new act');
 -- Exact receipt remains valid after revoke, close, stale edition, liability and cancellation.
 SELECT public.revoke_fabrication_authority((SELECT id FROM public.project_party_authority WHERE engagement_id=pg_temp.fi_id(811) AND scope='fabrication' AND revoked_at IS NULL),'revoked');
 UPDATE public.project_parties SET off_job_at=current_date WHERE id=pg_temp.fi_id(811);
@@ -223,9 +310,14 @@ UPDATE public.project_external_fulfilments SET status='cancelled' WHERE id=pg_te
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.fi_assert((pg_temp.fi_call('generic',ARRAY['k-1','k-2'],pg_temp.fi_id(1001),NULL,'{"amountCents":1}')->>'replayed')::boolean,
  'exact original receipt skips all later mutable act guards');
+-- Model already-removed access without exercising the unrelated last-owner RPC.
+SET LOCAL session_replication_role=replica;
 UPDATE public.organization_members SET status='suspended' WHERE organization_id=pg_temp.fi_id(101) AND user_id=pg_temp.fi_id(1);
+SET LOCAL session_replication_role=origin;
 SELECT pg_temp.fi_error($q$SELECT pg_temp.fi_call('direct',ARRAY['k-1','k-2'],pg_temp.fi_id(1001),NULL,'{"amountCents":1}')$q$,'42501',NULL,'removed original requester cannot replay');
+SET LOCAL session_replication_role=replica;
 UPDATE public.organization_members SET status='active' WHERE organization_id=pg_temp.fi_id(101) AND user_id=pg_temp.fi_id(1);
+SET LOCAL session_replication_role=origin;
 UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
 SELECT pg_temp.fi_error($q$SELECT pg_temp.fi_call('generic',ARRAY['k-1','k-2'],pg_temp.fi_id(1001),NULL,'{"amountCents":1}')$q$,'55000','scope_editions_inactive','capability suspension precedes even exact replay');
 SELECT pg_temp.fi_error($q$UPDATE public.project_external_fulfilment_events SET amount_cents=1 WHERE fulfilment_id=pg_temp.fi_fid()$q$,'23514','external_fulfilment_immutable','prior instructions cannot be rewritten');
