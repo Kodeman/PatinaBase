@@ -24456,6 +24456,180 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._validate_scope_signer_parts(uuid,jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._validate_scope_retained_parts(uuid,jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._scope_parts_from_edition(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._record_scope_execution(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._mint_scope_edition(uuid,uuid,boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._scope_after_execution(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_scope_editions(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_scope_editions(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_proposal_scope_edition() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00869_round8_scope_execution.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._normalize_scope_package_parts(uuid,jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00870_round8_scope_reconciliation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_scope_reconciliations FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00870_round8_scope_reconciliation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._scope_reconciliation_snapshot(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00870_round8_scope_reconciliation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_scope_reconciliation_authority(uuid,uuid[],uuid[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00870_round8_scope_reconciliation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reconcile_scope_edition(uuid,uuid,uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_plan_composition() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_compose_project_plan(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_compose_project_plan(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_packages, public.plan_sheet_rooms, public.plan_sheet_packages FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_packages, public.plan_sheet_rooms, public.plan_sheet_packages TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_packages, public.plan_sheet_rooms, public.plan_sheet_packages TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_plan_package_key(uuid,text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_project_package(uuid,text,text,text,text,uuid,text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_project_package(uuid,text,text,text,text,uuid,text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.bind_project_package_key(uuid,text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.bind_project_package_key(uuid,text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_plan_sheet_rooms(uuid,uuid[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_plan_sheet_rooms(uuid,uuid[]) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_plan_sheet_packages(uuid,uuid[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00871_round8_plan_composition.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_plan_sheet_packages(uuid,uuid[]) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00873_round8_placement_retry_idempotency.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._place_product_in_project_v2_00438_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
@@ -24471,6 +24645,420 @@ END $g$;
 -- 00873_round8_placement_retry_idempotency.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.place_product_in_project_v2(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00874_round8_typed_subjects.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._subject_project_id(text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00874_round8_typed_subjects.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_margin_note_subject() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00874_round8_typed_subjects.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.escalate_margin_note(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00874_round8_typed_subjects.sql
+DO $g$ BEGIN
+  grant select on public.margin_items to authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00874_round8_typed_subjects.sql
+DO $g$ BEGIN
+  grant select on public.margin_items to service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_external_fulfilments FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_external_fulfilment_events FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_external_fulfilment_evidence_bindings FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_external_fulfilment_verifications FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_units_valid(text[]) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_rail_refusal(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._fabrication_instructed_amount_cents(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_assert_access(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_assert_replay(uuid,uuid,text,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_lock(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_assert_active(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_guard() FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_refresh_status(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_external_fulfilment(uuid,uuid,text,text,text[],uuid,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_external_fulfilment_event(uuid,text,jsonb,text[],text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.verify_external_fulfilment_event(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.bind_fulfilment_evidence(uuid,uuid,text[],text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_external_fulfilments(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00875_round8_external_fulfilment.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_external_fulfilments(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_bump_item_row_version() FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_ffe_scope_assignment_receipts FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_guard_scope_binding() FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_scope_assignment_receipt_guard() FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assign_ffe_items_to_scope_package(uuid,uuid[],text,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_external_pricing_snapshot(public.project_ffe_items) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_ffe_external_conversion_receipts FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_external_conversion_receipt_guard() FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_furnishings_authorization_from_schedule_00444_impl(uuid,text,uuid[],numeric) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_authorized(uuid,text,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00876_round8_external_presence_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._subject_project_id(text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_margin_note_subject() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.escalate_margin_note(uuid,uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.evidence_manifests FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.evidence_manifest_requests FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.evidence_manifests TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.evidence_manifest_requests TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.evidence_manifest_members FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_evidence_member_pinned() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._evidence_manifest_member(uuid,jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_evidence_manifest(uuid,uuid,text,jsonb,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00877_round8_evidence_manifests.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_evidence_manifest(uuid,uuid,text,jsonb,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_fabrication_grant_overlap() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_fabrication_authority_immutable() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_fabrication_authority(uuid,text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_fabrication_authority(uuid,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.party_holds_fabrication_authority(uuid,bigint,date) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_fabrication_seat_identity() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00878_round8_fabrication_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.end_party_authority_at_seat_close() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00879_round8_fabrication_instruction.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_fabrication_instruction_authority(uuid,uuid,uuid,text[]) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00879_round8_fabrication_instruction.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._record_fabrication_instruction(uuid,uuid,uuid,text[],jsonb,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00879_round8_fabrication_instruction.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_external_fulfilment_event(uuid,text,jsonb,text[],text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00879_round8_fabrication_instruction.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_plan_issue(uuid,text,text,uuid[]) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00879_round8_fabrication_instruction.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_plan_issue(uuid,text,text,uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00879_round8_fabrication_instruction.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_fabrication_instruction(uuid,uuid,uuid,text[],jsonb,uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00880_round8_readiness_batch.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.get_project_ffe_readiness_batch(text[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00881_round8_fill_locked_current.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.place_product_in_project_v2(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00881_round8_fill_locked_current.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_in_project_v2(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00883_round8_external_reader_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_presence_lines(uuid,boolean) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00883_round8_external_reader_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._external_rail_refusal(jsonb,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00883_round8_external_reader_parity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_scope_external_amendment(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
