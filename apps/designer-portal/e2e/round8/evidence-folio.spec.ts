@@ -128,6 +128,8 @@ test('issued evidence stays frozen as current advances; private viewer retries a
       if (request.url().includes('/storage/v1/object/sign/project-documents/'))
         signedRequests.push(request.url());
     });
+    // Compile the native workspace before observing client navigation in the dev-server oracle.
+    expect((await page.request.get(`/doc/${JOB}/plans`)).ok()).toBe(true);
     await page.goto(`/doc/${JOB}`, {
       waitUntil: 'domcontentloaded',
       timeout: 120_000,
@@ -213,7 +215,7 @@ test('issued evidence stays frozen as current advances; private viewer retries a
       return padding;
     }), 'workspace padding falls back to zero outside the shell').toBe('0px');
     if (info.project.name === 'webkit-iphone') {
-      await historicalOpener.scrollIntoViewIfNeeded();
+      await historicalOpener.evaluate((control) => control.scrollIntoView({ block: 'center' }));
       await expect.poll(() => historicalOpener.evaluate((control) => {
         const bar = document.querySelector('nav[data-mobile-edge-owner="document-bar"]');
         const box = control.getBoundingClientRect();
