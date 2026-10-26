@@ -39,6 +39,7 @@ export type RecordAChangeOrigin = 'pieces-head' | 'money-head' | 'cmdk' | 'line'
 
 export interface RecordAChangeDetail {
   origin: RecordAChangeOrigin;
+  returnFocusTo?: HTMLElement | null;
   itemId?: string;
 }
 
@@ -129,8 +130,8 @@ function RecordAChangeRouter({
         return;
       }
       const active = document.activeElement;
-      openerRef.current =
-        active instanceof HTMLElement && active !== document.body ? active : null;
+      openerRef.current = detail?.returnFocusTo ??
+        (active instanceof HTMLElement && active !== document.body ? active : null);
       setChoice(null);
       setOpen(true);
     };
@@ -162,6 +163,7 @@ function RecordAChangeRouter({
         title={NAMED_ACTS.recordChange}
         icon={PencilLine}
         fallbackFocusRef={homeRef}
+        returnFocusTo={openerRef.current}
         initialFocusRef={firstChoiceRef}
         kind="record-a-change"
       >
