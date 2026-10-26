@@ -60,6 +60,10 @@ jest.mock('@patina/supabase', () => ({
   procurementUnreadCountKey: () => ['procurement-unread-count'],
   useProjectRoomPlacements: () => ({ data: [] }),
   useProjectPalettes: () => ({ data: [] }),
+  useRemovedProjectLines: () => ({ data: [] }),
+  useStartPurchaseOrderChange: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useFindVendorMatch: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useResolveOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProcurementDrafts: () => ({ data: [] }),
   useStudioPurchases: () => ({ data: [] }),
   useProjectPoCostLines: () => ({ data: [] }),
@@ -150,11 +154,17 @@ jest.mock('@/hooks/use-section-work', () => {
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 import { FFESection } from '@/components/document/ffe-section';
 import { RecordAChangeSheet } from '@/components/document/overlays/record-a-change-sheet';
+import { BuildRoom } from '../build-room';
 import { LineQueryReading } from '../build-room-shell';
 import { lineQueryState } from '../line-query';
 jest.mock('@/components/document/overlays/amendment-sheet', () => ({ AmendmentSheet: () => null }));
 
+jest.mock('@/hooks/use-document-state', () => ({
+  useDocumentEngagement: () => ({ data: { kind: 'engagement', row: { project_id: 'project-1', title: 'Cedar' } }, fetchStatus: 'idle', isError: false }),
+}));
+
 beforeEach(() => {
+  localStorage.clear();
   __setDensityForTest('full');
   mockItems = [];
   mockAskThePaper = true;
@@ -217,5 +227,56 @@ it('returns Escape to the clicked FF&E change trigger without prefocusing it', a
   fireEvent.click(trigger);
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   fireEvent.keyDown(screen.getByRole('dialog'), {key: 'Escape'});
+  await waitFor(() => expect(trigger).toHaveFocus());
+});
+
+
+it.each(['loading', 'refused'])('keeps a persisted folded %s schedule unknown', (state) => {
+  localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+  mockQuery.isPending = state === 'loading';
+  mockQuery.error = state === 'refused' ? new Error('refused') : null;
+  render(<FFESection projectId="project-1" projectName="Cedar" mode="project" />);
+  const summary = document.querySelector('[data-fold-summary]');
+  expect(summary).toHaveTextContent('Schedule total unknown');
+  expect(summary).not.toHaveTextContent('no lines yet');
+});
+
+it.each(['loading', 'refused'])('keeps the quiet %s schedule status unknown', (state) => {
+  __setDensityForTest('quiet');
+  mockQuery.isPending = state === 'loading';
+  mockQuery.error = state === 'refused' ? new Error('refused') : null;
+  render(<FFESection projectId="project-1" projectName="Cedar" mode="project" />);
+  const status = document.querySelector('#ffe-region-body-project-1 .sr-only');
+  expect(status).toHaveTextContent('Schedule total unknown');
+  expect(status).not.toHaveTextContent('No recorded activity');
+});
+
+it('keeps known-empty folded copy unchanged', () => {
+  localStorage.setItem('patina:doc-fold:project-1:ffe', '1');
+  render(<FFESection projectId="project-1" projectName="Cedar" mode="project" />);
+  expect(document.querySelector('[data-fold-summary]')).toHaveTextContent('no lines yet');
+});
+
+it('keeps standalone refusal Return and Escape alongside retry', () => {
+  mockQuery.error = new Error('refused');
+  const onReturn = jest.fn();
+  render(<BuildRoom docId="project-1" lens="spec" room={null} canSeeMoney onReturn={onReturn} onNavigate={jest.fn()} onRedirect={jest.fn()} />);
+  expect(screen.getByRole('link', { name: 'Back to Cedar' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(onReturn).toHaveBeenCalledTimes(1);
+});
+
+it('returns the live-PO sheet to the clicked line act with unrelated focus', async () => {
+  mockItems = [{ id: 'line-1', name: 'Chair', quantity: 1, item_type: 'fixed', status: 'ordered', purchase_order: { id: 'po-1', status: 'sent', po_number: 'PO-1' } }];
+  render(<><button>Unrelated focus</button><FFESection projectId="project-1" projectName="Cedar" mode="install" /><RecordAChangeSheet projectId="project-1" clientName="Client" /></>);
+  const row = document.querySelector('#ffe-selection-line-1 > button')!;
+  fireEvent.click(row);
+  const trigger = document.querySelector<HTMLButtonElement>('[data-action-key="record-a-change-line"]')!;
+  expect(trigger).not.toBeNull();
+  screen.getByRole('button', { name: 'Unrelated focus' }).focus();
+  fireEvent.click(trigger);
+  expect(screen.getByTestId('po-change-sheet')).toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
   await waitFor(() => expect(trigger).toHaveFocus());
 });

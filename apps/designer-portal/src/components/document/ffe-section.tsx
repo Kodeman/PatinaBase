@@ -1411,6 +1411,7 @@ function FFESectionBody({
   );
   const [choosingPiece, setChoosingPiece] = useState(false);
   const [changeOrderLineId, setChangeOrderLineId] = useState<string | null>(null);
+  const changeOrderReturnRef = useRef<HTMLElement | null>(null);
   const choosePieceRef = useRef<HTMLParagraphElement | null>(null);
   const ffeBodyRef = useRef<HTMLDivElement | null>(null);
   const [addLineRoom, setAddLineRoom] = useState<{
@@ -1891,13 +1892,16 @@ function FFESectionBody({
   // line's change order (the Order cell's own sheet) at project, install and
   // care alike (R33); without one, the line unfolds with today's controls.
   const recordChangeOnLine = useCallback(
-    (itemId: string) => {
+    (itemId: string, returnFocusTo?: HTMLElement | null) => {
       const item = (items ?? []).find((candidate) => String(candidate.id) === itemId);
       if (!item) return;
       setChoosingPiece(false);
       openFfeRegion();
       setOpenLineId(item.id);
-      if (livePurchaseOrder(item)) setChangeOrderLineId(String(item.id));
+      if (livePurchaseOrder(item)) {
+        changeOrderReturnRef.current = returnFocusTo ?? null;
+        setChangeOrderLineId(String(item.id));
+      }
     },
     [items, openFfeRegion],
   );
@@ -1915,10 +1919,9 @@ function FFESectionBody({
     // (CONTRACT §3.8 rule 2), so its `On a piece` always lands here.
     if (!recordChangeAtHead && mode !== 'project') return;
     const onPiece = (event: Event) => {
-      const itemId = (event as CustomEvent<RecordAChangeOnPieceDetail | undefined>)
-        .detail?.itemId;
-      if (itemId) {
-        recordChangeOnLine(itemId);
+      const detail = (event as CustomEvent<RecordAChangeOnPieceDetail | undefined>).detail;
+      if (detail?.itemId) {
+        recordChangeOnLine(detail.itemId, detail.returnFocusTo);
         return;
       }
       const active = document.activeElement;
@@ -2122,7 +2125,9 @@ function FFESectionBody({
   );
   const overviewJob = useMemo(() => deriveOverviewJob(overviewLines), [overviewLines]);
   const ffeSeamSummary =
-    total === 0
+    lineState.total === null
+      ? 'Schedule total unknown'
+      : total === 0
       ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet`
       : ffeAwaiting
         ? `${ffeCounts} · ${ffeAwaiting}`
@@ -2710,7 +2715,7 @@ function FFESectionBody({
       {!ffeFolded && ffeQuiet && (
         <div id={ffeBodyId}>
           <p className="sr-only">
-            {quietStateSentence(ffeQuietStatus, 'Pieces & purchasing')}
+            {lineState.total === null ? 'Schedule total unknown' : quietStateSentence(ffeQuietStatus, 'Pieces & purchasing')}
           </p>
         </div>
       )}
@@ -3078,6 +3083,7 @@ function FFESectionBody({
       <FlagProbe flag="one-voice" onValue={setOneVoice} />
       {changeOrderLine?.item.purchase_order && (
         <ChangeOrderSheet
+          returnFocusTo={changeOrderReturnRef.current}
           open
           onClose={() => setChangeOrderLineId(null)}
           item={changeOrderLine.item}

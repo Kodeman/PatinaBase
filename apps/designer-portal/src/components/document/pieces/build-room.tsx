@@ -168,11 +168,6 @@ export function BuildRoom({
   if (roomsPending || (linesPending && !lineState.error) || placementsPending) {
     return <><LineQueryReading state={lineState} /><PiecesSkeleton /></>;
   }
-  if (lineState.total === null) {
-    return <div><LineQueryReading state={lineState} />
-      <button type="button" onClick={() => void linesQuery.refetch()}>Try again</button>
-    </div>;
-  }
 
   return (
     <BuildRoomShell
@@ -193,6 +188,9 @@ export function BuildRoom({
       onReturn={onReturn}
       onAddRoom={onAddRoom}
     >
+      {lineState.total === null ? (
+        <button type="button" onClick={() => void linesQuery.refetch()}>Try again</button>
+      ) : <>
       {lens === "rough" ? (
         <RoughInLens
           docId={docId}
@@ -240,6 +238,7 @@ export function BuildRoom({
           canSeeMoney={canSeeMoney}
         />
       )}
+      </>}
     </BuildRoomShell>
   );
 }

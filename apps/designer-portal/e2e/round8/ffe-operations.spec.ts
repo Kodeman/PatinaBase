@@ -66,3 +66,29 @@ test('selection-change chooser returns to More after a real click and custom-pie
   await expect(line.getByRole('textbox', { name: /name/i }).first()).toBeVisible();
   await page.keyboard.press('Escape');
 });
+
+test('standalone initial line refusal retains native Return, retry and Escape', async ({ authenticatedPage: page }) => {
+  test.setTimeout(180_000);
+  const lineRead = '**/rest/v1/project_ffe_items?*';
+  let refused = 0;
+  await page.route(lineRead, (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    refused += 1;
+    return route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ code: '42501', message: 'Schedule read refused for regression' }) });
+  });
+  try {
+    await page.goto('about:blank');
+    await page.goto(`/doc/${JOB}/pieces?lens=rough`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+    const retry = page.getByRole('button', { name: 'Try again', exact: true });
+    await expect(retry).toBeVisible({ timeout: 60_000 });
+    expect(refused).toBeGreaterThan(0);
+    const build = page.getByTestId('build-room');
+    await expect(build.locator('[data-line-query]')).toContainText('Schedule total unknown');
+    await expect(build.getByRole('link', { name: /^Back to / })).toBeVisible();
+    await expect(build.getByRole('heading', { name: 'Preliminary selections', exact: true })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(new RegExp(`/doc/${JOB}(?:#|$)`));
+  } finally {
+    await page.unroute(lineRead);
+  }
+});

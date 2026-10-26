@@ -45,6 +45,7 @@ export interface RecordAChangeDetail {
 
 export interface RecordAChangeOnPieceDetail {
   itemId?: string;
+  returnFocusTo?: HTMLElement | null;
 }
 
 export function openRecordAChange(detail: RecordAChangeDetail): void {
@@ -53,10 +54,10 @@ export function openRecordAChange(detail: RecordAChangeDetail): void {
   );
 }
 
-function toPiece(itemId?: string): void {
+function toPiece(itemId?: string, returnFocusTo?: HTMLElement | null): void {
   window.dispatchEvent(
     new CustomEvent<RecordAChangeOnPieceDetail>(RECORD_A_CHANGE_ON_PIECE_EVENT, {
-      detail: itemId ? { itemId } : {},
+      detail: itemId ? { itemId, returnFocusTo } : {},
     }),
   );
 }
@@ -126,7 +127,7 @@ function RecordAChangeRouter({
       const detail = (event as CustomEvent<RecordAChangeDetail | undefined>).detail;
       if (!flagged && detail?.origin !== 'pieces-head') return;
       if (detail?.itemId) {
-        toPiece(detail.itemId);
+        toPiece(detail.itemId, detail.returnFocusTo);
         return;
       }
       const active = document.activeElement;
