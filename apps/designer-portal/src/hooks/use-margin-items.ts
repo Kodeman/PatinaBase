@@ -32,9 +32,16 @@ export function useMarginItems(projectId: string | null, proposalId: string | nu
       if (!rows.some((row) => row.kind === 'note')) return rows;
       // The union view preserves its legacy shape. Read additive note metadata
       // under the same caller's RLS, not through the private integrity helper.
-      const { data: notes, error: noteError } = await supabase.from('margin_notes')
-        .select('id, project_id, subject_kind, subject_id').or(clauses);
-      if (noteError) throw noteError;
+      let notes = null;
+      let contextUnavailable = false;
+      try {
+        const result = await supabase.from('margin_notes')
+          .select('id, project_id, subject_kind, subject_id').or(clauses);
+        contextUnavailable = Boolean(result.error);
+        if (!result.error) notes = result.data;
+      } catch {
+        contextUnavailable = true;
+      }
       const byId = new Map<string, { project_id: string | null; subject_kind: string | null; subject_id: string | null }>(
         (notes ?? []).map((note: { id: string; project_id: string | null; subject_kind: string | null; subject_id: string | null }) => [note.id, note]),
       );
@@ -44,6 +51,7 @@ export function useMarginItems(projectId: string | null, proposalId: string | nu
         const note = byId.get(row.item_id);
         const subject = note?.project_id === row.project_id ? note : null;
         return { ...row, payload: { ...row.payload,
+          context_unavailable: contextUnavailable,
           subject_kind: subject?.subject_kind ?? null,
           subject_id: subject?.subject_id ?? null,
         } };
