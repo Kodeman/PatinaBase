@@ -120,6 +120,7 @@ function pickGcCourt() {
 }
 
 function writeAndPublish() {
+  fireEvent.click(screen.getByRole('radio', { name: 'Shared — client and project parties' }));
   fireEvent.change(screen.getByPlaceholderText(PROMPT), {
     target: { value: 'Which pendant for the entry?' },
   });
