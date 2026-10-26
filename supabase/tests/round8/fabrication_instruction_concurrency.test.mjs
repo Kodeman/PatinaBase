@@ -123,7 +123,7 @@ const scenarios = [
     UPDATE public.client_decisions SET status='pending' WHERE id='${id(601)}';
     SELECT set_config('app.client_decision_write_id','',true);
     SELECT public.submit_coordination_revision('${id(601)}','[]','race new round');` },
-  { name: 'reissue', lock: () => labels, error: 'fabrication_evidence_issue_missing', mutate: `
+  { name: 'reissue', lock: instructionFirst => instructionFirst ? labels : `SELECT id FROM public.projects WHERE id='${id(201)}' FOR UPDATE;`, error: 'fabrication_evidence_issue_missing', mutate: `
     SELECT public.create_plan_issue('${id(201)}','Race I2','race-issue-2');` },
 ];
 async function blocked(holder, pid) {
