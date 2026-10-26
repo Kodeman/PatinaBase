@@ -2,6 +2,7 @@
 -- Lineage: policies 00624; seat-close body 00634 (hand-close trigger unchanged).
 -- Activation is a separately reviewed EXECUTE grant, not a runtime flag.
 -- No backfill: existing scopes, grants, SELECT policy and table ACLs stay intact.
+-- SQ-2133: immutable grant-time job/holder binding; live seats cannot transfer it.
 ALTER TABLE public.project_party_authority
   DROP CONSTRAINT IF EXISTS project_party_authority_scope_check;
 ALTER TABLE public.project_party_authority
@@ -69,9 +70,17 @@ CREATE POLICY project_party_authority_studio_delete
 
 CREATE OR REPLACE FUNCTION public.guard_fabrication_grant_overlap()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE v_seat public.project_parties;
 BEGIN
   IF NEW.scope = 'fabrication' THEN
-    PERFORM 1 FROM public.project_parties WHERE id = NEW.engagement_id FOR UPDATE;
+    SELECT * INTO v_seat FROM public.project_parties WHERE id = NEW.engagement_id FOR UPDATE;
+    IF NEW.fabrication_grant_request IS NOT NULL
+      AND jsonb_typeof(NEW.fabrication_grant_request) <> 'object' THEN
+      RAISE EXCEPTION 'fabrication_authority_binding_invalid' USING ERRCODE = '23514';
+    END IF;
+    -- Bind every INSERT path, including service fixtures, to the locked seat.
+    NEW.fabrication_grant_request := COALESCE(NEW.fabrication_grant_request,'{}'::jsonb)
+      || jsonb_build_object('project_id',v_seat.project_id,'profile_id',v_seat.profile_id);
     IF NEW.revoked_at IS NULL AND EXISTS (
       SELECT 1 FROM public.project_party_authority a
       WHERE a.engagement_id = NEW.engagement_id AND a.scope = 'fabrication'
@@ -152,7 +161,8 @@ BEGIN
     RAISE EXCEPTION 'fabrication_authority_idempotency_required' USING ERRCODE = '23514';
   END IF;
   v_request := jsonb_build_object('effective_from',p_effective_from,'effective_to',p_effective_to,
-    'threshold_cents',p_threshold_cents,'copy_to',p_copy_to,'source_clause',p_source_clause);
+    'threshold_cents',p_threshold_cents,'copy_to',p_copy_to,'source_clause',p_source_clause,
+    'project_id',v_seat.project_id,'profile_id',v_seat.profile_id);
   SELECT * INTO v_row FROM public.project_party_authority
     WHERE engagement_id = v_seat.id AND idempotency_key = p_idempotency_key;
   IF FOUND THEN
@@ -226,12 +236,32 @@ CREATE OR REPLACE FUNCTION public.party_holds_fabrication_authority(
 ) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT p_amount_cents IS NOT NULL AND p_amount_cents >= 0 AND EXISTS (
     SELECT 1 FROM public.project_party_authority a
+    JOIN public.project_parties p ON p.id = a.engagement_id
     WHERE a.engagement_id = p_party_id AND a.scope = 'fabrication' AND NOT a.prepares_only
+      AND a.fabrication_grant_request->'project_id' = to_jsonb(p.project_id)
+      AND a.fabrication_grant_request->'profile_id' = COALESCE(to_jsonb(p.profile_id),'null'::jsonb)
       AND a.revoked_at IS NULL AND a.effective_from <= p_on
       AND (a.effective_to IS NULL OR a.effective_to >= p_on)
       AND (a.threshold_cents IS NULL OR p_amount_cents <= a.threshold_cents));
 $$;
 REVOKE ALL ON FUNCTION public.party_holds_fabrication_authority(uuid,bigint,date) FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.guard_fabrication_seat_identity()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  -- UPDATE already owns the seat lock; read grants only after that parent lock.
+  IF (NEW.project_id IS DISTINCT FROM OLD.project_id OR NEW.profile_id IS DISTINCT FROM OLD.profile_id)
+    AND EXISTS (SELECT 1 FROM public.project_party_authority a
+      WHERE a.engagement_id = OLD.id AND a.scope = 'fabrication' AND a.revoked_at IS NULL
+        AND (a.effective_to IS NULL OR a.effective_to >= current_date)) THEN
+    RAISE EXCEPTION 'fabrication_seat_identity_locked' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.guard_fabrication_seat_identity() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS guard_fabrication_seat_identity_trg ON public.project_parties;
+CREATE TRIGGER guard_fabrication_seat_identity_trg BEFORE UPDATE ON public.project_parties
+  FOR EACH ROW EXECUTE FUNCTION public.guard_fabrication_seat_identity();
 
 CREATE OR REPLACE FUNCTION public.end_party_authority_at_seat_close()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$

@@ -16,6 +16,7 @@ FUNCTIONS = (
     "revoke_fabrication_authority(uuid,text)",
     "party_holds_fabrication_authority(uuid,bigint,date)",
     "end_party_authority_at_seat_close()",
+    "guard_fabrication_seat_identity()",
 )
 
 
@@ -35,7 +36,7 @@ def check(path):
         # syntax, including dynamic literal ACLs, rather than that prose word.
         assert not re.search(r"\b(?:GRANT|REVOKE)\s+(?:ALL|EXECUTE|SELECT|INSERT|UPDATE|DELETE|USAGE|TRUNCATE|REFERENCES|TRIGGER|CREATE|CONNECT|TEMPORARY|TEMP|SET|ALTER|MAINTAIN)\b", legacy.clean(body["body"]), re.IGNORECASE), "ACL inside dollar body is not replayable"
     assert not re.search(r"party_holds_field_authority\s*\([^;]*'fabrication'", legacy.clean(sql), re.IGNORECASE), "fabrication cannot use legacy holder predicate"
-    print("PASS: native extractor retains six function revokes and only two service-role lifecycle grants")
+    print("PASS: native extractor retains seven function revokes and only two service-role lifecycle grants")
     print("PASS: no ACL hidden in dollar bodies; no legacy fabrication predicate")
 
 

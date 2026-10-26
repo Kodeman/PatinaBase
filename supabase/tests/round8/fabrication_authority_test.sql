@@ -1,7 +1,3 @@
--- Cumulative replay entry point: 00878 must already be installed.
+-- Local verification entry point: apply 00878 only inside the rollback wrapper.
 \set ON_ERROR_STOP on
-BEGIN;
-SET LOCAL lock_timeout='3s';
-SET LOCAL statement_timeout='30s';
-\ir fabrication_authority_body.psql
-ROLLBACK;
+\ir fabrication_authority_isolated.psql
