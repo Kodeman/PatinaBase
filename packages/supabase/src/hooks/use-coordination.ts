@@ -1999,7 +1999,7 @@ export function isAdminOnlyAuthorityScope(scope: string | null | undefined): boo
 
 /** Authority is never a state word — it prints as plain, uncoloured text
  *  (direction §3.8). These are the phrases, one per scope. */
-export const AUTHORITY_SCOPE_LABELS: Record<AuthorityScope, string> = {
+export const AUTHORITY_SCOPE_LABELS: Record<AuthorityScope | 'fabrication', string> = {
   money: 'Signs money',
   change_order: 'Approves change orders',
   selections: 'Selections',
@@ -2007,6 +2007,7 @@ export const AUTHORITY_SCOPE_LABELS: Record<AuthorityScope, string> = {
   site_access: 'Controls site access',
   key: 'Holds a key',
   draw_certify: 'Certifies draws',
+  fabrication: 'Fabrication authority — admin-only, dedicated act',
 };
 
 export interface ProjectPartyAuthority {
@@ -2097,6 +2098,11 @@ export function useSetPartyAuthority() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: SetPartyAuthorityInput): Promise<ProjectPartyAuthority> => {
+      // Fabrication grants bind seat identity and immutable request history in
+      // grant_fabrication_authority; even untyped callers must use that RPC.
+      if ((input.scope as string) === 'fabrication') {
+        throw new Error('Fabrication authority is admin-only and must be recorded through its dedicated grant act.');
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
