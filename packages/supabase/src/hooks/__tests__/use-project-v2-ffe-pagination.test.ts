@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { from, requests, rows, failure } = vi.hoisted(() => ({
   from: vi.fn(), requests: [] as Array<{ range: number[]; orders: string[]; filters: unknown[][] }>,
   rows: Array.from({ length: 2500 }, (_, i) => ({ id: `line-${i}` })),
-  failure: { at: -1 },
+  failure: { at: -1, size: 2500 },
 }));
 vi.mock('../../client', () => ({ createBrowserClient: () => ({ from }) }));
 vi.mock('@tanstack/react-query', () => ({
@@ -17,7 +17,7 @@ const config = () => useProjectFFEItems('project', { roomId: 'room', status: 'dr
   queryFn: () => Promise<typeof rows>; queryKey: unknown[];
 };
 beforeEach(() => {
-  requests.length = 0; failure.at = -1;
+  requests.length = 0; failure.at = -1; failure.size = 2500;
   from.mockImplementation(() => {
     let range = [0, 999];
     const orders: string[] = [], filters: unknown[][] = [];
@@ -30,13 +30,23 @@ beforeEach(() => {
       range: (start: number, end: number) => { range = [start, end]; return builder; },
       then: (resolve: (value: unknown) => unknown) => {
         requests.push({ range: [...range], orders: [...orders], filters: [...filters] });
-        return Promise.resolve({ data: rows.slice(range[0], range[1] + 1), error: range[0] === failure.at ? new Error('page refused') : null }).then(resolve);
+        return Promise.resolve({ data: rows.slice(0, failure.size).slice(range[0], range[1] + 1), error: range[0] === failure.at ? new Error('page refused') : null }).then(resolve);
       },
     };
     return builder;
   });
 });
 describe('FF&E full-list pagination', () => {
+  it.each([0, 1000, 1001, 2000])('preserves complete stable IDs at the %i-row boundary', async (size) => {
+    failure.size = size;
+    const result = await config().queryFn();
+    expect(result.map(row => row.id)).toEqual(rows.slice(0, size).map(row => row.id));
+    expect(new Set(result.map(row => row.id)).size).toBe(size);
+    expect(requests.map(request => request.range)).toEqual(
+      Array.from({ length: Math.floor(size / 1000) + 1 }, (_, page) => [page * 1000, page * 1000 + 999]),
+    );
+  });
+
   it('returns 2500 rows across three stable pages without duplicates or gaps', async () => {
     const query = config();
     const result = await query.queryFn();
