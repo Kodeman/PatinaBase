@@ -2678,3 +2678,19 @@ export {
 export { useScopeEditions, readScopeEditions, scopeEditionKeys, scopeEditionCapability } from "./use-scope-editions";
 export { useServiceArrangements, selectServiceArrangements } from "./use-service-arrangements";
 export { readScopePackagePayload } from "./use-agreement-parts";
+
+export {
+  externalFulfilmentCapability,
+  externalFulfilmentKeys,
+  useExternalFulfilments,
+  useCreateExternalFulfilment,
+  useRecordExternalFulfilmentEvent,
+  useVerifyExternalFulfilmentEvent,
+  useBindFulfilmentEvidence,
+  useAssignFfeItemsToScopePackage,
+  useSetFfeItemExternalFulfilment,
+  useGrantFabricationAuthority,
+  useRevokeFabricationAuthority,
+  useRecordFabricationInstruction,
+} from './use-external-fulfilments';
+export type { ExternalFulfilment } from './use-external-fulfilments';

@@ -1035,6 +1035,10 @@ export function AddPersonSheet({
 
   const submitParty = async () => {
     if (!isSeatKind(kind)) return;
+    if (grantRequested && (authorityScope as string) === "fabrication") {
+      setError("Fabrication authority is admin-only and requires its dedicated grant act; it cannot be recorded here.");
+      return;
+    }
     /**
      * R-CD, amended twice (F5, then F-C) — the invariant holds by
      * construction, not by one button. No Enter-key path reaches here today:
@@ -2120,7 +2124,13 @@ export function AddPersonSheet({
                       {AUTHORITY_SCOPE_LABELS[scope]}
                     </option>
                   ))}
+                  <option value="fabrication" disabled>
+                    {AUTHORITY_SCOPE_LABELS.fabrication}
+                  </option>
                 </select>
+                <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+                  Fabrication authority requires an owner or admin and its dedicated grant act; it cannot be recorded here.
+                </p>
                 {/* F-A/F-A2: an unread standing is not a refusal. While either
                 query is out the scopes stay offered and this notice stays
                 silent — the act carries the reason instead. It asserts only
