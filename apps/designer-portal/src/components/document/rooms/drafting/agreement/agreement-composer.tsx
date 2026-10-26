@@ -93,6 +93,7 @@ import {
   type GalleyPartIds,
 } from "./galley/galley-part";
 import { GalleyFold } from "./galley/galley-fold";
+import { ScopeArrangementChoices } from "./editors/scope-package-editor";
 import { PartOutline } from "./galley/part-outline";
 import { StudioStrip, StudioRun } from "./galley/studio-strip";
 import { composeReadinessSentence } from "./galley/readiness-voice";
@@ -1170,6 +1171,8 @@ export function AgreementComposer({
       key={`fold-${part.partKey}`}
       part={part}
       proposalId={proposalId}
+      scopeProjectId={document.projectId ?? proposal.project_id}
+      inheritedScopeEditionId={proposal.drafted_against_scope_edition_id}
       record={
         !savedAt
           ? "Not saved yet"
@@ -1642,6 +1645,7 @@ export function AgreementComposer({
             </p>
           </header>
 
+          {libraryOn && <ScopeArrangementChoices />}
           <PartOutline
             parts={rows}
             openKey={openKey}

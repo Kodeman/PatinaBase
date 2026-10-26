@@ -16,6 +16,7 @@
  * custom schedule part cannot rewrite the terms row either.
  */
 
+import { ScopePackageEditor } from "./editors/scope-package-editor";
 import { DESIGN_BUILD_COPY } from "@patina/types";
 import type { AgreementPart } from "@patina/types";
 import { Button, Input, Select, Textarea } from "@/components/ui/controls";
@@ -48,6 +49,8 @@ const labelClass =
 
 export interface PartEditorProps {
   part: AgreementPart;
+  scopeProjectId?: string | null;
+  inheritedScopeEditionId?: string | null;
   onChange: (payload: Record<string, unknown>) => void;
   readOnly: boolean;
   /** `agreement-parts && agreement-library`, resolved by the composer. Off,
@@ -93,6 +96,8 @@ export function PartEditor({
   turnkey,
   onToggleClientVisible,
   headless = false,
+  scopeProjectId,
+  inheritedScopeEditionId,
 }: PartEditorProps) {
   const chipped = libraryOn && part.kind === "schedule";
   const hidden = part.clientVisible === false;
@@ -161,6 +166,8 @@ export function PartEditor({
         readOnly={readOnly}
         libraryOn={libraryOn}
         turnkey={turnkey}
+        scopeProjectId={scopeProjectId}
+        inheritedScopeEditionId={inheritedScopeEditionId}
       />
       {chipped && authorityStanding(part.variant) === "record-only" && (
         <p className="text-[11px] leading-relaxed text-[var(--text-muted)]">
@@ -177,8 +184,13 @@ function PartEditorBody({
   readOnly,
   libraryOn = false,
   turnkey,
+  scopeProjectId,
+  inheritedScopeEditionId,
 }: PartEditorProps) {
   const payload = part.payload ?? {};
+  if (part.kind === "scope_package") {
+    return <ScopePackageEditor payload={payload} projectId={scopeProjectId} inheritedEditionId={inheritedScopeEditionId} />;
+  }
 
   // Wave 3 asks first, and only where the composer handed down a turnkey
   // context. Nothing below this line changed: a variant the turnkey folder
