@@ -232,6 +232,8 @@ export function LineUnfold({
 
   const [paperOpen, setPaperOpen] = useState(false);
   const [inspectionOpen, setInspectionOpen] = useState(false);
+  const [inspectionId, setInspectionId] = useState<string>();
+  const inspectionOpener = useRef<HTMLElement | null>(null);
   const { data: receipts } = useReceivingInspections(purchase ? { studioPurchaseId: purchase.id } : { projectId });
   const pendingInspection = receipts?.find(receipt => receipt.outcome === null &&
     (po ? receipt.purchase_order_id === po.id : receipt.studio_purchase_id === purchase?.id));
@@ -322,7 +324,7 @@ export function LineUnfold({
     <DocumentAction
       actionKey="inspect-ffe-delivery"
       variant={variant}
-      onClick={() => setInspectionOpen(true)}
+      onClick={(event) => { inspectionOpener.current = event.currentTarget; setInspectionId(pendingInspection?.id); setInspectionOpen(true); }}
     >
       {pendingInspection ? 'Complete inspection' : 'Log inspection'}
     </DocumentAction>
@@ -626,7 +628,9 @@ export function LineUnfold({
             open={inspectionOpen}
             onOpenChange={setInspectionOpen}
             purchaseOrderId={po.id}
-            inspectionId={pendingInspection?.id}
+            inspectionId={inspectionId}
+            subjectStale={inspectionOpen && inspectionId !== pendingInspection?.id}
+            returnFocusTo={inspectionOpener.current}
             buyerUserId={po.created_by}
             projectId={projectId}
             poLabel={po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'Delivery'}

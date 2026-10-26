@@ -209,6 +209,7 @@ export interface LogInspectionDrawerProps {
   studioPurchaseId?: string;
   arrivalMethod?: 'picked_up' | 'delivered';
   inspectionId?: string;
+  subjectStale?: boolean;
   returnFocusTo?: HTMLElement | null;
   receiptItems?: Array<ReceivingInspectionItemInput & { name: string; unit?: string | null; project_id?: string; quantity: number; received_quantity?: number | null }>;
   buyerUserId?: string;
@@ -280,8 +281,16 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const complete = useCompleteReceivingInspection();
   const followUp = useRetryReceivingFollowUp();
   const shipments = usePoShipments(purchaseOrderId);
-  const inspections = useReceivingInspections(props.studioPurchaseId ? { studioPurchaseId: props.studioPurchaseId } : undefined);
-  const original = inspections.data?.find(i => i.id === props.inspectionId);
+  const inspections = useReceivingInspections(props.studioPurchaseId ? { studioPurchaseId: props.studioPurchaseId } : { projectId });
+  const nativeOriginal = inspections.data?.find(i => i.id === props.inspectionId);
+  // Keep the opened receipt's immutable quantities when another actor completes it.
+  const originalRef = useRef<typeof nativeOriginal>(undefined);
+  if (!open || originalRef.current?.id !== props.inspectionId) originalRef.current = undefined;
+  if (open && !originalRef.current && nativeOriginal) originalRef.current = nativeOriginal;
+  const original = originalRef.current;
+  const subjectStale = !saved && (props.subjectStale || (!!props.inspectionId &&
+    !inspections.isLoading && inspections.data !== undefined && !inspections.error &&
+    (!nativeOriginal || nativeOriginal.outcome !== null)));
   const { data: studioId } = useProjectRecordedStudio(projectId ?? '');
   const members = useOrganizationMembers(studioId ?? '');
   const locations = useStudioLocations(studioId);
@@ -484,7 +493,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const busy = createInspection.isPending || complete.isPending || followUp.isPending || uploading > 0;
 
   const handleSubmit = async () => {
-    if (saved || busy) return;
+    if (saved || busy || subjectStale) return;
     if (!items.length) { setSubmitError('The delivery items are still loading.'); return; }
     if (!props.inspectionId && availableShipments.length > 1 && !shipmentId) { setSubmitError('Choose the shipment for this delivery.'); return; }
     if (!checked) { setSubmitError('Choose whether the delivery was opened and checked.'); return; }
@@ -624,6 +633,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5">
+              {subjectStale && <p role="alert">This receipt changed while you were inspecting it. Your draft is kept. Close and reopen receiving to review the current record.</p>}
               {saved ? <section role="status" className="space-y-3">
                 <p>Receipt saved. {saved.inspection.inspection_pending ? 'Inspection pending.' : 'Inspection recorded.'}</p>
                 {saved.claimDraftError && <><p>Claim draft could not be created.</p><Button disabled={busy} onClick={async () => {
@@ -978,7 +988,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 variant="primary"
                 size="sm"
                 onClick={handleSubmit}
-                disabled={busy || !!saved || itemsQuery.isLoading || inspections.isLoading || shipments.isLoading}
+                disabled={busy || !!saved || !!subjectStale || itemsQuery.isLoading || inspections.isLoading || shipments.isLoading}
                 loading={createInspection.isPending || complete.isPending}
               >
                 {props.inspectionId ? 'Complete inspection' : 'Save receipt'}

@@ -376,10 +376,10 @@ export function ReceivingBookPage({
     refetch?: () => unknown;
   };
   const { data: inspections, isLoading: inspLoading, error: inspectionsError, refetch: retryInspections } = useReceivingInspections(
-    undefined,
+    projectId ? { projectId } : undefined,
   ) as { data: AnyRecord[] | undefined; isLoading: boolean; error?: unknown; refetch?: () => unknown };
   const { data: draftedClaims, isLoading: draftedLoading, error: draftedError, refetch: retryDrafted } = useDamageClaims({
-    state: 'drafted',
+    state: 'drafted', projectId: projectId ?? undefined,
   }) as {
     data: AnyRecord[] | undefined;
     isLoading: boolean;
@@ -387,7 +387,7 @@ export function ReceivingBookPage({
     refetch?: () => unknown;
   };
   const { data: notifiedClaims, isLoading: notifiedLoading, error: notifiedError, refetch: retryNotified } = useDamageClaims({
-    state: 'vendor_notified',
+    state: 'vendor_notified', projectId: projectId ?? undefined,
   }) as {
     data: AnyRecord[] | undefined;
     isLoading: boolean;
@@ -399,8 +399,7 @@ export function ReceivingBookPage({
   const [target, setTarget] = useState<AnyRecord | null>(null);
   const [showCleared, setShowCleared] = useState(false);
 
-  // US-16 (C-08): none of these hooks take a project id, so the lens narrows
-  // every already-fetched list client-side — same project the Ledger holds.
+  // Keep the book lens aligned with the server-scoped receipt and claim reads.
   const matchesProject = (poLike: AnyRecord | null | undefined) =>
     !projectId || (poLike?.project_id ?? poLike?.project?.id) === projectId;
 
@@ -457,8 +456,8 @@ export function ReceivingBookPage({
 
   // Cleared inspections (clean, 30-day window) — the Settled fold.
   const cleared = useMemo(
-    () => filteredInspections.filter((i) => i.outcome === 'clean'),
-    [filteredInspections],
+    () => filteredInspections.filter((i) => i.outcome === 'clean' && (i.received_on ?? i.inspected_at ?? i.created_at) >= since30),
+    [filteredInspections, since30],
   );
 
   const stats = useMemo(

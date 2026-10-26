@@ -24,6 +24,7 @@ export function ReceivingCell({
 }) {
   const opener = useRef<HTMLElement | null>(null);
   const [receiving, setReceiving] = useState(false);
+  const [inspectionId, setInspectionId] = useState<string>();
   // Physical counts are not proof that cartons were opened and inspected.
   const value = stampKind === 'damaged'
     ? `Open claim${openClaims.length > 1 ? 's' : ''} · ${openClaims[0]?.state === 'vendor_notified' ? 'vendor notified' : 'drafted'}`
@@ -43,8 +44,8 @@ export function ReceivingCell({
     <UnfoldCell head="Receiving" testId="line-receiving-cell">
       <CellValue>{value}</CellValue>
       {po?.id && <>
-        <button className="min-h-11 text-left underline" onClick={(event) => { opener.current = event.currentTarget; setReceiving(true); }}>{pendingInspectionId ? 'Complete inspection' : 'Receive a delivery'}</button>
-        {receiving && <LogInspectionDrawer returnFocusTo={opener.current} open onOpenChange={setReceiving} purchaseOrderId={po.id} inspectionId={pendingInspectionId} projectId={item.project_id}
+        <button className="min-h-11 text-left underline" onClick={(event) => { opener.current = event.currentTarget; setInspectionId(pendingInspectionId); setReceiving(true); }}>{pendingInspectionId ? 'Complete inspection' : 'Receive a delivery'}</button>
+        {receiving && <LogInspectionDrawer returnFocusTo={opener.current} open onOpenChange={setReceiving} purchaseOrderId={po.id} inspectionId={inspectionId} subjectStale={receiving && inspectionId !== pendingInspectionId} projectId={item.project_id}
           poLabel={po.po_number ?? 'Purchase order'} vendorName={item.vendor_name ?? 'Vendor'} projectName={item.project?.name ?? 'Project'} buyerUserId={po.created_by} />}
       </>}
       {clockRuns && (claimReceipts.length > 0

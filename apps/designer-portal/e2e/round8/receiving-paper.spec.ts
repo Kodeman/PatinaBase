@@ -7,6 +7,8 @@ const DESIGNER = 'f0180000-0000-4000-8000-000000000002';
 const PREFIX = 'f0760000-0000-4000-8000-';
 const id = (n: number) => `${PREFIX}${String(n).padStart(12, '0')}`;
 const PO = id(2);
+let owned = false;
+const ownsPO = `EXISTS (SELECT 1 FROM public.purchase_orders po WHERE po.id='${PO}' AND po.project_id='${JOB}' AND po.designer_id='${DESIGNER}')`;
 const LINE = id(3);
 const ASSET = id(4);
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9z8AAAAASUVORK5CYII=';
@@ -36,28 +38,32 @@ function seed() {
     SELECT set_config('request.jwt.claims','{"sub":"${DESIGNER}","role":"authenticated"}',true);
     UPDATE public.project_ffe_items SET purchase_order_id='${PO}',status='ordered' WHERE id='${LINE}';
     COMMIT;`);
+  owned = true;
 }
 
 function cleanup() {
+  if (!owned) return;
   psqlRun(`BEGIN; SET LOCAL statement_timeout = '5s';
-    DELETE FROM public.procurement_exceptions WHERE purchase_order_id='${PO}' AND project_id='${JOB}';
+    DO $$ BEGIN IF NOT ${ownsPO} THEN RAISE EXCEPTION 'P02 fixture ownership changed'; END IF; END $$;
+    DELETE FROM public.procurement_exceptions WHERE purchase_order_id='${PO}' AND project_id='${JOB}' AND ${ownsPO};
     SET LOCAL session_replication_role=replica;
-    DELETE FROM public.purchase_order_changes WHERE purchase_order_id='${PO}' AND project_id='${JOB}';
+    DELETE FROM public.purchase_order_changes WHERE purchase_order_id='${PO}' AND project_id='${JOB}' AND ${ownsPO};
     SET LOCAL session_replication_role=origin;
     DELETE FROM public.damage_claims WHERE receiving_inspection_id IN
-      (SELECT id FROM public.receiving_inspections WHERE purchase_order_id='${PO}');
-    DELETE FROM public.project_ffe_receipt_commands WHERE purchase_order_id='${PO}';
-    DELETE FROM public.receiving_inspections WHERE purchase_order_id='${PO}';
+      (SELECT id FROM public.receiving_inspections WHERE purchase_order_id='${PO}' AND ${ownsPO});
+    DELETE FROM public.project_ffe_receipt_commands WHERE purchase_order_id='${PO}' AND ${ownsPO};
+    DELETE FROM public.receiving_inspections WHERE purchase_order_id='${PO}' AND ${ownsPO};
     SET LOCAL session_replication_role=replica;
-    DELETE FROM public.project_ffe_specs WHERE ffe_item_id='${LINE}';
-    DELETE FROM public.project_ffe_selection_threads WHERE primary_ffe_item_id='${LINE}' AND project_id='${JOB}';
-    DELETE FROM public.project_ffe_items WHERE id='${LINE}' AND project_id='${JOB}';
+    DELETE FROM public.project_ffe_specs WHERE ffe_item_id='${LINE}' AND ${ownsPO} AND EXISTS (SELECT 1 FROM public.project_ffe_items item WHERE item.id='${LINE}' AND item.project_id='${JOB}' AND item.purchase_order_id='${PO}');
+    DELETE FROM public.project_ffe_selection_threads WHERE primary_ffe_item_id='${LINE}' AND project_id='${JOB}' AND ${ownsPO};
+    DELETE FROM public.project_ffe_items WHERE id='${LINE}' AND project_id='${JOB}' AND purchase_order_id='${PO}' AND ${ownsPO};
     SET LOCAL session_replication_role=origin;
     DELETE FROM public.purchase_orders WHERE id='${PO}' AND project_id='${JOB}' AND designer_id='${DESIGNER}';
     DELETE FROM public.vendors WHERE id='${id(1)}' AND name='P02 Fictional Receiving Maker';
     DELETE FROM svc_media.media_assets WHERE id='${ASSET}' AND project_id='${JOB}';
     DELETE FROM public.studio_locations WHERE id='${id(5)}' AND label='P02 Fictional Receiver';
     COMMIT;`);
+  owned = false;
   expect(residue(), 'P02 fixture residue').toBe('0');
 }
 
@@ -75,6 +81,46 @@ async function openReceiving(page: Page) {
 
 test.afterAll(() => {
   cleanup();
+});
+
+test('P02 collision refusal makes zero writes and preserves the other job receipt history', () => {
+  expect(residue()).toBe('0');
+  // This is our isolated collision job, never an existing foreign record.
+  const foreignJob = id(90);
+  psqlRun(`BEGIN;
+    INSERT INTO public.projects(id,name,created_by,designer_id)
+      VALUES ('${foreignJob}','P02 isolated collision','${DESIGNER}','${DESIGNER}');
+    INSERT INTO public.vendors(id,name) VALUES ('${id(1)}','P02 collision maker');
+    INSERT INTO public.purchase_orders(id,designer_id,project_id,vendor_id,payment_pattern,total_cents,status,is_patina_catalog)
+      VALUES ('${PO}','${DESIGNER}','${foreignJob}','${id(1)}','net_30',100,'shipped',false);
+    INSERT INTO public.receiving_inspections(id,purchase_order_id,inspected_by,outcome)
+      VALUES ('${id(91)}','${PO}','${DESIGNER}','clean');
+    INSERT INTO public.project_ffe_receipt_commands(purchase_order_id,request_hash)
+      VALUES ('${PO}',repeat('c',64));
+    COMMIT;`);
+  const history = () => psqlScalar(`SELECT row_to_json(po)::text || '|' ||
+    (SELECT json_agg(i)::text FROM public.receiving_inspections i WHERE purchase_order_id=po.id) || '|' ||
+    (SELECT json_agg(c)::text FROM public.project_ffe_receipt_commands c WHERE purchase_order_id=po.id)
+    FROM public.purchase_orders po WHERE po.id='${PO}' AND po.project_id='${foreignJob}';`);
+  const before = history();
+  try {
+    let refusal: unknown;
+    try { try { seed(); } finally { cleanup(); } } catch (error) { refusal = error; }
+    expect(history(), 'collision refusal preserves the entire foreign-job receipt history').toBe(before);
+    expect((refusal as Error)?.message).toContain('P02 namespace starts empty');
+    expect(owned, 'refused seed never owns teardown').toBe(false);
+  } finally {
+    psqlRun(`BEGIN;
+      DELETE FROM public.project_ffe_receipt_commands WHERE purchase_order_id='${PO}' AND EXISTS
+        (SELECT 1 FROM public.purchase_orders WHERE id='${PO}' AND project_id='${foreignJob}' AND designer_id='${DESIGNER}');
+      DELETE FROM public.receiving_inspections WHERE id='${id(91)}' AND purchase_order_id='${PO}' AND EXISTS
+        (SELECT 1 FROM public.purchase_orders WHERE id='${PO}' AND project_id='${foreignJob}' AND designer_id='${DESIGNER}');
+      DELETE FROM public.purchase_orders WHERE id='${PO}' AND project_id='${foreignJob}' AND designer_id='${DESIGNER}';
+      DELETE FROM public.vendors WHERE id='${id(1)}' AND name='P02 collision maker';
+      DELETE FROM public.projects WHERE id='${foreignJob}' AND name='P02 isolated collision' AND created_by='${DESIGNER}';
+      COMMIT;`);
+    expect(residue(), 'collision namespace fully removed').toBe('0');
+  }
 });
 
 test('P02 partial damaged delivery preserves native receipt, photo, claim and replacement identities', async ({ authenticatedPage: page }, testInfo) => {
