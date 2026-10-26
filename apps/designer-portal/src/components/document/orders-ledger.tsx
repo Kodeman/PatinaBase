@@ -121,9 +121,11 @@ export function OrdersLedger({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const { data: orders, isLoading } = usePurchaseOrders() as {
+  const { data: orders, isLoading, isError, refetch } = usePurchaseOrders() as {
     data: AnyRecord[] | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
   // Q10 (walk W-D5): studio totals are an owner's or admin's; any other seat
   // sees the money on the jobs she leads. Vendors applies the same rule
@@ -156,7 +158,9 @@ export function OrdersLedger({
   );
   // R18: send / resend through the shared preview-confirm.
   const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
-  const [paperPo, setPaperPo] = useState<AnyRecord | null>(null);
+  const [paperPoId, setPaperPoId] = useState<string | null>(null);
+  const paperPo = orders?.find((po) => po.id === paperPoId);
+  const orderOpener = useRef<HTMLElement | null>(null);
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [truckEta, setTruckEta] = useState(todayYmd());
@@ -232,7 +236,9 @@ export function OrdersLedger({
 
   // C-32 (SQ-430): the orders waiting on THIS seat's release lead the page;
   // they leave the vendor groups so each order reads once.
-  const { data: heldRows } = useHeldPurchaseOrders();
+  const heldQuery = useHeldPurchaseOrders();
+  const heldRows = heldQuery.data;
+  const ordersKnown = !isLoading && !isError && !heldQuery.isLoading && !heldQuery.isError;
   const releasableIds = useMemo(
     () =>
       new Set(
@@ -282,7 +288,7 @@ export function OrdersLedger({
   // cancelled: StrictMode's second pass finds the flag already spent.
   const bookRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (!ordersSendLanding.pending || isLoading || page !== 'ledger') return;
+    if (!ordersSendLanding.pending || !ordersKnown || page !== 'ledger') return;
     ordersSendLanding.pending = false;
     const index = groups
       .flatMap((g) => g.pos)
@@ -299,7 +305,7 @@ export function OrdersLedger({
         control?.focus({ preventScroll: true });
       }),
     );
-  }, [isLoading, page, groups]);
+  }, [ordersKnown, page, groups]);
 
   const selectedVendor = useMemo(() => {
     const pos = (orders ?? []).filter((o) => selected.includes(o.id));
@@ -393,7 +399,16 @@ export function OrdersLedger({
         ))}
       </nav>
 
-      {page === 'vendors' && (
+      {(isError || heldQuery.isError) && (page === 'ledger' || page === 'vendors') && (
+        <div role="alert" className="doc-type-body py-3">
+          <p>The purchase orders could not be read. Try reading them again.</p>
+          <DocumentAction actionKey="retry-order-register" surfaceKey="orders" regionKey="read-failure" variant="secondary" onClick={() => { void refetch(); void heldQuery.refetch(); }}>
+            Read the orders again
+          </DocumentAction>
+        </div>
+      )}
+
+      {page === 'vendors' && ordersKnown && (
         <VendorsBookPage
           vendors={vendors ?? []}
           orders={orders ?? []}
@@ -424,13 +439,13 @@ export function OrdersLedger({
       {page === 'ledger' && (
         <>
           {/* Front-matter (R5): procurement throughput — the page's opening. */}
-          {!isLoading && canSeeMargin && (
+          {ordersKnown && canSeeMargin && (
             <LedgerFrontMatter
               caption="throughput"
               stats={ordersThroughput((orders ?? []).filter(inBook) as POForThroughput[])}
             />
           )}
-          {isLoading && (
+          {(isLoading || heldQuery.isLoading) && (
             <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
               Opening the book…
             </p>
@@ -439,7 +454,7 @@ export function OrdersLedger({
               lenses (R84 — never FilterPills) as two labelled lines of
               underline words that fold behind "Filter" at 390, then the
               orders; the Section closes on its own rule after the last row. */}
-          {!isLoading && (
+          {ordersKnown && (
             <section
               className="section money-register"
               data-orders-register
@@ -548,13 +563,13 @@ export function OrdersLedger({
               )}
           {/* The bill run (D1-11): under the `payment · due` lens, one total
               over exactly the rows beneath it (V11). */}
-          {!isLoading && canSeeMargin && paymentLens === 'due' && (
+          {ordersKnown && canSeeMargin && paymentLens === 'due' && (
             <LedgerFrontMatter
               caption="due to makers this week"
               stats={dueToMakers(groups.flatMap((g) => g.pos).filter(inBook))}
             />
           )}
-          {!isLoading &&
+          {ordersKnown &&
             live.length > 0 &&
             groups.length === 0 &&
             heldShown.length === 0 &&
@@ -565,7 +580,7 @@ export function OrdersLedger({
             )}
           {/* The zero-PO state (help-desk Wave 1, copy §E.3) — the page was
               blank here before; a quiet heading + teaching line, no chrome. */}
-          {!isLoading && live.length === 0 && (
+          {ordersKnown && live.length === 0 && (
             <div className="py-6">
               <p className="font-heading text-[15px] italic text-[var(--color-charcoal)]">
                 No purchase orders yet
@@ -578,7 +593,7 @@ export function OrdersLedger({
             </div>
           )}
           {/* C-32: held for release — only the orders this seat may release. */}
-          {heldShown.length > 0 && (
+          {ordersKnown && heldShown.length > 0 && (
             <section data-orders-held-for-release className="mb-4">
               <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
                 {[
@@ -626,7 +641,10 @@ export function OrdersLedger({
                           surfaceKey="orders"
                           regionKey="held-for-release"
                           variant="secondary"
-                          onClick={() => setPaperPo(po)}
+                          onClick={(event) => {
+                            orderOpener.current = event.currentTarget;
+                            setPaperPoId(po.id);
+                          }}
                         >
                           Open →
                         </DocumentAction>
@@ -637,7 +655,7 @@ export function OrdersLedger({
               </ul>
             </section>
           )}
-          {groups.map((g) => (
+          {ordersKnown && groups.map((g) => (
             <section key={g.vendorId} className="mb-4">
               <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.07em] text-[var(--color-quiet-ink)]">
                 {g.vendorName}
@@ -826,7 +844,8 @@ export function OrdersLedger({
                               surfaceKey="orders"
                               regionKey={`purchase-order-row-${index + 1}`}
                               variant="secondary"
-                              onClick={() =>
+                              onClick={(event) => {
+                                orderOpener.current = event.currentTarget;
                                 // C-23: an unsent draft opens on its order
                                 // paper; a sent PO keeps its PDF paper.
                                 // C-32: a held PO reads on its paper too.
@@ -834,9 +853,9 @@ export function OrdersLedger({
                                 (po.status === 'draft' ||
                                   po.status === 'held_for_release') &&
                                 !po.is_patina_catalog
-                                  ? setPaperPo(po)
-                                  : setPreviewPo(po)
-                              }
+                                  ? setPaperPoId(po.id)
+                                  : setPreviewPo(po);
+                              }}
                             >
                               {po.sent_at
                                 ? 'Resend'
@@ -927,6 +946,7 @@ export function OrdersLedger({
               onOpenChange={(o: boolean) => {
                 if (!o) setPreviewPo(null);
               }}
+              returnFocusTo={orderOpener.current}
               purchaseOrderId={previewPo.id}
               vendorName={
                 vendorById.get(previewPo.vendor_id)?.name ??
@@ -949,7 +969,8 @@ export function OrdersLedger({
           {paperPo && (
             <ExistingOrderPaper
               open
-              onClose={() => setPaperPo(null)}
+              onClose={() => setPaperPoId(null)}
+              returnFocusTo={orderOpener.current}
               purchaseOrder={paperPo}
               vendor={
                 vendorById.get(paperPo.vendor_id) ??

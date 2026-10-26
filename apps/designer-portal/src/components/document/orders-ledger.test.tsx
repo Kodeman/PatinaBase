@@ -19,7 +19,8 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
-const mockHeld: { data: Record<string, unknown>[] } = { data: [] };
+const mockHeld = { data: [] as Record<string, unknown>[], isLoading: false, isError: false, refetch: jest.fn() };
+beforeEach(() => { mockHeld.isLoading = false; mockHeld.isError = false; mockHeld.refetch.mockReset(); });
 const mockProjectLeads = { data: new Map<string, { leadUserId: string; leadName: string }>() };
 const mockCanSeeMargin = jest.fn(() => true);
 
@@ -32,7 +33,7 @@ jest.mock('@patina/supabase', () => ({
   usePurchaseOrders: jest.fn(),
   useUpdatePurchaseOrderETA: jest.fn(),
   useVendors: jest.fn(),
-  useHeldPurchaseOrders: () => ({ data: mockHeld.data }),
+  useHeldPurchaseOrders: () => mockHeld,
   useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
   useProjectLeads: () => mockProjectLeads,
 }));
@@ -57,8 +58,8 @@ jest.mock('@/hooks/use-studio-money', () => ({
 
 // The paper's own suites live under order-paper/__tests__.
 jest.mock('@/components/portal/procurement/order-paper', () => ({
-  ExistingOrderPaper: ({ purchaseOrder }: { purchaseOrder: { id: string } }) => (
-    <div data-testid="order-paper">Paper {purchaseOrder.id}</div>
+  ExistingOrderPaper: ({ purchaseOrder, onClose }: { purchaseOrder: { id: string; sidemark?: string }; onClose: () => void }) => (
+    <div data-testid="order-paper">Paper {purchaseOrder.id} {purchaseOrder.sidemark}<button onClick={onClose}>Put paper back</button></div>
   ),
 }));
 
@@ -305,6 +306,26 @@ describe('OrdersLedger quiet register', () => {
     mockUseUpdatePurchaseOrderETA.mockReturnValue({
       mutateAsync: mockMutateEta,
     });
+  });
+
+  it.each(['orders', 'held'] as const)('refuses empty-book truth when the %s read fails and retries both owners', (owner) => {
+    const refetch = jest.fn();
+    mockUsePurchaseOrders.mockReturnValue({ data: [], isLoading: false, isError: owner === 'orders', refetch });
+    mockHeld.isError = owner === 'held';
+    const { container } = renderBook();
+    expect(screen.getByRole('alert')).toHaveTextContent('The purchase orders could not be read.');
+    expect(screen.queryByText(/No purchase orders/)).not.toBeInTheDocument();
+    expect(container.querySelector('[data-orders-register]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Read the orders again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(mockHeld.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the register unknown while the independent held read is loading', () => {
+    mockHeld.isLoading = true;
+    const { container } = renderBook();
+    expect(screen.getByText('Opening the book…')).toBeInTheDocument();
+    expect(container.querySelector('[data-orders-register]')).toBeNull();
   });
 
   it('opens as a two-line register with bulk controls hidden and row acts intact', () => {
@@ -843,6 +864,20 @@ describe('OrdersLedger · Send the purchase order lands on its row (walk D3)', (
     const send = draftedSend();
     expect(send).toHaveTextContent('Send →');
     await waitFor(() => expect(document.activeElement).toBe(send));
+  });
+
+  it('uses the current native PO row after refetch and on reopening, not the clicked snapshot', () => {
+    const { rerender } = render(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    fireEvent.click(draftedSend()!);
+    const currentOrders = [...ORDERS, { ...DRAFTED, sidemark: 'Current row header' }];
+    mockUsePurchaseOrders.mockReturnValue({ data: currentOrders, isLoading: false, isError: true });
+    rerender(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    expect(screen.getByTestId('order-paper')).toHaveTextContent('Current row header');
+    mockUsePurchaseOrders.mockReturnValue({ data: currentOrders, isLoading: false, isError: false });
+    rerender(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Put paper back' }));
+    fireEvent.click(draftedSend()!);
+    expect(screen.getByTestId('order-paper')).toHaveTextContent('Current row header');
   });
 
   it('unarmed, the book opens without moving focus', async () => {

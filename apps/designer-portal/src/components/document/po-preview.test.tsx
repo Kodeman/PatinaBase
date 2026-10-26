@@ -4,6 +4,7 @@
  * manual mark-sent path (no email) never carries it.
  */
 
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const sendMutateAsync = jest.fn();
@@ -134,6 +135,27 @@ async function waitForPdf() {
 }
 
 describe('PoPreview · lifted paper', () => {
+  it('returns to the event opener without relying on pointer pre-focus', async () => {
+    function Harness() {
+      const [opener, setOpener] = useState<HTMLButtonElement | null>(null);
+      const [open, setOpen] = useState(false);
+      return <>
+        <button type="button" onClick={(event) => { setOpener(event.currentTarget); setOpen(true); }}>Preview this order</button>
+        <PoPreview open={open} onOpenChange={setOpen} purchaseOrderId="po-1" vendorName="Acme" returnFocusTo={opener} />
+      </>;
+    }
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Preview this order' });
+    expect(opener).not.toHaveFocus();
+    fireEvent.click(opener);
+    await waitForPdf();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(sendMutateAsync).toHaveBeenCalledTimes(1);
+    expect(sendMutateAsync).toHaveBeenCalledWith({ purchaseOrderId: 'po-1', mode: 'preview' });
+  });
+
   it('portals the dialog to document.body outside an isolated row and removes it when closed', async () => {
     const props = {
       open: true,
@@ -150,7 +172,7 @@ describe('PoPreview · lifted paper', () => {
     await waitForPdf();
 
     const dialog = screen.getByRole('dialog', { name: 'Purchase order preview' });
-    expect(dialog.parentElement).toBe(document.body);
+    expect(dialog.closest('[data-doc-sheet-layer]')?.parentElement).toBe(document.body);
     expect(container).not.toContainElement(dialog);
     expect(within(dialog).getByRole('button', { name: 'Send to vendor' })).toBeEnabled();
 
@@ -168,10 +190,9 @@ describe('PoPreview · lifted paper', () => {
     renderPreview();
     await waitForPdf();
 
-    const paper = screen.getByRole('dialog').querySelector('[data-spotlight-frame]') as HTMLElement;
-    expect(paper).toHaveClass(
-      'bottom-[calc(4vh_+_max(var(--doc-drawer-height,0px),var(--doc-mobile-bar-height,0px),env(safe-area-inset-bottom,0px)))]',
-    );
+    const paper = screen.getByRole('dialog');
+    expect(paper).toHaveAttribute('data-doc-sheet-scroll-region');
+    expect(paper.closest('[data-doc-sheet-layer]')).toHaveClass('pb-[var(--doc-sheet-inset-bottom)]');
     expect(paper).toHaveClass('overflow-y-auto');
     expect(paper).not.toHaveClass('h-[92vh]');
   });
