@@ -69,12 +69,14 @@ export function AmendmentSheet({
   open,
   onClose,
   seed,
+  returnFocusTo,
 }: {
   projectId: string;
   clientName: string;
   open: boolean;
   onClose: () => void;
   seed?: AmendmentSeed | null;
+  returnFocusTo?: HTMLElement | null;
 }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const { data: amendments } = useScopeChangeRequests(projectId) as {
@@ -201,6 +203,7 @@ export function AmendmentSheet({
       open={open}
       onClose={onClose}
       title="Amendment"
+      returnFocusTo={returnFocusTo}
       initialFocusRef={titleFieldRef}
       fallbackFocusRef={bandHomeRef}
       labelledBy={headingId}

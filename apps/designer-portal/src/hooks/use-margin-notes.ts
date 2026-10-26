@@ -15,7 +15,14 @@ import { useAuth } from '@/hooks/use-auth';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
 
+export type MarginNoteSubject = {
+  kind: 'ffe_item' | 'project_room' | 'plan_print' | 'plan_issue'
+    | 'purchase_order' | 'field_capture' | 'coordination_item';
+  id: string;
+};
+
 export interface CreateMarginNoteInput {
+  subject?: MarginNoteSubject | null;
   projectId: string | null;
   proposalId: string | null;
   // R66: the relationship anchor for a pre-project Discovery engagement
@@ -44,6 +51,8 @@ export function useCreateMarginNote() {
           anchor_kind: input.anchorKind ?? 'letterhead',
           anchor_id: input.anchorId ?? null,
           due_date: input.dueDate ?? null,
+          subject_kind: input.subject?.kind ?? null,
+          subject_id: input.subject?.id ?? null,
         })
         .select()
         .single();
@@ -68,11 +77,11 @@ export function useEscalateNoteToDecision() {
     mutationFn: async ({
       noteId,
       projectId,
-      body,
     }: {
       noteId: string;
       projectId: string;
-      body: string;
+      /** Kept for existing callers; private note text is never copied. */
+      body?: string;
     }) => {
       if (!user?.id) throw new Error('Not authenticated');
       const supabase = getSupabase();
@@ -93,15 +102,16 @@ export function useEscalateNoteToDecision() {
       if (dcError) throw dcError;
       if (!dc) throw new Error('No designer–client relationship found for this project');
 
-      const title = body.length > 70 ? `${body.slice(0, 67)}…` : body;
+      // Draft rows are visible to inherited decision readers, even when unsent.
+      // Only the designer's later client-facing edit may supply their text.
       const decisionId = crypto.randomUUID();
       const { data: decision, error: decError } = await supabase.rpc('create_client_decision', {
         p_decision_id: decisionId,
         p_payload: {
           designer_client_id: dc.id,
           project_id: projectId,
-          title,
-          context: body,
+          title: 'Decision from a studio note',
+          context: null,
           status: 'draft',
           blocking_status: 'non_blocking',
         },
