@@ -1,0 +1,12 @@
+\set ON_ERROR_STOP on
+BEGIN;
+SET LOCAL lock_timeout='3s';
+SET LOCAL statement_timeout='30s';
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+SELECT plan(1);
+CREATE TEMP TABLE c1_native_before AS SELECT oid,prosrc FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('get_plan_room_holdings','create_plan_issue','file_plan_prints','can_compose_project_plan');
+\ir ../../migrations/00871_round8_plan_composition.sql
+\ir plan_composition_body.psql
+SELECT pass('C1 plan composition actor, identity and compatibility assertions');
+SELECT * FROM finish();
+ROLLBACK;

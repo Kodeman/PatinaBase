@@ -105,7 +105,39 @@ export interface PlanTransmittalTokenSafe {
   created_at: string;
 }
 
+export interface ProjectPackage {
+  id: string;
+  project_id: string;
+  package_kind: 'cabinetry' | 'build';
+  code: string;
+  package_key: string | null;
+  title: string;
+  project_room_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  archived_at: string | null;
+  idempotency_key: string;
+  request_hash: string;
+}
+
+export interface PlanSheetRoom {
+  sheet_id: string;
+  project_room_id: string;
+  added_by: string | null;
+  added_at: string;
+}
+
+export interface PlanSheetPackage {
+  sheet_id: string;
+  package_id: string;
+  added_by: string | null;
+  added_at: string;
+}
+
 export interface PlanRoomBundle {
+  sheetRooms: PlanSheetRoom[];
+  sheetPackages: PlanSheetPackage[];
+  packages: ProjectPackage[];
   sheets: PlanSheet[];
   prints: PlanPrint[];
   batches: PlanPrintBatch[];
@@ -265,6 +297,17 @@ function asArray<T>(value: T[] | null | undefined): T[] {
   return value ?? [];
 }
 
+async function readCompositionPages<T>(query: any): Promise<T[]> {
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await query.range(offset, offset + 999);
+    if (error) throw error;
+    const page = asArray<T>(data);
+    rows.push(...page);
+    if (page.length < 1000) return rows;
+  }
+}
+
 export function usePlanRoom(projectId: string) {
   return useQuery<PlanRoomBundle>({
     queryKey: planRoomKeys.room(projectId),
@@ -297,6 +340,9 @@ export function usePlanRoom(projectId: string) {
         issuePrintsResult,
         transmittalsResult,
         tokensResult,
+        sheetRooms,
+        sheetPackages,
+        packages,
       ] = await Promise.all([
         // plan_prints / plan_issue_prints carry no project_id; scope through
         // their parents, with the zero-uuid sentinel keeping an empty IN valid.
@@ -333,6 +379,20 @@ export function usePlanRoom(projectId: string) {
             "id, transmittal_id, project_id, status, expires_at, first_opened_at, view_count, last_used_at, created_at",
           )
           .eq("project_id", projectId),
+        readCompositionPages<PlanSheetRoom>(
+          supabase.from("plan_sheet_rooms").select("*").in("sheet_id",
+            sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"])
+            .order("sheet_id", { ascending: true }).order("project_room_id", { ascending: true }),
+        ),
+        readCompositionPages<PlanSheetPackage>(
+          supabase.from("plan_sheet_packages").select("*").in("sheet_id",
+            sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"])
+            .order("sheet_id", { ascending: true }).order("package_id", { ascending: true }),
+        ),
+        readCompositionPages<ProjectPackage>(
+          supabase.from("project_packages").select("*").eq("project_id", projectId)
+            .order("id", { ascending: true }),
+        ),
       ]);
       const firstError = [
         printsResult,
@@ -344,6 +404,9 @@ export function usePlanRoom(projectId: string) {
       if (firstError) throw firstError;
 
       return {
+        sheetRooms,
+        sheetPackages,
+        packages,
         sheets,
         prints: asArray<PlanPrint>(printsResult.data),
         batches: asArray<PlanPrintBatch>(batchesResult.data),
