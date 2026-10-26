@@ -14,6 +14,7 @@ const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwM
 function residue() {
   return psqlScalar(`SELECT
     (SELECT count(*) FROM public.purchase_orders WHERE id::text LIKE '${PREFIX}%') +
+    (SELECT count(*) FROM public.project_ffe_receipt_commands WHERE purchase_order_id='${PO}') +
     (SELECT count(*) FROM public.project_ffe_items WHERE id::text LIKE '${PREFIX}%') +
     (SELECT count(*) FROM public.vendors WHERE id::text LIKE '${PREFIX}%') +
     (SELECT count(*) FROM public.studio_locations WHERE id::text LIKE '${PREFIX}%') +
@@ -40,9 +41,12 @@ function seed() {
 function cleanup() {
   psqlRun(`BEGIN; SET LOCAL statement_timeout = '5s';
     DELETE FROM public.procurement_exceptions WHERE purchase_order_id='${PO}' AND project_id='${JOB}';
+    SET LOCAL session_replication_role=replica;
     DELETE FROM public.purchase_order_changes WHERE purchase_order_id='${PO}' AND project_id='${JOB}';
+    SET LOCAL session_replication_role=origin;
     DELETE FROM public.damage_claims WHERE receiving_inspection_id IN
       (SELECT id FROM public.receiving_inspections WHERE purchase_order_id='${PO}');
+    DELETE FROM public.project_ffe_receipt_commands WHERE purchase_order_id='${PO}';
     DELETE FROM public.receiving_inspections WHERE purchase_order_id='${PO}';
     SET LOCAL session_replication_role=replica;
     DELETE FROM public.project_ffe_specs WHERE ffe_item_id='${LINE}';
@@ -69,10 +73,14 @@ async function openReceiving(page: Page) {
   return ledger;
 }
 
-test('P02 partial damaged delivery preserves native receipt, photo, claim and replacement identities', async ({ authenticatedPage: page }) => {
+test.afterAll(() => {
+  cleanup();
+});
+
+test('P02 partial damaged delivery preserves native receipt, photo, claim and replacement identities', async ({ authenticatedPage: page }, testInfo) => {
   test.setTimeout(240_000);
-  seed();
   try {
+    seed();
     // Only the absent local media service is stood in, following phase2-member-walk.
     // Receiving, claim and remedy calls use the real local Supabase stack.
     await page.route('**/api/media/assets', async (route) => {
@@ -117,8 +125,9 @@ test('P02 partial damaged delivery preserves native receipt, photo, claim and re
     const claimId = psqlScalar(`SELECT id FROM public.damage_claims WHERE receiving_inspection_id='${inspectionId}';`);
     await receipt.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(opener).toBeVisible();
-    const claim = ledger.getByRole('listitem').filter({ has: ledger.getByRole('button', { name: 'Track claim', exact: true }) }).filter({ hasText: 'P02 Fictional Receiving Maker' });
+    const claim = ledger.getByRole('listitem').filter({ has: page.getByRole('button', { name: 'Track claim', exact: true }) }).filter({ hasText: 'P02 Fictional Receiving Maker' });
     await expect(claim.getByRole('img', { name: 'Inspection photo 1 of 1', exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('receiving-claim.png') });
     await claim.getByRole('button', { name: 'Track claim', exact: true }).click();
     const exception = ledger.getByTestId('exception-row').filter({ hasText: 'P02-RECEIPT' });
     await exception.getByRole('button', { name: 'Choose resolution', exact: true }).click();
