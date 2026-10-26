@@ -472,29 +472,34 @@ export function useInvoices(filters?: InvoiceFilters) {
     queryKey: ['invoices', 'list', filters ?? {}],
     queryFn: async () => {
       const supabase = getSupabase() as any;
-      let query = supabase
-        .from('invoices')
-        .select(
-          `
+      const pageSize = 1000;
+      const invoices: Invoice[] = [];
+      let cursor: Invoice | undefined;
+      for (;;) {
+        let query = supabase
+          .from('invoices')
+          .select(
+            `
           *,
           project:projects!invoices_project_id_fkey(id, name),
           client:profiles!invoices_client_id_fkey(id, full_name, email),
           payments:invoice_payments(*)
         `
-        )
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false });
+          )
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false });
 
-      if (filters?.status) query = query.eq('status', filters.status);
-      if (filters?.projectId) query = query.eq('project_id', filters.projectId);
+        if (filters?.status) query = query.eq('status', filters.status);
+        if (filters?.projectId) query = query.eq('project_id', filters.projectId);
+        if (cursor) {
+          query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
+        }
 
-      const pageSize = 1000;
-      const invoices: Invoice[] = [];
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error } = await query.range(offset, offset + pageSize - 1);
+        const { data, error } = await query.limit(pageSize);
         if (error) throw error;
         invoices.push(...(data ?? []));
         if ((data?.length ?? 0) < pageSize) return invoices;
+        cursor = data[data.length - 1];
       }
     },
   });

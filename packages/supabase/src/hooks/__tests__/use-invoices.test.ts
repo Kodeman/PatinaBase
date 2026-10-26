@@ -1600,29 +1600,120 @@ describe('computeArAging undated receivables', () => {
 });
 
 describe('useInvoices whole-book completeness', () => {
-  function pages(results: { data: unknown[] | null; error: Error | null }[]) {
-    const query: any = { then: (resolve: any) => Promise.resolve(results[0]).then(resolve) };
-    query.order = vi.fn(() => query);
-    query.eq = vi.fn(() => query);
-    query.range = vi.fn();
-    for (const result of results) query.range.mockResolvedValueOnce(result);
-    supabaseClient.from.mockReturnValue({ select: vi.fn(() => query) });
-    return query;
+  const createdAt = '2026-10-01T12:00:00+00:00';
+  const invoice = (sequence: number, overrides: Partial<Invoice> = {}) => ({
+    id: `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`,
+    created_at: createdAt,
+    status: 'draft',
+    project_id: 'project-a',
+    due_date: null,
+    total_cents: 10000,
+    amount_paid_cents: 0,
+    ...overrides,
+  } as Invoice);
+  const book = () => Array.from({ length: 1001 }, (_, i) =>
+    invoice(1001 - i, i >= 999 ? { status: 'sent' } : {}));
+
+  function transport(records: Invoice[], afterFirstPage?: () => void, failPage?: number) {
+    let requests = 0;
+    const queries: any[] = [];
+    supabaseClient.from.mockImplementation(() => {
+      let start = 0;
+      let end = 999;
+      let continuation: string | undefined;
+      const filters: [string, unknown][] = [];
+      const orders: [keyof Invoice, { ascending: boolean }][] = [];
+      const query: any = {
+        select: vi.fn(() => query),
+        order: vi.fn((key, options) => { orders.push([key, options]); return query; }),
+        eq: vi.fn((key, value) => { filters.push([key, value]); return query; }),
+        range: vi.fn((from, to) => { start = from; end = to; return query; }),
+        limit: vi.fn((count) => { end = start + count - 1; return query; }),
+        or: vi.fn((filter) => { continuation = filter; return query; }),
+        then: (resolve: any, reject: any) => Promise.resolve().then(() => {
+          requests += 1;
+          if (requests === failPage) return { data: null, error: new Error('later page failed') };
+          let rows = records.filter(row => filters.every(([key, value]) => row[key as keyof Invoice] === value));
+          if (continuation) {
+            const match = /^created_at\.lt\.([^,]+),and\(created_at\.eq\.([^,]+),id\.lt\.([^()]+)\)$/.exec(continuation);
+            if (!match || match[1] !== match[2]) throw new Error(`Invalid continuation: ${continuation}`);
+            const [, timestamp, , id] = match;
+            rows = rows.filter(row => row.created_at < timestamp || (row.created_at === timestamp && row.id < id));
+          }
+          rows.sort((a, b) => {
+            for (const [key, { ascending }] of orders) {
+              if (a[key] === b[key]) continue;
+              return (a[key]! < b[key]! ? -1 : 1) * (ascending ? 1 : -1);
+            }
+            return 0;
+          });
+          const data = rows.slice(start, end + 1);
+          if (requests === 1) afterFirstPage?.();
+          return { data, error: null };
+        }).then(resolve, reject),
+      };
+      queries.push(query);
+      return query;
+    });
+    return queries;
   }
+
   it('includes the older unpaid invoice after 1000 newer records with stable paging and native filters', async () => {
-    const newer = Array.from({ length: 1000 }, (_, i) => ({ id: 'new-' + i, status: 'paid' }));
-    const older = { id: 'older-unpaid', status: 'sent', total_cents: 9000 };
-    const query = pages([{ data: newer, error: null }, { data: [older], error: null }]);
-    const config = useInvoices({ projectId: 'project-a' }) as unknown as { queryFn: () => Promise<Invoice[]> };
+    const records = book().map(row => ({ ...row, status: 'sent' as const }));
+    const older = { ...records[1000], created_at: '2026-09-01T12:00:00+00:00', total_cents: 9000 };
+    records[1000] = older;
+    const queries = transport([...records, invoice(2000, { project_id: 'other-project', status: 'sent' }), invoice(2001)]);
+    const filters = { projectId: 'project-a', status: 'sent' as const };
+    const config = useInvoices(filters) as unknown as { queryKey: unknown[]; queryFn: () => Promise<Invoice[]> };
     const rows = await config.queryFn();
-    expect(rows).toHaveLength(1001);
+    expect(config.queryKey).toEqual(['invoices', 'list', filters]);
+    expect(rows).toEqual(records);
     expect(rows[1000]).toEqual(older);
-    expect(query.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
-    expect(query.order.mock.calls).toEqual([['created_at', { ascending: false }], ['id', { ascending: false }]]);
-    expect(query.eq).toHaveBeenCalledWith('project_id', 'project-a');
+    expect(queries).toHaveLength(2);
+    for (const query of queries) {
+      expect(query.limit).toHaveBeenCalledWith(1000);
+      expect(query.order.mock.calls).toEqual([['created_at', { ascending: false }], ['id', { ascending: false }]]);
+      expect(query.eq.mock.calls).toEqual([['status', 'sent'], ['project_id', 'project-a']]);
+    }
+    expect(queries[0].or).not.toHaveBeenCalled();
+    const last = records[999];
+    expect(queries[1].or).toHaveBeenCalledWith(`created_at.lt.${last.created_at},and(created_at.eq.${last.created_at},id.lt.${last.id})`);
   });
+
+  it('does not duplicate boundary invoices or inflate due after a newer draft is inserted between pages', async () => {
+    const records = book();
+    const expectedIds = records.map(row => row.id);
+    transport(records, () => records.unshift(invoice(1002, { created_at: '2026-10-02T12:00:00+00:00' })));
+    const config = useInvoices() as unknown as { queryFn: () => Promise<Invoice[]> };
+    const rows = await config.queryFn();
+    expect(rows.map(row => row.id)).toEqual(expectedIds);
+    expect(new Set(rows.map(row => row.id)).size).toBe(rows.length);
+    expect(computeArAging(rows).totalBalanceCents).toBe(20000);
+  });
+
+  it('does not skip the older unpaid invoice after a leading draft is deleted between pages', async () => {
+    const records = book();
+    const expectedIds = records.map(row => row.id);
+    transport(records, () => { records.shift(); });
+    const config = useInvoices() as unknown as { queryFn: () => Promise<Invoice[]> };
+    const rows = await config.queryFn();
+    expect(rows.map(row => row.id)).toEqual(expectedIds);
+    expect(rows[1000].id).toBe(invoice(1).id);
+    expect(computeArAging(rows).totalBalanceCents).toBe(20000);
+  });
+
+  it('returns all 1001 distinct invoices with tied created_at values using the id continuation', async () => {
+    const records = book();
+    const queries = transport(records);
+    const config = useInvoices() as unknown as { queryFn: () => Promise<Invoice[]> };
+    const rows = await config.queryFn();
+    expect(rows.map(row => row.id)).toEqual(records.map(row => row.id));
+    expect(new Set(rows.map(row => row.id)).size).toBe(1001);
+    expect(queries.flatMap(query => query.or.mock.calls)).toContainEqual([`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${invoice(2).id})`]);
+  });
+
   it('rejects a later-page refusal rather than publishing a partial book', async () => {
-    pages([{ data: Array.from({ length: 1000 }, (_, i) => ({ id: String(i) })), error: null }, { data: null, error: new Error('later page failed') }]);
+    transport(book(), undefined, 2);
     const config = useInvoices() as unknown as { queryFn: () => Promise<Invoice[]> };
     await expect(config.queryFn()).rejects.toThrow('later page failed');
   });
