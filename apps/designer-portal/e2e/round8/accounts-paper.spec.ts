@@ -57,8 +57,14 @@ test.afterAll(() => {
 async function openBook(page: Page) {
   await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
   await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
-  const opener = page.locator('[data-studio-masthead]').getByRole('button', { name: 'Accounts', exact: true });
-  await opener.click();
+  let opener = page.locator('[data-studio-door="accounts"]');
+  if (await opener.isVisible()) await opener.click();
+  else {
+    opener = page.getByRole('button', { name: 'More studio actions', exact: true });
+    await opener.click();
+    await page.getByRole('button', { name: 'Ledgers', exact: true }).click();
+    await page.locator('[data-mobile-ledger="accounts"]').click();
+  }
   const book = page.getByRole('dialog', { name: 'Studio accounts', exact: true });
   await expect(book).toBeVisible();
   return { book, opener };
@@ -77,7 +83,7 @@ test('issued, received and due read native invoice/payment truth; drafts remain 
   await expect(book.locator(`[data-invoice-row="${DRAFT}"]`)).toContainText('Draft');
   await expect(book).not.toContainText('PRIVATE COST H02');
   await book.getByRole('button', { name: 'Receivables', exact: true }).click();
-  await expect(book.getByText('$150.00 owed', { exact: true })).toBeVisible();
+  await expect(book.getByText('$190.00 owed', { exact: true })).toBeVisible();
   await expect(book.getByRole('button', { name: 'Send reminder', exact: true })).toBeEnabled();
   await page.screenshot({ path: info.outputPath('accounts-native-receivables.png') });
   await page.keyboard.press('Escape');

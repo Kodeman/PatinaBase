@@ -28,6 +28,8 @@ vi.mock('@tanstack/react-query', () => ({
 
 // Import AFTER mocks.
 import {
+  computeArAging,
+  type Invoice,
   useFfeInvoiceCoverage,
   buildLineRow,
   useCreateDraftInvoice,
@@ -1573,5 +1575,25 @@ describe('useUpdateDraftInvoice atomic edit', () => {
     expect(supabaseClient.rpc.mock.calls[0][1]).toMatchObject({ p_entry_ids: [], p_billing_lines: [] });
     config.onSuccess({ id: 'studio-draft', project_id: null });
     expect(invalidatedKeys()).toContainEqual(['invoices', 'studio-draft']);
+  });
+});
+
+// Undated open invoices are still money owed; no date means current, not absent.
+describe('computeArAging undated receivables', () => {
+  it('counts undated open balances as current and sorts them after dated invoices without counting drafts', () => {
+    const row = (id: string, status: Invoice['status'], due_date: string | null, total_cents = 10000, amount_paid_cents = 0) =>
+      ({ id, status, due_date, total_cents, amount_paid_cents } as Invoice);
+    const undated = row('undated', 'sent', null, 4000);
+    const partial = row('partial', 'partially_paid', null, 20000, 5000);
+    const future = row('future', 'sent', '2999-01-01');
+    const past = row('past', 'sent', '2000-01-01');
+    const inputs = [undated, row('draft', 'draft', null, 999999), future, partial, past,
+      row('void', 'void', null), row('paid', 'paid', null)];
+    const aging = computeArAging(inputs);
+    expect(aging.openInvoices.map(i => i.id)).toEqual(['past', 'future', 'undated', 'partial']);
+    expect(aging.totalBalanceCents).toBe(39000);
+    expect(aging.buckets.find(b => b.key === 'current')?.invoices.map(i => i.id)).toEqual(['future', 'undated', 'partial']);
+    expect(aging.buckets.find(b => b.key === 'current')?.balanceCents).toBe(29000);
+    expect(inputs[0]).toBe(undated);
   });
 });
