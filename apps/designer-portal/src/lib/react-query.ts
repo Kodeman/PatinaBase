@@ -93,11 +93,6 @@ const createQueryCache = (isRetired: () => boolean) => new QueryCache({
       meta: query.meta,
     });
 
-    // Failed refetches are already idle here; retained data identifies a warm query.
-    if (query.state.data !== undefined) {
-      return;
-    }
-
     // Handle auth errors. An *expired session* must route to sign-in —
     // otherwise queries like useDecisionMetrics silently return undefined and
     // the dashboard renders a misleading "0 open / 100%" healthy state.
@@ -120,6 +115,7 @@ const createQueryCache = (isRetired: () => boolean) => new QueryCache({
           restoreErrorSurface: (outcome) => {
             // The probe can answer after the subject has left.
             if (isRetired()) return;
+            if (outcome !== 'dead' && query.state.data !== undefined) return;
             if (query.meta?.errorSurface === 'silent') return;
             if (isNetworkError(appError)) return;
             showErrorToast(
@@ -133,6 +129,12 @@ const createQueryCache = (isRetired: () => boolean) => new QueryCache({
       // Auth-shaped but not a clear session-expiry (e.g. a 403 forbidden).
       // Leave it to the individual query's UI rather than bouncing the user.
       console.warn('Authentication error in query:', query.queryKey);
+      return;
+    }
+
+    // Failed refetches are already idle here; retained data identifies a warm query.
+    // Auth/session arbitration above still runs even when cached data is available.
+    if (query.state.data !== undefined) {
       return;
     }
 

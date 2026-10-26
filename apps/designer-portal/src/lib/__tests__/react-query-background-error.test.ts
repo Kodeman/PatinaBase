@@ -102,6 +102,51 @@ describe('native QueryCache error surfaces', () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
+  it('leaves a warm expired-session failure with the session arbiter', async () => {
+    const queryKey = ['warm-expired-query'];
+    await client.fetchQuery({ queryKey, queryFn: async () => [], staleTime: 0 });
+    const failure = { code: 'PGRST301', message: 'JWT expired' };
+    authExpiry.mockReturnValue(true);
+
+    await expect(client.fetchQuery({
+      queryKey, queryFn: async () => { throw failure; }, retry: false, staleTime: 0,
+    })).rejects.toBe(failure);
+
+    expect(authExpiry).toHaveBeenCalledTimes(1);
+    expect(authExpiry).toHaveBeenCalledWith(failure, {
+      restoreErrorSurface: expect.any(Function),
+    });
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(client.getQueryData(queryKey)).toEqual([]);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it.each(['dead', 'alive', 'inconclusive'] as const)(
+    'keeps warm session arbitration and its %s restore outcome',
+    async (outcome) => {
+      const queryKey = ['warm-session-verdict'];
+      await client.fetchQuery({ queryKey, queryFn: async () => [], staleTime: 0 });
+      const failure = { code: 'PGRST301', message: 'JWT expired' };
+      authExpiry.mockReturnValue(true);
+
+      await expect(client.fetchQuery({
+        queryKey, queryFn: async () => { throw failure; }, retry: false, staleTime: 0,
+      })).rejects.toBe(failure);
+
+      expect(authExpiry).toHaveBeenCalledTimes(1);
+      expect(toast).not.toHaveBeenCalled();
+      authExpiry.mock.calls[0][1]?.restoreErrorSurface?.(outcome);
+
+      expect(client.getQueryData(queryKey)).toEqual([]);
+      if (outcome === 'dead') {
+        expect(toast).toHaveBeenCalledTimes(1);
+        expect(toast).toHaveBeenCalledWith(handleApiError(failure));
+      } else {
+        expect(toast).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it.each(['dead', 'alive', 'inconclusive'] as const)(
     'preserves the cold session restore path for a %s verdict',
     async (outcome) => {
