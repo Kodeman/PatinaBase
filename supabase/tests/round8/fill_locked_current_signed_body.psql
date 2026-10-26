@@ -1,0 +1,60 @@
+-- Include-only signed allowance oracle, in the same rolled-back transaction.
+SELECT pg_temp.fill_actor(1);
+CREATE TEMP TABLE fill_signed_lines(name text,id uuid);
+INSERT INTO fill_signed_lines VALUES
+ ('at',pg_temp.fill_new('signed-at')),('under',pg_temp.fill_new('signed-under')),
+ ('over',pg_temp.fill_new('signed-over')),('fixed-intent',pg_temp.fill_new('signed-fixed-intent')),
+ ('fixed-line',pg_temp.fill_new('signed-fixed-line','fixed')),('sent',pg_temp.fill_new('signed-sent'));
+SELECT set_config('app.ffe_mutation_rpc','on',true);
+UPDATE public.project_ffe_items SET quantity=CASE name WHEN 'Requirement signed-over' THEN 7 WHEN 'Requirement signed-under' THEN 4 ELSE 6 END,
+ budget_min_cents=30000,budget_max_cents=60000
+WHERE id IN (SELECT id FROM fill_signed_lines);
+INSERT INTO public.proposals(id,project_id,designer_id,title,status,document_kind,commercial_state,total_amount,subtotal) VALUES
+ (pg_temp.fill_id(300),pg_temp.fill_id(10),pg_temp.fill_id(1),'Fill signed authorization','accepted','furnishings_authorization','executed',360000,360000),
+ (pg_temp.fill_id(301),pg_temp.fill_id(10),pg_temp.fill_id(1),'Fill sent authorization','sent','furnishings_authorization','sent',60000,60000);
+INSERT INTO public.project_commercial_documents(id,project_id,proposal_id,document_kind,wave_name,is_origin,bound_at,executed_at,created_by) VALUES
+ (pg_temp.fill_id(310),pg_temp.fill_id(10),pg_temp.fill_id(300),'furnishings_authorization','Signed',false,now(),now(),pg_temp.fill_id(1)),
+ (pg_temp.fill_id(311),pg_temp.fill_id(10),pg_temp.fill_id(301),'furnishings_authorization','Sent',false,now(),NULL,pg_temp.fill_id(1));
+INSERT INTO public.furnishing_authorization_items(id,commercial_document_id,source_ffe_item_id,name,item_type,quantity,client_unit_price_cents,client_line_total_cents,sort_order)
+SELECT extensions.uuid_generate_v5(pg_temp.fill_id(310),s.name),
+ CASE WHEN s.name='sent' THEN pg_temp.fill_id(311) ELSE pg_temp.fill_id(310) END,
+ s.id,s.name,i.item_type,6,10000,60000,row_number() OVER ()
+FROM fill_signed_lines s JOIN public.project_ffe_items i ON i.id=s.id;
+UPDATE public.project_ffe_items i SET source_authorization_item_id=a.id,
+ source_commercial_document_id=a.commercial_document_id
+FROM public.furnishing_authorization_items a WHERE i.id=a.source_ffe_item_id
+ AND i.id IN (SELECT id FROM fill_signed_lines WHERE name<>'sent');
+GRANT SELECT ON fill_signed_lines TO authenticated;
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE l uuid; req jsonb; reply jsonb; saved jsonb;
+BEGIN
+ SELECT id INTO l FROM fill_signed_lines WHERE name='at';
+ req:=pg_temp.fill_request(l,'signed-at-fill')||jsonb_build_object('configurationId',pg_temp.fill_id(40));
+ reply:=public.place_product_in_project_v2(req);
+ ASSERT EXISTS (SELECT 1 FROM public.project_ffe_items WHERE id=l AND item_type='allowance'
+   AND budget_min_cents=30000 AND budget_max_cents=60000 AND quantity=6 AND line_total_cents=60000),
+   'signed_ceiling_uses_current_quantity_and_keeps_current_budget';
+ ASSERT EXISTS (SELECT 1 FROM public.project_ffe_allowance_fills WHERE ffe_item_id=l
+   AND authorization_item_id=extensions.uuid_generate_v5(pg_temp.fill_id(310),'at')
+   AND ceiling_cents=60000 AND filled_cents=60000 AND variance_cents=0 AND filled_by=auth.uid()),
+   'signed_fill_records_exact_provenance_once';
+ saved:=pg_temp.fill_state();
+ ASSERT public.place_product_in_project_v2(req)=reply AND pg_temp.fill_state()=saved,
+   'signed_fill_replay_has_no_second_provenance';
+ SELECT id INTO l FROM fill_signed_lines WHERE name='under';
+ reply:=public.place_product_in_project_v2(pg_temp.fill_request(l,'signed-under-fill'));
+ ASSERT reply->>'outcome'='filled' AND EXISTS (SELECT 1 FROM public.project_ffe_allowance_fills
+   WHERE ffe_item_id=l AND filled_cents=40000 AND variance_cents=20000),
+   'signed_plain_fill_under_ceiling_still_succeeds';
+ SELECT id INTO l FROM fill_signed_lines WHERE name='over';
+ PERFORM pg_temp.fill_refused(pg_temp.fill_request(l,'signed-over-fill'),'23514');
+ SELECT id INTO l FROM fill_signed_lines WHERE name='fixed-intent';
+ PERFORM pg_temp.fill_refused(pg_temp.fill_request(l,'signed-fixed-intent-fill','fixed'),'23514');
+ SELECT id INTO l FROM fill_signed_lines WHERE name='fixed-line';
+ PERFORM pg_temp.fill_refused(pg_temp.fill_request(l,'signed-fixed-line-fill','fixed'),'23514');
+ SELECT id INTO l FROM fill_signed_lines WHERE name='sent';
+ PERFORM pg_temp.fill_refused(pg_temp.fill_request(l,'signed-sent-fill'),'23514');
+ RAISE NOTICE 'PASS: signed current-quantity/configuration ceiling, provenance/replay, over/fixed/sent atomic refusals';
+END; $$;
+RESET ROLE;

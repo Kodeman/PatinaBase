@@ -1,0 +1,105 @@
+-- N() harness: COMPILE ONLY in leaf verification, never executed here.
+-- Lead-owned localhost DB window only; 00881 must already be COMMITTED.
+-- Supply TWO disposable, committed, empty-product fixture requirements from
+-- fill_locked_current_fixture.psql (distinct lines for the two orders). The
+-- lead owns their setup/disposal, including native triage/pricing audit rows.
+-- This file creates only pg_temp.N; it does not open sessions until called.
+-- In the owned window, for each line call:
+-- SELECT pg_temp.N(project, line, dining_room, owner_actor, member_actor,
+--                 catalog_product, 'edit_then_fill'|'fill_then_edit');
+-- Both orders COMMIT native edits and Fill into disposable fixtures. The lead
+-- must dispose those fixtures on success OR failure, including audit records.
+-- No timers, backend termination, reset, capability or private RPC bypass.
+\set ON_ERROR_STOP on
+SELECT :'HOST'='127.0.0.1' AND :'PORT'='54322' AS local_stack \gset
+\if :local_stack
+\else
+\quit 3
+\endif
+-- Temp function survives this include in the same psql session; default is
+-- compile-only. A lead can subsequently call it from its owned fixture script.
+SET check_function_bodies=on;
+CREATE FUNCTION pg_temp.N(project uuid, line uuid, dining uuid, actor_a uuid,
+ actor_b uuid, product uuid, ordering text) RETURNS void LANGUAGE plpgsql AS $N$
+DECLARE
+ conn text:=format('host=127.0.0.1 port=%s dbname=%L user=postgres password=postgres connect_timeout=3',current_setting('port'),current_database());
+ before_row public.project_ffe_items%ROWTYPE;
+ request jsonb; edit jsonb; answer jsonb;
+ a_pid integer; b_pid integer; waiter integer; blocker integer;
+ deadline timestamptz;
+ a_open boolean:=false; b_open boolean:=false;
+BEGIN
+ IF current_user<>'postgres' OR ordering NOT IN ('edit_then_fill','fill_then_edit') THEN
+  RAISE EXCEPTION 'N requires localhost owner and a named ordering';
+ END IF;
+ IF pg_get_functiondef('public.place_product_in_project_v2(jsonb)'::regprocedure)
+     NOT LIKE '%This line changed type. Choose Fill again.%' THEN
+  RAISE EXCEPTION 'N requires committed 00881';
+ END IF;
+ IF project<>'f2084000-0000-4000-8000-000000000010'::uuid
+    OR actor_a<>'f2084000-0000-4000-8000-000000000001'::uuid
+    OR actor_b<>'f2084000-0000-4000-8000-000000000002'::uuid
+    OR product<>'f2084000-0000-4000-8000-000000000030'::uuid
+    OR dining<>'f2084000-0000-4000-8000-000000000021'::uuid THEN
+  RAISE EXCEPTION 'N accepts only the SQ-2084 disposable fixture identities';
+ END IF;
+ SELECT * INTO STRICT before_row FROM public.project_ffe_items WHERE id=line AND project_id=project;
+ IF before_row.product_id IS NOT NULL OR before_row.item_type<>'allowance'
+    OR before_row.source_commercial_document_id IS NOT NULL OR before_row.purchase_order_id IS NOT NULL THEN
+  RAISE EXCEPTION 'N requires a disposable, unprotected allowance fixture';
+ END IF;
+ request:=jsonb_build_object('projectId',project,'placeholderSelectionId',line,'productId',product,
+  'itemType','allowance','budgetMinCents',20000,'budgetMaxCents',60000,'quantity',4,
+  'assignmentScope',before_row.assignment_scope,'roomId',before_row.project_room_id,
+  'disposition',before_row.design_disposition,'idempotencyKey','sq2084-N-'||line||'-'||ordering);
+ edit:=jsonb_build_object('projectId',project,'selectionIds',jsonb_build_array(line),
+  'assignmentScope','room','roomId',dining,'disposition','alternate');
+ PERFORM extensions.dblink_connect('fill_N_a',conn); a_open:=true;
+ PERFORM extensions.dblink_connect('fill_N_b',conn); b_open:=true;
+ SELECT pid INTO a_pid FROM extensions.dblink('fill_N_a','SELECT pg_backend_pid()') AS x(pid integer);
+ SELECT pid INTO b_pid FROM extensions.dblink('fill_N_b','SELECT pg_backend_pid()') AS x(pid integer);
+ PERFORM extensions.dblink_exec('fill_N_a',format('BEGIN; SET LOCAL statement_timeout=''45s''; SET LOCAL lock_timeout=''30s''; SET LOCAL ROLE authenticated; SET LOCAL request.jwt.claim.sub=%L;',actor_a));
+ PERFORM extensions.dblink_exec('fill_N_b',format('BEGIN; SET LOCAL statement_timeout=''45s''; SET LOCAL lock_timeout=''30s''; SET LOCAL ROLE authenticated; SET LOCAL request.jwt.claim.sub=%L;',actor_b));
+ IF ordering='edit_then_fill' THEN
+  PERFORM * FROM extensions.dblink('fill_N_b',format('SELECT public.triage_project_ffe_items(%L::jsonb)',edit)) AS x(result jsonb);
+  PERFORM * FROM extensions.dblink('fill_N_b',format('SELECT to_jsonb(public.set_project_ffe_line_build_fields(%L,%L))',line,'{"quantity":6}')) AS x(result jsonb);
+  PERFORM extensions.dblink_send_query('fill_N_a',format('SELECT public.place_product_in_project_v2(%L::jsonb)',request));
+  waiter:=a_pid; blocker:=b_pid;
+ ELSE
+  SELECT result INTO answer FROM extensions.dblink('fill_N_a',format('SELECT public.place_product_in_project_v2(%L::jsonb)',request)) AS x(result jsonb);
+  PERFORM extensions.dblink_send_query('fill_N_b',format('SELECT public.triage_project_ffe_items(%L::jsonb)',edit));
+  waiter:=b_pid; blocker:=a_pid;
+ END IF;
+ deadline:=clock_timestamp()+interval '10 seconds';
+ LOOP
+  EXIT WHEN blocker=ANY(pg_blocking_pids(waiter));
+  IF clock_timestamp()>deadline THEN RAISE EXCEPTION 'N did not observe native lock wait'; END IF;
+ END LOOP;
+ IF ordering='edit_then_fill' THEN
+  PERFORM extensions.dblink_exec('fill_N_b','COMMIT');
+  SELECT result INTO answer FROM extensions.dblink_get_result('fill_N_a') AS x(result jsonb);
+  PERFORM * FROM extensions.dblink_get_result('fill_N_a') AS x(result jsonb);
+  ASSERT answer->>'roomId'=dining::text AND answer->>'assignmentScope'='room','N_edit_then_fill_preserves_current_context';
+  SELECT result INTO answer FROM extensions.dblink('fill_N_a',format('SELECT to_jsonb(i) FROM public.project_ffe_items i WHERE id=%L',line)) AS x(result jsonb);
+  ASSERT answer->>'design_disposition'='alternate' AND (answer->>'quantity')::integer=6,'N_edit_then_fill_current_quantity';
+  PERFORM extensions.dblink_exec('fill_N_a','COMMIT');
+ ELSE
+  PERFORM extensions.dblink_exec('fill_N_a','COMMIT');
+  PERFORM * FROM extensions.dblink_get_result('fill_N_b') AS x(result jsonb);
+  PERFORM * FROM extensions.dblink_get_result('fill_N_b') AS x(result jsonb);
+  SELECT result INTO answer FROM extensions.dblink('fill_N_b',format('SELECT to_jsonb(i) FROM public.project_ffe_items i WHERE id=%L',line)) AS x(result jsonb);
+  ASSERT answer->>'project_room_id'=dining::text AND answer->>'design_disposition'='alternate','N_fill_then_edit_later_context_wins';
+  PERFORM extensions.dblink_exec('fill_N_b','COMMIT');
+ END IF;
+ PERFORM extensions.dblink_disconnect('fill_N_a'); a_open:=false;
+ PERFORM extensions.dblink_disconnect('fill_N_b'); b_open:=false;
+ RAISE NOTICE 'PASS N(%): observed native wait, authoritative row checked; fixture disposal remains lead-owned',ordering;
+EXCEPTION WHEN OTHERS THEN
+ IF a_open THEN PERFORM extensions.dblink_disconnect('fill_N_a'); END IF;
+ IF b_open THEN PERFORM extensions.dblink_disconnect('fill_N_b'); END IF;
+ -- Remote committed edit cannot be undone by this function's failed local
+ -- transaction. The lead must dispose its disposable fixture on any failure.
+ RAISE;
+END;
+$N$;
+-- Only compile in this entry. The lead invokes N in its owned fixture session.
