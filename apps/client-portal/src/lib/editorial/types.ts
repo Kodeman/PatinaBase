@@ -45,6 +45,9 @@ export interface EditorialAsset {
 }
 
 export interface EditorialItem {
+  /** Frozen with this edition; absent on historical facts, never inferred from live selections. */
+  responsibility?: 'studio' | 'external' | null;
+  externalFulfilmentId?: string | null;
   id: string;
   nameAsSigned: string;
   category: string | null;
