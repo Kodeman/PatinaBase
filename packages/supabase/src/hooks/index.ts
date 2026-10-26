@@ -2674,3 +2674,7 @@ export {
   type OptimisticContext,
   type UseOptimisticMutationOptions,
 } from "./optimistic";
+
+export { useScopeEditions, readScopeEditions, scopeEditionKeys, scopeEditionCapability } from "./use-scope-editions";
+export { useServiceArrangements, selectServiceArrangements } from "./use-service-arrangements";
+export { readScopePackagePayload } from "./use-agreement-parts";
