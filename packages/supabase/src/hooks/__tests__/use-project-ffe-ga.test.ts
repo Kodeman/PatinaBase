@@ -127,7 +127,10 @@ describe('project FF&E GA commands', () => {
   });
 
   it('uses the exact authoritative readiness positional signature', async () => {
-    rpc.mockResolvedValue({
+    rpc.mockImplementation(async (name) => name === 'get_project_ffe_readiness_batch' ? {
+      data: null,
+      error: { code: '42501', message: 'permission denied for function get_project_ffe_readiness_batch' },
+    } : {
       data: { selectionId: 'selection-1', ready: false, missingFields: ['vendor'] },
       error: null,
     });
