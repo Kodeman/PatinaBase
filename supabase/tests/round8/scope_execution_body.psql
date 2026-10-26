@@ -1,0 +1,458 @@
+-- B02a real PostgreSQL oracle. Enclosing runner owns BEGIN/ROLLBACK.
+-- BEGIN shared assertion helpers
+CREATE FUNCTION pg_temp.assert_true(ok boolean, name text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',name; END IF;
+  RAISE NOTICE 'PASS: %',name;
+END $$;
+CREATE FUNCTION pg_temp.expect_error(command text, state text, message text, name text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+  BEGIN EXECUTE command;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+  END;
+  PERFORM pg_temp.assert_true(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
+    name||format(' [expected %s/%s, got %s/%s]',state,message,actual_state,actual_message));
+END $$;
+CREATE FUNCTION pg_temp.actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub','f8690000-0000-4000-8000-'||lpad(n::text,12,'0'),true);
+  PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',
+    'f8690000-0000-4000-8000-'||lpad(n::text,12,'0'),'role','authenticated')::text,true);
+END $$;
+
+-- END shared assertion helpers
+-- Inspect shipped ACLs before any test-only grant or capability change.
+DO $$ DECLARE f record; r text; BEGIN
+  FOR f IN SELECT p.oid::regprocedure signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public' AND p.proname IN ('_validate_scope_signer_parts','_validate_scope_retained_parts',
+      '_scope_parts_from_edition','_record_scope_execution','_mint_scope_edition','_scope_after_execution') LOOP
+    FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+      PERFORM pg_temp.assert_true(NOT has_function_privilege(r,f.signature,'EXECUTE'),r||' no execute '||f.signature);
+    END LOOP;
+    PERFORM pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM pg_proc p,
+      aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
+      WHERE p.oid=f.signature::oid AND acl.grantee=0 AND acl.privilege_type='EXECUTE'),'PUBLIC no execute '||f.signature);
+  END LOOP;
+END $$;
+SELECT pg_temp.assert_true((SELECT NOT enabled FROM public.server_capabilities WHERE key='scope_editions'),'capability ships false');
+-- BEGIN shared fixture
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f8690000-%'),'fixture starts absent');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT ('f8690000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  'scope-execution-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(1,5)n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT id,email,'Scope execution fixture',true FROM auth.users WHERE id::text LIKE 'f8690000-%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+('f8691000-0000-4000-8000-000000000001','design_studio','Execution A','scope-execution-a','active'),
+('f8691000-0000-4000-8000-000000000002','design_studio','Execution B','scope-execution-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+('f8690000-0000-4000-8000-000000000001','f8691000-0000-4000-8000-000000000001','owner','active'),
+('f8690000-0000-4000-8000-000000000002','f8691000-0000-4000-8000-000000000001','member','active'),
+('f8690000-0000-4000-8000-000000000003','f8691000-0000-4000-8000-000000000002','owner','active'),
+('f8690000-0000-4000-8000-000000000004','f8691000-0000-4000-8000-000000000001','guest','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT p.id,r.id,p.id FROM public.profiles p CROSS JOIN public.roles r
+WHERE p.id::text LIKE 'f8690000-%' AND r.name='studio_owner';
+INSERT INTO public.designer_clients(id,designer_id,client_id,client_name,client_email,status,source) VALUES
+('f8692000-0000-4000-8000-000000000001','f8690000-0000-4000-8000-000000000001',
+'f8690000-0000-4000-8000-000000000005','Execution client','scope-execution-5@test.invalid','active','direct');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+
+-- END shared fixture
+-- BEGIN shared native helpers
+CREATE FUNCTION pg_temp.package(phase_id uuid DEFAULT NULL, inclusion text DEFAULT 'included', installer text DEFAULT 'gc')
+RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object('kind','scope_package','partKey','scope.kitchen','title','Kitchen','payload',
+  jsonb_build_object('packageKey','pkg.kitchen','label','Kitchen','inclusion',inclusion,
+    'responsibilities',jsonb_build_object('design','studio','purchasing','client','payer','client','fabrication_contract','gc','installation',installer))
+  || CASE WHEN phase_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('serviceBindings',jsonb_build_object('design',jsonb_build_array(phase_id))) END);
+$$;
+CREATE FUNCTION pg_temp.policy() RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object('kind','acceptance_signer_policy','partKey','scope.signers','title','Signers','payload',
+  jsonb_build_object('policyRevision',1,'signers',jsonb_build_array(jsonb_build_object('slot','client','required',true,
+    'profileId','f8690000-0000-4000-8000-000000000005'))));
+$$;
+CREATE FUNCTION pg_temp.parts(p uuid) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT COALESCE(jsonb_agg(jsonb_build_object('kind',kind,'variant',variant,'partKey',part_key,'title',title,
+   'payload',payload,'required',required,'clientVisible',client_visible) ORDER BY position),'[]')
+ FROM public.proposal_agreement_parts WHERE proposal_id=p;
+$$;
+CREATE FUNCTION pg_temp.draft(p uuid, scope_parts boolean DEFAULT true) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE phase_id uuid;
+BEGIN
+ INSERT INTO public.proposals(id,designer_id,designer_client_id,client_id,title,total_amount,status,valid_until)
+ VALUES(p,'f8690000-0000-4000-8000-000000000001','f8692000-0000-4000-8000-000000000001',
+   'f8690000-0000-4000-8000-000000000005','Scope execution draft',0,'draft',now()+interval '30 days');
+ INSERT INTO public.proposal_phases(proposal_id,name,phase_key,duration_days,lane,fee_cents,sort_order)
+ VALUES(p,'Design','design-development',5,'main',0,0) RETURNING id INTO phase_id;
+ PERFORM public.upsert_design_services_draft(p,jsonb_build_object('scope','Interior design services',
+   'deliverables',jsonb_build_array('Selections'),'exclusions','[]'::jsonb,'billingCeilingCents',100000,
+   'retainerAmountCents',0,'retainerActivationPolicy','immediate','billingCadence','monthly',
+   'currency','USD','terms','Signed actual hours','currentRateVersion',1),
+   jsonb_build_array(jsonb_build_object('version',1,'roleName','Designer','hourlyRateCents',12000,'sortOrder',0,'effectiveAt',now()-interval '1 day')));
+ IF scope_parts THEN
+   PERFORM public.materialize_standard_parts(p);
+   PERFORM public.upsert_agreement_parts(p,pg_temp.parts(p)||jsonb_build_array(pg_temp.package(phase_id),pg_temp.policy()),'execution fixture');
+ END IF;
+END $$;
+CREATE FUNCTION pg_temp.send_and_sign(p uuid, paper boolean DEFAULT false) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE snapshot jsonb;
+BEGIN
+ IF paper THEN
+   PERFORM public.record_paper_client_signature(p,'Execution Client',current_date,NULL::uuid,true);
+ ELSE
+   snapshot:=public.get_commercial_document_send_snapshot(p);
+   PERFORM public.send_commercial_document(p,snapshot->>'documentFingerprint',NULL,now()+interval '30 days');
+   PERFORM pg_temp.actor(5);
+   PERFORM public.sign_design_services_agreement(p,'Execution Client');
+   PERFORM pg_temp.actor(1);
+ END IF;
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.actor(integer),pg_temp.send_and_sign(uuid,boolean) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_true(boolean,text),pg_temp.expect_error(text,text,text,text) TO authenticated,anon;
+-- END shared native helpers
+CREATE TEMP TABLE scope_execution_results(key text PRIMARY KEY,value jsonb);
+GRANT ALL ON scope_execution_results TO authenticated;
+
+-- Flag-off origin still assigns execution_seq, with no inferred edition.
+SELECT pg_temp.draft('f8693000-0000-4000-8000-000000000001',false);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.send_and_sign('f8693000-0000-4000-8000-000000000001');
+INSERT INTO scope_execution_results VALUES('inactive',public.countersign_design_services_agreement(
+ 'f8693000-0000-4000-8000-000000000001','Execution Designer'));
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=1 AND min(execution_seq)=1 FROM public.project_commercial_execution_order
+ WHERE commercial_document_id=(SELECT id FROM public.project_commercial_documents WHERE proposal_id='f8693000-0000-4000-8000-000000000001')),
+ 'inactive native execution assigns one unconditional order row');
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.project_scope_editions
+ WHERE source_proposal_id='f8693000-0000-4000-8000-000000000001'),'inactive execution does not infer an edition');
+
+-- Local-only activation is rolled back by the enclosing runner.
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SELECT pg_temp.draft('f8693000-0000-4000-8000-000000000002');
+SELECT pg_temp.expect_error($q$SELECT public.upsert_agreement_parts('f8693000-0000-4000-8000-000000000002',
+ jsonb_build_array(jsonb_set(pg_temp.policy(),'{payload,signers,0,profileId}','"f8690000-0000-4000-8000-000000000003"')),'bad signer')$q$,
+ '23514','scope_signer_outside_household','draft refuses signer outside exact client household');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.send_and_sign('f8693000-0000-4000-8000-000000000002');
+INSERT INTO scope_execution_results VALUES('origin',public.countersign_design_services_agreement(
+ 'f8693000-0000-4000-8000-000000000002','Execution Designer'));
+INSERT INTO scope_execution_results VALUES('retry',public.countersign_design_services_agreement(
+ 'f8693000-0000-4000-8000-000000000002','Execution Designer'));
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT (value->>'newlyExecuted')::boolean FROM scope_execution_results WHERE key='origin')
+ AND (SELECT NOT (value->>'newlyExecuted')::boolean FROM scope_execution_results WHERE key='retry'),'native countersign retry is not a new execution');
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM public.project_scope_editions
+ WHERE source_proposal_id='f8693000-0000-4000-8000-000000000002'),'active native execution and retry mint exactly one edition');
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM public.project_commercial_execution_order
+ WHERE commercial_document_id=(SELECT commercial_document_id FROM public.project_scope_editions
+ WHERE source_proposal_id='f8693000-0000-4000-8000-000000000002')),'retry adds no execution order row');
+SELECT pg_temp.assert_true((SELECT agreement_fingerprint=public._commercial_document_fingerprint(source_proposal_id)
+ AND content_hash=encode(extensions.digest(convert_to(content::text,'UTF8'),'sha256'),'hex')
+ FROM public.project_scope_editions WHERE source_proposal_id='f8693000-0000-4000-8000-000000000002'),'edition fingerprints signed source and hashes frozen content');
+SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(p.package_key='pkg.kitchen' AND p.design_owed_since=1 AND p.installation_owed_since IS NULL)
+ FROM public.project_scope_edition_packages p JOIN public.project_scope_editions e ON e.id=p.edition_id
+ WHERE e.source_proposal_id='f8693000-0000-4000-8000-000000000002'),'baseline package snapshots initial owed-since');
+SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(p.project_phase_id IS NOT NULL AND p.package_key='pkg.kitchen' AND p.service_slot='design' AND p.bound_in_edition=1)
+ FROM public.project_scope_edition_phases p JOIN public.project_scope_editions e ON e.id=p.edition_id
+ WHERE e.source_proposal_id='f8693000-0000-4000-8000-000000000002'),'origin typed binding resolves copied project phase');
+SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(s.slot='client' AND s.required AND s.policy_revision=1 AND s.profile_id='f8690000-0000-4000-8000-000000000005')
+ FROM public.project_scope_edition_signers s JOIN public.project_scope_editions e ON e.id=s.edition_id
+ WHERE e.source_proposal_id='f8693000-0000-4000-8000-000000000002'),'signed policy freezes signer snapshot');
+
+-- A paper client act feeds the same countersign writer, never a parallel mint.
+SELECT pg_temp.draft('f8693000-0000-4000-8000-000000000003',false);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.send_and_sign('f8693000-0000-4000-8000-000000000003',true);
+RESET ROLE;
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.project_scope_editions
+ WHERE source_proposal_id='f8693000-0000-4000-8000-000000000003'),'paper client signature alone mints nothing');
+SET LOCAL ROLE authenticated;
+SELECT public.countersign_design_services_agreement('f8693000-0000-4000-8000-000000000003','Execution Designer');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM public.project_scope_editions
+ WHERE source_proposal_id='f8693000-0000-4000-8000-000000000003'),'paper native countersign mints one edition');
+SELECT pg_temp.assert_true((SELECT content->'signerPolicy'='null'::jsonb AND content->'packagesRecorded'='false'::jsonb
+ AND NOT EXISTS(SELECT 1 FROM public.project_scope_edition_signers WHERE edition_id=e.id)
+ FROM public.project_scope_editions e WHERE source_proposal_id='f8693000-0000-4000-8000-000000000003'),
+ 'genuine uncomposed paper execution records absent policy not invented signers');
+
+-- Native addendum creation/copy uses frozen predecessor scope, not its bindings.
+SET LOCAL ROLE authenticated;
+INSERT INTO scope_execution_results VALUES('amendment',public.create_service_addendum(
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin'),'Kitchen amendment'));
+SELECT public.copy_agreement_parts_from_authority((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='amendment'),'copy frozen composition');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT p.drafted_against_scope_edition_id=e.id
+ FROM public.proposals p CROSS JOIN public.project_scope_editions e
+ WHERE p.id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='amendment')
+ AND e.source_proposal_id='f8693000-0000-4000-8000-000000000002'),'native addendum records predecessor edition');
+SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(NOT (payload ? 'serviceBindings'))
+ FROM public.proposal_agreement_parts WHERE kind='scope_package' AND proposal_id=
+ (SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='amendment')),
+ 'native addendum copy does not re-declare inherited phase bindings');
+DO $$ DECLARE p uuid; phase_id uuid; parts jsonb; BEGIN
+ SELECT (value->>'proposalId')::uuid INTO p FROM scope_execution_results WHERE key='amendment';
+ INSERT INTO public.proposal_phases(proposal_id,name,phase_key,duration_days,lane,fee_cents,sort_order)
+ VALUES(p,'Installation','installation',5,'main',0,0) RETURNING id INTO phase_id;
+ SELECT jsonb_agg(CASE WHEN part->>'kind'='scope_package' THEN
+   jsonb_set(jsonb_set(part,'{payload,responsibilities,installation}','"studio"'),
+     '{payload,serviceBindings}',jsonb_build_object('installation',jsonb_build_array(phase_id)))
+   ELSE part END ORDER BY ord) INTO parts FROM jsonb_array_elements(pg_temp.parts(p)) WITH ORDINALITY e(part,ord);
+ PERFORM public.upsert_agreement_parts(p,parts,'Bind added installation');
+ PERFORM pg_temp.expect_error(format('SELECT public.upsert_agreement_parts(%L,''[]''::jsonb,''drop package'')',p),
+ '23514','scope_package_key_dropped','amendment cannot drop predecessor package key');
+END $$;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.send_and_sign((SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='amendment'));
+SELECT public.countersign_design_services_agreement((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='amendment'),'Execution Designer');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=2 AND count(*) FILTER(WHERE status='active')=1
+ AND count(*) FILTER(WHERE status='superseded')=1 FROM public.project_scope_editions
+ WHERE project_id=(SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),
+ 'native addendum atomically supersedes exactly one predecessor');
+SELECT pg_temp.assert_true((SELECT count(*)=2 AND min(execution_seq)=1 AND max(execution_seq)=2
+ FROM public.project_commercial_execution_order WHERE project_id=
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),'amendment execution order is contiguous');
+SELECT pg_temp.assert_true((SELECT design_owed_since=1 AND installation_owed_since=2
+ FROM public.project_scope_edition_packages p JOIN public.project_scope_editions e ON e.id=p.edition_id
+ WHERE e.status='active' AND e.project_id=(SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),
+ 'continued design owed-since survives and new installation starts at amendment');
+SELECT pg_temp.assert_true((SELECT count(*)=2 AND count(*) FILTER(WHERE project_phase_id IS NULL AND service_slot='installation' AND bound_in_edition=2)=1
+ AND count(*) FILTER(WHERE project_phase_id IS NOT NULL AND service_slot='design' AND bound_in_edition=1)=1
+ FROM public.project_scope_edition_phases p JOIN public.project_scope_editions e ON e.id=p.edition_id
+ WHERE e.status='active' AND e.project_id=(SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),
+ 'cumulative phases retain inherited binding and leave new amendment phase unbound');
+SELECT pg_temp.expect_error($q$UPDATE public.project_scope_edition_packages SET label='Mutable'
+ WHERE edition_id=(SELECT id FROM public.project_scope_editions WHERE source_proposal_id='f8693000-0000-4000-8000-000000000002')$q$,
+ '23514','scope_record_immutable','frozen package rows cannot be edited');
+
+-- Tenant-first read/write matrix, including a lead who also belongs to B.
+SELECT pg_temp.draft('f8693000-0000-4000-8000-000000000005');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+('f8690000-0000-4000-8000-000000000001','f8691000-0000-4000-8000-000000000002','member','active');
+SELECT pg_temp.actor(2);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert_true(jsonb_array_length(public.get_project_scope_editions(
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin'))->'editions')=2,
+ 'recorded A comember reads editions despite lead membership in A and B');
+RESET ROLE;
+DO $$ DECLARE n integer; job uuid; BEGIN
+ PERFORM public.upsert_agreement_parts('f8693000-0000-4000-8000-000000000005',
+  pg_temp.parts('f8693000-0000-4000-8000-000000000005'),'A comember edit');
+ PERFORM pg_temp.assert_true(public.can_author_scope_proposal('f8693000-0000-4000-8000-000000000005'),
+  'recorded A comember writes scope through native composition RPC');
+ SELECT (value->>'projectId')::uuid INTO job FROM scope_execution_results WHERE key='origin';
+ FOREACH n IN ARRAY ARRAY[3,4,5] LOOP
+  PERFORM pg_temp.actor(n);
+  PERFORM pg_temp.expect_error(format('SELECT public.get_project_scope_editions(%L)',job),'42501',
+   'scope_project_access_denied','B-only member guest and client cannot read A editions actor '||n);
+  PERFORM pg_temp.assert_true(NOT public.can_author_scope_proposal('f8693000-0000-4000-8000-000000000002'),
+   'B-only member guest and client cannot author A scope actor '||n);
+  PERFORM pg_temp.expect_error(format('SELECT public.upsert_agreement_parts(%L,%L::jsonb,''foreign edit'')',
+   'f8693000-0000-4000-8000-000000000005',pg_temp.parts('f8693000-0000-4000-8000-000000000005')),
+   '42501',NULL,'native scope composition refuses unauthorized actor '||n);
+ END LOOP;
+END $$;
+SET LOCAL ROLE anon;
+SELECT pg_temp.expect_error($q$SELECT public.get_project_scope_editions('00000000-0000-0000-0000-000000000000')$q$,
+ '42501','permission denied','anonymous cannot execute edition read');
+RESET ROLE;
+SELECT pg_temp.actor(1);
+SELECT pg_temp.assert_true(public.get_project_scope_editions((SELECT (value->>'projectId')::uuid
+ FROM scope_execution_results WHERE key='inactive'))->'editions'='[]'::jsonb,
+ 'populated legacy commercial project reads empty scope without guessed baseline');
+
+-- New mint refuses incomplete native evidence and never leaves partial children.
+DO $$ DECLARE doc uuid; command text; BEGIN
+ SELECT id INTO doc FROM public.project_commercial_documents WHERE proposal_id='f8693000-0000-4000-8000-000000000001';
+ command:=format($q$DO $x$ BEGIN
+  SET LOCAL session_replication_role=replica;
+  DELETE FROM public.project_commercial_execution_order WHERE commercial_document_id=%L;
+  SET LOCAL session_replication_role=origin;
+  PERFORM public._mint_scope_edition(%L);
+ END $x$; $q$,doc,doc);
+ PERFORM pg_temp.expect_error(command,'23514','scope_execution_order_missing','mint refuses absent execution order');
+ command:=format($q$DO $x$ BEGIN
+  SET LOCAL session_replication_role=replica;
+  UPDATE public.commercial_document_signatures SET evidence_fingerprint=repeat('0',64)
+   WHERE proposal_id='f8693000-0000-4000-8000-000000000001' AND party_role='studio';
+  SET LOCAL session_replication_role=origin;
+  PERFORM public._mint_scope_edition(%L);
+ END $x$; $q$,doc);
+ PERFORM pg_temp.expect_error(command,'23514','scope_edition_signature_invalid','mint refuses mismatched signature evidence');
+ command:=format($q$DO $x$ BEGIN
+  SET LOCAL session_replication_role=replica;
+  UPDATE public.project_phases SET source_proposal_phase_id=NULL
+   WHERE project_id=(SELECT project_id FROM public.project_commercial_documents WHERE id=%L);
+  SET LOCAL session_replication_role=origin;
+  PERFORM public._mint_scope_edition(%L);
+ END $x$; $q$,doc,doc);
+ PERFORM pg_temp.expect_error(command,'23514','scope_edition_phase_unbound','mint refuses missing native origin phase copy');
+ PERFORM pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.project_scope_editions WHERE commercial_document_id=doc),
+  'evidence refusals leave no partial edition');
+END $$;
+
+-- Household identity, policy validation, and the send-time independent defense.
+-- Restore the native single-studio draft derivation after the cross-studio read case.
+DELETE FROM public.organization_members WHERE user_id='f8690000-0000-4000-8000-000000000001'
+ AND organization_id='f8691000-0000-4000-8000-000000000002';
+SELECT pg_temp.draft('f8693000-0000-4000-8000-000000000004');
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.studio_contacts(id,organization_id,entity_kind,contact_kind,full_name,profile_id) VALUES
+('f8696000-0000-4000-8000-000000000001','f8691000-0000-4000-8000-000000000001','person','client','Primary','f8690000-0000-4000-8000-000000000005'),
+('f8696000-0000-4000-8000-000000000002','f8691000-0000-4000-8000-000000000001','person','client','Household member',NULL);
+INSERT INTO public.client_households(id,organization_id,designer_id,display_name,member_person_ids) VALUES
+('f8697000-0000-4000-8000-000000000001','f8691000-0000-4000-8000-000000000001','f8690000-0000-4000-8000-000000000001',
+ 'Execution household',ARRAY['f8696000-0000-4000-8000-000000000001','f8696000-0000-4000-8000-000000000002']::uuid[]);
+UPDATE public.designer_clients SET household_id='f8697000-0000-4000-8000-000000000001' WHERE id='f8692000-0000-4000-8000-000000000001';
+SET LOCAL session_replication_role=origin;
+DO $$ DECLARE bad jsonb; good jsonb:=pg_temp.policy(); p uuid:='f8693000-0000-4000-8000-000000000004'; BEGIN
+ bad:=jsonb_set(good,'{payload,signers}',(good#>'{payload,signers}')||(good#>'{payload,signers}'));
+ PERFORM pg_temp.expect_error(format('SELECT public.upsert_agreement_parts(%L,%L::jsonb,''duplicate slot'')',p,jsonb_build_array(bad)),
+  '23514','scope_signer_slot_duplicate','policy refuses duplicate signer slot');
+ bad:=jsonb_set(good,'{payload,signers,0,householdPersonId}','"f8696000-0000-4000-8000-000000000001"');
+ PERFORM pg_temp.expect_error(format('SELECT public.upsert_agreement_parts(%L,%L::jsonb,''two refs'')',p,jsonb_build_array(bad)),
+  '23514','scope_signer_reference_invalid','policy refuses two identity references');
+ bad:=good#-'{payload,signers,0,profileId}';
+ PERFORM pg_temp.expect_error(format('SELECT public.upsert_agreement_parts(%L,%L::jsonb,''no ref'')',p,jsonb_build_array(bad)),
+  '23514','scope_signer_reference_invalid','policy refuses missing identity reference');
+ bad:=jsonb_set(good,'{payload,signers}',(good#>'{payload,signers}')||jsonb_build_array(jsonb_build_object(
+  'slot','second','required',true,'householdPersonId','f8696000-0000-4000-8000-000000000001')));
+ PERFORM pg_temp.expect_error(format('SELECT public.upsert_agreement_parts(%L,%L::jsonb,''same human'')',p,jsonb_build_array(bad)),
+  '23514','scope_signer_person_duplicate','policy resolves profile and household card as same person');
+ good:=jsonb_set(good,'{payload,signers}',(good#>'{payload,signers}')||jsonb_build_array(jsonb_build_object(
+  'slot','household.second','required',false,'householdPersonId','f8696000-0000-4000-8000-000000000002')));
+ PERFORM public.upsert_agreement_parts(p,(SELECT jsonb_agg(part) FROM jsonb_array_elements(pg_temp.parts(p)) part
+  WHERE part->>'kind'<>'acceptance_signer_policy')||jsonb_build_array(good),'Household signers');
+ PERFORM pg_temp.assert_true((SELECT payload=good->'payload' FROM public.proposal_agreement_parts WHERE proposal_id=p
+  AND kind='acceptance_signer_policy'),'valid exact-household signer policy is retained');
+ -- Bypass the draft seam only inside an exception subtransaction to exercise send.
+ PERFORM pg_temp.expect_error(format($q$DO $x$ BEGIN
+  SET LOCAL session_replication_role=replica;
+  UPDATE public.proposal_agreement_parts SET payload=%L::jsonb WHERE proposal_id=%L AND kind='acceptance_signer_policy';
+  SET LOCAL session_replication_role=origin;
+  PERFORM public.send_commercial_document(%L,public._commercial_document_fingerprint(%L));
+ END $x$; $q$,bad->'payload',p,p,p),'23514','scope_signer_person_duplicate','send independently refuses malformed stored policy');
+ PERFORM pg_temp.expect_error(format($q$DO $x$ BEGIN
+  SET LOCAL session_replication_role=replica;
+  UPDATE public.proposal_agreement_parts SET payload=jsonb_set(payload,'{serviceBindings}',
+   '{"design":["00000000-0000-4000-8000-000000000000"]}'::jsonb) WHERE proposal_id=%L AND kind='scope_package';
+  SET LOCAL session_replication_role=origin;
+  PERFORM public.send_commercial_document(%L,public._commercial_document_fingerprint(%L));
+ END $x$; $q$,p,p,p),'23514','scope_package_phase_unknown','send independently refuses malformed stored phase binding');
+END $$;
+
+-- design_build traverses the identical native execution seam.
+SET LOCAL session_replication_role=replica;
+UPDATE public.proposals SET document_kind='design_build' WHERE id='f8693000-0000-4000-8000-000000000004';
+SET LOCAL session_replication_role=origin;
+INSERT INTO public.studio_license_attestations(studio_id,credential_type,credential_number,state,expires_on,attested_by)
+VALUES('f8691000-0000-4000-8000-000000000001','Execution fixture license','TEST-ONLY','WI',current_date+1,
+ 'f8690000-0000-4000-8000-000000000001');
+SELECT public.upsert_agreement_parts('f8693000-0000-4000-8000-000000000004',
+ (SELECT jsonb_agg(part) FROM jsonb_array_elements(pg_temp.parts('f8693000-0000-4000-8000-000000000004')) part
+  WHERE part->>'kind'<>'schedule')||'[
+ {"kind":"schedule","variant":"pricing_basis","partKey":"patina.pricing_basis","title":"Pricing basis",
+  "payload":{"basis":"fixed","fixedCents":10000,"costBasisCents":10000,"subDisclosure":"open_book",
+   "costLines":[{"id":"general","label":"General conditions","category":"general_conditions","basisCents":10000}]}},
+ {"kind":"schedule","variant":"draws","partKey":"patina.draws","title":"Draws",
+  "payload":{"retainageBps":0,"draws":[{"key":"deposit","label":"Deposit","pct":50,"sortOrder":1,"retainageApplies":false},{"key":"complete","label":"Complete","pct":50,"sortOrder":2,"retainageApplies":false}]}},
+ {"kind":"clause","partKey":"patina.sub_disclosure","title":"Trades","payload":{"mode":"open_book","body":"Open book trades."}}
+ ]'::jsonb,'Native design-build price and draws');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.send_and_sign('f8693000-0000-4000-8000-000000000004');
+INSERT INTO scope_execution_results VALUES('build',public.countersign_design_services_agreement(
+ 'f8693000-0000-4000-8000-000000000004','Execution Designer'));
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(o.execution_seq=1 AND d.document_kind='design_build')
+ FROM public.project_scope_editions e JOIN public.project_commercial_documents d ON d.id=e.commercial_document_id
+ JOIN public.project_commercial_execution_order o ON o.commercial_document_id=d.id
+ WHERE e.source_proposal_id='f8693000-0000-4000-8000-000000000004'),'design_build native countersign records order and baseline');
+
+CREATE FUNCTION pg_temp.amend(job uuid, title text, installer text) RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE p uuid; parts jsonb;
+BEGIN
+ p:=(public.create_service_addendum(job,title)->>'proposalId')::uuid;
+ PERFORM public.copy_agreement_parts_from_authority(p,'Copy frozen scope');
+ SELECT jsonb_agg(CASE WHEN part->>'kind'='scope_package' THEN
+  jsonb_set(part,'{payload,responsibilities,installation}',to_jsonb(installer)) ELSE part END ORDER BY ord)
+ INTO parts FROM jsonb_array_elements(pg_temp.parts(p)) WITH ORDINALITY e(part,ord);
+ PERFORM public.upsert_agreement_parts(p,parts,title);
+ PERFORM pg_temp.send_and_sign(p);
+ RETURN p;
+END $$;
+DO $$ DECLARE job uuid; p uuid; stale uuid; BEGIN
+ SELECT (value->>'projectId')::uuid INTO job FROM scope_execution_results WHERE key='build';
+ p:=pg_temp.amend(job,'Start installation','studio');
+ PERFORM public.countersign_design_services_agreement(p,'Execution Designer');
+ stale:=pg_temp.amend(job,'Concurrent stale draft','studio');
+ p:=pg_temp.amend(job,'Release installation','gc');
+ PERFORM public.countersign_design_services_agreement(p,'Execution Designer');
+ PERFORM pg_temp.assert_true((SELECT design_owed_since=1 AND installation_owed_since IS NULL
+  FROM public.project_scope_edition_packages pk JOIN public.project_scope_editions e ON e.id=pk.edition_id
+  WHERE e.project_id=job AND e.status='active'),'released installation clears owed-since without restarting design');
+ PERFORM pg_temp.expect_error(format('SELECT public.countersign_design_services_agreement(%L,''Execution Designer'')',stale),
+  '40001','scope_edition_stale','stale addendum execution refuses under project lock');
+ PERFORM pg_temp.expect_error(format('SELECT public.countersign_design_services_agreement(%L,''Execution Designer'')',stale),
+  '40001','scope_edition_stale','stale addendum retry also refuses');
+ PERFORM pg_temp.assert_true((SELECT count(*)=3 FROM public.project_commercial_execution_order WHERE project_id=job)
+  AND NOT EXISTS(SELECT 1 FROM public.commercial_document_signatures WHERE proposal_id=stale AND party_role='studio')
+  AND (SELECT commercial_state='client_signed' FROM public.proposals WHERE id=stale),
+  'stale execution and retry leave no order signature or commercial-state partial writes');
+ p:=pg_temp.amend(job,'Restart installation','studio');
+ PERFORM public.countersign_design_services_agreement(p,'Execution Designer');
+ PERFORM pg_temp.assert_true((SELECT design_owed_since=1 AND installation_owed_since=4
+  FROM public.project_scope_edition_packages pk JOIN public.project_scope_editions e ON e.id=pk.edition_id
+  WHERE e.project_id=job AND e.status='active'),'restarted installation starts new edition run while design continues');
+END $$;
+
+-- Every content collection matches canonical child rows; all frozen rows reject update/delete.
+DO $$ DECLARE e record; t text; expr text; BEGIN
+ FOR e IN SELECT * FROM public.project_scope_editions LOOP
+  SELECT COALESCE(jsonb_agg(to_jsonb(p)-'edition_id' ORDER BY package_key),'[]') INTO e.content_hash
+   FROM public.project_scope_edition_packages p WHERE edition_id=e.id;
+  PERFORM pg_temp.assert_true(e.content->'packages'=e.content_hash::jsonb,'frozen package content/child parity edition '||e.edition_number);
+  PERFORM pg_temp.assert_true(e.content->'phases'=(SELECT COALESCE(jsonb_agg(to_jsonb(p)-'edition_id'
+   ORDER BY source_proposal_phase_id),'[]') FROM public.project_scope_edition_phases p WHERE edition_id=e.id),
+   'frozen phase content/child parity edition '||e.edition_number);
+  PERFORM pg_temp.assert_true(COALESCE(e.content#>'{signerPolicy,signers}','[]')=(SELECT COALESCE(jsonb_agg(
+   jsonb_build_object('slot',s.slot,'required',s.required)||CASE WHEN s.profile_id IS NOT NULL THEN
+    jsonb_build_object('profileId',s.profile_id) ELSE jsonb_build_object('householdPersonId',s.household_person_id) END
+   ORDER BY s.slot),'[]') FROM public.project_scope_edition_signers s WHERE edition_id=e.id),
+   'frozen signer content/child parity edition '||e.edition_number);
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['project_scope_editions','project_scope_edition_packages','project_scope_edition_phases','project_scope_edition_signers'] LOOP
+  expr:=CASE WHEN t='project_scope_editions' THEN 'id=id' ELSE 'edition_id=edition_id' END;
+  PERFORM pg_temp.expect_error(format('UPDATE public.%I SET %s',t,expr),'23514','scope_record_immutable',t||' rejects update');
+  PERFORM pg_temp.expect_error(format('DELETE FROM public.%I',t),'23514','scope_record_immutable',t||' rejects delete');
+ END LOOP;
+END $$;
+
+-- An amendment executed while paused changes billing natively, but freezes scope stale.
+SET LOCAL ROLE authenticated;
+INSERT INTO scope_execution_results VALUES('paused',public.create_service_addendum(
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin'),'Paused amendment'));
+SELECT public.copy_agreement_parts_from_authority((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='paused'),'copy before pause');
+SELECT pg_temp.send_and_sign((SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='paused'));
+RESET ROLE;
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
+SET LOCAL ROLE authenticated;
+SELECT public.countersign_design_services_agreement((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='paused'),'Execution Designer');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=2 AND count(*) FILTER(WHERE status='stale' AND stale_reason='amended_while_inactive' AND stale_execution_seq=3)=1
+ FROM public.project_scope_editions WHERE project_id=(SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),
+ 'paused amendment makes active edition stale without minting');
+SELECT pg_temp.assert_true((SELECT count(*)=3 AND max(execution_seq)=3 FROM public.project_commercial_execution_order WHERE project_id=
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),'paused amendment still assigns execution sequence');
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM public.project_billing_authorities WHERE status='active' AND source_proposal_id=
+ (SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='paused')),'paused amendment preserves native active billing authority');
