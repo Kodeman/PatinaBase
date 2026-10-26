@@ -14,9 +14,9 @@ const revision='f8770000-0000-4000-8000-000000000047';
 const body=readFileSync(new URL('./evidence_manifests_body.psql',import.meta.url),'utf8');
 const fixture=body.slice(body.indexOf('SET LOCAL session_replication_role=replica;'),body.indexOf('CREATE TEMP TABLE members'));
 const claims="SET request.jwt.claim.sub='f8770000-0000-4000-8000-000000000002';";
-const mint=`SELECT public.create_evidence_manifest('4{project}','f8770000-0000-4000-8000-000000000030','package_issue',
- jsonb_build_array(jsonb_build_object('kind','custom_commission_revision','id','4{revision}','rev',1,'sha256',
- encode(extensions.digest(public._plan_room_canonical_json(jsonb_build_object('configurationId','4{config}','revision',1,
+const mint=`SELECT public.create_evidence_manifest('${project}','f8770000-0000-4000-8000-000000000030','package_issue',
+ jsonb_build_array(jsonb_build_object('kind','custom_commission_revision','id','${revision}','rev',1,'sha256',
+ encode(extensions.digest(public._plan_room_canonical_json(jsonb_build_object('configurationId','${config}','revision',1,
  'brief','{}'::jsonb,'drawings','[]'::jsonb,'quote','{}'::jsonb,'provenance','{}'::jsonb)),'sha256'),'hex'))),'concurrency');`;
 class Session {
   constructor() {
@@ -124,26 +124,26 @@ test('N manifest shares job-label seam and locks configuration before revision',
    AND NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f877%')
    AND NOT EXISTS(SELECT 1 FROM public.organizations WHERE id::text LIKE 'f877%');`),'t','00877 installed and owned roots absent');
   owned=true;
-  await a.query(`BEGIN; 4{fixture} COMMIT; 4{claims}`);
+  await a.query(`BEGIN; ${fixture} COMMIT; ${claims}`);
   await b.query(claims);
   const aPid=Number(await a.query('SELECT pg_backend_pid();'));
   const bPid=Number(await b.query('SELECT pg_backend_pid();'));
   async function waitForMint(){
    await a.query(`DO $wait$ DECLARE deadline timestamptz:=clock_timestamp()+interval '5s'; BEGIN
-    WHILE NOT 4{aPid}=ANY(pg_blocking_pids(4{bPid})) LOOP
+    WHILE NOT ${aPid}=ANY(pg_blocking_pids(${bPid})) LOOP
      IF clock_timestamp()>deadline THEN RAISE EXCEPTION 'ASSERTION FAILED: manifest did not wait at native lock boundary'; END IF;
      PERFORM pg_sleep(0.02);
     END LOOP;
    END $wait$;`);
   }
   async function exercise(hold, probe, label){
-   await a.query(`BEGIN; 4{hold}`);
-   const waiting=b.query(`BEGIN; 4{mint}`).then(value=>({value}),error=>({error}));
+   await a.query(`BEGIN; ${hold}`);
+   const waiting=b.query(`BEGIN; ${mint}`).then(value=>({value}),error=>({error}));
    try {
     await waitForMint();
     const result=await a.query(`DO $probe$ BEGIN
-     4{probe}
-     EXCEPTION WHEN lock_not_available THEN RAISE EXCEPTION 'ASSERTION FAILED: 4{label}';
+     ${probe}
+     EXCEPTION WHEN lock_not_available THEN RAISE EXCEPTION 'ASSERTION FAILED: ${label}';
     END $probe$; SELECT true;`);
     assert.equal(result,'t',label);
    } finally {
@@ -154,12 +154,12 @@ test('N manifest shares job-label seam and locks configuration before revision',
     await b.query('ROLLBACK;');
    }
   }
-  await exercise(`SELECT public._ffe_lock_job_labels('4{project}');`,
-   `PERFORM 1 FROM public.product_configurations WHERE id='4{config}' FOR UPDATE NOWAIT;
-     PERFORM 1 FROM public.custom_commission_revisions WHERE id='4{revision}' FOR UPDATE NOWAIT;`,
+  await exercise(`SELECT public._ffe_lock_job_labels('${project}');`,
+   `PERFORM 1 FROM public.product_configurations WHERE id='${config}' FOR UPDATE NOWAIT;
+     PERFORM 1 FROM public.custom_commission_revisions WHERE id='${revision}' FOR UPDATE NOWAIT;`,
    'mint takes job-label seam before members');
-  await exercise(`SELECT id FROM public.product_configurations WHERE id='4{config}' FOR UPDATE;`,
-   `PERFORM 1 FROM public.custom_commission_revisions WHERE id='4{revision}' FOR UPDATE NOWAIT;`,
+  await exercise(`SELECT id FROM public.product_configurations WHERE id='${config}' FOR UPDATE;`,
+   `PERFORM 1 FROM public.custom_commission_revisions WHERE id='${revision}' FOR UPDATE NOWAIT;`,
    'mint does not lock revision ahead of blocked configuration');
  } finally {
   // Closing the waiting connection first also releases a failed probe's transaction.
