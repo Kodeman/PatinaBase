@@ -71,13 +71,20 @@ export function useAckBasis(purchaseOrderId: string | null | undefined) {
   const freight = (costLines.data ?? []).filter(
     (l) => l.kind === 'freight' && l.estimate_cents != null,
   );
-  const basis: AckBasis | undefined = query.data && {
+  const isLoading = query.isLoading || costLines.isLoading;
+  const isError = query.isError || costLines.isError;
+  const basis: AckBasis | undefined = !isLoading && !isError && query.data ? {
     ...query.data,
     freightCents: freight.length
       ? freight.reduce((sum, l) => sum + (l.estimate_cents ?? 0), 0)
       : null,
+  } : undefined;
+  return {
+    basis,
+    isLoading,
+    isError,
+    refetch: () => Promise.all([query.refetch(), costLines.refetch()]),
   };
-  return { basis, isLoading: query.isLoading, isError: query.isError };
 }
 
 /** The latest acknowledgment's state, open differences and the PO stamp's copy. */
@@ -147,7 +154,7 @@ export function AckCheckForm({
 }) {
   const qc = useQueryClient();
   const logAck = useLogPoAcknowledgment({ errorSurface: 'inline' });
-  const { basis, isLoading, isError } = useAckBasis(purchaseOrderId);
+  const { basis, isLoading, isError, refetch } = useAckBasis(purchaseOrderId);
   const { data: quotes } = useVendorQuotes(basis?.projectId);
   const rows = basis ? ackRows(basis, quotes ?? []) : [];
   const [values, setValues] = useState<Record<string, string> | null>(null);
@@ -205,7 +212,7 @@ export function AckCheckForm({
   const setValue = (key: string, value: string) => setValues({ ...current, [key]: value });
 
   const confirm = async () => {
-    if (logAck.isPending || invalid) return;
+    if (logAck.isPending || isLoading || isError || !basis || invalid) return;
     setError(null);
     try {
       const { ack, lines } = ackPayload(rows, current, { vendorOrderRef: poNo, confirmedEta: eta });
@@ -298,10 +305,19 @@ export function AckCheckForm({
       </div>
 
       {isLoading && <p className="text-[11px] italic text-[var(--text-muted)]">Reading the order…</p>}
-      {isError && (
-        <p className="text-[11px] text-[var(--text-muted)]">
-          The order&rsquo;s lines could not be read; the acknowledgment logs without them.
-        </p>
+      {!isLoading && (isError || !basis) && (
+        <div id={`ack-basis-${purchaseOrderId}`} role="alert" className="text-[11px] text-[var(--text-muted)]">
+          <p>The order details or freight could not be read. Check them before logging an acknowledgment.</p>
+          <DocumentAction
+            actionKey="retry-po-ack-basis"
+            surfaceKey="orders"
+            regionKey="po-acknowledgment"
+            variant="tertiary"
+            onClick={() => void refetch()}
+          >
+            Read the order again
+          </DocumentAction>
+        </div>
       )}
 
       {rows.length > 0 && (
@@ -357,19 +373,21 @@ export function AckCheckForm({
           surfaceKey="orders"
           regionKey="po-acknowledgment"
           variant="primary"
-          disabled={logAck.isPending || isLoading || invalid}
-          held={invalid}
+          disabled={logAck.isPending || isLoading || isError || !basis || invalid}
+          held={invalid || isError || (!isLoading && !basis)}
           holds={invalidHolds.length ? invalidHolds : undefined}
-          aria-describedby={invalid ? invalidId : undefined}
+          aria-describedby={!basis ? `ack-basis-${purchaseOrderId}` : invalid ? invalidId : undefined}
           loading={logAck.isPending}
           loadingLabel="Logging…"
           onClick={() => void confirm()}
         >
-          {differences === 0
-            ? oneVoice
-              ? 'Log it — confirmed as ordered'
-              : 'Everything agrees — log it'
-            : `Log it with ${differences} difference${differences === 1 ? '' : 's'}`}
+          {!basis
+            ? 'Read the order before logging'
+            : differences === 0
+              ? oneVoice
+                ? 'Log it — confirmed as ordered'
+                : 'Everything agrees — log it'
+              : `Log it with ${differences} difference${differences === 1 ? '' : 's'}`}
         </DocumentAction>
       </div>
       {error && (
