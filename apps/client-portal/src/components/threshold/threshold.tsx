@@ -791,6 +791,13 @@ export function Threshold({
       ? selectionsQuery.data.selections
       : [];
   const externalSelections = currentSelections.filter((selection) => selection.kind === 'external');
+  const externalFulfilments = new Map<string, typeof externalSelections>();
+  for (const selection of externalSelections) {
+    const key = selection.externalFulfilmentId ?? selection.id;
+    const linked = externalFulfilments.get(key) ?? [];
+    linked.push(selection);
+    externalFulfilments.set(key, linked);
+  }
   // External presence is context, never an ordinary studio piece or act.
   const selections = currentSelections.filter((selection) => selection.kind !== 'external');
   const selectionById = new Map(
@@ -1412,10 +1419,12 @@ export function Threshold({
         {externalSelections.length > 0 && <section aria-label="Current external work">
           <h3>Current external work</h3>
           <p>Current context, not part of the recorded budget checkpoint or studio totals.</p>
-          <ul>{externalSelections.map((selection) => <li key={selection.id}>
-            <p>{selection.name}</p>
+          <ul>{[...externalFulfilments].map(([id, linked]) => <li key={id}>
+            <p>External fulfilment · linked items: {linked.map((selection) => selection.name).join(', ')}</p>
             <p>{EXTERNAL_WORK_DESCRIPTION}</p>
-            {selection.reportedPriceCents != null && <p>Reported external amount: {formatCurrency(selection.reportedPriceCents)}</p>}
+            {linked[0].reportedPriceCents != null
+              ? <p>Reported total for this external fulfilment: {formatCurrency(linked[0].reportedPriceCents)}</p>
+              : <p>Reported total not available.</p>}
           </li>)}</ul>
         </section>}
       </>}
