@@ -132,15 +132,23 @@ export function GalleryPieces({ band, issue, extras }: { band: RoomBandModel; is
       ? { ...room, items: room.items.filter((item) => item.responsibility === 'external') }
       : room) },
   } : issue;
+  const recordedRoom = frozenIssue?.editorial.rooms.find((room) => room.id === band.roomId);
+  const recordLabel = issue?.editorial.edition ? 'In the shared edition' : 'In the house record';
   return <>
     {band.varianceLine && <p>{band.varianceLine}</p>}
-    <ul className="gallery-piece-list">
-      {band.pieces.map((piece) => <li key={piece.id} data-threshold-piece={piece.id}>
-        <PieceImages piece={piece} />
-        <PieceFacts piece={piece} />
-      </li>)}
-    </ul>
-    {frozenIssue && choice && <EditorialPieces issue={frozenIssue} choice={choice} />}
+    {band.pieces.length > 0 && <section aria-label="Current studio pieces">
+      <h3 className="mt-6 font-medium">Current studio pieces</h3>
+      <ul className="gallery-piece-list">
+        {band.pieces.map((piece) => <li key={piece.id} data-threshold-piece={piece.id}>
+          <PieceImages piece={piece} />
+          <PieceFacts piece={piece} />
+        </li>)}
+      </ul>
+    </section>}
+    {frozenIssue && choice && recordedRoom && recordedRoom.items.length > 0 && <section aria-label={recordLabel}>
+      <h3 className="mt-6 font-medium">{recordLabel}</h3>
+      <EditorialPieces issue={frozenIssue} choice={choice} />
+    </section>}
     {extras}
   </>;
 }

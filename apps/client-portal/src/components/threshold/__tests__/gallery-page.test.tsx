@@ -184,6 +184,9 @@ it('keeps existing editorial room items in Every piece when the commercial proje
   expect(drawer.getAllByText('Linen sofa', { exact: true })[0]).toBeVisible();
   expect(drawer.getByText('Released to maker', { exact: true })).toBeVisible();
   expect(drawer.queryByText(/\$/)).not.toBeInTheDocument();
+  expect(drawer.getByRole('heading', { name: 'In the house record' })).toBeVisible();
+  expect(drawer.queryByRole('region', { name: 'In the shared edition' })).not.toBeInTheDocument();
+  expect(drawer.queryByRole('region', { name: 'Current studio pieces' })).not.toBeInTheDocument();
 });
 
 it('replaces a failed arrival picture source with paint', () => {
@@ -250,6 +253,8 @@ it.each([null, 0, 720000])('keeps ordinary gallery price behavior for %s cents',
     clientLineTotalCents: price, logisticsStatus: 'specified', instrument: null } as ClientSelection;
   const { container } = render(<GalleryPieces band={{ pieces: [piece], varianceLine: null } as RoomBandModel} />);
   expect(container).toHaveTextContent('Ordinary chair');
+  expect(screen.getByRole('region', { name: 'Current studio pieces' })).toBeVisible();
+  expect(screen.queryByRole('region', { name: /In the (shared edition|house record)/ })).not.toBeInTheDocument();
   if (price === 720000) expect(container).toHaveTextContent('$7,200.00');
   else expect(container).not.toHaveTextContent(/\$/);
 });

@@ -3835,6 +3835,44 @@ describe('Threshold — The House Issue data', () => {
     },
   );
 
+  it.each([true, false])('distinguishes the same piece now sold by the studio from its shared external record (photo=%s)', (photo) => {
+    const frozen: ClientProjectEditorial = {
+      ...EDITORIAL,
+      edition: { id: 'external-edition', seq: 2, approvedAt: '2026-10-21T10:00:00Z', approvedBy: 'studio', notice: null },
+      composition: { hero: null, held: [], chapters: [] },
+      images: photo ? [{ assetId: 'plate-1', plateRole: 'chapter', rank: 1, chapterKey: `room-${LIBRARY}` }] : [],
+      rooms: EDITORIAL.rooms.map(room => ({ ...room, items: room.id === LIBRARY ? [
+        { id: CREDENZA.id, nameAsSigned: CREDENZA.name, category: 'storage', status: 'specified',
+          responsibility: 'external', externalFulfilmentId: 'frozen-fulfilment', material: null, finish: null,
+          dimensions: null, descriptionAsSigned: null, assetIds: [] },
+      ] : [] })),
+    };
+    const snapshot = JSON.stringify(frozen);
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [
+      { ...CREDENZA, responsibility: 'studio', externalFulfilmentId: null }, PAINTWORK,
+    ] }));
+    const { container } = renderThreshold(MILESTONES, [], frozen);
+    const chapter = container.querySelector(`#room-${LIBRARY}`)!;
+    if (photo) expect(chapter.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/plates/external-edition/'));
+    else expect(chapter.querySelector('img')).toBeNull();
+    openGallery('#pieces-' + LIBRARY);
+    const drawer = within(screen.getByRole('dialog'));
+    const current = drawer.getByRole('region', { name: 'Current studio pieces' });
+    const recorded = drawer.getByRole('region', { name: 'In the shared edition' });
+    expect(within(current).getByRole('heading', { name: 'Current studio pieces', level: 3 })).toBeVisible();
+    expect(within(recorded).getByRole('heading', { name: 'In the shared edition', level: 3 })).toBeVisible();
+    expect(within(current).getByText(CREDENZA.name, { exact: true })).toBeVisible();
+    expect(within(recorded).getByText(CREDENZA.name, { selector: 'p.ed-piece__name', exact: true })).toBeVisible();
+    expect(current).toHaveTextContent('$8,400.00');
+    expect(current).toHaveTextContent('FA-7');
+    expect(current).toHaveTextContent('Furnishings authorization No. 7');
+    expect(current).not.toHaveTextContent('Bought by client/GC');
+    expect(recorded).toHaveTextContent('Bought by client/GC (not billed by studio)');
+    expect(recorded).not.toHaveTextContent(/\$|FA-7|Furnishings authorization|approved|signed/i);
+    expect(recorded.querySelector('a, button, form')).toBeNull();
+    expect(JSON.stringify(frozen)).toBe(snapshot);
+  });
+
   it('null editorial keeps today’s house unchanged', () => {
     const markup = (html: string) => html.replace(/_r_[0-9a-z]+_/g, '_r_id_');
     const today = renderThreshold(MILESTONES, [], undefined);
