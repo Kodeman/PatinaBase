@@ -25,10 +25,29 @@ export function useMarginItems(projectId: string | null, proposalId: string | nu
       ]
         .filter(Boolean)
         .join(',');
-      const { data, error } = await getSupabase().from('margin_items').select('*').or(clauses);
+      const supabase = getSupabase();
+      const { data, error } = await supabase.from('margin_items').select('*').or(clauses);
       if (error) throw error;
+      const rows = (data ?? []) as MarginItemRow[];
+      if (!rows.some((row) => row.kind === 'note')) return rows;
+      // The union view preserves its legacy shape. Read additive note metadata
+      // under the same caller's RLS, not through the private integrity helper.
+      const { data: notes, error: noteError } = await supabase.from('margin_notes')
+        .select('id, project_id, subject_kind, subject_id').or(clauses);
+      if (noteError) throw noteError;
+      const byId = new Map<string, { project_id: string | null; subject_kind: string | null; subject_id: string | null }>(
+        (notes ?? []).map((note: { id: string; project_id: string | null; subject_kind: string | null; subject_id: string | null }) => [note.id, note]),
+      );
       // Unordered — the rail applies R12 ordering (it knows line positions).
-      return (data ?? []) as MarginItemRow[];
+      return rows.map((row) => {
+        if (row.kind !== 'note') return row;
+        const note = byId.get(row.item_id);
+        const subject = note?.project_id === row.project_id ? note : null;
+        return { ...row, payload: { ...row.payload,
+          subject_kind: subject?.subject_kind ?? null,
+          subject_id: subject?.subject_id ?? null,
+        } };
+      });
     },
   });
 }
