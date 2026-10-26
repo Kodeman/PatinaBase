@@ -28,6 +28,9 @@ def check(path):
         "REVOKE ALL ON TABLE public.project_ffe_external_conversion_receipts FROM PUBLIC,anon,authenticated,service_role;",
         "REVOKE ALL ON FUNCTION public._ffe_external_conversion_receipt_guard() FROM PUBLIC,anon,authenticated,service_role;",
         "REVOKE ALL ON FUNCTION public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text) FROM PUBLIC,anon,authenticated,service_role;",
+        "REVOKE ALL ON FUNCTION public._create_furnishings_authorization_from_schedule_00444_impl(uuid,text,uuid[],numeric) FROM PUBLIC,anon,authenticated,service_role;",
+        "REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_authorized(uuid,text,uuid,text) FROM PUBLIC,anon,authenticated,service_role;",
+        "REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;",
     )}
     assert actual == expected, "native extractor loses or adds an ACL: " + repr(actual ^ expected)
     bodies = re.finditer(r"(?P<tag>\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$)(?P<body>.*?)(?P=tag)", sql, re.DOTALL)
