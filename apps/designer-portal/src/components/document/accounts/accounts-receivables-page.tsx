@@ -24,7 +24,9 @@ import {
   type EmailDelivery,
   type Invoice,
 } from '@patina/supabase';
-import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { formatCurrency } from '@patina/shared';
+import { formatCurrencyTotal, sumByCurrency } from '@/lib/currency-totals';
+import { fmtDay } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import { billingRefusal } from '@/lib/document/invoice-composer';
 import { DeliveryWord } from '../delivery-word';
@@ -43,7 +45,7 @@ export function AccountsReceivablesPage({
   /** U-Q16 — the Accounts book opens the folio in place, in its own sheet. */
   onOpenFolio?: (invoiceId: string) => void;
 }) {
-  const { openInvoices, buckets, totalBalanceCents } = aging;
+  const { openInvoices, buckets } = aging;
   // One read for the whole page — a per-row hook would open N queries.
   const emailDelivery = useEmailDelivery(
     'invoice',
@@ -63,14 +65,14 @@ export function AccountsReceivablesPage({
       {/* Aging buckets — quiet mono pairs, never a chart. */}
       <div className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-[var(--color-pearl)] pb-2.5">
         <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
-          {fmtUsd(totalBalanceCents)} owed
+          {formatCurrencyTotal(sumByCurrency(openInvoices, invoiceBalanceCents), formatCurrency)} owed
         </span>
         {buckets
           .filter((b) => b.balanceCents > 0)
           .map((b) => (
             <span key={b.key} className="flex items-baseline gap-1.5">
               <span className="font-heading text-[14px] text-[var(--color-charcoal)]">
-                {fmtUsd(b.balanceCents)}
+                {formatCurrencyTotal(sumByCurrency(b.invoices, invoiceBalanceCents), formatCurrency)}
               </span>
               <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 {b.label}
@@ -79,6 +81,7 @@ export function AccountsReceivablesPage({
           ))}
       </div>
 
+      {emailDelivery.isError && <p role="alert">Delivery history could not be read. Reminders are held. <button type="button" onClick={() => void emailDelivery.refetch()}>Read delivery history again</button></p>}
       <ul>
         {openInvoices.map((inv) => (
           <ReceivableRow
@@ -86,6 +89,7 @@ export function AccountsReceivablesPage({
             invoice={inv}
             delivery={emailDelivery.byRef[inv.id] ?? null}
             highlight={inv.id === highlightInvoiceId}
+            deliveryUnread={Boolean(emailDelivery.isLoading || emailDelivery.isError)}
             onOpenDocument={onOpenDocument}
             onOpenFolio={onOpenFolio}
           />
@@ -99,12 +103,14 @@ function ReceivableRow({
   invoice,
   delivery,
   highlight,
+  deliveryUnread,
   onOpenDocument,
   onOpenFolio,
 }: {
   invoice: Invoice;
   delivery: EmailDelivery | null;
   highlight: boolean;
+  deliveryUnread: boolean;
   onOpenDocument: (projectId: string | null) => void;
   onOpenFolio: (invoiceId: string) => void;
 }) {
@@ -132,6 +138,7 @@ function ReceivableRow({
   const studioInvoice = invoice.project_id === null;
 
   const doChase = async () => {
+    if (busy || deliveryUnread) return;
     setNote(null);
     try {
       // One act, two writes: the overdue-notice email + the chase timestamp the
@@ -182,7 +189,7 @@ function ReceivableRow({
             ? `Invoice ${invoice.invoice_number}`
             : 'Draft invoice'}
           <span className="ml-2 font-mono text-[11px] font-medium text-[var(--color-charcoal)]">
-            {fmtUsd(balance)}
+            {formatCurrency(balance, invoice.currency)}
           </span>
           <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
             folio →
@@ -215,6 +222,7 @@ function ReceivableRow({
             .filter(Boolean)
             .join(' · ')}`}
         </p>
+        {overdue && deliveryUnread && !delivery && <p className="t-body-sm">Delivery history is unread; reminders are held.</p>}
         {note && (
           <p
             className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.05em]"
@@ -234,7 +242,7 @@ function ReceivableRow({
           surfaceKey="accounts"
           regionKey="receivable-row"
           variant="primary"
-          disabled={busy}
+          disabled={busy || deliveryUnread}
           onClick={() => void doChase()}
           loading={busy}
           loadingLabel="Sending…"

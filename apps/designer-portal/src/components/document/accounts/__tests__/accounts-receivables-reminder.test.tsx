@@ -33,6 +33,7 @@ const overdue = {
   project_id: 'project-1',
   designer_id: 'designer-1',
   client_id: 'client-1',
+  client: { id: 'client-1', full_name: 'Fictional client', email: 'client@example.test' },
   invoice_number: 'INV-0030',
   title: null,
   status: 'sent',
@@ -75,5 +76,17 @@ it.each([
   // a reminder that went out (jsdom drops var() colours, so the words carry it).
   expect(await within(row).findByText(said)).toBeInTheDocument();
   expect(row).not.toHaveTextContent(raw);
+  expect(mockChase).not.toHaveBeenCalled();
+});
+
+it('lets native reminder resolution decide when the profile email is null', async () => {
+  mockSend.mockRejectedValue(new Error('no_recipient'));
+  const withoutProfileEmail = { ...overdue, client: { ...overdue.client!, email: null } };
+  render(<AccountsReceivablesPage aging={{ ...aging, openInvoices: [withoutProfileEmail] }} highlightInvoiceId={null} onOpenDocument={jest.fn()} />);
+  const send = screen.getByRole('button', { name: 'Send reminder' });
+  expect(send).toBeEnabled();
+  fireEvent.click(send);
+  expect(mockSend).toHaveBeenCalledWith({ invoiceId: overdue.id, projectId: overdue.project_id, type: 'reminder' });
+  expect(await screen.findByText('Could not send the reminder — This invoice has no client email yet. Add their email, then send it.')).toBeVisible();
   expect(mockChase).not.toHaveBeenCalled();
 });
