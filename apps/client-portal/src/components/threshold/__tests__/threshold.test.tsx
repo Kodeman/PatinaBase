@@ -3787,6 +3787,54 @@ describe('Threshold — The House Issue data', () => {
     sheets: [],
   };
 
+  it.each([[true, true], [true, false], [false, true], [false, false]])(
+    'keeps frozen external pieces beside ordinary live pieces (photo=%s, live=%s)', (photo, live) => {
+      const frozen: ClientProjectEditorial = {
+        ...EDITORIAL,
+        edition: { id: 'external-edition', seq: 2, approvedAt: '2026-10-21T10:00:00Z', approvedBy: 'studio', notice: null },
+        composition: { hero: null, held: [], chapters: [] },
+        images: photo ? [{ assetId: 'plate-1', plateRole: 'chapter', rank: 1, chapterKey: `room-${LIBRARY}` }] : [],
+        rooms: EDITORIAL.rooms.map(room => ({ ...room, items: room.id === LIBRARY ? [
+          { id: 'frozen-cabinet', nameAsSigned: 'Recorded GC cabinet', category: 'storage', status: 'in_production',
+            responsibility: 'external', externalFulfilmentId: 'frozen-fulfilment', material: null, finish: null,
+            dimensions: null, descriptionAsSigned: null, assetIds: [] },
+          { id: CREDENZA.id, nameAsSigned: CREDENZA.name, category: 'storage', status: 'in_production',
+            responsibility: 'studio', material: null, finish: null, dimensions: null, descriptionAsSigned: null, assetIds: [] },
+        ] : [] })),
+      };
+      const snapshot = JSON.stringify(frozen);
+      selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: live ? [CREDENZA, PAINTWORK] : [] }));
+      const first = renderThreshold(MILESTONES, [], frozen);
+      const chapter = first.container.querySelector(`#room-${LIBRARY}`)!;
+      if (photo) expect(chapter.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/plates/external-edition/'));
+      else expect(chapter.querySelector('img')).toBeNull();
+      openGallery('#pieces-' + LIBRARY);
+      const drawer = screen.getByRole('dialog');
+      const cabinet = within(drawer).getByText('Recorded GC cabinet', { selector: 'p.ed-piece__name' }).closest('figure')!;
+      expect(cabinet).toHaveTextContent('Bought by client/GC (not billed by studio)');
+      expect(cabinet).not.toHaveTextContent(/\$|FA-7/);
+      expect(cabinet.querySelector('a, button, form')).toBeNull();
+      expect(within(drawer).getAllByText(CREDENZA.name, { selector: 'p' })).toHaveLength(1);
+      if (live) {
+        expect(drawer).toHaveTextContent('$8,400');
+        expect(drawer).toHaveTextContent('FA-7');
+      }
+      const recorded = cabinet.textContent;
+      first.unmount();
+      // A later live reclassification/relink cannot rewrite this edition's stored responsibility.
+      selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [
+        { ...CREDENZA, name: 'Updated studio credenza', clientLineTotalCents: 910000 },
+        { ...CREDENZA, id: 'frozen-cabinet', name: 'Current studio cabinet', responsibility: 'studio', externalFulfilmentId: null },
+      ] }));
+      renderThreshold(MILESTONES, [], frozen);
+      openGallery('#pieces-' + LIBRARY);
+      const later = screen.getByRole('dialog');
+      expect(within(later).getByText('Recorded GC cabinet', { selector: 'p.ed-piece__name' }).closest('figure')!.textContent).toBe(recorded);
+      expect(within(later).getByText('Updated studio credenza')).toBeInTheDocument();
+      expect(JSON.stringify(frozen)).toBe(snapshot);
+    },
+  );
+
   it('null editorial keeps today’s house unchanged', () => {
     const markup = (html: string) => html.replace(/_r_[0-9a-z]+_/g, '_r_id_');
     const today = renderThreshold(MILESTONES, [], undefined);
@@ -4058,5 +4106,78 @@ describe('Gallery review F3 settled approval mail', () => {
     await waitFor(() => expect(document.getElementById('approval-settled-4')).toBeInTheDocument());
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     link.remove();
+  });
+});
+
+
+describe('current external work in the existing plan', () => {
+  function externalRead(reportedPriceCents: number | null, overrides: Record<string, unknown> = {}) {
+    return adaptClientSelections({ origin: 'commercial', selections: [{
+      id: 'external-cabinets', kind: 'external', responsibility: 'external', externalFulfilmentId: 'external-1',
+      name: 'GC cabinetry', roomId: CREDENZA.roomId, roomName: CREDENZA.roomName,
+      quantity: 1, clientUnitPriceCents: null, clientLineTotalCents: null,
+      buyerPartyKind: 'gc', payerPartyKind: 'client', reportedPriceCents,
+      priceDescription: 'Bought by client/GC (not billed by studio)',
+      instrument: { documentId: 'do-not-pay', proposalId: 'do-not-sign' },
+      logisticsStatus: 'in_production', reported_price_cents: 998877, ...overrides,
+    }] }).selections[0];
+  }
+  it('groups native shared fulfilment totals once without allocating across linked items', () => {
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA, PAINTWORK,
+      externalRead(1250000),
+      externalRead(1250000, { id: 'external-panels', name: 'GC wall panels' }),
+      externalRead(300000, { id: 'external-stone', name: 'Client stone', externalFulfilmentId: 'external-2' }),
+      externalRead(0, { id: 'external-gift', name: 'Client gift', externalFulfilmentId: 'external-3' }),
+      externalRead(null, { id: 'external-unknown', name: 'GC unknown', externalFulfilmentId: 'external-4' }),
+    ] }));
+    renderThreshold();
+    openGallery('#key');
+    const current = screen.getByRole('region', { name: 'Current external work' });
+    const groups = within(current).getAllByRole('listitem');
+    expect(groups).toHaveLength(4);
+    expect(groups[0]).toHaveTextContent('linked items: GC cabinetry, GC wall panels');
+    expect(within(current).getAllByText('Reported total for this external fulfilment: $12,500.00')).toHaveLength(1);
+    expect(groups[1]).toHaveTextContent('Client stone');
+    expect(groups[1]).toHaveTextContent('Reported total for this external fulfilment: $3,000');
+    expect(groups[2]).toHaveTextContent('Reported total for this external fulfilment: $0');
+    expect(groups[3]).toHaveTextContent('Reported total not available.');
+    expect(groups[3]).not.toHaveTextContent('$');
+    expect(current).toHaveTextContent('not part of the recorded budget checkpoint or studio totals');
+    expect(current).not.toHaveTextContent(/\$25,000|\$6,250|\$15,500/);
+    expect(current.querySelector('button, a, form')).toBeNull();
+  });
+  it('separates current external amounts from unchanged studio ledger/checkpoint and all commercial acts', () => {
+    const baseline = renderThreshold();
+    openGallery('#key');
+    const ledger = document.querySelector('[data-testid="house-ledger"]');
+    expect(ledger).not.toBeNull();
+    const before = ledger!.textContent;
+    baseline.unmount();
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA, PAINTWORK, externalRead(1250000)] }));
+    const { container } = renderThreshold();
+    openGallery('#pieces-' + CREDENZA.roomId);
+    expect(screen.queryByText('GC cabinetry')).not.toBeInTheDocument();
+    openGallery('#key');
+    const current = screen.getByRole('region', { name: 'Current external work' });
+    expect(current).toHaveTextContent('GC cabinetry');
+    expect(current).toHaveTextContent('Bought by client/GC (not billed by studio)');
+    expect(current).toHaveTextContent('Reported total for this external fulfilment: $12,500');
+    expect(current).toHaveTextContent('Current context, not part of the recorded budget checkpoint or studio totals.');
+    expect(document.querySelector('[data-testid="house-ledger"]')!.textContent).toBe(before);
+    expect(current.querySelector('button, a, form')).toBeNull();
+    expect(current).not.toHaveTextContent(/\$0|998877|free furniture/);
+    expect(container.querySelector('[href*="do-not-pay"], [href*="do-not-sign"]')).toBeNull();
+  });
+  it.each([null, 0])('does not expose private fallback amounts when reported amount is %s', (amount) => {
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [externalRead(amount)] }));
+    renderThreshold();
+    openGallery('#key');
+    const current = screen.getByRole('region', { name: 'Current external work' });
+    if (amount === null) {
+      expect(current).toHaveTextContent('Reported total not available.');
+      expect(current).not.toHaveTextContent('$');
+    } else expect(current).toHaveTextContent('Reported total for this external fulfilment: $0');
+    expect(current).not.toHaveTextContent('998877');
+    expect(current.querySelector('button, a, form')).toBeNull();
   });
 });

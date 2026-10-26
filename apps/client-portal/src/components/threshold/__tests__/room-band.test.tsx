@@ -639,3 +639,13 @@ describe('RoomBand', () => {
     });
   });
 });
+
+
+it.each([null, 0, 234000])('keeps ordinary room record price behavior for %s cents', (price) => {
+  const piece = selection({ clientUnitPriceCents: price, clientLineTotalCents: price });
+  render(<RoomBand band={band({ pieces: [piece] })} projectId="proj-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Brass library sconces — open its record' }));
+  const record = screen.getByTestId('room-band-record');
+  if (price === 234000) expect(record).toHaveTextContent('$2,340.00');
+  else expect(record).not.toHaveTextContent(/\$/);
+});

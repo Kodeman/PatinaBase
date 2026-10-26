@@ -118,12 +118,20 @@ function PieceImages({ piece }: { piece: ClientSelection }) {
 function PieceFacts({ piece }: { piece: ClientSelection }) {
   return <div><p>{piece.name}</p><p>{pieceStatus(piece)}</p>
     {piece.quantity > 1 && <p>{piece.quantity} of them</p>}
-    {piece.clientLineTotalCents > 0 && <p>{formatCurrency(piece.clientLineTotalCents)}</p>}
+    {piece.clientLineTotalCents != null && piece.clientLineTotalCents > 0 && <p>{formatCurrency(piece.clientLineTotalCents)}</p>}
     <PieceInstrument piece={piece} />
   </div>;
 }
 
 export function GalleryPieces({ band, issue, extras }: { band: RoomBandModel; issue?: HouseIssue | null; extras?: ReactNode }) {
+  const choice = issue?.rooms.get(band.roomId);
+  // Live studio facts do not replace an edition's recorded external responsibility.
+  const frozenIssue = issue && band.pieces.length > 0 ? {
+    ...issue,
+    editorial: { ...issue.editorial, rooms: issue.editorial.rooms.map((room) => room.id === band.roomId
+      ? { ...room, items: room.items.filter((item) => item.responsibility === 'external') }
+      : room) },
+  } : issue;
   return <>
     {band.varianceLine && <p>{band.varianceLine}</p>}
     <ul className="gallery-piece-list">
@@ -132,7 +140,7 @@ export function GalleryPieces({ band, issue, extras }: { band: RoomBandModel; is
         <PieceFacts piece={piece} />
       </li>)}
     </ul>
-    {band.pieces.length === 0 && issue?.rooms.get(band.roomId) && <EditorialPieces issue={issue} choice={issue.rooms.get(band.roomId)!} />}
+    {frozenIssue && choice && <EditorialPieces issue={frozenIssue} choice={choice} />}
     {extras}
   </>;
 }

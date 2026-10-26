@@ -1190,3 +1190,52 @@ describe('frozen authorization lead time adapter', () => {
     expect(JSON.stringify(item)).not.toContain('PRIVATE');
   });
 });
+
+
+describe('00883 client external-work projection', () => {
+  const external = {
+    id: 'external-line', kind: 'external', responsibility: 'external',
+    externalFulfilmentId: 'external-1', packageKey: 'kitchen-cabinets',
+    name: 'GC cabinetry', roomId: 'kitchen', roomName: 'Kitchen', quantity: 1, unit: 'each',
+    itemType: 'cabinetry', logisticsStatus: 'in_production', updatedAt: '2026-10-25',
+    clientUnitPriceCents: null, clientLineTotalCents: null,
+    buyerPartyKind: 'gc', payerPartyKind: 'client', reportedPriceCents: 1250000,
+    priceDescription: 'Bought by client/GC (not billed by studio)',
+    productId: null, imageUrl: null, primaryImageUrl: null, imageUrls: [], docCode: 'K1',
+  };
+  it('preserves native external identity and null studio prices in mixed ordinary/trade/external reads', () => {
+    const result = adaptClientSelections({ origin: 'commercial', selections: [
+      { id: 'sofa', kind: 'furnishings', clientUnitPriceCents: 500, clientLineTotalCents: 1000 },
+      { id: 'labor', kind: 'trade', clientUnitPriceCents: 0, clientLineTotalCents: 0 }, external,
+    ] });
+    expect(result.selections[0]).toMatchObject({ kind: 'furnishings', clientLineTotalCents: 1000 });
+    expect(result.selections[1]).toMatchObject({ kind: 'trade', clientUnitPriceCents: 0, clientLineTotalCents: 0 });
+    expect(result.selections[2]).toMatchObject({
+      kind: 'external', responsibility: 'external', externalFulfilmentId: 'external-1',
+      packageKey: 'kitchen-cabinets', buyerPartyKind: 'gc', payerPartyKind: 'client',
+      reportedPriceCents: 1250000, clientUnitPriceCents: null, clientLineTotalCents: null,
+      priceDescription: external.priceDescription, instrument: null, allowance: null,
+    });
+  });
+  it('distinguishes absent prices from true zero and refuses external commerce instruments', () => {
+    const rows = adaptClientSelections({ selections: [
+      { id: 'missing' }, { id: 'zero', clientUnitPriceCents: 0, clientLineTotalCents: 0 },
+      { ...external, clientUnitPriceCents: 999, clientLineTotalCents: 999,
+        instrument: { documentId: 'private-document', proposalId: 'do-not-sign' },
+        allowance: { id: 'private-allowance' }, tradeJourney: 'substantially_complete' },
+    ] }).selections;
+    expect(rows[0]).toMatchObject({ clientUnitPriceCents: null, clientLineTotalCents: null });
+    expect(rows[1]).toMatchObject({ clientUnitPriceCents: 0, clientLineTotalCents: 0 });
+    expect(rows[2]).toMatchObject({ clientUnitPriceCents: null, clientLineTotalCents: null, instrument: null, allowance: null, tradeJourney: null });
+  });
+  it('never reads denied/raw private amounts and retains an authorized reported zero', () => {
+    const rows = adaptClientSelections({ selections: [
+      { ...external, reportedPriceCents: null, reported_price_cents: 998877, vendorCostCents: 998877, studioEstimateBeforeConversion: 998877 },
+      { ...external, id: 'reported-zero', reportedPriceCents: 0 },
+    ] }).selections;
+    expect(rows[0].reportedPriceCents).toBeNull();
+    expect(JSON.stringify(rows[0])).not.toContain('998877');
+    expect(rows[0]).not.toHaveProperty('reported_price_cents');
+    expect(rows[1].reportedPriceCents).toBe(0);
+  });
+});
