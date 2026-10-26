@@ -313,3 +313,12 @@ SELECT pg_temp.expect_error($q$DELETE FROM public.project_scope_reconciliations 
  '23514','scope_record_immutable','receipt cannot be deleted');
 SELECT pg_temp.assert_true((SELECT count(*)=1 FROM public.project_scope_reconciliations WHERE project_id=pg_temp.fixture('job'))
  AND (SELECT count(*)=4 FROM public.project_scope_editions WHERE project_id=pg_temp.fixture('job')),'retries retain exactly one receipt and four editions');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.amendment(5,'design');
+SELECT public.countersign_design_services_agreement(pg_temp.fixture('proposal5'),'Execution Designer');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.assert_true(pg_temp.reconcile()=(SELECT response FROM public.project_scope_reconciliations
+ WHERE project_id=pg_temp.fixture('job')),'original receipt replays unchanged after a later native execution');
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM public.project_scope_reconciliations WHERE project_id=pg_temp.fixture('job'))
+ AND (SELECT count(*)=5 AND count(*) FILTER(WHERE status='active' AND commercial_document_id=pg_temp.fixture('doc5'))=1
+ FROM public.project_scope_editions WHERE project_id=pg_temp.fixture('job')),'old receipt replay never revives or remints a superseded edition');
