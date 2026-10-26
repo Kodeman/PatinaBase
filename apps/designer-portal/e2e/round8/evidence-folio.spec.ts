@@ -203,6 +203,31 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     await viewer.getByRole('button', { name: 'Back to the document', exact: true }).click();
     await expect(currentOpener).toBeFocused();
     const historicalOpener = page.locator('[data-plan-print-row]').filter({ hasText: 'Rev A' }).getByRole('button', { name: 'Open revision', exact: true });
+    const workspace = page.getByRole('main');
+    expect(await workspace.evaluate((main) => {
+      const probe = document.createElement('div');
+      probe.className = main.className;
+      document.body.append(probe);
+      const padding = getComputedStyle(probe).paddingBottom;
+      probe.remove();
+      return padding;
+    }), 'workspace padding falls back to zero outside the shell').toBe('0px');
+    if (info.project.name === 'webkit-iphone') {
+      await historicalOpener.scrollIntoViewIfNeeded();
+      await expect.poll(() => historicalOpener.evaluate((control) => {
+        const bar = document.querySelector('nav[data-mobile-edge-owner="document-bar"]');
+        const box = control.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return {
+          aboveBar: Boolean(bar && box.bottom <= bar.getBoundingClientRect().top),
+          centerHitsControl: hit === control || control.contains(hit),
+        };
+      }), { timeout: 5_000, message: 'historical revision clears the mobile bar and receives centre tap' })
+        .toEqual({ aboveBar: true, centerHitsControl: true });
+    } else {
+      expect(await workspace.evaluate((main) => getComputedStyle(main).paddingBottom),
+        'desktop workspace bottom padding is unchanged').toBe('0px');
+    }
     await historicalOpener.click();
     await expect(viewer).toContainText('Fictional evidence plan');
     await expect(viewer).not.toContainText('Fictional changed live title');
