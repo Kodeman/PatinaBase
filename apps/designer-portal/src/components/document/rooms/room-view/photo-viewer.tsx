@@ -34,6 +34,7 @@
 
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { isElementRendered } from '../../overlays/active-dialog';
 import type { RoomScanPhoto } from '@patina/supabase';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -211,9 +212,11 @@ export interface PhotoViewerProps {
    *  selection stays in range. */
   onIndexChange: (index: number) => void;
   onClose: () => void;
+  /** Actual opening control; null/omitted keeps the programmatic focus fallback. */
+  returnFocusTo?: HTMLElement | null;
 }
 
-export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoViewerProps) {
+export function PhotoViewer({ photos, index, onIndexChange, onClose, returnFocusTo }: PhotoViewerProps) {
   const total = photos.length;
   const safeIndex = clampIndex(index, total);
   const photo = photos[safeIndex];
@@ -222,6 +225,11 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
     photo ? initialViewerStage(photo) : 'failed',
   );
   const restoreRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef(returnFocusTo);
+
+  useEffect(() => {
+    returnFocusRef.current = returnFocusTo;
+  }, [returnFocusTo]);
 
   // Reset the HEIC-fallback stage whenever the photo changes.
   useEffect(() => {
@@ -233,6 +241,19 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
   // same discipline as DocFileViewer / use-measure.
   useEffect(() => {
     restoreRef.current = document.activeElement as HTMLElement | null;
+    return () => {
+      const targets = [returnFocusRef.current, restoreRef.current];
+      restoreRef.current = null;
+      window.requestAnimationFrame(() => {
+        const target = targets.find(
+          (element) => element?.isConnected && isElementRendered(element),
+        );
+        target?.focus({ preventScroll: true });
+      });
+    };
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -248,7 +269,6 @@ export function PhotoViewer({ photos, index, onIndexChange, onClose }: PhotoView
     document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
-      restoreRef.current?.focus?.();
     };
   }, [onClose, onIndexChange, safeIndex]);
 

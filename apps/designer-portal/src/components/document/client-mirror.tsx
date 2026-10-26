@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { isElementRendered } from './overlays/active-dialog';
 import { useQuery } from '@tanstack/react-query';
 import {
   createBrowserClient,
@@ -144,10 +145,13 @@ function MirrorEdition({ projectId, name }: { projectId: string; name: string })
 export function ClientMirror({
   projectId,
   clientName,
+  returnFocusTo,
   onClose,
 }: {
   projectId: string;
   clientName: string;
+  /** Actual opening control; null/omitted keeps the programmatic focus fallback. */
+  returnFocusTo?: HTMLElement | null;
   onClose: () => void;
 }) {
   const { data } = useClientMirrorData(projectId);
@@ -156,9 +160,27 @@ export function ClientMirror({
   const oneVoice = useFeatureFlag('one-voice').value === true;
   const shown = oneVoice ? householdDisplayName(clientName) || undefined : clientName;
   const restoreRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef(returnFocusTo);
+
+  useEffect(() => {
+    returnFocusRef.current = returnFocusTo;
+  }, [returnFocusTo]);
 
   useEffect(() => {
     restoreRef.current = document.activeElement as HTMLElement | null;
+    return () => {
+      const targets = [returnFocusRef.current, restoreRef.current];
+      restoreRef.current = null;
+      window.requestAnimationFrame(() => {
+        const target = targets.find(
+          (element) => element?.isConnected && isElementRendered(element),
+        );
+        target?.focus({ preventScroll: true });
+      });
+    };
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -168,7 +190,6 @@ export function ClientMirror({
     document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
-      restoreRef.current?.focus?.();
     };
   }, [onClose]);
 
