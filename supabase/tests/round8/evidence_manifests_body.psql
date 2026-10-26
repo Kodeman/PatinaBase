@@ -1,0 +1,300 @@
+CREATE FUNCTION pg_temp.c1_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
+ RAISE NOTICE 'PASS: %',label;
+END $$;
+CREATE FUNCTION pg_temp.c1_error(command text,state text,message text,label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+ BEGIN EXECUTE command;
+ EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+ END;
+ PERFORM pg_temp.c1_assert(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
+ label||format(' expected %s/%s got %s/%s',state,message,actual_state,actual_message));
+END $$;
+
+SELECT pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f877%'),'owned fixtures initially absent');
+SELECT pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM public.evidence_manifests),'no historical manifest backfill');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email) SELECT ('f8770000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'manifest-'||n||'@test.invalid' FROM generate_series(1,5)n;
+INSERT INTO public.profiles(id,email,full_name,is_designer) SELECT id,email,'Manifest fixture',true FROM auth.users WHERE id::text LIKE 'f877%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES ('f8770000-0000-4000-8000-000000000010','design_studio','Manifest A','manifest-a','active'),('f8770000-0000-4000-8000-000000000011','design_studio','Manifest B','manifest-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES ('f8770000-0000-4000-8000-000000000001','f8770000-0000-4000-8000-000000000010','owner','active'),('f8770000-0000-4000-8000-000000000001','f8770000-0000-4000-8000-000000000011','owner','active'),('f8770000-0000-4000-8000-000000000002','f8770000-0000-4000-8000-000000000010','member','active'),('f8770000-0000-4000-8000-000000000003','f8770000-0000-4000-8000-000000000011','member','active'),('f8770000-0000-4000-8000-000000000004','f8770000-0000-4000-8000-000000000010','guest','active');
+INSERT INTO public.projects(id,name,designer_id,created_by,client_id,studio_id,status) VALUES
+ ('f8770000-0000-4000-8000-000000000020','Manifest A','f8770000-0000-4000-8000-000000000001','f8770000-0000-4000-8000-000000000001','f8770000-0000-4000-8000-000000000005','f8770000-0000-4000-8000-000000000010','active'),('f8770000-0000-4000-8000-000000000021','Manifest B','f8770000-0000-4000-8000-000000000001','f8770000-0000-4000-8000-000000000001','f8770000-0000-4000-8000-000000000005','f8770000-0000-4000-8000-000000000011','active');
+INSERT INTO public.project_packages(id,project_id,package_kind,code,title,idempotency_key,request_hash) VALUES
+ ('f8770000-0000-4000-8000-000000000030','f8770000-0000-4000-8000-000000000020','build','A','A','a','fixture'),('f8770000-0000-4000-8000-000000000031','f8770000-0000-4000-8000-000000000020','build','B','B','b','fixture'),('f8770000-0000-4000-8000-000000000032','f8770000-0000-4000-8000-000000000021','build','X','X','x','fixture');
+INSERT INTO public.project_packages(id,project_id,package_kind,code,title,idempotency_key,request_hash,archived_at) VALUES ('f8770000-0000-4000-8000-000000000033','f8770000-0000-4000-8000-000000000020','build','OLD','Archived','old','fixture',now());
+INSERT INTO public.plan_sheets(id,project_id,sheet_number,title) VALUES ('f8770000-0000-4000-8000-000000000040','f8770000-0000-4000-8000-000000000020','A1','Fixture');
+INSERT INTO public.plan_prints(id,sheet_id,batch_id,print_number,rev_letter,project_document_id,sha256) VALUES ('f8770000-0000-4000-8000-000000000041','f8770000-0000-4000-8000-000000000040','f8770000-0000-4000-8000-000000000400',1,'A','f8770000-0000-4000-8000-000000000401','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count) VALUES ('f8770000-0000-4000-8000-000000000042','f8770000-0000-4000-8000-000000000020',1,'Issue','issue',repeat('a',64),'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1);
+INSERT INTO public.plan_issue_prints(id,issue_id,sheet_id,print_id,sheet_number,sheet_title,rev_letter,sha256) VALUES ('f8770000-0000-4000-8000-000000000043','f8770000-0000-4000-8000-000000000042','f8770000-0000-4000-8000-000000000040','f8770000-0000-4000-8000-000000000041','A1','Fixture','A','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+INSERT INTO public.product_configurations(id,product_id,project_id,owner_user_id,version,schema_revision,status,evaluation,snapshot,snapshot_hash,approved_at,approved_by) VALUES
+ ('f8770000-0000-4000-8000-000000000044','f8770000-0000-4000-8000-000000000402','f8770000-0000-4000-8000-000000000020','f8770000-0000-4000-8000-000000000001',1,1,'approved','{}','{}',public._configuration_snapshot_hash('{}'),now(),'f8770000-0000-4000-8000-000000000001'),
+ ('f8770000-0000-4000-8000-000000000045','f8770000-0000-4000-8000-000000000402','f8770000-0000-4000-8000-000000000021','f8770000-0000-4000-8000-000000000001',1,1,'approved','{}','{}',public._configuration_snapshot_hash('{}'),now(),'f8770000-0000-4000-8000-000000000001'),
+ ('f8770000-0000-4000-8000-000000000046','f8770000-0000-4000-8000-000000000402','f8770000-0000-4000-8000-000000000020','f8770000-0000-4000-8000-000000000001',1,1,'saved','{}','{}',public._configuration_snapshot_hash('{}'),now(),'f8770000-0000-4000-8000-000000000001');
+INSERT INTO public.custom_commission_revisions(id,configuration_id,revision_number,status,brief,drawings,quote,provenance,submitted_at,quoted_at,approved_at) VALUES ('f8770000-0000-4000-8000-000000000047','f8770000-0000-4000-8000-000000000044',1,'approved','{}','[]','{}','{}',now(),now(),now());
+INSERT INTO public.custom_commission_revisions(id,configuration_id,revision_number,status,brief,drawings,quote,provenance,submitted_at,quoted_at,approved_at) VALUES
+ ('f8770000-0000-4000-8000-000000000079','f8770000-0000-4000-8000-000000000044',2,'client_review','{}','[]','{"retailPriceCents":100}','{}',now(),now(),NULL),
+ ('f8770000-0000-4000-8000-000000000080','f8770000-0000-4000-8000-000000000045',1,'approved','{}','[]','{}','{}',now(),now(),now());
+INSERT INTO public.project_review_editions(id,project_id,edition_number,title,status,published_at,snapshot_hash) VALUES ('f8770000-0000-4000-8000-000000000048','f8770000-0000-4000-8000-000000000020',1,'Fixture','published',now(),repeat('a',64)),('f8770000-0000-4000-8000-000000000049','f8770000-0000-4000-8000-000000000020',2,'Draft','draft',NULL,NULL);
+INSERT INTO public.project_review_items(id,edition_id,source_ffe_item_id,selection_thread_id,item_snapshot,content_hash) VALUES ('f8770000-0000-4000-8000-000000000050','f8770000-0000-4000-8000-000000000048','f8770000-0000-4000-8000-000000000403','f8770000-0000-4000-8000-000000000404','{}','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),('f8770000-0000-4000-8000-000000000051','f8770000-0000-4000-8000-000000000049','f8770000-0000-4000-8000-000000000403','f8770000-0000-4000-8000-000000000404','{}','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+INSERT INTO public.client_decisions(id,designer_client_id,project_id,title,designer_id) VALUES ('f8770000-0000-4000-8000-000000000052','f8770000-0000-4000-8000-000000000405','f8770000-0000-4000-8000-000000000020','Fixture','f8770000-0000-4000-8000-000000000001');
+INSERT INTO public.project_approval_artifacts(id,decision_id,project_id,source_kind,source_id,source_version,artifact_hash,artifact_title,question,due_at,phase_id,cost_cents_delta,schedule_days_delta,lead_time_days_delta,source_snapshot) VALUES
+ ('f8770000-0000-4000-8000-000000000053','f8770000-0000-4000-8000-000000000052','f8770000-0000-4000-8000-000000000020','plan_issue','f8770000-0000-4000-8000-000000000042',1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','Fixture','Approve?',now(),'f8770000-0000-4000-8000-000000000406',0,0,0,'{}');
+INSERT INTO public.purchase_orders(id,designer_id,project_id,vendor_id,payment_pattern) VALUES ('f8770000-0000-4000-8000-000000000054','f8770000-0000-4000-8000-000000000001','f8770000-0000-4000-8000-000000000020','f8770000-0000-4000-8000-000000000407','full_upfront');
+INSERT INTO public.po_spec_snapshots(id,purchase_order_id,revision,spec,content_hash) VALUES ('f8770000-0000-4000-8000-000000000055','f8770000-0000-4000-8000-000000000054',1,'{}',md5('{}'));
+INSERT INTO public.coordination_item_revisions(id,decision_id,rev_number,status,attachments,note) VALUES ('f8770000-0000-4000-8000-000000000056','f8770000-0000-4000-8000-000000000052',1,'approved','[]','frozen'),('f8770000-0000-4000-8000-000000000057','f8770000-0000-4000-8000-000000000052',2,'submitted','[]','mutable');
+INSERT INTO public.designer_clients(id,designer_id,client_id,status) VALUES ('f8770000-0000-4000-8000-000000000405','f8770000-0000-4000-8000-000000000001','f8770000-0000-4000-8000-000000000005','active');
+SET LOCAL session_replication_role=origin;
+CREATE TEMP TABLE members(kind text PRIMARY KEY,member jsonb);
+INSERT INTO members VALUES
+ ('plan_issue',jsonb_build_object('kind','plan_issue','id','f8770000-0000-4000-8000-000000000042','version',1,'sha256','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),
+ ('plan_issue_print',jsonb_build_object('kind','plan_issue_print','id','f8770000-0000-4000-8000-000000000043','rev','A','sha256','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),
+ ('plan_print',jsonb_build_object('kind','plan_print','id','f8770000-0000-4000-8000-000000000041','rev','A','sha256','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),
+ ('product_configuration',jsonb_build_object('kind','product_configuration','id','f8770000-0000-4000-8000-000000000044','version',1,'sha256',public._configuration_snapshot_hash('{}'))),
+ ('custom_commission_revision',jsonb_build_object('kind','custom_commission_revision','id','f8770000-0000-4000-8000-000000000047','rev',1,'sha256',encode(extensions.digest(public._plan_room_canonical_json(jsonb_build_object('configurationId','f8770000-0000-4000-8000-000000000044','revision',1,'brief','{}'::jsonb,'drawings','[]'::jsonb,'quote','{}'::jsonb,'provenance','{}'::jsonb)),'sha256'),'hex'))),
+ ('review_item',jsonb_build_object('kind','review_item','id','f8770000-0000-4000-8000-000000000050','version',1,'sha256','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),
+ ('approval_artifact',jsonb_build_object('kind','approval_artifact','id','f8770000-0000-4000-8000-000000000053','version',1,'sha256','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')),
+ ('po_spec_snapshot',jsonb_build_object('kind','po_spec_snapshot','id','f8770000-0000-4000-8000-000000000055','rev',1,'sha256',encode(extensions.digest(public._plan_room_canonical_json('{}'),'sha256'),'hex'))),
+ ('coordination_item_revision',jsonb_build_object('kind','coordination_item_revision','id','f8770000-0000-4000-8000-000000000056','rev',1,'sha256',encode(extensions.digest(public._plan_room_canonical_json(jsonb_build_object('decisionId','f8770000-0000-4000-8000-000000000052','rev',1,'attachments','[]'::jsonb,'note','frozen')),'sha256'),'hex')));
+CREATE TEMP TABLE expected AS SELECT encode(extensions.digest(public._plan_room_canonical_json(jsonb_agg(member ORDER BY kind,member->>'id')),'sha256'),'hex') hash FROM members;
+CREATE TEMP TABLE results(key text PRIMARY KEY,result jsonb);
+CREATE FUNCTION pg_temp.mint(key text,pkg uuid DEFAULT 'f8770000-0000-4000-8000-000000000030',purpose text DEFAULT 'fabrication_instruction',items jsonb DEFAULT NULL) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.create_evidence_manifest('f8770000-0000-4000-8000-000000000020',pkg,purpose,coalesce(items,(SELECT jsonb_agg(member ORDER BY kind DESC) FROM members)),key);
+$$;
+DO $$ DECLARE role text; t text; BEGIN
+ FOREACH role IN ARRAY ARRAY['anon','authenticated'] LOOP
+  PERFORM pg_temp.c1_assert(NOT has_function_privilege(role,'public.create_evidence_manifest(uuid,uuid,text,jsonb,text)','EXECUTE'),role||' mint inactive');
+ END LOOP;
+ PERFORM pg_temp.c1_assert(has_function_privilege('service_role','public.create_evidence_manifest(uuid,uuid,text,jsonb,text)','EXECUTE'),'only service mint grant');
+ FOREACH t IN ARRAY ARRAY['evidence_manifests','evidence_manifest_requests'] LOOP
+  PERFORM pg_temp.c1_assert(NOT has_table_privilege('authenticated','public.'||t,'INSERT,UPDATE,DELETE,TRUNCATE'),'authenticated no direct write '||t);
+  PERFORM pg_temp.c1_assert(NOT has_table_privilege('anon','public.'||t,'SELECT'),'anon no read '||t);
+ END LOOP;
+END $$;
+SELECT pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid='public.create_evidence_manifest(uuid,uuid,text,jsonb,text)'::regprocedure AND a.grantee=0 AND a.privilege_type='EXECUTE'),'PUBLIC mint inactive');
+SELECT pg_temp.c1_assert((SELECT count(*)=2 AND bool_and(confdeltype='r') FROM pg_constraint WHERE contype='f' AND conname IN ('evidence_manifests_created_by_fkey','evidence_manifest_requests_created_by_fkey')),'both immutable actor FKs RESTRICT');
+-- Test-only activation, always rolled back with the wrapper.
+GRANT EXECUTE ON FUNCTION public.create_evidence_manifest(uuid,uuid,text,jsonb,text) TO authenticated;
+GRANT ALL ON members,results,expected TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.mint(text,uuid,text,jsonb),pg_temp.c1_assert(boolean,text),pg_temp.c1_error(text,text,text,text) TO authenticated;
+SELECT set_config('request.jwt.claim.sub','f8770000-0000-4000-8000-000000000002',true);
+SET LOCAL ROLE authenticated;
+INSERT INTO results VALUES('original',pg_temp.mint('original'));
+SELECT pg_temp.c1_assert(NOT (result->>'replayed')::boolean,'nine native member kinds mint') FROM results WHERE key='original';
+INSERT INTO results VALUES('same',pg_temp.mint('original')),('alias',pg_temp.mint('alias')),('package-b',pg_temp.mint('package-b','f8770000-0000-4000-8000-000000000031')),('purpose',pg_temp.mint('purpose','f8770000-0000-4000-8000-000000000030','package_issue'));
+SELECT pg_temp.c1_assert((SELECT result->>'manifestId' FROM results WHERE key='original')=(SELECT result->>'manifestId' FROM results WHERE key='alias') AND (SELECT (result->>'replayed')::boolean FROM results WHERE key='alias'),'new alias persists and replays exact binding');
+SELECT pg_temp.c1_assert((SELECT result->>'manifestId' FROM results WHERE key='original')<>(SELECT result->>'manifestId' FROM results WHERE key='package-b'),'same members separate by package');
+SELECT pg_temp.c1_assert((SELECT result->>'manifestId' FROM results WHERE key='original')<>(SELECT result->>'manifestId' FROM results WHERE key='purpose'),'same members separate by purpose');
+SELECT pg_temp.c1_assert((SELECT (result->>'replayed')::boolean FROM results WHERE key='same'),'original key replays');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('alias','f8770000-0000-4000-8000-000000000030','fabrication_instruction',(SELECT jsonb_agg(member) FROM members WHERE kind='plan_issue'))$q$,'23505','idempotency_key_reused','alias cannot change members');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('dupe','f8770000-0000-4000-8000-000000000030','package_issue',(SELECT jsonb_build_array(member,member) FROM members WHERE kind='plan_issue'))$q$,'23514','manifest_member_duplicate','duplicate members refuse');
+SELECT pg_temp.c1_assert((SELECT count(*)=4 FROM public.evidence_manifest_requests),'every accepted key has one receipt');
+SELECT pg_temp.c1_assert((SELECT manifest_hash=(SELECT hash FROM expected) AND members=(SELECT jsonb_agg(member ORDER BY kind,member->>'id') FROM pg_temp.members) FROM public.evidence_manifests WHERE id=(SELECT (result->>'manifestId')::uuid FROM results WHERE key='original')),'server canonical sorted hash matches exact members');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('alias','f8770000-0000-4000-8000-000000000031')$q$,'23505','idempotency_key_reused','alias cannot be reused for another package');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('alias','f8770000-0000-4000-8000-000000000030','package_issue')$q$,'23505','idempotency_key_reused','alias cannot change purpose');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('empty','f8770000-0000-4000-8000-000000000030','package_issue','[]')$q$,'23514','manifest_members_empty','empty issue refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('empty','f8770000-0000-4000-8000-000000000030','fabrication_instruction','[]')$q$,'23514','manifest_members_empty','empty fabrication refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('missing',NULL)$q$,'23514','manifest_package_required','fabrication requires package');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('foreign','f8770000-0000-4000-8000-000000000032')$q$,'23514','manifest_package_off_project','foreign package refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('archived','f8770000-0000-4000-8000-000000000033')$q$,'23514','manifest_package_off_project','archived package refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('forged','f8770000-0000-4000-8000-000000000030','package_issue',jsonb_build_array(jsonb_set((SELECT member FROM members WHERE kind='plan_print'),'{sha256}',to_jsonb(repeat('b',64)))))$q$,'23514','manifest_member_identity_mismatch','forged file hash refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('stale','f8770000-0000-4000-8000-000000000030','package_issue',jsonb_build_array(jsonb_set((SELECT member FROM members WHERE kind='product_configuration'),'{version}','2')))$q$,'23514','manifest_member_identity_mismatch','stale version refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('mutable','f8770000-0000-4000-8000-000000000030','package_issue',jsonb_build_array(jsonb_set((SELECT member FROM members WHERE kind='product_configuration'),'{id}',to_jsonb('f8770000-0000-4000-8000-000000000046'::text))))$q$,'23514','manifest_member_not_frozen','saved configuration refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('foreign','f8770000-0000-4000-8000-000000000030','package_issue',jsonb_build_array(jsonb_set((SELECT member FROM members WHERE kind='product_configuration'),'{id}',to_jsonb('f8770000-0000-4000-8000-000000000045'::text))))$q$,'23514','manifest_member_off_project','foreign member refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('draft','f8770000-0000-4000-8000-000000000030','package_issue',jsonb_build_array(jsonb_set((SELECT member FROM members WHERE kind='review_item'),'{id}',to_jsonb('f8770000-0000-4000-8000-000000000051'::text))))$q$,'23514','manifest_member_not_frozen','draft review refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('submitted','f8770000-0000-4000-8000-000000000030','package_issue',jsonb_build_array(jsonb_set((SELECT member FROM members WHERE kind='coordination_item_revision'),'{id}',to_jsonb('f8770000-0000-4000-8000-000000000057'::text))))$q$,'23514','manifest_member_not_frozen','unapproved submittal refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('head','f8770000-0000-4000-8000-000000000030','package_issue','[{"kind":"plan_sheet","id":"f8770000-0000-4000-8000-000000000040"}]')$q$,'23514','manifest_member_not_frozen','mutable sheet head is not evidence');
+SELECT pg_temp.c1_assert((pg_temp.mint('service',NULL,'service_acceptance','[]')->>'manifestId')=(pg_temp.mint('service-alias',NULL,'service_acceptance','[]')->>'manifestId'),'NULL service package dedupes with alias receipt');
+INSERT INTO public.margin_notes(id,project_id,designer_id,body,subject_kind,subject_id) VALUES ('f8770000-0000-4000-8000-000000000060','f8770000-0000-4000-8000-000000000020','f8770000-0000-4000-8000-000000000002','Private studio text','project_package','f8770000-0000-4000-8000-000000000030');
+SELECT pg_temp.c1_assert(EXISTS(SELECT 1 FROM public.margin_notes WHERE id='f8770000-0000-4000-8000-000000000060' AND subject_kind='project_package'),'package subject accepted for studio member');
+SELECT pg_temp.c1_error($q$UPDATE public.margin_notes SET subject_id='f8770000-0000-4000-8000-000000000032' WHERE id='f8770000-0000-4000-8000-000000000060'$q$,'23514','subject_off_project','foreign package note refuses');
+SELECT pg_temp.c1_error($q$UPDATE public.evidence_manifests SET purpose=purpose$q$,'42501',NULL,'authenticated direct update denied');
+RESET ROLE;
+UPDATE public.server_capabilities SET enabled=true WHERE key='margin_note_escalation';
+GRANT EXECUTE ON FUNCTION public.escalate_margin_note(uuid,uuid) TO authenticated;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.c1_assert((public.escalate_margin_note('f8770000-0000-4000-8000-000000000060','f8770000-0000-4000-8000-000000000061')).title='Decision from a studio note','package subject escalates with neutral title');
+SELECT pg_temp.c1_assert((SELECT context IS NULL AND status='draft' FROM public.client_decisions WHERE id='f8770000-0000-4000-8000-000000000061'),'package escalation never copies private text');
+RESET ROLE;
+REVOKE EXECUTE ON FUNCTION public.escalate_margin_note(uuid,uuid) FROM authenticated;
+UPDATE public.server_capabilities SET enabled=false WHERE key='margin_note_escalation';
+
+-- Retention: mutable native evidence must refuse before FK/native guards.
+SELECT pg_temp.c1_error($q$UPDATE public.po_spec_snapshots SET spec='{"changed":true}' WHERE id='f8770000-0000-4000-8000-000000000055'$q$,'55000','evidence_member_pinned','pinned PO content UPDATE refuses');
+CREATE TEMP TABLE retention_cases(kind text, native_table text, id uuid, assignment text);
+INSERT INTO retention_cases VALUES
+ ('plan_issue','plan_issues','f8770000-0000-4000-8000-000000000042','name=''changed'''),
+ ('plan_issue_print','plan_issue_prints','f8770000-0000-4000-8000-000000000043','sheet_title=''changed'''),
+ ('plan_print','plan_prints','f8770000-0000-4000-8000-000000000041','sha256=repeat(''b'',64)'),
+ ('product_configuration','product_configurations','f8770000-0000-4000-8000-000000000044','snapshot=''{}''::jsonb||''{"changed":true}''::jsonb'),
+ ('custom_commission_revision','custom_commission_revisions','f8770000-0000-4000-8000-000000000047','brief=''{}''::jsonb||''{"changed":true}''::jsonb'),
+ ('review_item','project_review_items','f8770000-0000-4000-8000-000000000050','item_snapshot=''{}''::jsonb||''{"changed":true}''::jsonb'),
+ ('approval_artifact','project_approval_artifacts','f8770000-0000-4000-8000-000000000053','artifact_title=''changed'''),
+ ('po_spec_snapshot','po_spec_snapshots','f8770000-0000-4000-8000-000000000055','spec=''{}''::jsonb||''{"changed":true}''::jsonb'),
+ ('coordination_item_revision','coordination_item_revisions','f8770000-0000-4000-8000-000000000056','note=''changed''');
+GRANT EXECUTE ON FUNCTION pg_temp.c1_assert(boolean,text),pg_temp.c1_error(text,text,text,text) TO service_role;
+DO $$ DECLARE c record; role_name text; before_row jsonb; after_row jsonb; BEGIN
+ FOREACH role_name IN ARRAY ARRAY['postgres','service_role'] LOOP
+  FOR c IN SELECT * FROM retention_cases LOOP
+   EXECUTE format('SELECT to_jsonb(t) FROM public.%I t WHERE id=$1',c.native_table) INTO before_row USING c.id;
+   -- Test-only grants prove the trigger, not a missing table permission, refuses service writes.
+   EXECUTE format('GRANT UPDATE,DELETE ON public.%I TO service_role',c.native_table);
+   IF role_name='service_role' THEN SET LOCAL ROLE service_role; END IF;
+   PERFORM pg_temp.c1_error(format('UPDATE public.%I SET %s WHERE id=%L',c.native_table,c.assignment,c.id),'55000','evidence_member_pinned',role_name||' pinned UPDATE '||c.kind);
+   PERFORM pg_temp.c1_error(format('DELETE FROM public.%I WHERE id=%L',c.native_table,c.id),'55000','evidence_member_pinned',role_name||' pinned DELETE '||c.kind);
+   RESET ROLE;
+   EXECUTE format('SELECT to_jsonb(t) FROM public.%I t WHERE id=$1',c.native_table) INTO after_row USING c.id;
+   PERFORM pg_temp.c1_assert(before_row IS NOT DISTINCT FROM after_row,role_name||' zero writes '||c.kind);
+  END LOOP;
+ END LOOP;
+END $$;
+SELECT pg_temp.c1_error($q$DELETE FROM public.purchase_orders WHERE id='f8770000-0000-4000-8000-000000000054'$q$,'55000','evidence_member_pinned','PO parent cascade retains snapshot');
+-- Enter the native draft-delete boundary; the parent guard otherwise refuses before cascading.
+SELECT set_config('app.client_decision_write_id','f8770000-0000-4000-8000-000000000052',true);
+SELECT pg_temp.c1_error($q$DELETE FROM public.client_decisions WHERE id='f8770000-0000-4000-8000-000000000052'$q$,'55000','evidence_member_pinned','decision parent cascade retains evidence');
+SELECT set_config('app.client_decision_write_id','',true);
+SELECT pg_temp.c1_assert((SELECT count(*)=27 FROM public.evidence_manifest_members),'nine relational pins per distinct manifest; replay adds none');
+SELECT pg_temp.c1_assert((SELECT count(*)=9 AND bool_and(confdeltype='r') FROM pg_constraint WHERE conrelid='public.evidence_manifest_members'::regclass AND contype='f' AND confrelid<>'public.evidence_manifests'::regclass),'all nine native member FKs RESTRICT');
+SELECT pg_temp.c1_error($q$INSERT INTO public.evidence_manifest_members(manifest_id) SELECT id FROM public.evidence_manifests LIMIT 1$q$,'23514',NULL,'exactly one native member required');
+SELECT pg_temp.c1_error($q$INSERT INTO public.evidence_manifest_members(manifest_id,po_spec_snapshot_id,coordination_item_revision_id) SELECT id,'f8770000-0000-4000-8000-000000000055','f8770000-0000-4000-8000-000000000056' FROM public.evidence_manifests LIMIT 1$q$,'23514',NULL,'two native members refuse');
+UPDATE public.coordination_item_revisions SET note='still mutable' WHERE id='f8770000-0000-4000-8000-000000000057';
+SELECT pg_temp.c1_assert((SELECT note='still mutable' FROM public.coordination_item_revisions WHERE id='f8770000-0000-4000-8000-000000000057'),'unpinned coordination keeps native UPDATE');
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.po_spec_snapshots(id,purchase_order_id,revision,spec,content_hash) VALUES ('f8770000-0000-4000-8000-000000000078','f8770000-0000-4000-8000-000000000054',2,'{}',md5('{}'));
+SET LOCAL session_replication_role=origin;
+UPDATE public.po_spec_snapshots SET spec='{"unpinned":true}' WHERE id='f8770000-0000-4000-8000-000000000078';
+DELETE FROM public.po_spec_snapshots WHERE id='f8770000-0000-4000-8000-000000000078';
+DELETE FROM public.coordination_item_revisions WHERE id='f8770000-0000-4000-8000-000000000057';
+SELECT pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM public.po_spec_snapshots WHERE id='f8770000-0000-4000-8000-000000000078') AND NOT EXISTS(SELECT 1 FROM public.coordination_item_revisions WHERE id='f8770000-0000-4000-8000-000000000057'),'unpinned mutable evidence keeps native DELETE');
+SELECT pg_temp.c1_error($q$UPDATE public.evidence_manifests SET purpose=purpose$q$,'55000','immutable','owner update rejector');
+SELECT pg_temp.c1_error($q$DELETE FROM public.evidence_manifests$q$,'55000','immutable','owner delete rejector');
+SELECT pg_temp.c1_error($q$UPDATE public.evidence_manifest_requests SET request_hash=request_hash$q$,'55000','immutable','receipt update rejector');
+SELECT pg_temp.c1_error($q$DELETE FROM public.evidence_manifest_requests$q$,'55000','immutable','receipt delete rejector');
+SELECT pg_temp.c1_error($q$DELETE FROM public.profiles WHERE id='f8770000-0000-4000-8000-000000000002'$q$,'23503',NULL,'minting actor retained with RESTRICT');
+SELECT pg_temp.c1_assert(public._subject_project_id('project_package','f8770000-0000-4000-8000-000000000030')='f8770000-0000-4000-8000-000000000020','package subject project helper');
+DO $$ DECLARE n integer; BEGIN
+ FOR n IN 3..5 LOOP
+  PERFORM set_config('request.jwt.claim.sub',('f8770000-0000-4000-8000-'||lpad(n::text,12,'0')),true);
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.c1_error('SELECT pg_temp.mint(''denied'')','42501','manifest_access_denied','foreign-studio, guest and client denied '||n);
+  PERFORM pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM public.evidence_manifests),'RLS hides manifest from denied actor '||n);
+  RESET ROLE;
+ END LOOP;
+END $$;
+REVOKE EXECUTE ON FUNCTION public.create_evidence_manifest(uuid,uuid,text,jsonb,text) FROM authenticated;
+SELECT pg_temp.c1_assert(NOT has_function_privilege('authenticated','public.create_evidence_manifest(uuid,uuid,text,jsonb,text)','EXECUTE') AND NOT has_function_privilege('anon','public.create_evidence_manifest(uuid,uuid,text,jsonb,text)','EXECUTE'),'activation rollback closes authenticated; anon never opens');
+
+-- Recorded-tenant matrix: owner belongs to A+B; members belong to only A or B.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.margin_notes(id,project_id,designer_id,body,subject_kind,subject_id)
+ SELECT ('f8770000-0000-4000-8000-'||lpad((100+j*10+n)::text,12,'0'))::uuid,
+ ('f8770000-0000-4000-8000-'||lpad((20+j)::text,12,'0'))::uuid,
+ ('f8770000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'private','project_package',
+ ('f8770000-0000-4000-8000-'||lpad((30+j*2)::text,12,'0'))::uuid
+ FROM generate_series(0,1)j CROSS JOIN generate_series(1,5)n;
+SET LOCAL session_replication_role=origin;
+UPDATE public.server_capabilities SET enabled=true WHERE key='margin_note_escalation';
+GRANT EXECUTE ON FUNCTION public.escalate_margin_note(uuid,uuid) TO authenticated;
+DO $$ DECLARE n integer; j integer; admitted boolean; note_id uuid; actor_id uuid; project_id uuid; package_id uuid; decision_id uuid; changed integer; cmd text; BEGIN
+ FOR j IN 0..1 LOOP
+  FOR n IN 1..5 LOOP
+   actor_id:=('f8770000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+   project_id:=('f8770000-0000-4000-8000-'||lpad((20+j)::text,12,'0'))::uuid;
+   package_id:=('f8770000-0000-4000-8000-'||lpad((30+j*2)::text,12,'0'))::uuid;
+   note_id:=('f8770000-0000-4000-8000-'||lpad((100+j*10+n)::text,12,'0'))::uuid;
+   decision_id:=('f8770000-0000-4000-8000-'||lpad((300+j*10+n)::text,12,'0'))::uuid;
+   admitted:=n=1 OR (j=0 AND n=2) OR (j=1 AND n=3);
+   PERFORM set_config('request.jwt.claim.sub',actor_id::text,true);
+   SET LOCAL ROLE authenticated;
+   cmd:=format('INSERT INTO public.margin_notes(project_id,designer_id,body,subject_kind,subject_id) VALUES(%L,%L,''private'',''project_package'',%L)',project_id,actor_id,package_id);
+   IF admitted THEN
+    EXECUTE cmd;
+    PERFORM pg_temp.c1_assert(true,format('package note INSERT allowed studio %s actor %s',j,n));
+   ELSE
+    PERFORM pg_temp.c1_error(cmd,'42501',NULL,format('package note INSERT denied studio %s actor %s',j,n));
+   END IF;
+   UPDATE public.margin_notes SET body='updated private' WHERE id=note_id;
+   GET DIAGNOSTICS changed=ROW_COUNT;
+   PERFORM pg_temp.c1_assert(changed=CASE WHEN admitted THEN 1 ELSE 0 END,format('package note UPDATE tenant matrix studio %s actor %s',j,n));
+   IF admitted THEN
+    PERFORM public.escalate_margin_note(note_id,decision_id);
+    PERFORM pg_temp.c1_assert((SELECT title='Decision from a studio note' AND context IS NULL FROM public.client_decisions WHERE id=decision_id),format('package note escalation neutral studio %s actor %s',j,n));
+   ELSE
+    PERFORM pg_temp.c1_error(format('SELECT public.escalate_margin_note(%L,%L)',note_id,decision_id),'42501','note access denied',format('package note escalation denied studio %s actor %s',j,n));
+   END IF;
+   RESET ROLE;
+  END LOOP;
+ END LOOP;
+END $$;
+SELECT set_config('request.jwt.claim.sub','f8770000-0000-4000-8000-000000000001',true);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.c1_error($q$INSERT INTO public.margin_notes(project_id,designer_id,body,subject_kind,subject_id) VALUES('f8770000-0000-4000-8000-000000000020','f8770000-0000-4000-8000-000000000001','private','project_package','f8770000-0000-4000-8000-000000000032')$q$,'23514','subject_off_project','INSERT real studio-B package refuses');
+SELECT pg_temp.c1_error($q$UPDATE public.margin_notes SET subject_id='f8770000-0000-4000-8000-000000000032' WHERE id='f8770000-0000-4000-8000-000000000101'$q$,'23514','subject_off_project','UPDATE real studio-B package refuses');
+SELECT pg_temp.c1_error($q$UPDATE public.margin_notes SET subject_id='f8770000-0000-4000-8000-000000000999' WHERE id='f8770000-0000-4000-8000-000000000101'$q$,'23514','subject_off_project','absent package fails closed');
+RESET ROLE;
+SAVEPOINT null_subject_helper;
+CREATE OR REPLACE FUNCTION public._subject_project_id(p_kind text,p_id uuid) RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$ SELECT NULL::uuid $$;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.c1_error($q$INSERT INTO public.margin_notes(project_id,designer_id,body,subject_kind,subject_id) VALUES('f8770000-0000-4000-8000-000000000020','f8770000-0000-4000-8000-000000000001','private','project_package','f8770000-0000-4000-8000-000000000030')$q$,'23514','subject_off_project','NULL helper INSERT fails closed');
+SELECT pg_temp.c1_error($q$UPDATE public.margin_notes SET body='bad' WHERE id='f8770000-0000-4000-8000-000000000101'$q$,'23514','subject_off_project','NULL helper UPDATE fails closed');
+SELECT pg_temp.c1_error($q$SELECT public.escalate_margin_note('f8770000-0000-4000-8000-000000000101','f8770000-0000-4000-8000-000000000301')$q$,'23514','subject_off_project','NULL helper escalation fails closed');
+RESET ROLE;
+ROLLBACK TO null_subject_helper;
+REVOKE EXECUTE ON FUNCTION public.escalate_margin_note(uuid,uuid) FROM authenticated;
+UPDATE public.server_capabilities SET enabled=false WHERE key='margin_note_escalation';
+
+-- Static lock-order control: exception subtransactions release their locks, so
+-- checking pg_locks after a caught refusal cannot prove the pre-refusal order.
+DO $$ DECLARE branch text; first_lock integer; BEGIN
+ branch:=split_part(split_part(pg_get_functiondef('public._evidence_manifest_member(uuid,jsonb)'::regprocedure),
+  'WHEN ''custom_commission_revision'' THEN',2),'WHEN ''review_item'' THEN',1);
+ first_lock:=strpos(branch,'FOR SHARE');
+ PERFORM pg_temp.c1_assert(first_lock>0 AND strpos(branch,'manifest_member_not_frozen')>0
+  AND strpos(branch,'manifest_member_not_frozen')<first_lock,
+  'ineligible revision precheck precedes configuration and revision SHARE (static order)');
+END $$;
+SELECT set_config('request.jwt.claim.sub','f8770000-0000-4000-8000-000000000002',true);
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('unapproved-revision',items=>jsonb_build_array(
+ jsonb_set(jsonb_set((SELECT member FROM members WHERE kind='custom_commission_revision'),'{id}',
+ '"f8770000-0000-4000-8000-000000000079"'),'{rev}','2')))$q$,
+ '23514','manifest_member_not_frozen','unapproved custom revision refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('foreign-revision',items=>jsonb_build_array(
+ jsonb_set((SELECT member FROM members WHERE kind='custom_commission_revision'),'{id}',
+ '"f8770000-0000-4000-8000-000000000080"')))$q$,
+ '23514','manifest_member_off_project','custom revision from foreign configuration refuses');
+SELECT pg_temp.c1_assert((SELECT members @> jsonb_build_array((SELECT member FROM pg_temp.members
+ WHERE kind='custom_commission_revision')) FROM public.evidence_manifests
+ WHERE id=(SELECT (result->>'manifestId')::uuid FROM results WHERE key='original')),
+ 'approved custom revision remains in minted manifest');
+
+-- Test-only interposition between the eligibility read and the locked reads.
+-- Simulate otherwise immutable source drift without a second DB connection;
+-- each refused call rolls the mutation back, then restore the exact helper.
+DO $$ DECLARE original text; seam text; assignment text; label text; before_counts bigint[]; BEGIN
+ original:=pg_get_functiondef('public._evidence_manifest_member(uuid,jsonb)'::regprocedure);
+ seam:='SELECT c.project_id INTO j FROM public.product_configurations c WHERE c.id=v_configuration_id FOR SHARE;';
+ PERFORM pg_temp.c1_assert(array_length(string_to_array(original,seam),1)=2,'one locked configuration seam for drift injection');
+ SELECT ARRAY[(SELECT count(*) FROM public.evidence_manifests),(SELECT count(*) FROM public.evidence_manifest_requests),
+  (SELECT count(*) FROM public.evidence_manifest_members)] INTO before_counts;
+ ALTER TABLE public.custom_commission_revisions DISABLE TRIGGER USER;
+ FOREACH label IN ARRAY ARRAY['status','hash'] LOOP
+  assignment:=CASE label WHEN 'status' THEN 'status=''client_review''' ELSE 'brief='' {"changed":true}''::jsonb' END;
+  EXECUTE replace(original,seam,
+   'UPDATE public.custom_commission_revisions SET '||assignment||' WHERE id=i; '||seam);
+  PERFORM pg_temp.c1_error($q$SELECT pg_temp.mint('drift-revision',items=>jsonb_build_array(
+   (SELECT member FROM members WHERE kind='custom_commission_revision')))$q$,'23514',
+   CASE label WHEN 'status' THEN 'manifest_member_not_frozen' ELSE 'manifest_member_identity_mismatch' END,
+   'locked custom revision revalidates '||label||' after eligible precheck (injected drift)');
+ END LOOP;
+ EXECUTE original;
+ ALTER TABLE public.custom_commission_revisions ENABLE TRIGGER USER;
+ PERFORM pg_temp.c1_assert(before_counts=ARRAY[(SELECT count(*) FROM public.evidence_manifests),
+  (SELECT count(*) FROM public.evidence_manifest_requests),(SELECT count(*) FROM public.evidence_manifest_members)],
+  'revision refusals write no manifests receipts or pins');
+ PERFORM pg_temp.c1_assert((SELECT status='approved' AND brief='{}'::jsonb FROM public.custom_commission_revisions
+  WHERE id='f8770000-0000-4000-8000-000000000047'),'injected revision drift rolls back');
+END $$;
+SELECT pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM public.evidence_manifest_requests
+ WHERE idempotency_key IN ('unapproved-revision','foreign-revision','drift-revision')),'all refused revision keys remain absent');
