@@ -302,6 +302,9 @@ export function OutboundDraftReview({
                   : 'Sending.'
                 : 'Discarded.'}
           </p>
+          {sendHoldReason && status === 'sending' && (
+            <p className="text-[11px] text-[var(--text-muted)]">{sendHoldReason}</p>
+          )}
           {stalled && canSend && !sendHoldReason && (
             <div className="flex flex-wrap items-baseline gap-x-3">
               <DocumentAction

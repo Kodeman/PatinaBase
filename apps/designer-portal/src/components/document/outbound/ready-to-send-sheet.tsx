@@ -54,7 +54,7 @@ const SEND_UNCONFIRMED =
 const CLIENT_REFS = new Set(['invoice', 'client_decision', 'project', 'client', 'field_batch', 'field_prompt']);
 
 function sendHold(draft: OutboundDraftRow, result?: OutboundSendResult): string | null {
-  if (result || draft.last_send_outcome) return 'This draft is held. Check its recorded send outcome before sending again.';
+  if (result || draft.last_send_outcome || draft.status === 'sending') return 'This draft is held. Check its recorded send outcome before sending again.';
   if (!['client', 'vendor', 'trade'].includes(draft.recipient_kind) || !draft.to_address?.trim()) {
     return 'An explicit recipient and address are required. No audience is chosen for you.';
   }
