@@ -300,10 +300,27 @@ END $$;
 SELECT pg_temp.act(pg_temp.id('A1'),pg_temp.sql_of('SELECT public.escalate_margin_note({N2},{DEC})'));
 DO $$ BEGIN
   ASSERT (SELECT escalated_to_decision_id=pg_temp.id('DEC') FROM public.margin_notes WHERE id=pg_temp.id('N2')),'C7 atomic note link';
-  ASSERT (SELECT status='draft' AND court='designer' AND sent_at IS NULL AND context='Private escalation' FROM public.client_decisions WHERE id=pg_temp.id('DEC')),'C7 studio-only unsent draft copies body';
+  ASSERT (SELECT status='draft' AND court='designer' AND sent_at IS NULL FROM public.client_decisions WHERE id=pg_temp.id('DEC')),'C7 unsent designer-court draft';
   ASSERT pg_temp.probe(pg_temp.id('A1'),pg_temp.sql_of('SELECT (public.escalate_margin_note({N2},{DEC})).id::text'),NULL)=pg_temp.id('DEC')::text,'C7 same-ID replay';
   ASSERT pg_temp.probe(pg_temp.id('A1'),pg_temp.sql_of('SELECT public.escalate_margin_note({N2},{DEC2})'),NULL) LIKE 'error 23505: note already escalated%', 'C7 different-ID replay refused';
   ASSERT pg_temp.probe(pg_temp.id('CL'),pg_temp.sql_of('SELECT count(*)::text FROM public.client_decisions WHERE id={DEC}'),NULL)='0','C7 no client draft promotion';
+END $$;
+-- SQ-2082 F1: inherited policies expose draft existence, not private text.
+DO $$ BEGIN
+  ASSERT pg_temp.probe(pg_temp.id('U'),pg_temp.sql_of('SELECT count(*)::text FROM public.client_decisions WHERE id={DEC}'),NULL)='0','C7 unrelated reader excludes draft before GC appointment';
+END $$;
+INSERT INTO public.project_parties(project_id,party_kind,display_name,profile_id,created_by)
+VALUES(pg_temp.id('PA'),'gc','874 GC',pg_temp.id('U'),pg_temp.id('D'));
+DO $$
+DECLARE a text;
+BEGIN
+  FOREACH a IN ARRAY ARRAY['B1','U'] LOOP
+    ASSERT pg_temp.probe(pg_temp.id(a),pg_temp.sql_of('SELECT count(*)::text FROM public.margin_notes WHERE id={N2}'),NULL)='0','C7 source note stays invisible: '||a;
+    ASSERT pg_temp.probe(pg_temp.id(a),pg_temp.sql_of('SELECT count(*)::text FROM public.client_decisions WHERE id={DEC}'),NULL)='1','C7 inherited draft existence remains visible: '||a;
+    ASSERT pg_temp.probe(pg_temp.id(a),pg_temp.sql_of('SELECT (title=''Decision from a studio note'' AND context IS NULL AND to_jsonb(cd)::text NOT ILIKE ''%private%'')::text FROM public.client_decisions cd WHERE id={DEC}'),NULL)='true','C7 draft has neutral fields and no note-derived text: '||a;
+  END LOOP;
+  ASSERT NOT EXISTS(SELECT 1 FROM public.client_decision_options WHERE decision_id=pg_temp.id('DEC')),'C7 neutral draft has no copied options';
+  RAISE NOTICE 'C7 audience assertions passed: B-only and GC see neutral draft fields only; source note remains hidden.';
 END $$;
 -- Fail AFTER the decision insert, at note linking: the nested statement must
 -- roll the native decision back too, not leave a private orphan behind.

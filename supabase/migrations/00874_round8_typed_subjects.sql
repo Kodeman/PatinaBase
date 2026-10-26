@@ -117,12 +117,12 @@ BEGIN
   SELECT * INTO STRICT v_project FROM public.projects WHERE id = v_note.project_id;
   SELECT id INTO STRICT v_relationship_id FROM public.designer_clients
     WHERE designer_id = v_project.designer_id AND client_id = v_project.client_id;
-  -- Only a studio draft. No client promotion, project_notes row, send or
-  -- notification. A later explicit audience act remains a separate contract.
+  -- Inherited decision readers can see drafts: never copy private note text.
+  -- The designer writes client-facing text in the decision editor before Send.
   v_decision := public.create_client_decision(p_decision_id, jsonb_build_object(
     'designer_client_id', v_relationship_id, 'project_id', v_note.project_id,
-    'title', CASE WHEN length(v_note.body) > 70 THEN left(v_note.body, 67) || '…' ELSE v_note.body END,
-    'context', v_note.body, 'status', 'draft', 'court', 'designer',
+    'title', 'Decision from a studio note',
+    'context', NULL, 'status', 'draft', 'court', 'designer',
     'blocking_status', 'non_blocking'), '[]'::jsonb, '{}'::uuid[], '{}'::uuid[]);
   UPDATE public.margin_notes SET escalated_to_decision_id = v_decision.id, updated_at = now()
     WHERE id = v_note.id;
