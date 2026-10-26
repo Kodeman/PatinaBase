@@ -282,7 +282,17 @@ BEGIN
   h:=public._configuration_snapshot_hash(r->'snapshot');
   IF h IS DISTINCT FROM r->>'snapshot_hash' THEN frozen:=false; END IF;
  WHEN 'custom_commission_revision' THEN
-  SELECT t.configuration_id INTO v_configuration_id FROM public.custom_commission_revisions t WHERE t.id=i;
+  -- Native approval locks revision then configuration. Never join that lock
+  -- graph until a nonlocking read proves this revision is already frozen.
+  SELECT to_jsonb(t),c.project_id INTO r,j FROM public.custom_commission_revisions t
+   JOIN public.product_configurations c ON c.id=t.configuration_id WHERE t.id=i;
+  IF r IS NULL OR j IS DISTINCT FROM p_project_id THEN
+   RAISE EXCEPTION 'manifest_member_off_project' USING ERRCODE='check_violation';
+  END IF;
+  IF (r->>'status') IS NULL OR (r->>'status') NOT IN ('approved','issued') THEN
+   RAISE EXCEPTION 'manifest_member_not_frozen' USING ERRCODE='check_violation';
+  END IF;
+  v_configuration_id:=(r->>'configuration_id')::uuid;
   SELECT c.project_id INTO j FROM public.product_configurations c WHERE c.id=v_configuration_id FOR SHARE;
   SELECT to_jsonb(t) INTO r FROM public.custom_commission_revisions t
    WHERE t.id=i AND t.configuration_id=v_configuration_id FOR SHARE;
