@@ -63,9 +63,17 @@ describe('scope edition read boundary', () => {
     expect(useScopeEditions('job-1').editionState.status).toBe('absent');
     mocks.state = { data: readScopeEditions(bundle(), 'job-1') };
     expect(useScopeEditions('job-1').editionState.status).toBe('recorded');
-    mocks.state = { ...mocks.state, isError: true, error: new Error('refused') };
+    mocks.state = { isError: true, error: new Error('refused') };
     expect(useScopeEditions('job-1').editionState.status).toBe('error');
-    expect(useScopeEditions('job-1').data).toHaveLength(1);
+  });
+  it('retains recorded editions alongside a failed background refetch', () => {
+    const editions = readScopeEditions(bundle(), 'job-1');
+    const error = new Error('refused');
+    mocks.state = { data: editions, isError: true, error };
+    const query = useScopeEditions('job-1');
+    expect(query.editionState).toEqual({ status: 'recorded', editions });
+    expect(query.refetchError).toBe(error);
+    expect(query.error).toBe(error);
   });
   it('reports inactive by construction without querying capability tables', () => {
     expect(scopeEditionCapability).toEqual({ status: 'inactive', reason: 'not_activated' });
