@@ -104,18 +104,18 @@ test('B04 mounted composer keeps arrangements inactive and five independent resp
       await toggle.press('Enter');
       const fold = page.locator(`#fold-${slug}`);
       await expect(fold).toBeVisible();
-      await expect(fold.getByLabel('Inclusion', { exact: true })).toHaveValue(payload.inclusion);
+      await expect(fold.getByRole('combobox', { name: 'Inclusion', exact: true })).toHaveValue(payload.inclusion);
       for (const [label, value] of [
         ['Design', 'studio'], ['Purchasing', 'gc'], ['Payer', 'client'],
         ['Fabrication contract', 'other'], ['Installation', 'none'],
       ]) {
-        const control = fold.getByLabel(label, { exact: true });
+        const control = fold.getByRole('combobox', { name: label, exact: true });
         await expect(control).toHaveValue(value);
         await expect(control).toBeDisabled();
       }
       if (payload.conditionText) {
-        await expect(fold.getByLabel('Condition', { exact: true })).toHaveValue(payload.conditionText);
-        await expect(fold.getByLabel('Condition', { exact: true })).toBeDisabled();
+        await expect(fold.getByRole('textbox', { name: 'Condition', exact: true })).toHaveValue(payload.conditionText);
+        await expect(fold.getByRole('textbox', { name: 'Condition', exact: true })).toBeDisabled();
         await expect(fold).toContainText('Overrides pkg.b04-original');
       }
       const bindings = fold.getByRole('region', { name: "This draft's new service bindings" });
