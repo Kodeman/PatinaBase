@@ -28,7 +28,7 @@ test('whole-schedule reading survives room filtering and native Rough-in/Price o
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await build.getByRole('group', { name: 'Schedule view' }).getByRole('button', { name: 'Pricing', exact: true }).click();
-  await expect(build.getByRole('heading', { name: 'Pricing', exact: true })).toBeVisible();
+  await expect(build.getByRole('heading', { name: 'Pricing the room', exact: true })).toBeVisible();
   await build.getByRole('button', { name: `Acts for ${NAME}`, exact: true }).click();
   await build.getByRole('menuitem', { name: 'Make it an allowance', exact: true }).click();
   const allowance = build.getByRole('form', { name: `Make ${NAME} an allowance` });
