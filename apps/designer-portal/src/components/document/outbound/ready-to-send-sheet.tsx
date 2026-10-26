@@ -50,6 +50,21 @@ export const LEAD_CHANGED = 'Who leads this project changed since this opened, s
 const SEND_UNCONFIRMED =
   'The send could not be confirmed. Some messages may have gone; check each one before sending again.';
 
+// New typed subjects have no approved client projection yet (C7 §8).
+const CLIENT_REFS = new Set(['invoice', 'client_decision', 'project', 'client', 'field_batch', 'field_prompt']);
+
+function sendHold(draft: OutboundDraftRow, result?: OutboundSendResult): string | null {
+  if (result || draft.last_send_outcome) return 'This draft is held. Check its recorded send outcome before sending again.';
+  if (!['client', 'vendor', 'trade'].includes(draft.recipient_kind) || !draft.to_address?.trim()) {
+    return 'An explicit recipient and address are required. No audience is chosen for you.';
+  }
+  if (!draft.ref_type?.trim() || !draft.ref_id) return 'This draft has no recorded subject. Sending is unavailable.';
+  if (draft.recipient_kind === 'client' && !CLIENT_REFS.has(draft.ref_type) && !draft.ref_type.startsWith('field_message:')) {
+    return 'Client-subject outbound composition is unavailable for this subject kind.';
+  }
+  return null;
+}
+
 export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; studioId?: string }) {
   const viewer = useActViewer(projectId ?? null);
   const { user } = useAuth();
@@ -73,6 +88,8 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
   const [batchError, setBatchError] = useState<string | null>(null);
   // Unsaved edits, by draft id: each send saves its own first.
   const edits = useRef(new Map<string, OutboundDraftText>());
+  const inFlight = useRef(false);
+  const attempted = useRef(new Set<string>());
 
   // A message stays on the sheet while it is open, and once this sheet sent
   // it, so its row can say how the send went.
@@ -86,15 +103,14 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
         )
         .filter((d) => OPEN_STATUSES.has(d.status) || results.has(d.id))
         .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0)),
-    [outbound.data, results, studioId],
+    [outbound.data, results, studioId, projectId],
   );
   const letters = procurement.data ?? [];
 
   const checkable = (d: OutboundDraftRow) =>
     canSend &&
     d.status === 'awaiting_review' &&
-    !results.get(d.id)?.ok &&
-    Boolean(d.to_address?.trim());
+    !sendHold(d, results.get(d.id));
   const checkedIds = rows.filter((d) => checked.has(d.id) && checkable(d)).map((d) => d.id);
 
   const toggleChecked = (ids: readonly string[], on: boolean) =>
@@ -122,6 +138,12 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
 
   /** Saves the edits, reads the lead again, sends; throws when nothing went. */
   const sendIds = async (ids: string[]) => {
+    if (inFlight.current || !ids.length) return;
+    if (!canSend || ids.some((id) => {
+      const row = rows.find((d) => d.id === id);
+      return !row || !OPEN_STATUSES.has(row.status) || sendHold(row, results.get(id)) || attempted.current.has(id);
+    })) throw new Error('Sending is held. Review the recipient, subject and recorded outcome.');
+    inFlight.current = true;
     setBatchError(null);
     setSendingIds(new Set(ids));
     try {
@@ -129,7 +151,6 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
         const text = edits.current.get(id);
         if (!text) continue;
         await update.mutateAsync({ id, subject: text.subject.trim(), body: text.body });
-        edits.current.delete(id);
       }
       if (projectId && viewer.recheck && !(await viewer.recheck())) throw new Error(LEAD_CHANGED);
       if (!projectId) {
@@ -141,21 +162,34 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
       }
       let answer: Awaited<ReturnType<typeof sendDrafts.mutateAsync>>;
       try {
+        ids.forEach((id) => attempted.current.add(id));
         answer = await sendDrafts.mutateAsync(ids);
       } catch (e) {
         console.error('[ready-to-send] send failed', e);
+        setResults((was) => {
+          const next = new Map(was);
+          ids.forEach((id) => next.set(id, { id, ok: false, error: SEND_UNCONFIRMED }));
+          return next;
+        });
         throw new Error(SEND_UNCONFIRMED);
       }
+      const receipts = ids.map((id): OutboundSendResult => {
+        const matches = Array.isArray(answer?.results) ? answer.results.filter((r) => r?.id === id) : [];
+        const receipt = matches.length === 1 ? matches[0] : undefined;
+        if (receipt?.ok === true) {
+          edits.current.delete(id);
+          return { id, ok: true };
+        }
+        return { id, ok: false, error: receipt?.error || SEND_UNCONFIRMED };
+      });
       setResults((was) => {
         const next = new Map(was);
-        for (const r of answer?.results ?? []) next.set(r.id, r);
+        receipts.forEach((receipt) => next.set(receipt.id, receipt));
         return next;
       });
-      toggleChecked(
-        (answer?.results ?? []).filter((r) => r.ok).map((r) => r.id),
-        false,
-      );
+      toggleChecked(ids, false);
     } finally {
+      inFlight.current = false;
       setSendingIds(new Set());
     }
   };
@@ -164,12 +198,13 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
     sendIds(checkedIds).catch((e: Error) => setBatchError(e.message || SEND_UNCONFIRMED));
   };
 
-  const busy = sendDrafts.isPending || update.isPending;
+  const busy = sendingIds.size > 0 || sendDrafts.isPending || update.isPending;
   const waiting = rows.some((d) => d.status === 'awaiting_review' && !results.get(d.id)?.ok);
   const empty = rows.length === 0 && letters.length === 0;
 
   const renderRow = (d: OutboundDraftRow) => {
     const result = results.get(d.id);
+    const hold = result?.ok ? null : sendHold(d, result);
     const isOpen = opened.has(d.id);
     const label = outboundKindLabel(d.kind);
     const to = d.to_address?.trim() || 'no address on file';
@@ -201,7 +236,7 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
               {result
                 ? result.ok
                   ? 'Sent'
-                  : "Couldn't send"
+                  : 'Held — check outcome'
                 : d.status === 'sending'
                   ? 'Sending'
                   : isOpen
@@ -213,7 +248,8 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
         {isOpen && (
           <div id={`outbound-review-${d.id}`} className="pl-[52px] max-sm:pl-0">
             <OutboundDraftReview
-              draft={d}
+              draft={{ ...d, ...edits.current.get(d.id) }}
+              sendHoldReason={hold}
               canSend={canSend}
               ready={ready}
               leadName={leadName}
@@ -224,9 +260,9 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
             />
           </div>
         )}
-        {!isOpen && result && !result.ok && (
+        {!isOpen && hold && (
           <p role="alert" className="pl-[52px] text-[11px] text-[var(--color-terracotta-ink)] max-sm:pl-0">
-            {`Couldn't send: ${(result.error || 'no reason was given').replace(/\.$/, '')}.`}
+            {hold}
           </p>
         )}
       </li>
@@ -300,6 +336,12 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
         );
       })}
 
+      {rows.some((d) => !GROUPS.some((group) => group.key === d.recipient_kind)) && (
+        <section aria-label="Unrecognized audience">
+          <h3 className={LABEL_CLS}>Unrecognized audience — held</h3>
+          <ul>{rows.filter((d) => !GROUPS.some((group) => group.key === d.recipient_kind)).map(renderRow)}</ul>
+        </section>
+      )}
       {waiting && (
         <div className="sticky bottom-0 z-10 -mx-6 flex flex-col gap-1.5 border-t border-[var(--color-pearl)] bg-[var(--doc-paper,#FAF7F2)] px-6 py-3 sm:-mx-9 sm:px-9">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -308,7 +350,7 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
               surfaceKey="desk"
               regionKey="ready-to-send"
               variant="primary"
-              held={!canSend}
+              held={!canSend || busy}
               aria-describedby={canSend ? undefined : 'ready-to-send-lead'}
               disabled={!canSend || checkedIds.length === 0 || busy}
               loading={sendDrafts.isPending}
