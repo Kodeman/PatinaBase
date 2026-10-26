@@ -10,8 +10,8 @@ spec = importlib.util.spec_from_file_location("legacy_grants", ROOT / "scripts/g
 legacy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(legacy)
 
-TABLES = ('evidence_manifests', 'evidence_manifest_requests')
-FUNCTIONS = ('_subject_project_id(text,uuid)', '_guard_margin_note_subject()', 'escalate_margin_note(uuid,uuid)', '_evidence_manifest_member(uuid,jsonb)', 'create_evidence_manifest(uuid,uuid,text,jsonb,text)')
+TABLES = ('evidence_manifests', 'evidence_manifest_requests', 'evidence_manifest_members')
+FUNCTIONS = ('_guard_evidence_member_pinned()', '_subject_project_id(text,uuid)', '_guard_margin_note_subject()', 'escalate_margin_note(uuid,uuid)', '_evidence_manifest_member(uuid,jsonb)', 'create_evidence_manifest(uuid,uuid,text,jsonb,text)')
 
 
 def check(path):
