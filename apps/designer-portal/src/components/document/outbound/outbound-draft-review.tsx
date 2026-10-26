@@ -79,6 +79,7 @@ const INPUT_CLS =
 export function OutboundDraftReview({
   draft,
   canSend,
+  sendHoldReason,
   ready,
   leadName,
   sending,
@@ -89,6 +90,8 @@ export function OutboundDraftReview({
   draft: OutboundDraftRow;
   /** Q11 — this seat sends; false holds Send for the lead. */
   canSend: boolean;
+  /** A recipient, subject or outcome hold is separate from seat authority. */
+  sendHoldReason?: string | null;
   /** False until who leads the job is read. */
   ready: boolean;
   /** The lead as the copy names her ("the lead" when unnamed). */
@@ -228,13 +231,13 @@ export function OutboundDraftReview({
               surfaceKey="desk"
               regionKey="ready-to-send"
               variant="primary"
-              held={!recipient || !canSend}
+              held={pending || !!sendHoldReason || !recipient || !canSend}
               aria-describedby={
-                !canSend || !recipient
+                sendHoldReason || !canSend || !recipient
                   ? `${fieldId}-send-hold-reason`
                   : undefined
               }
-              disabled={pending || !ready || !canSend || !recipient || blank}
+              disabled={pending || !ready || !canSend || !!sendHoldReason || !recipient || blank}
               loading={sending || (!ink && update.isPending)}
               loadingLabel="Sending"
               onClick={send}
@@ -271,9 +274,9 @@ export function OutboundDraftReview({
               Discard draft
             </DocumentAction>
           </div>
-          {(!ready || !canSend || !recipient) && (
+          {(sendHoldReason || !ready || !canSend || !recipient) && (
             <p id={`${fieldId}-send-hold-reason`} className="text-[11px] text-[var(--text-muted)]">
-              {!ready
+              {sendHoldReason ? sendHoldReason : !ready
                 ? 'Loading who leads this project…'
                 : !recipient && !canSend
                   ? `No address on file. ${lead} sees this first.`
@@ -299,7 +302,10 @@ export function OutboundDraftReview({
                   : 'Sending.'
                 : 'Discarded.'}
           </p>
-          {stalled && canSend && (
+          {sendHoldReason && status === 'sending' && (
+            <p className="text-[11px] text-[var(--text-muted)]">{sendHoldReason}</p>
+          )}
+          {stalled && canSend && !sendHoldReason && (
             <div className="flex flex-wrap items-baseline gap-x-3">
               <DocumentAction
                 actionKey="resend-outbound-draft"
@@ -319,7 +325,7 @@ export function OutboundDraftReview({
       )}
       {result && !result.ok && (
         <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
-          {`Couldn't send: ${(result.error || 'no reason was given').replace(/\.$/, '')}.`}
+          {`Send held: ${(result.error || 'The outcome is unconfirmed').replace(/\.$/, '')}.`}
         </p>
       )}
       {error && (

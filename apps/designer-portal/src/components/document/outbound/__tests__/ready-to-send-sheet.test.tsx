@@ -36,6 +36,9 @@ const row = (over: Record<string, unknown>) => ({
   created_at: '2026-10-13T08:00:00Z',
   updated_at: '2026-10-13T08:00:00Z',
   claimed_at: null,
+  ref_type: 'invoice',
+  ref_id: 'invoice-1001',
+  last_send_outcome: null,
   ...over,
 });
 
@@ -159,7 +162,7 @@ describe('ReadyToSendSheet', () => {
     expect(mockRefetchMembers).toHaveBeenCalled();
   });
 
-  it('offers Retry for a stalled sending draft after reload', () => {
+  it('holds a stalled sending draft without a recorded outcome after reload', () => {
     mockOutbound = [
       row({
         id: 'stalled-outbound',
@@ -170,7 +173,9 @@ describe('ReadyToSendSheet', () => {
     ];
     render(<ReadyToSendSheet projectId="p1" />);
     fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
-    expect(screen.getByRole('button', { name: 'Send again' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send again' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Check its recorded send outcome/)).toBeVisible();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('sends the checked rows, opened or not, and says how each went', async () => {
@@ -194,12 +199,14 @@ describe('ReadyToSendSheet', () => {
     const sent = document.querySelector('[data-outbound-row="out-client"]') as HTMLElement;
     await waitFor(() => expect(within(sent).getByText('Sent')).toBeInTheDocument());
     const refused = document.querySelector('[data-outbound-row="out-text-1"]') as HTMLElement;
-    expect(within(refused).getByText("Couldn't send")).toBeInTheDocument();
+    expect(within(refused).getByText('Held — check outcome')).toBeInTheDocument();
     expect(within(refused).getByRole('alert')).toHaveTextContent(
-      "Couldn't send: The number has opted out.",
+      'Check its recorded send outcome before sending again.',
     );
-    // The sent row leaves the count; the refused one stays checked.
-    expect(batchButton()).toHaveTextContent('Send the 1 checked');
+    fireEvent.click(within(refused).getByRole('button', { name: /Day-of text/ }));
+    expect(within(refused).getByText('Send held: The number has opted out.')).toBeVisible();
+    expect(within(refused).getByRole('checkbox')).toBeDisabled();
+    expect(batchButton()).toHaveTextContent('Send the 0 checked');
   });
 
   it('checks every text with the group control', () => {
