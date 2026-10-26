@@ -1,5 +1,5 @@
 -- Include-only: the wrapper must own BEGIN/ROLLBACK.
--- Item-version checkpoint tests; the remaining C5 safety assertions are pending.
+-- Item-version and package-assignment checkpoint; conversion/writer coverage is pending.
 CREATE FUNCTION pg_temp.presence_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
@@ -46,3 +46,159 @@ SELECT pg_temp.presence_assert((SELECT row_version=4 AND notes='native item edit
  WHERE id='f8760000-0000-4000-8000-000000000001'), 'native item edit advances item version');
 SELECT pg_temp.presence_assert(NOT (SELECT enabled FROM public.server_capabilities WHERE key='scope_editions'),
  'scope capability remains inactive');
+
+-- Package-assignment checkpoint. All mutations being measured use origin
+-- triggers, authenticated execution and the recorded-studio predicate.
+CREATE FUNCTION pg_temp.presence_id(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+ SELECT ('f8760000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.presence_actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM set_config('request.jwt.claim.sub',pg_temp.presence_id(n)::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.presence_id(n),'role','authenticated')::text,true);
+END $$;
+CREATE FUNCTION pg_temp.presence_error(command text,state text,message text,label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+ BEGIN EXECUTE command;
+ EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+ END;
+ PERFORM pg_temp.presence_assert(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
+ label||format(' expected %s/%s got %s/%s',state,message,actual_state,actual_message));
+END $$;
+SELECT pg_temp.presence_assert(to_regprocedure('public.assign_ffe_items_to_scope_package(uuid,uuid[],text,text)') IS NOT NULL,
+ 'package assignment API exists');
+DO $$ DECLARE f regprocedure; r text; BEGIN
+ FOREACH f IN ARRAY ARRAY['public.assign_ffe_items_to_scope_package(uuid,uuid[],text,text)'::regprocedure,
+  'public._ffe_guard_scope_binding()'::regprocedure,'public._ffe_scope_assignment_receipt_guard()'::regprocedure] LOOP
+  FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   PERFORM pg_temp.presence_assert(NOT has_function_privilege(r,f,'EXECUTE'),'safety API inactive for '||r||' '||f);
+  END LOOP;
+  PERFORM pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM aclexplode((SELECT proacl FROM pg_proc WHERE oid=f))
+   WHERE grantee=0 AND privilege_type='EXECUTE'),'safety API inactive for PUBLIC '||f);
+ END LOOP;
+ PERFORM pg_temp.presence_assert((SELECT relrowsecurity FROM pg_class
+  WHERE oid='public.project_ffe_scope_assignment_receipts'::regclass),'assignment receipts use RLS');
+ FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+  PERFORM pg_temp.presence_assert(NOT has_table_privilege(r,'public.project_ffe_scope_assignment_receipts','SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),
+   'assignment receipts inaccessible to '||r);
+ END LOOP;
+END $$;
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT pg_temp.presence_id(n),'presence-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(5,9)n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT id,email,'Presence fixture',true FROM auth.users WHERE id::text LIKE 'f876%' AND id<>pg_temp.presence_id(4);
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+(pg_temp.presence_id(10),'design_studio','Presence A','f876-presence-a','active'),
+(pg_temp.presence_id(11),'design_studio','Presence B','f876-presence-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+(pg_temp.presence_id(4),pg_temp.presence_id(10),'owner','active'),
+(pg_temp.presence_id(4),pg_temp.presence_id(11),'owner','active'),
+(pg_temp.presence_id(5),pg_temp.presence_id(11),'member','active'),
+(pg_temp.presence_id(6),pg_temp.presence_id(10),'member','active'),
+(pg_temp.presence_id(8),pg_temp.presence_id(10),'guest','active'),
+(pg_temp.presence_id(9),pg_temp.presence_id(10),'member','suspended');
+UPDATE public.projects SET studio_id=pg_temp.presence_id(10),client_id=pg_temp.presence_id(7) WHERE id=pg_temp.presence_id(2);
+INSERT INTO public.projects(id,name,designer_id,created_by,studio_id,status) VALUES
+(pg_temp.presence_id(12),'Other job',pg_temp.presence_id(4),pg_temp.presence_id(4),pg_temp.presence_id(10),'active');
+INSERT INTO public.project_scope_editions(id,project_id,edition_number,kind,commercial_document_id,source_proposal_id,
+ agreement_fingerprint,effective_at,content,content_hash,status) VALUES
+(pg_temp.presence_id(20),pg_temp.presence_id(2),1,'baseline',pg_temp.presence_id(21),pg_temp.presence_id(22),'fixture',now(),'{}','fixture','active');
+INSERT INTO public.project_scope_edition_packages(edition_id,package_key,label,inclusion,responsibilities)
+SELECT pg_temp.presence_id(20),k,k,'included','{"design":"studio","purchasing":"gc","payer":"gc","fabrication_contract":"gc","installation":"gc"}'::jsonb
+FROM unnest(ARRAY['pkg.chairs','pkg.tables'])k;
+INSERT INTO public.project_external_fulfilments(id,project_id,scope_edition_id,package_key,units,kind,buyer_party_kind,payer_party_kind,
+ contracting_party_kind,created_by,client_request_id,request_hash) VALUES
+(pg_temp.presence_id(30),pg_temp.presence_id(2),pg_temp.presence_id(20),'pkg.chairs',ARRAY['chair'],'client_furnishing','client','client','none',pg_temp.presence_id(4),'fixture','fixture');
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,scope_package_key,external_fulfilment_id)
+SELECT pg_temp.presence_id(n),pg_temp.presence_id(CASE WHEN n=13 THEN 12 ELSE 2 END),'Presence assignment fixture',pg_temp.presence_id(100+n),
+ CASE WHEN n=14 THEN 'pkg.chairs' END,CASE WHEN n=14 THEN pg_temp.presence_id(30) END FROM generate_series(13,15)n;
+SET LOCAL session_replication_role=origin;
+GRANT EXECUTE ON FUNCTION public.assign_ffe_items_to_scope_package(uuid,uuid[],text,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.presence_assert(boolean,text),pg_temp.presence_id(integer),
+ pg_temp.presence_actor(integer),pg_temp.presence_error(text,text,text,text) TO authenticated,service_role;
+SELECT pg_temp.presence_actor(4);
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1)],'pkg.chairs','inactive')$q$,
+ '55000','scope_editions_inactive','assignment capability gate refuses while inactive');
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_actor(5);
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1)],'pkg.chairs','b-only')$q$,
+ '42501','external_fulfilment_access','B-only co-member cannot assign recorded-A job');
+SELECT pg_temp.presence_actor(7);
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1)],'pkg.chairs','client')$q$,
+ '42501','external_fulfilment_access','job client cannot assign');
+SELECT pg_temp.presence_actor(8);
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1)],'pkg.chairs','guest')$q$,
+ '42501','external_fulfilment_access','guest cannot assign');
+SELECT pg_temp.presence_actor(9);
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1)],'pkg.chairs','suspended')$q$,
+ '42501','external_fulfilment_access','inactive member cannot assign');
+SELECT pg_temp.presence_actor(6);
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1),pg_temp.presence_id(13)],'pkg.chairs','foreign')$q$,
+ '23514','scope_assignment_item_off_project','mixed foreign item refuses entire assignment');
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1),pg_temp.presence_id(99)],'pkg.chairs','missing')$q$,
+ '23514','scope_assignment_item_off_project','missing item refuses entire assignment');
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1),pg_temp.presence_id(1)],'pkg.chairs','duplicate')$q$,
+ '23514','scope_assignment_item_off_project','duplicate item refuses entire assignment');
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(14)],'pkg.chairs','external')$q$,
+ '23514','scope_assignment_external_line','external line cannot be reassigned even to its own package');
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1)],'pkg.absent','absent')$q$,
+ '23514','package_key_not_in_edition','key outside active edition refused');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT row_version=4 AND scope_package_key IS NULL FROM public.project_ffe_items WHERE id=pg_temp.presence_id(1))
+ AND NOT EXISTS(SELECT 1 FROM public.project_ffe_scope_assignment_receipts),'rejected assignments change neither items nor receipts');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_assert(NOT (public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.chairs','assign')->>'replayed')::boolean,
+ 'recorded-studio member assigns multiple items');
+SELECT pg_temp.presence_assert((public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.chairs','assign')->>'replayed')::boolean,
+ 'original requester exact assignment replays');
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.tables','assign')$q$,
+ '40001','external_request_changed','assignment receipt rejects changed payload');
+SELECT pg_temp.presence_actor(4);
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.chairs','assign')$q$,
+ '42501','idempotency_key_reused','another authorized requester cannot replay assignment');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT row_version=5 AND scope_package_key='pkg.chairs' FROM public.project_ffe_items WHERE id=pg_temp.presence_id(1))
+ AND (SELECT row_version=2 AND scope_package_key='pkg.chairs' FROM public.project_ffe_items WHERE id=pg_temp.presence_id(15)),
+ 'assignment increments both item versions exactly once despite retry');
+-- Receipt replay precedes edition lifecycle validation, but never access.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_scope_editions SET status='superseded' WHERE id=pg_temp.presence_id(20);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.presence_actor(6);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_assert((public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.chairs','assign')->>'replayed')::boolean,
+ 'exact assignment replay survives edition supersession');
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(1)],'pkg.tables','new-after-edition')$q$,
+ '55000','scope_edition_not_active','new assignment needs active edition');
+RESET ROLE;
+UPDATE public.organization_members SET status='suspended' WHERE user_id=pg_temp.presence_id(6) AND organization_id=pg_temp.presence_id(10);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.chairs','assign')$q$,
+ '42501','external_fulfilment_access','assignment retry rechecks current access');
+RESET ROLE;
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_scope_assignment_receipts SET request_hash='changed'$q$,
+ '23514','scope_assignment_receipt_immutable','assignment receipts cannot be altered');
+SELECT pg_temp.presence_error($q$DELETE FROM public.project_ffe_scope_assignment_receipts$q$,
+ '23514','scope_assignment_receipt_immutable','assignment receipts cannot be deleted');
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_items SET scope_package_key='pkg.tables' WHERE id=pg_temp.presence_id(1)$q$,
+ '42501','ffe_scope_binding_rpc_required','direct package edit refused');
+SET LOCAL ROLE service_role;
+SELECT set_config('patina.ffe_scope_binding_writer','00876',true);
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_items SET scope_package_key='pkg.tables' WHERE id=pg_temp.presence_id(1)$q$,
+ '42501','ffe_scope_binding_rpc_required','service-role GUC forgery is not binding authority');
+RESET ROLE;
+SELECT set_config('patina.ffe_scope_binding_writer','',true);
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_items SET status='installed' WHERE id=pg_temp.presence_id(14)$q$,
+ '23514','external_presence_verified_install_required','direct external installation refused');
+SELECT pg_temp.presence_error($q$DELETE FROM public.project_ffe_items WHERE id=pg_temp.presence_id(14)$q$,
+ '23514','external_presence_delete_refused','external provenance cannot be physically deleted');
+SELECT set_config('patina.ffe_scope_binding_writer','00876',true);
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_items SET scope_package_key='pkg.tables' WHERE id=pg_temp.presence_id(14)$q$,
+ '23514','external_presence_binding_mismatch','external package must match immutable fulfilment');
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_items SET unit_price_cents=123,line_total_cents=123 WHERE id=pg_temp.presence_id(14)$q$,
+ '23514','project_ffe_items_external_unpriced_check','external line cannot carry a studio price');
+SELECT set_config('patina.ffe_scope_binding_writer','',true);
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';

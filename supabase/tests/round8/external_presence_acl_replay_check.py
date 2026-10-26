@@ -1,7 +1,6 @@
 """Check 00876 ACLs through the native seed extractor without rewriting the seed.
 
-This checkpoint covers the item-version helper only. Add each new safety RPC
-and receipt table to the exact manifest as implementation proceeds.
+The exact manifest grows with each safety RPC and private receipt table.
 """
 import importlib.util
 from pathlib import Path
@@ -21,6 +20,10 @@ def check(path):
               for _, stmt in legacy.iter_top_level_acl_statements(legacy.clean(sql))}
     expected = {re.sub(r"\s+", "", stmt).lower() for stmt in (
         "REVOKE ALL ON FUNCTION public._ffe_bump_item_row_version() FROM PUBLIC,anon,authenticated,service_role;",
+        "REVOKE ALL ON TABLE public.project_ffe_scope_assignment_receipts FROM PUBLIC,anon,authenticated,service_role;",
+        "REVOKE ALL ON FUNCTION public._ffe_guard_scope_binding() FROM PUBLIC,anon,authenticated,service_role;",
+        "REVOKE ALL ON FUNCTION public._ffe_scope_assignment_receipt_guard() FROM PUBLIC,anon,authenticated,service_role;",
+        "REVOKE ALL ON FUNCTION public.assign_ffe_items_to_scope_package(uuid,uuid[],text,text) FROM PUBLIC,anon,authenticated,service_role;",
     )}
     assert actual == expected, "native extractor loses or adds an ACL: " + repr(actual ^ expected)
     bodies = re.finditer(r"(?P<tag>\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$)(?P<body>.*?)(?P=tag)", sql, re.DOTALL)
@@ -28,7 +31,7 @@ def check(path):
         assert not re.search(r"\b(?:GRANT|REVOKE)\b", legacy.clean(body["body"]), re.IGNORECASE), (
             "ACL inside dollar-quoted body is not replayable"
         )
-    print("PASS: native extractor preserves the exact item-version helper revoke")
+    print("PASS: native extractor preserves the exact inactive safety ACL manifest")
     print("PASS: no GRANT/REVOKE in dollar-quoted bodies")
 
 
