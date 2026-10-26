@@ -14,7 +14,9 @@ async function openNote(page: Page) {
     await page.getByRole('group', { name: 'In this document', exact: true }).getByRole('button', { name: /^Margin/ }).click();
     await page.locator('[data-margin-row]').filter({ hasText: 'N02 fictional observation' }).getByRole('button').first().click();
   } else {
-    await page.locator('[data-margin-panel] [data-margin-kind="note"]').filter({ hasText: 'N02 fictional observation' }).getByRole('button').first().click();
+    const toggle = page.getByRole('complementary', { name: 'In the margin', exact: true })
+      .getByRole('button', { name: 'Note N02 fictional observation ABOUT THE WHOLE JOB', exact: true });
+    await toggle.click({ timeout: 30_000 });
   }
   await expect(page.getByLabel('Note context')).toBeVisible();
 }
