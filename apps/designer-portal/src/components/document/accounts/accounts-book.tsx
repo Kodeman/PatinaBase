@@ -30,9 +30,9 @@ import {
 } from '@patina/supabase';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
 import { useStudioMoney } from '@/hooks/use-studio-money';
-import { mixedCurrenciesText } from '@/lib/currency-totals';
-import { collectedCents } from '@/lib/document/account-summary';
-import { fmtUsd } from '@/lib/document/format';
+import { formatCurrencyTotal, mixedCurrenciesText, sumByCurrency } from '@/lib/currency-totals';
+import { billedCents, collectedCents, invoiceBalanceCents } from '@/lib/document/account-summary';
+import { formatCurrency } from '@patina/shared';
 import type { OpenLedgerContext } from '../command-bar';
 import { AccountsLedgerPage } from './accounts-ledger-page';
 import { AccountsReceivablesPage } from './accounts-receivables-page';
@@ -86,10 +86,10 @@ export function AccountsBook({
   const bookAr = useMemo(() => {
     const aging = computeArAging(bookInvoices);
     return {
-      outCents: aging.totalBalanceCents,
-      overdueCents: aging.buckets
-        .filter((b) => b.key !== 'current')
-        .reduce((sum, b) => sum + b.balanceCents, 0),
+      issued: sumByCurrency(bookInvoices, (invoice) => invoice.status === 'draft' || invoice.status === 'void' ? null : billedCents([invoice])),
+      received: sumByCurrency(bookInvoices, (invoice) => invoice.status === 'draft' ? null : collectedCents([invoice])),
+      due: sumByCurrency(bookInvoices, (invoice) => invoice.status === 'sent' || invoice.status === 'partially_paid' ? invoiceBalanceCents(invoice) : null),
+      overdue: sumByCurrency(aging.buckets.filter((bucket) => bucket.key !== 'current').flatMap((bucket) => bucket.invoices), invoiceBalanceCents),
     };
   }, [bookInvoices]);
 
@@ -176,8 +176,8 @@ export function AccountsBook({
       : null;
   const availablePages = canSeeMargin ? PAGES : PAGES.filter((p) => p.key !== 'earnings');
 
-  if (folioId) {
-    const folioInvoice = (invoices ?? []).find((inv) => inv.id === folioId);
+  if (folioId && !isError && !isLoading && !money.isError && !money.isLoading) {
+    const folioInvoice = visibleInvoices.find((inv) => inv.id === folioId);
     return (
       <div ref={sheetRef} onClickCapture={(event) => { pressed.current = (event.target as Element).closest<HTMLElement>('button'); }} className="mx-auto max-w-3xl" data-accounts-folio={folioId}>
         <div className="sh-head money-folio-head">
@@ -272,13 +272,13 @@ export function AccountsBook({
 
       {/* A failed ledger read must not become a zero-revenue front matter or
           an empty Ledger / Receivables page. */}
-      {isError ? (
+      {isError || money.isError ? (
         <AccountsQueryFailure
           title="The studio book could not be opened."
           message="Invoices and receivables are still held in place. Try the account read again."
-          onRetry={refetch}
+          onRetry={() => { void refetch(); money.refetch?.(); }}
         />
-      ) : isLoading ? (
+      ) : isLoading || money.isLoading ? (
         <SectionLoadingLine label="Opening the book" className="py-3" />
       ) : (
         <>
@@ -287,31 +287,13 @@ export function AccountsBook({
           {canSeeMargin && (
             <div className="money-front" data-accounts-front-matter>
               <p className="t-body">
-                {bookAr.outCents > 0 ? (
-                  <>
-                    <span className="money-num">{fmtUsd(bookAr.outCents)}</span> is out with clients;{' '}
-                    {bookAr.overdueCents > 0 ? (
-                      <span className="od">
-                        <span className="money-num">{fmtUsd(bookAr.overdueCents)}</span> of it is
-                        overdue
-                      </span>
-                    ) : (
-                      'none of it is overdue'
-                    )}
-                    .
-                  </>
-                ) : (
-                  'Nothing is out with clients.'
-                )}
+                <span className="money-num">{formatCurrencyTotal(bookAr.issued, formatCurrency)}</span> issued;{' '}
+                <span className="money-num">{formatCurrencyTotal(bookAr.received, formatCurrency)}</span> received;{' '}
+                <span className="money-num">{formatCurrencyTotal(bookAr.due, formatCurrency)}</span> due.
               </p>
               <p className="t-body-sm money-front-sub">
-                <span className="money-num">{fmtUsd(collectedCents(bookInvoices))}</span> collected
-                {marginText ? (
-                  <>
-                    ; margin <span className="money-num">{marginText}</span>
-                  </>
-                ) : null}
-                .
+                <span className="money-num">{formatCurrencyTotal(bookAr.overdue, formatCurrency)}</span> overdue
+                {marginText ? <>; margin <span className="money-num">{marginText}</span></> : null}.
               </p>
             </div>
           )}

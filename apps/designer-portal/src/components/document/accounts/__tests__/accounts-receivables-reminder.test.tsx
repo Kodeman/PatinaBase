@@ -33,6 +33,7 @@ const overdue = {
   project_id: 'project-1',
   designer_id: 'designer-1',
   client_id: 'client-1',
+  client: { id: 'client-1', full_name: 'Fictional client', email: 'client@example.test' },
   invoice_number: 'INV-0030',
   title: null,
   status: 'sent',
