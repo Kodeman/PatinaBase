@@ -1,0 +1,158 @@
+-- Include-only: continues the presence fixtures inside the owner's rollback.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.invoices(id,project_id,designer_id,client_id,studio_id,status)
+VALUES(pg_temp.presence_id(320),pg_temp.presence_id(2),pg_temp.presence_id(4),pg_temp.presence_id(7),pg_temp.presence_id(10),'draft');
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,line_kind,parent_ffe_item_id,
+ link_kind,quantity,unit_price_cents,line_total_cents,scope_package_key,external_fulfilment_id)
+VALUES
+(pg_temp.presence_id(310),pg_temp.presence_id(2),'External labor',pg_temp.presence_id(410),'labor',pg_temp.presence_id(14),'labor',2,0,0,'pkg.chairs',pg_temp.presence_id(30)),
+(pg_temp.presence_id(311),pg_temp.presence_id(2),'Studio labor',pg_temp.presence_id(411),'labor',pg_temp.presence_id(15),'labor',2,0,0,NULL,NULL);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.presence_actor(6);
+
+-- The shared native table writer covers full/deposit/balance and re-pointing,
+-- including zero-cent bills which must not create a studio receivable either.
+SELECT pg_temp.presence_error($q$INSERT INTO public.invoice_line_items(invoice_id,kind,ffe_item_id,description,billing_stage,unit_amount_cents,amount_cents)
+ VALUES(pg_temp.presence_id(320),'ffe',pg_temp.presence_id(14),'External full','full',0,0)$q$,
+ '23514','external_presence_invoice_refused','external full invoice line refused even at zero cents');
+SELECT pg_temp.presence_error($q$INSERT INTO public.invoice_line_items(invoice_id,kind,ffe_item_id,description,billing_stage,billing_stage_pct,unit_amount_cents,amount_cents)
+ VALUES(pg_temp.presence_id(320),'ffe',pg_temp.presence_id(14),'External deposit','deposit',50,0,0)$q$,
+ '23514','external_presence_invoice_refused','external deposit invoice line refused');
+SELECT pg_temp.presence_error($q$INSERT INTO public.invoice_line_items(invoice_id,kind,ffe_item_id,description,billing_stage,unit_amount_cents,amount_cents)
+ VALUES(pg_temp.presence_id(320),'ffe',pg_temp.presence_id(14),'External balance','balance',0,0)$q$,
+ '23514','external_presence_invoice_refused','external balance invoice line refused');
+INSERT INTO public.invoice_line_items(id,invoice_id,kind,ffe_item_id,description,unit_amount_cents,amount_cents)
+VALUES(pg_temp.presence_id(321),pg_temp.presence_id(320),'ffe',pg_temp.presence_id(15),'Studio full',100,100);
+SELECT pg_temp.presence_error($q$UPDATE public.invoice_line_items SET ffe_item_id=pg_temp.presence_id(14) WHERE id=pg_temp.presence_id(321)$q$,
+ '23514','external_presence_invoice_refused','existing invoice cannot be repointed to external presence');
+SELECT pg_temp.presence_assert((SELECT ffe_item_id=pg_temp.presence_id(15) FROM public.invoice_line_items WHERE id=pg_temp.presence_id(321))
+ AND NOT EXISTS(SELECT 1 FROM public.invoice_line_items WHERE ffe_item_id=pg_temp.presence_id(14)),
+ 'refused invoice writes preserve the native line and create no external receivable');
+SELECT pg_temp.presence_error($q$INSERT INTO public.invoice_line_items(invoice_id,kind,ffe_item_id,description,billing_stage,billing_stage_pct,unit_amount_cents,amount_cents)
+ VALUES(pg_temp.presence_id(320),'ffe',pg_temp.presence_id(15),'Conflicting studio deposit','deposit',50,50,50)$q$,
+ '23505','uniq_invoice_line_items_ffe_item','non-external native full versus deposit slot conflict unchanged');
+INSERT INTO public.invoice_line_items(id,invoice_id,kind,description,unit_amount_cents,amount_cents)
+VALUES(pg_temp.presence_id(322),pg_temp.presence_id(320),'adhoc','Unbound service',200,200);
+SELECT pg_temp.presence_assert((SELECT count(*)=2 FROM public.invoice_line_items WHERE invoice_id=pg_temp.presence_id(320)),
+ 'native non-external and unbound invoice lines remain writable');
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.set_labor_line_price(pg_temp.presence_id(310),0)$q$,
+ '23514','external_presence_labor_price_refused','external labor price writer refuses even an unchanged zero price');
+SELECT pg_temp.presence_error($q$SELECT public.set_labor_line_price(pg_temp.presence_id(310),2500)$q$,
+ '23514','external_presence_labor_price_refused','external labor price writer refuses a positive price');
+SELECT pg_temp.presence_actor(5);
+SELECT pg_temp.presence_error($q$SELECT public.set_labor_line_price(pg_temp.presence_id(310),0)$q$,
+ '42501','project not found or access denied','external labor refusal preserves native project authority first');
+SELECT pg_temp.presence_actor(6);
+SELECT pg_temp.presence_assert((public.set_labor_line_price(pg_temp.presence_id(311),2500)->>'lineTotalCents')::integer=5000,
+ 'native non-external labor price still derives quantity times unit cents');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT unit_price_cents=0 AND line_total_cents=0 AND row_version=1
+ FROM public.project_ffe_items WHERE id=pg_temp.presence_id(310)),
+ 'refused labor writes preserve external zero price and item version');
+SELECT pg_temp.presence_assert(NOT has_function_privilege('anon','public.guard_invoice_line_ffe_stage()','EXECUTE')
+ AND NOT has_function_privilege('authenticated','public.guard_invoice_line_ffe_stage()','EXECUTE'),
+ 'native invoice guard retains its private execution ACL');
+
+-- Native furnishings and labor constructors: frozen pre-C5 papers cannot price
+-- an external line. Only fixture setup bypasses triggers; measured RPCs do not.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT pg_temp.presence_id(4),id,pg_temp.presence_id(4) FROM public.roles WHERE name='studio_owner';
+INSERT INTO public.designer_clients(id,designer_id,client_id,status)
+VALUES(pg_temp.presence_id(425),pg_temp.presence_id(4),pg_temp.presence_id(7),'active');
+INSERT INTO public.project_rooms(id,project_id,name,sort_order)
+VALUES(pg_temp.presence_id(426),pg_temp.presence_id(2),'Presence room',0);
+INSERT INTO public.proposals(id,project_id,designer_id,client_id,designer_client_id,title,status,document_kind,commercial_state)
+VALUES(pg_temp.presence_id(423),pg_temp.presence_id(2),pg_temp.presence_id(4),pg_temp.presence_id(7),pg_temp.presence_id(425),
+ 'Presence signed origin','accepted','design_services','executed');
+INSERT INTO public.project_commercial_documents(id,project_id,proposal_id,document_kind,is_origin,created_by)
+VALUES(pg_temp.presence_id(424),pg_temp.presence_id(2),pg_temp.presence_id(423),'design_services',true,pg_temp.presence_id(4));
+INSERT INTO public.project_budget_versions(id,project_id,version,created_by)
+VALUES(pg_temp.presence_id(421),pg_temp.presence_id(2),1,pg_temp.presence_id(4));
+INSERT INTO public.project_budget_lines(budget_version_id,project_room_id,room_name,category,low_cents,target_cents,high_cents)
+VALUES(pg_temp.presence_id(421),pg_temp.presence_id(426),'Presence room','Furnishings',100,50000,90000);
+INSERT INTO public.project_budget_checkpoints(id,project_id,budget_version_id,checkpoint_code,status,snapshot_fingerprint,published_by,acknowledged_by,acknowledged_at)
+VALUES(pg_temp.presence_id(422),pg_temp.presence_id(2),pg_temp.presence_id(421),'B-PRESENCE','acknowledged',
+ public._budget_version_fingerprint(pg_temp.presence_id(421)),pg_temp.presence_id(4),pg_temp.presence_id(7),now());
+INSERT INTO public.proposals(id,project_id,designer_id,client_id,designer_client_id,title,status,document_kind,commercial_state,total_amount,deposit_percent)
+SELECT pg_temp.presence_id(n),pg_temp.presence_id(2),pg_temp.presence_id(4),pg_temp.presence_id(7),pg_temp.presence_id(425),
+ 'Presence old paper',CASE WHEN n=430 THEN 'draft' ELSE 'sent' END,'furnishings_authorization',
+ CASE WHEN n=430 THEN 'draft' ELSE 'sent' END,10000,50 FROM generate_series(430,431)n;
+INSERT INTO public.project_commercial_documents(id,project_id,proposal_id,document_kind,wave_name,budget_checkpoint_id,created_by)
+SELECT pg_temp.presence_id(n+10),pg_temp.presence_id(2),pg_temp.presence_id(n),'furnishings_authorization','Presence old wave '||n,
+ pg_temp.presence_id(422),pg_temp.presence_id(4) FROM generate_series(430,431)n;
+INSERT INTO public.furnishing_authorization_items(commercial_document_id,source_ffe_item_id,name,quantity,client_unit_price_cents,client_line_total_cents)
+SELECT pg_temp.presence_id(n+10),pg_temp.presence_id(CASE WHEN n=430 THEN 14 ELSE 40 END),'Stale priced snapshot',1,10000,10000
+ FROM generate_series(430,431)n;
+UPDATE public.project_ffe_items SET project_room_id=pg_temp.presence_id(426),assignment_scope='room',item_type='fixed'
+ WHERE id=pg_temp.presence_id(41);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.presence_actor(4);
+-- The private leaf is the authentic draft mutation after the readiness wrapper;
+-- call it as its owner, with the same authenticated claims and stamp context.
+SELECT pg_temp.presence_error($q$SELECT public._create_furnishings_authorization_from_schedule_00444_impl(
+ pg_temp.presence_id(2),'External draft',ARRAY[pg_temp.presence_id(40)],0)$q$,
+ '23514','external_presence_authorization_refused','native locked draft refuses an external source before pricing it');
+SELECT set_config('app.proposal_stamp_project_id',pg_temp.presence_id(2)::text,true);
+CREATE TEMP TABLE presence_native_release AS SELECT public._create_furnishings_authorization_from_schedule_00444_impl(
+ pg_temp.presence_id(2),'Presence native studio release',ARRAY[pg_temp.presence_id(41)],0) AS result;
+SELECT set_config('app.proposal_stamp_project_id','',true);
+SELECT pg_temp.presence_assert((SELECT (result->>'itemCount')::integer=1 FROM presence_native_release)
+ AND (SELECT count(*)=1 FROM public.furnishing_authorization_items a JOIN presence_native_release r
+ ON a.commercial_document_id=(r.result->>'documentId')::uuid
+ JOIN public.project_ffe_items i ON i.id=a.source_ffe_item_id
+ WHERE i.id=pg_temp.presence_id(41) AND a.client_line_total_cents=i.line_total_cents),
+ 'native non-external draft preserves the exact priced schedule snapshot');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.send_commercial_document(pg_temp.presence_id(430),'unused-external-fingerprint')$q$,
+ '23514','external_presence_authorization_refused','native send refuses an old priced external snapshot before dispatch');
+SELECT pg_temp.presence_actor(7);
+SELECT pg_temp.presence_error($q$SELECT public.send_commercial_document(pg_temp.presence_id(430),'unused-external-fingerprint')$q$,
+ '42501','not found or access denied','send preserves native client-versus-author access before external refusal');
+SELECT pg_temp.presence_actor(7);
+SELECT pg_temp.presence_error($q$SELECT public.execute_furnishings_authorization(pg_temp.presence_id(431),'Presence Client')$q$,
+ '23514','external_presence_authorization_refused','native digital execution refuses external snapshot before signature or deposit');
+SELECT pg_temp.presence_actor(6);
+SELECT pg_temp.presence_error($q$SELECT public.execute_furnishings_authorization_on_paper(pg_temp.presence_id(431),'Presence Client',current_date,NULL,NULL)$q$,
+ '23514','external_presence_authorization_refused','native paper execution refuses external snapshot before signature or deposit');
+SELECT pg_temp.presence_error($q$SELECT public.add_labor_line(pg_temp.presence_id(14),'{}',0)$q$,
+ '23514','external_presence_labor_parent_refused','external parent cannot acquire studio labor even with zero price');
+SELECT pg_temp.presence_actor(5);
+SELECT pg_temp.presence_error($q$SELECT public.add_labor_line(pg_temp.presence_id(14),'{}',0)$q$,
+ '42501','project not found or access denied','labor constructor preserves native project access first');
+RESET ROLE;
+SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM public.commercial_document_signatures WHERE proposal_id=pg_temp.presence_id(431))
+ AND NOT EXISTS(SELECT 1 FROM public.proposal_send_dispatches WHERE proposal_id=pg_temp.presence_id(430))
+ AND NOT EXISTS(SELECT 1 FROM public.invoices WHERE project_id=pg_temp.presence_id(2) AND id<>pg_temp.presence_id(320))
+ AND (SELECT commercial_state='sent' FROM public.proposals WHERE id=pg_temp.presence_id(431)),
+ 'external refusal writes no signature, dispatch, deposit invoice or execution state');
+SELECT pg_temp.presence_actor(4);
+SELECT pg_temp.presence_error($q$SELECT public.send_commercial_document((SELECT (result->>'proposalId')::uuid FROM presence_native_release),'stale-studio-fingerprint')$q$,
+ 'PT409','changed after review','non-external send retains its native fingerprint refusal');
+-- Execution uses the same native paper identity and checkpoint as before C5.
+SET LOCAL session_replication_role=replica;
+UPDATE public.proposals SET status='sent',commercial_state='sent'
+ WHERE id=(SELECT (result->>'proposalId')::uuid FROM presence_native_release);
+SET LOCAL session_replication_role=origin;
+GRANT SELECT ON presence_native_release TO authenticated;
+SELECT pg_temp.presence_actor(7);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_assert((public.execute_furnishings_authorization(
+ (SELECT (result->>'proposalId')::uuid FROM presence_native_release),'Presence Client')->>'newlyExecuted')::boolean,
+ 'native non-external digital execution still links its priced schedule line');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT i.source_commercial_document_id=(r.result->>'documentId')::uuid
+ AND i.external_fulfilment_id IS NULL FROM public.project_ffe_items i CROSS JOIN presence_native_release r
+ WHERE i.id=pg_temp.presence_id(41)), 'native non-external execution preserves studio provenance');
+DO $$ DECLARE f regprocedure; r text; BEGIN
+ FOREACH f IN ARRAY ARRAY[
+  'public._create_furnishings_authorization_from_schedule_00444_impl(uuid,text,uuid[],numeric)'::regprocedure,
+  'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'::regprocedure,
+  'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)'::regprocedure] LOOP
+  FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+   PERFORM pg_temp.presence_assert(NOT has_function_privilege(r,f,'EXECUTE'),'native authorization leaf remains private to '||r||' '||f);
+  END LOOP;
+ END LOOP;
+END $$;
