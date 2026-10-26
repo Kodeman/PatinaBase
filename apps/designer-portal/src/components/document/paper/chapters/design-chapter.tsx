@@ -275,7 +275,7 @@ function ProjectPrints({
                                 : "No current print recorded"}
                               {sheet.state === "shared" ? " · Client-shared current" : " · Studio only"}
                             </span>
-                            {current && <PlanPrintProvenance print={current} />}
+                            {current && <PlanPrintProvenance print={current} projectId={projectId} />}
                             <PlanSheetComposition bundle={plans.data} sheetId={sheet.id} rooms={rooms} />
                           </li>
                         );
@@ -286,7 +286,7 @@ function ProjectPrints({
               })}
             </div>
           )}
-          <PlanIssueHistory bundle={plans.data} />
+          <PlanIssueHistory bundle={plans.data} projectId={projectId} />
           <DocumentActionRow surfaceKey="design" regionKey="project-drawings">
             <DocumentAction
               actionKey="open-project-drawings"

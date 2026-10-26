@@ -1,10 +1,14 @@
 import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import type { PlanRoomBundle } from '@patina/supabase';
-import { PlanRoomSet, PlanIssueHistory } from '../plan-room-set';
+import { PlanRoomSet, PlanIssueHistory, PlanPrintProvenance, PlanSheetComposition } from '../plan-room-set';
 import { PlanSheetDetail } from '../plan-sheet-detail';
 import { DesignChapter } from '../../paper/chapters/design-chapter';
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRoster: () => ({ data: [
+    { profile_id: 'original-filer', display_name: '  Morgan Maker  ' },
+    { profile_id: 'new-lead', display_name: 'Leah Designer' },
+  ] }),
   usePlanRoom: () => ({ data: mockBundle, isPending: false, isError: false }),
   useProjectRooms: () => ({ data: mockRooms, isPending: false, isError: false }),
   useProjectRoomScans: () => ({ data: [], isPending: false, isError: false }),
@@ -51,7 +55,7 @@ let mockBundle = fixture();
 beforeEach(() => { mockBundle = fixture(); });
 
 it('uses exact package IDs despite duplicate names and package home rooms; retains archived identity', () => {
-  render(<PlanRoomSet projectId="job" bundle={mockBundle} onOpenSheet={jest.fn()} onIssue={jest.fn()} onChooseFile={jest.fn()} />);
+  render(<PlanRoomSet projectId="job" rooms={mockRooms} bundle={mockBundle} onOpenSheet={jest.fn()} onIssue={jest.fn()} onChooseFile={jest.fn()} />);
   const sheet = screen.getByRole('button', { name: /New live title/ });
   expect(sheet).toHaveTextContent('pkg.original');
   expect(sheet).toHaveTextContent('Archived');
@@ -72,18 +76,21 @@ it('does not infer room membership from matching titles or a package home room',
 
 it('distinguishes unkeyed composition and unavailable package metadata without erasing links', () => {
   mockBundle.sheetPackages.push({ sheet_id: 'sheet-a', package_id: 'pkg-b', added_by: null, added_at: '' }, { sheet_id: 'sheet-a', package_id: 'hidden-package', added_by: null, added_at: '' });
-  render(<PlanSheetDetail projectId="job" sheetId="sheet-a" bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
+  render(<PlanSheetDetail projectId="job" sheetId="sheet-a" rooms={mockRooms} bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
   expect(screen.getByText(/Composition only · no agreed-scope key/)).toBeInTheDocument();
   expect(screen.getByText('Linked package unavailable')).toBeInTheDocument();
   expect(screen.getByText(/not an issued package or authority to fabricate/)).toBeInTheDocument();
 });
 
 it('keeps issued title and original print provenance after the live sheet and filer advance', async () => {
-  render(<PlanIssueHistory bundle={mockBundle} />);
+  render(<PlanIssueHistory bundle={mockBundle} projectId="job" />);
   fireEvent.click(screen.getByText(/Issue 1/));
   const issued = screen.getByText(/OLD-201 · Frozen maker title/).closest('li')!;
-  expect(issued).toHaveTextContent('Source: upload · maker-original.pdf · Filed by original-filer');
-  expect(issued).not.toHaveTextContent('new-lead');
+  expect(issued).toHaveTextContent('Source: upload · maker-original.pdf · Filed by Morgan Maker');
+  expect(issued).not.toHaveTextContent('original-filer');
+  expect(issued).not.toHaveTextContent('print-a');
+  expect(issued).not.toHaveTextContent('Leah Designer');
+  expect(issued.querySelector('[data-print-filer="original-filer"]')).not.toBeNull();
   const opener = within(issued).getByRole('button', { name: 'Open issued print' });
   fireEvent.click(opener);
   const dialog = await screen.findByRole('dialog');
@@ -96,7 +103,7 @@ it('keeps issued title and original print provenance after the live sheet and fi
 it('returns each current and historical viewer to its actual trigger and uses the issued title', async () => {
   mockBundle.issues.unshift({ ...mockBundle.issues[0], id: 'later-issue', issue_number: 2 });
   mockBundle.issuePrints.unshift({ ...mockBundle.issuePrints[0], id: 'later-snapshot', issue_id: 'later-issue', sheet_title: 'Later reissue title' });
-  render(<PlanSheetDetail projectId="job" sheetId="sheet-a" bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
+  render(<PlanSheetDetail projectId="job" sheetId="sheet-a" rooms={mockRooms} bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
   const current = screen.getByRole('button', { name: 'Open drawing revision' });
   // Another focused control must not become the inferred opener.
   screen.getByRole('button', { name: 'Issue current set' }).focus();
@@ -113,3 +120,33 @@ it('returns each current and historical viewer to its actual trigger and uses th
   fireEvent.keyDown(dialog, { key: 'Escape' });
   await waitFor(() => expect(historical).toHaveFocus());
 });
+
+it.each(['set', 'detail', 'chapter'])('shows exact linked room and named filer in %s without visible IDs', (surface) => {
+  const { container } = render(surface === 'set'
+    ? <PlanRoomSet projectId="job" rooms={mockRooms} bundle={mockBundle} onOpenSheet={jest.fn()} onIssue={jest.fn()} onChooseFile={jest.fn()} />
+    : surface === 'detail'
+      ? <PlanSheetDetail projectId="job" rooms={mockRooms} sheetId="sheet-a" bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />
+      : <DesignChapter projectId="job" routeId="job" onWorkRoom={jest.fn()} />);
+  expect(container).toHaveTextContent('Kitchen');
+  expect(container).not.toHaveTextContent('room-a');
+  expect(container.querySelector('[data-room-id="room-a"]')).not.toBeNull();
+  if (surface !== 'set') {
+    expect(container).toHaveTextContent('Filed by Leah Designer');
+    expect(container).not.toHaveTextContent('new-lead');
+  }
+});
+
+it('uses neutral unavailable-room copy while retaining the exact link', () => {
+  const { container } = render(<PlanSheetComposition bundle={mockBundle} sheetId="sheet-a" rooms={[]} />);
+  expect(container).toHaveTextContent('Room no longer on this job');
+  expect(container).not.toHaveTextContent('room-a');
+  expect(container.querySelector('[data-room-id="room-a"]')).not.toBeNull();
+});
+
+it.each([['missing-filer', 'Filed by a person whose name is unavailable'], [null, 'Filer not recorded']])(
+  'never prints an unresolved or unrecorded filer ID (%s)', (createdBy, label) => {
+    const { container } = render(<PlanPrintProvenance projectId="job" print={{ ...mockBundle.prints[0], created_by: createdBy }} />);
+    expect(container).toHaveTextContent(label!);
+    expect(container).not.toHaveTextContent('missing-filer');
+  },
+);

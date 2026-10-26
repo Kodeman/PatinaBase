@@ -57,6 +57,8 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     });
     const { sheetId, printId } = filed.prints[0];
     const roomId = psqlScalar(`SELECT id FROM project_rooms WHERE project_id='${JOB}' ORDER BY id LIMIT 1`);
+    const roomName = psqlScalar(`SELECT name FROM project_rooms WHERE id='${roomId}' AND project_id='${JOB}'`);
+    expect(roomName).toBe('Living room');
     expect(roomId, 'fixture has an exact room identity').toMatch(/^[0-9a-f-]{36}$/);
     const pack = rpc(`public.create_project_package('${JOB}', 'cabinetry', 'D02-${info.project.name}', 'Fictional exact package', '${prefix}-package', '${roomId}', NULL)`);
     const unrelated = rpc(`public.create_project_package('${JOB}', 'cabinetry', 'D02-other-${info.project.name}', 'Fictional lookalike package', '${prefix}-other', '${roomId}', NULL)`);
@@ -141,6 +143,10 @@ test('issued evidence stays frozen as current advances; private viewer retries a
       /\barr-(?:pre|on|press)\b/,
     );
     const drawing = page.locator(`[data-drawing-sheet-id="${sheetId}"]`);
+    await expect(drawing).toContainText(roomName);
+    await expect(drawing).not.toContainText(roomId);
+    await expect(drawing).toContainText('Filed by F01 Fictional Designer');
+    await expect(drawing).not.toContainText(originalFiler);
     await expect(drawing).toContainText('Fictional exact package');
     await expect(drawing).toContainText('Composition only · no agreed-scope key');
     await expect(drawing).not.toContainText('Fictional lookalike package');
@@ -155,7 +161,9 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     await expect(print).toContainText('not current / superseded');
     await expect(print).toContainText('Fictional evidence plan');
     await expect(print).not.toContainText('Fictional changed live title');
-    await expect(print).toContainText(`Filed by ${originalFiler}`);
+    await expect(print).toContainText('Filed by F01 Fictional Designer');
+    await expect(print).not.toContainText(originalFiler);
+    await expect(print).not.toContainText(printId);
     await expect(print).toContainText(printInput(0, bytes).sha256);
     await expect(issueEntry).toContainText('receipt not confirmed');
     expect(
@@ -197,8 +205,15 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     await expect(viewer).toHaveCount(0);
     await expect(opener).toBeFocused();
     await page.goto(`/doc/${JOB}/plans`, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: /Fictional changed live title/ })
-      .filter({ has: page.getByText(`D02-${info.project.name}`, { exact: true }) }).click();
+    const sheetOpener = page.getByRole('button', { name: /Fictional changed live title/ })
+      .filter({ has: page.getByText(`D02-${info.project.name}`, { exact: true }) });
+    await expect(sheetOpener).toContainText(roomName);
+    await expect(sheetOpener).not.toContainText(roomId);
+    await sheetOpener.click();
+    await expect(page.getByRole('main')).toContainText(roomName);
+    await expect(page.getByRole('main')).not.toContainText(roomId);
+    await expect(page.getByRole('main')).toContainText('Filed by F01 Fictional Designer');
+    await expect(page.getByRole('main')).not.toContainText(originalFiler);
     const currentOpener = page.getByRole('button', { name: 'Open drawing revision', exact: true });
     await currentOpener.click();
     await expect(viewer).toBeVisible();
