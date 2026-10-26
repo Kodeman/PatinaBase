@@ -303,7 +303,7 @@ function QueueRow({
 }: {
   po: AnyRecord;
   when: string | null;
-  onInspect: () => void;
+  onInspect: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onOpenDocument: (projectId: string | null) => void;
 }) {
   return (
@@ -369,31 +369,37 @@ export function ReceivingBookPage({
   onOpenDocument: (projectId: string | null) => void;
 }) {
   const since30 = useMemo(() => isoOffsetDays(-30), []);
-  const { data: orders, isLoading: ordersLoading } = usePurchaseOrders() as {
+  const { data: orders, isLoading: ordersLoading, error: ordersError, refetch: retryOrders } = usePurchaseOrders() as {
     data: AnyRecord[] | undefined;
     isLoading: boolean;
+    error?: unknown;
+    refetch?: () => unknown;
   };
-  const { data: inspections, isLoading: inspLoading } = useReceivingInspections(
-    undefined,
-  ) as { data: AnyRecord[] | undefined; isLoading: boolean };
-  const { data: draftedClaims, isLoading: draftedLoading } = useDamageClaims({
-    state: 'drafted',
+  const { data: inspections, isLoading: inspLoading, error: inspectionsError, refetch: retryInspections } = useReceivingInspections(
+    projectId ? { projectId } : undefined,
+  ) as { data: AnyRecord[] | undefined; isLoading: boolean; error?: unknown; refetch?: () => unknown };
+  const { data: draftedClaims, isLoading: draftedLoading, error: draftedError, refetch: retryDrafted } = useDamageClaims({
+    state: 'drafted', projectId: projectId ?? undefined,
   }) as {
     data: AnyRecord[] | undefined;
     isLoading: boolean;
+    error?: unknown;
+    refetch?: () => unknown;
   };
-  const { data: notifiedClaims, isLoading: notifiedLoading } = useDamageClaims({
-    state: 'vendor_notified',
+  const { data: notifiedClaims, isLoading: notifiedLoading, error: notifiedError, refetch: retryNotified } = useDamageClaims({
+    state: 'vendor_notified', projectId: projectId ?? undefined,
   }) as {
     data: AnyRecord[] | undefined;
     isLoading: boolean;
+    error?: unknown;
+    refetch?: () => unknown;
   };
 
+  const opener = useRef<HTMLElement | null>(null);
   const [target, setTarget] = useState<AnyRecord | null>(null);
   const [showCleared, setShowCleared] = useState(false);
 
-  // US-16 (C-08): none of these hooks take a project id, so the lens narrows
-  // every already-fetched list client-side — same project the Ledger holds.
+  // Keep the book lens aligned with the server-scoped receipt and claim reads.
   const matchesProject = (poLike: AnyRecord | null | undefined) =>
     !projectId || (poLike?.project_id ?? poLike?.project?.id) === projectId;
 
@@ -450,8 +456,8 @@ export function ReceivingBookPage({
 
   // Cleared inspections (clean, 30-day window) — the Settled fold.
   const cleared = useMemo(
-    () => filteredInspections.filter((i) => i.outcome === 'clean'),
-    [filteredInspections],
+    () => filteredInspections.filter((i) => i.outcome === 'clean' && (i.received_on ?? i.inspected_at ?? i.created_at) >= since30),
+    [filteredInspections, since30],
   );
 
   const stats = useMemo(
@@ -464,12 +470,15 @@ export function ReceivingBookPage({
     [filteredOrders, filteredInspections, openClaimCount],
   );
 
-  const isLoading = ordersLoading || inspLoading;
+  const isLoading = ordersLoading || inspLoading || draftedLoading || notifiedLoading;
+  const readError = ordersError || inspectionsError || draftedError || notifiedError;
+  const completeRead = orders !== undefined && inspections !== undefined && draftedClaims !== undefined && notifiedClaims !== undefined;
+  const coldRefusal = !!readError && !completeRead;
 
   // FR4 Fix 3 — two frames, so the landing follows the sheet's own focus.
   // Never cancelled: StrictMode's second pass finds the flag already spent.
   const pageRef = useRef<HTMLDivElement | null>(null);
-  const claimsRead = !isLoading && !draftedLoading && !notifiedLoading;
+  const claimsRead = !isLoading && !readError;
   useEffect(() => {
     if (!receivingClaimLanding.pending || !claimsRead) return;
     receivingClaimLanding.pending = false;
@@ -504,7 +513,7 @@ export function ReceivingBookPage({
           open claims · received (30d) — in the proposal-watch figures-strip
           grammar. Counts derive from the queries the page already holds
           (receivingFrontMatter, R5-pure). */}
-      {!isLoading && (
+      {!isLoading && !coldRefusal && (
         <div className="mb-4 grid grid-cols-2 items-stretch gap-y-4 border-y border-[var(--color-pearl)] py-3 sm:grid-cols-4 sm:gap-y-0">
           <Figure
             label="Inbound deliveries"
@@ -518,7 +527,7 @@ export function ReceivingBookPage({
           <Figure label="Open claims" value={String(openClaimCount)} />
           <Figure
             label="Received · last 30 days"
-            value={String((inspections ?? []).length)}
+            value={String(filteredInspections.filter((i) => (i.received_on ?? i.inspected_at ?? i.created_at) >= since30).length)}
             sub={
               stats.find((s) => s.label === '30-day pass')
                 ? `${stats.find((s) => s.label === '30-day pass')!.value} clean`
@@ -528,7 +537,13 @@ export function ReceivingBookPage({
         </div>
       )}
 
-      {isLoading ? (
+      {readError && <div role="alert" className="doc-type-body py-3">
+        Receiving records could not be refreshed. {completeRead ? 'Previously loaded records remain below.' : 'Receipt and claim counts are unavailable.'}
+        <button type="button" className="min-h-11 underline" onClick={() => {
+          void retryOrders?.(); void retryInspections?.(); void retryDrafted?.(); void retryNotified?.();
+        }}>Retry receiving records</button>
+      </div>}
+      {coldRefusal ? null : isLoading ? (
         <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
           Opening the book…
         </p>
@@ -536,7 +551,7 @@ export function ReceivingBookPage({
         <>
           {filteredInspections.filter(i => i.outcome === null).map(i => <div key={i.id} className="mb-3">
             <p>Inspection pending · {i.purchase_order?.vendor?.name ?? 'Delivery'} · received {fmtDay(i.received_on ?? i.created_at)}</p>
-            <button className="min-h-11 underline" onClick={() => setTarget({ ...i.purchase_order, inspectionId: i.id })}>Complete inspection</button>
+            <button className="min-h-11 underline" onClick={(event) => { opener.current = event.currentTarget; setTarget({ ...i.purchase_order, inspectionId: i.id }); }}>Complete inspection</button>
           </div>)}
           {/* The warehouse-day queue — delivered, awaiting the log. */}
           <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
@@ -554,7 +569,7 @@ export function ReceivingBookPage({
                       ? `arrived ~${fmtDay(po.confirmed_eta)}`
                       : null
                 }
-                onInspect={() => setTarget(po)}
+                onInspect={(event) => { opener.current = event.currentTarget; setTarget(po); }}
                 onOpenDocument={onOpenDocument}
               />
             ))}
@@ -581,7 +596,7 @@ export function ReceivingBookPage({
                         ? `shipped · due ~${fmtDay(po.confirmed_eta)}`
                         : 'shipped'
                     }
-                    onInspect={() => setTarget(po)}
+                    onInspect={(event) => { opener.current = event.currentTarget; setTarget(po); }}
                     onOpenDocument={onOpenDocument}
                   />
                 ))}
@@ -651,6 +666,7 @@ export function ReceivingBookPage({
       {/* I17: the same inspection drawer the line unfolds mount. */}
       {target && (
         <LogInspectionDrawer
+          returnFocusTo={opener.current}
           open
           onOpenChange={(o: boolean) => {
             if (!o) setTarget(null);

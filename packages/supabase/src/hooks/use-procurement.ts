@@ -1486,6 +1486,7 @@ export interface ReceivingInspectionFilters {
 }
 
 export interface DamageClaimFilters {
+  projectId?: string;
   state?: DamageClaimState;
   vendorId?: string;
   sinceDate?: string;
@@ -1628,6 +1629,20 @@ export function useFfePlacementReceipts(placementIds: string[]) {
   });
 }
 
+async function readReceivingPages<T extends { id: string; created_at: string }>(buildQuery: () => any): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor: T | undefined;
+  for (;;) {
+    let query = buildQuery().order('created_at', { ascending: false }).order('id', { ascending: false });
+    if (cursor) query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
+    const { data, error } = await query.limit(1000);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if ((data?.length ?? 0) < 1000) return rows;
+    cursor = data[data.length - 1];
+  }
+}
+
 /**
  * Fetches receiving_inspections for the authenticated designer. Joins the
  * purchase_order (with vendor + project) and any nested damage_claims.
@@ -1639,44 +1654,32 @@ export function useReceivingInspections(filters?: ReceivingInspectionFilters) {
     queryKey: ['receiving-inspections', filters],
     queryFn: async (): Promise<ReceivingInspection[]> => {
       const supabase = getSupabase() as any;
-      let query = supabase
-        .from('receiving_inspections')
-        .select(
-          `
-          *,
-          purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey(
-            id, vendor_id, project_id, status, po_number, vendor_po_number,
-            vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
-            project:projects!purchase_orders_project_id_fkey(id, name)
-          ),
-          receiving_inspection_lines(*),
-          damage_claims(*)
-        `,
-        )
-        .order('inspected_at', { ascending: false });
+      return readReceivingPages(() => {
+        let query = supabase
+          .from('receiving_inspections')
+          .select(
+            `
+            *,
+            purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey${filters?.projectId || filters?.vendorId ? '!inner' : ''}(
+              id, vendor_id, project_id, status, po_number, vendor_po_number,
+              vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
+              project:projects!purchase_orders_project_id_fkey(id, name)
+            ),
+            receiving_inspection_lines(*),
+            damage_claims(*)
+          `,
+          );
 
-      query = filters?.studioPurchaseId
-        ? query.eq('studio_purchase_id', filters.studioPurchaseId)
-        : query.not('purchase_order_id', 'is', null);
-      if (filters?.outcome) query = query.eq('outcome', filters.outcome);
-      if (filters?.sinceDate) query = query.gte('inspected_at', filters.sinceDate);
+        query = filters?.studioPurchaseId
+          ? query.eq('studio_purchase_id', filters.studioPurchaseId)
+          : query.not('purchase_order_id', 'is', null);
+        if (filters?.outcome) query = query.eq('outcome', filters.outcome);
+        if (filters?.sinceDate) query = query.gte('inspected_at', filters.sinceDate);
 
-      const { data, error } = await query;
-      if (error) throw error;
-
-      let rows = (data ?? []) as ReceivingInspection[];
-
-      // vendorId / projectId live on the joined purchase_order — apply
-      // client-side because the embedded relationship can't be filtered via
-      // .eq() on the parent table.
-      if (filters?.vendorId) {
-        rows = rows.filter((r) => r.purchase_order?.vendor_id === filters.vendorId);
-      }
-      if (filters?.projectId) {
-        rows = rows.filter((r) => r.purchase_order?.project_id === filters.projectId);
-      }
-
-      return rows;
+        if (filters?.projectId) query = query.eq('purchase_order.project_id', filters.projectId);
+        if (filters?.vendorId) query = query.eq('purchase_order.vendor_id', filters.vendorId);
+        return query;
+      });
     },
   });
 }
@@ -1692,42 +1695,34 @@ export function useDamageClaims(filters?: DamageClaimFilters) {
     queryKey: ['damage-claims', filters],
     queryFn: async (): Promise<DamageClaim[]> => {
       const supabase = getSupabase() as any;
-      let query = supabase
-        .from('damage_claims')
-        .select(
-          `
-          *,
-          inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(
-            id, purchase_order_id, outcome, photo_asset_ids,
-            purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey(
-              id, is_patina_catalog,
-              vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
-              project:projects!purchase_orders_project_id_fkey(id, name)
+      return readReceivingPages(() => {
+        let query = supabase
+          .from('damage_claims')
+          .select(
+            `
+            *,
+            inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey${filters?.projectId || filters?.vendorId ? '!inner' : ''}(
+              id, purchase_order_id, outcome, photo_asset_ids,
+              purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey${filters?.projectId || filters?.vendorId ? '!inner' : ''}(
+                id, project_id, vendor_id, is_patina_catalog,
+                vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
+                project:projects!purchase_orders_project_id_fkey(id, name)
+              )
             )
-          )
-        `,
-        )
-        .order('created_at', { ascending: false });
+          `,
+          );
 
-      if (filters?.state) query = query.eq('state', filters.state);
-      if (filters?.sinceDate) query = query.gte('created_at', filters.sinceDate);
+        if (filters?.state) query = query.eq('state', filters.state);
+        if (filters?.sinceDate) query = query.gte('created_at', filters.sinceDate);
 
-      const { data, error } = await query;
-      if (error) throw error;
-
-      let rows = (data ?? []) as DamageClaim[];
-
-      // vendorId lives on the nested purchase_order — apply client-side.
-      if (filters?.vendorId) {
-        rows = rows.filter(
-          (r) => r.inspection?.purchase_order?.vendor?.id === filters.vendorId,
-        );
-      }
-
-      return rows;
+        if (filters?.projectId) query = query.eq('inspection.purchase_order.project_id', filters.projectId);
+        if (filters?.vendorId) query = query.eq('inspection.purchase_order.vendor_id', filters.vendorId);
+        return query;
+      });
     },
   });
 }
+
 
 /**
  * Fetches the unified delivery_events view (PO confirmed_etas + project

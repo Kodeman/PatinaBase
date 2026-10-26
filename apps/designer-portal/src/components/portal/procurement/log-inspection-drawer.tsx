@@ -3,8 +3,7 @@
 /** One delivery receipt, with a separate pending-inspection and follow-up path. */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { DocSheet } from '@/components/document/overlays/doc-sheet';
 import { X } from 'lucide-react';
 import {
   useCreateReceivingInspection,
@@ -210,6 +209,8 @@ export interface LogInspectionDrawerProps {
   studioPurchaseId?: string;
   arrivalMethod?: 'picked_up' | 'delivered';
   inspectionId?: string;
+  subjectStale?: boolean;
+  returnFocusTo?: HTMLElement | null;
   receiptItems?: Array<ReceivingInspectionItemInput & { name: string; unit?: string | null; project_id?: string; quantity: number; received_quantity?: number | null }>;
   buyerUserId?: string;
   /**
@@ -280,8 +281,16 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const complete = useCompleteReceivingInspection();
   const followUp = useRetryReceivingFollowUp();
   const shipments = usePoShipments(purchaseOrderId);
-  const inspections = useReceivingInspections(props.studioPurchaseId ? { studioPurchaseId: props.studioPurchaseId } : undefined);
-  const original = inspections.data?.find(i => i.id === props.inspectionId);
+  const inspections = useReceivingInspections(props.studioPurchaseId ? { studioPurchaseId: props.studioPurchaseId } : { projectId });
+  const nativeOriginal = inspections.data?.find(i => i.id === props.inspectionId);
+  // Keep the opened receipt's immutable quantities when another actor completes it.
+  const originalRef = useRef<typeof nativeOriginal>(undefined);
+  if (!open || originalRef.current?.id !== props.inspectionId) originalRef.current = undefined;
+  if (open && !originalRef.current && nativeOriginal) originalRef.current = nativeOriginal;
+  const original = originalRef.current;
+  const subjectStale = !saved && (props.subjectStale || (!!props.inspectionId &&
+    !inspections.isLoading && inspections.data !== undefined && !inspections.error &&
+    (!nativeOriginal || nativeOriginal.outcome !== null)));
   const { data: studioId } = useProjectRecordedStudio(projectId ?? '');
   const members = useOrganizationMembers(studioId ?? '');
   const locations = useStudioLocations(studioId);
@@ -484,7 +493,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   const busy = createInspection.isPending || complete.isPending || followUp.isPending || uploading > 0;
 
   const handleSubmit = async () => {
-    if (saved || busy) return;
+    if (saved || busy || subjectStale) return;
     if (!items.length) { setSubmitError('The delivery items are still loading.'); return; }
     if (!props.inspectionId && availableShipments.length > 1 && !shipmentId) { setSubmitError('Choose the shipment for this delivery.'); return; }
     if (!checked) { setSubmitError('Choose whether the delivery was opened and checked.'); return; }
@@ -593,35 +602,12 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     }
   };
 
-  // Portal to document.body (as OrderAssistant does): rendered inline from the
-  // line unfold, /doc's stacking context capped the panel's z-50 beneath the
-  // fixed z-40 Studio drawer, which swallowed clicks on the footer.
-  if (typeof document === 'undefined') return null;
+  const close = () => { if (!busy) onOpenChange(false); };
 
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/20"
-            onClick={() => !createInspection.isPending && onOpenChange(false)}
-            aria-hidden="true"
-          />
-          <motion.div
-            onKeyDown={e => { if (e.key === 'Escape' && !busy) { e.stopPropagation(); onOpenChange(false); } }}
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Log inspection for ${poLabel}`}
-            className="fixed bottom-0 right-0 top-0 z-50 flex w-[440px] max-w-full flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)]"
-          >
+  return (
+    <DocSheet open={open} onClose={close} title={`Log inspection for ${poLabel}`}
+      headOwnedByChild returnFocusTo={props.returnFocusTo}>
+          <div className="min-w-0">
             {/* Header */}
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-5 py-4">
               <div className="min-w-0">
@@ -637,8 +623,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
               </div>
               <IconButton
                 label="Close"
-                onClick={() => !createInspection.isPending && onOpenChange(false)}
-                disabled={busy || !!saved}
+                onClick={close}
+                disabled={busy}
                 size="sm"
               >
                 <X size={18} />
@@ -647,6 +633,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5">
+              {subjectStale && <p role="alert">This receipt changed while you were inspecting it. Your draft is kept. Close and reopen receiving to review the current record.</p>}
               {saved ? <section role="status" className="space-y-3">
                 <p>Receipt saved. {saved.inspection.inspection_pending ? 'Inspection pending.' : 'Inspection recorded.'}</p>
                 {saved.claimDraftError && <><p>Claim draft could not be created.</p><Button disabled={busy} onClick={async () => {
@@ -992,8 +979,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onOpenChange(false)}
-                disabled={createInspection.isPending}
+                onClick={close}
+                disabled={busy}
               >
                 {saved ? 'Done' : 'Cancel'}
               </Button>
@@ -1001,17 +988,14 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 variant="primary"
                 size="sm"
                 onClick={handleSubmit}
-                disabled={busy || !!saved || itemsQuery.isLoading || inspections.isLoading || shipments.isLoading}
+                disabled={busy || !!saved || !!subjectStale || itemsQuery.isLoading || inspections.isLoading || shipments.isLoading}
                 loading={createInspection.isPending || complete.isPending}
               >
                 {props.inspectionId ? 'Complete inspection' : 'Save receipt'}
               </Button>
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>,
-    document.body,
+          </div>
+    </DocSheet>
   );
 }
 
