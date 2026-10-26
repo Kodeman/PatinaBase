@@ -25,6 +25,8 @@ import {
 export function GalleyFold({
   part,
   proposalId,
+  scopeProjectId,
+  inheritedScopeEditionId,
   record,
   dirty,
   readOnly,
@@ -39,6 +41,8 @@ export function GalleyFold({
 }: {
   part: AgreementPart;
   proposalId: string;
+  scopeProjectId?: string | null;
+  inheritedScopeEditionId?: string | null;
   /** The dated record, with this part's own unsaved clause when it has one. */
   record: string;
   /** The composer's dirty flag — this part's own unsaved clause (return-teaching
@@ -81,6 +85,8 @@ export function GalleyFold({
       )}
       <PartEditor
         part={part}
+        scopeProjectId={scopeProjectId}
+        inheritedScopeEditionId={inheritedScopeEditionId}
         onChange={onChange}
         readOnly={readOnly}
         libraryOn={libraryOn}
