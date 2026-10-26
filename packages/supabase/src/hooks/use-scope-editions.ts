@@ -114,9 +114,10 @@ export function useScopeEditions(projectId: string | null | undefined) {
   });
   let editionState: ScopeEditionState;
   if (!projectId) editionState = { status: 'idle' };
+  else if (query.data?.length) editionState = { status: 'recorded', editions: query.data };
   else if (query.isError) editionState = { status: 'error', error: query.error };
   else if (query.data === undefined) editionState = { status: 'loading' };
-  else if (!query.data.length) editionState = { status: 'absent' };
-  else editionState = { status: 'recorded', editions: query.data };
-  return { ...query, editionState, capability: scopeEditionCapability };
+  else editionState = { status: 'absent' };
+  const refetchError = projectId && query.data !== undefined && query.isError ? query.error : null;
+  return { ...query, editionState, refetchError, capability: scopeEditionCapability };
 }
