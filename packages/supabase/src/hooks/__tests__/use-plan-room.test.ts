@@ -125,6 +125,9 @@ describe('planRoomKeys', () => {
 describe('usePlanRoom', () => {
   const config = () =>
     usePlanRoom('p1') as unknown as QueryConfig<{
+      sheetRooms: unknown[];
+      sheetPackages: unknown[];
+      packages: unknown[];
       sheets: unknown[];
       prints: unknown[];
       batches: unknown[];
@@ -134,7 +137,7 @@ describe('usePlanRoom', () => {
       tokens: unknown[];
     }>;
 
-  it('is keyed, gated and assembles the bundle from the seven reads', async () => {
+  it('is keyed, gated and assembles the bundle from the ten reads', async () => {
     builders['plan_sheets'] = queryBuilder({
       data: [{ id: 'sheet-1', project_id: 'p1', sheet_number: 'A-101' }],
       error: null,
@@ -174,6 +177,9 @@ describe('usePlanRoom', () => {
 
     const bundle = await query.queryFn();
     expect(bundle).toEqual({
+      sheetRooms: [],
+      sheetPackages: [],
+      packages: [],
       sheets: [{ id: 'sheet-1', project_id: 'p1', sheet_number: 'A-101' }],
       prints: [{ id: 'print-1', sheet_id: 'sheet-1' }],
       batches: [{ id: 'batch-1', project_id: 'p1' }],
@@ -202,9 +208,11 @@ describe('usePlanRoom', () => {
     expect(builders['plan_prints'].in).toHaveBeenCalledWith('sheet_id', [
       ZERO_UUID,
     ]);
-    expect(builders['plan_issue_prints'].in).toHaveBeenCalledWith('issue_id', [
-      ZERO_UUID,
-    ]);
+    expect(builders['plan_issue_prints'].in).toHaveBeenCalledWith('issue_id', [ZERO_UUID]);
+    expect(builders['plan_sheet_rooms']).toBeDefined();
+    expect(builders['plan_sheet_packages']).toBeDefined();
+    expect(builders['plan_sheet_rooms']?.in).toHaveBeenCalledWith('sheet_id', [ZERO_UUID]);
+    expect(builders['plan_sheet_packages']?.in).toHaveBeenCalledWith('sheet_id', [ZERO_UUID]);
   });
 
   it('propagates the first error from the parallel reads', async () => {
@@ -213,6 +221,31 @@ describe('usePlanRoom', () => {
       error: new Error('rls denied'),
     });
     await expect(config().queryFn()).rejects.toThrow('rls denied');
+  });
+
+  it('returns exact composition without transmittals and keeps issue prints separate from current prints', async () => {
+    builders.plan_sheets = queryBuilder({data:[{id:'sheet-1',current_print_id:'new-print'}],error:null});
+    builders.plan_sheet_rooms = queryBuilder({data:[{sheet_id:'sheet-1',project_room_id:'room-1'}],error:null});
+    builders.plan_sheet_packages = queryBuilder({data:[{sheet_id:'sheet-1',package_id:'package-uuid'}],error:null});
+    builders.project_packages = queryBuilder({data:[{id:'package-uuid',package_key:'pkg.kitchen-cabinetry',archived_at:'2026-01-01'}],error:null});
+    builders.plan_issues = queryBuilder({data:[{id:'issue-1'}],error:null});
+    builders.plan_issue_prints = queryBuilder({data:[{issue_id:'issue-1',sheet_id:'sheet-1',print_id:'old-print',sheet_title:'Issued title'}],error:null});
+    const bundle = await config().queryFn();
+    expect(bundle.transmittals).toEqual([]);
+    expect(bundle.sheetRooms).toEqual([{sheet_id:'sheet-1',project_room_id:'room-1'}]);
+    expect(bundle.sheetPackages).toEqual([{sheet_id:'sheet-1',package_id:'package-uuid'}]);
+    expect(bundle.packages).toEqual([{id:'package-uuid',package_key:'pkg.kitchen-cabinetry',archived_at:'2026-01-01'}]);
+    expect(bundle.issuePrints).toEqual([{issue_id:'issue-1',sheet_id:'sheet-1',print_id:'old-print',sheet_title:'Issued title'}]);
+    expect(builders.plan_sheet_rooms.in).toHaveBeenCalledWith('sheet_id',['sheet-1']);
+    expect(builders.plan_sheet_packages.in).toHaveBeenCalledWith('sheet_id',['sheet-1']);
+    expect(builders.project_packages.eq).toHaveBeenCalledWith('project_id','p1');
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+    expect(supabaseClient.from).toHaveBeenCalledTimes(10);
+  });
+
+  it.each(['plan_sheet_rooms','plan_sheet_packages','project_packages'])('propagates %s composition failures instead of false empty', async (table) => {
+    builders[table]=queryBuilder({data:null,error:new Error('composition down')});
+    await expect(config().queryFn()).rejects.toThrow('composition down');
   });
 
   it('propagates a sheets read error', async () => {
