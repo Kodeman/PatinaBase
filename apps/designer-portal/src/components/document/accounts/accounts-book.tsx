@@ -176,7 +176,7 @@ export function AccountsBook({
       : null;
   const availablePages = canSeeMargin ? PAGES : PAGES.filter((p) => p.key !== 'earnings');
 
-  if (folioId && !isError && !isLoading && !money.isError && !money.isLoading) {
+  if (folioId) {
     const folioInvoice = visibleInvoices.find((inv) => inv.id === folioId);
     return (
       <div ref={sheetRef} onClickCapture={(event) => { pressed.current = (event.target as Element).closest<HTMLElement>('button'); }} className="mx-auto max-w-3xl" data-accounts-folio={folioId}>
@@ -209,6 +209,15 @@ export function AccountsBook({
           </button>
         </div>
         <div className="sh-body">
+          {isError || money.isError ? (
+            <AccountsQueryFailure
+              title="The studio book could not be opened."
+              message="Invoices and receivables are still held in place. Try the account read again."
+              onRetry={() => { void refetch(); money.refetch?.(); }}
+            />
+          ) : isLoading || money.isLoading ? (
+            <SectionLoadingLine label="Opening the book" className="py-3" />
+          ) : null}
           <InvoiceFolio invoiceId={folioId} onOpenDocument={openDocument} />
         </div>
       </div>

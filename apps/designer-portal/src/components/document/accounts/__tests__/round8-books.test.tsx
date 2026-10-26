@@ -16,6 +16,15 @@ const mockChase = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'designer' } }) }));
 jest.mock('@patina/supabase', () => ({
+  useInvoice: (id: string) => ({ data: mockInvoices.find(i => i.id === id), isLoading: false, isError: false }),
+  useInvoiceLink: () => ({ data: null }),
+  invoiceLinkIsLive: () => false,
+  useRegenerateInvoiceLink: () => ({ isPending: false }),
+  useRecordPayment: () => ({ isPending: false }),
+  useVoidInvoice: () => ({ isPending: false }),
+  useSessionUserId: () => null,
+  useDesignerClientForClientUser: () => ({ data: null }),
+  useClient: () => ({ data: null }),
   useInvoices: () => ({ data: mockInvoices, refetch: mockRetry, ...mockInvoiceState }),
   useOrganizations: () => ({ data: [{ id: 'studio', type: 'design_studio', membership: { role: mockRole } }], refetch: mockAuthorityRetry, ...mockAuthorityState }),
   useLedProjectIds: () => ({ data: new Set(['led-job']), refetch: mockAuthorityRetry }),
@@ -26,12 +35,14 @@ jest.mock('@patina/supabase', () => ({
   invoiceDaysOverdue: () => 10,
   computeArAging: () => ({ openInvoices: mockInvoices.filter(i => i.status === 'sent' || i.status === 'partially_paid'), buckets: [], totalBalanceCents: 0 }),
 }));
-jest.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: jest.fn() }) }));
+jest.mock('@tanstack/react-query', () => ({ ...jest.requireActual('@tanstack/react-query'), useQueryClient: () => ({ invalidateQueries: jest.fn() }) }));
 jest.mock('@/hooks/use-studio-accounts', () => ({ useStudioMargin: () => ({ data: undefined }) }));
 jest.mock('../accounts-export', () => ({ AccountsExportAction: () => <button>Export</button> }));
 jest.mock('../invoice-overlays', () => ({ openInvoiceComposer: jest.fn(), openInvoiceFolio: jest.fn() }));
 jest.mock('../accounts-earnings-page', () => ({ AccountsEarningsPage: () => null }));
-jest.mock('../invoice-folio', () => ({ InvoiceFolio: () => <div>Private folio</div> }));
+jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => ({ value: false }) }));
+jest.mock('@/hooks/use-invoice-checkout-reconciliation', () => ({ useReconcileInvoiceCheckout: () => ({ isPending: false }) }));
+jest.mock('../../overlays/household-sheet', () => ({ HouseholdSheet: () => null }));
 jest.mock('../../overlays/doc-sheet', () => ({ DocSheetHead: () => <h1>Studio accounts</h1> }));
 jest.mock('../../teaching/teaching-anchor-note', () => ({ TEACHING_MARGIN_COLUMN: '', TeachingAnchorNote: () => null }));
 
@@ -39,6 +50,7 @@ const invoice = (id: string, overrides: Partial<Invoice> = {}): Invoice => ({
   id, studio_id: 'studio', project_id: 'led-job', status: 'sent', invoice_number: id,
   total_cents: 10000, amount_paid_cents: 0, currency: 'USD', due_date: '2026-01-01',
   client: { id: 'client', full_name: 'Fictional client', email: 'client@example.test' },
+  line_items: [], payments: [], created_at: '2026-01-01', issue_date: '2026-01-01',
   internal_notes: 'PRIVATE TRADE COST 987654', reminder_count: 0, ...overrides,
 } as Invoice);
 const front = () => document.querySelector('[data-accounts-front-matter]') as HTMLElement;
@@ -94,15 +106,15 @@ it('keeps member books scoped to led jobs and never renders studio totals or pri
   expect(document.body).not.toHaveTextContent('PRIVATE TRADE COST');
 });
 
-it.each(['missing-recipient', 'delivery-loading', 'delivery-failure'])('holds reminder sends for %s without a chase write', (state) => {
-  const rowInvoice = invoice('overdue', state === 'missing-recipient' ? { client: undefined } : {});
+it.each(['delivery-loading', 'delivery-failure'])('holds reminder sends for %s without a chase write', (state) => {
+  const rowInvoice = invoice('overdue');
   mockDeliveryState = state === 'delivery-loading' ? { isLoading: true } : state === 'delivery-failure' ? { isError: true } : {};
   render(<AccountsReceivablesPage aging={{ openInvoices: [rowInvoice], buckets: [], totalBalanceCents: 10000, flagged: [] }} highlightInvoiceId={null} onOpenDocument={jest.fn()} />);
   const row = screen.getByRole('listitem');
   const send = within(row).getByRole('button', { name: 'Send reminder' });
   expect(send).toBeDisabled(); fireEvent.click(send);
   expect(mockSend).not.toHaveBeenCalled(); expect(mockChase).not.toHaveBeenCalled();
-  expect(row).toHaveTextContent(state === 'missing-recipient' ? 'Add the client email' : 'Delivery history is unread');
+  expect(row).toHaveTextContent('Delivery history is unread');
 });
 
 it('prints receivables in the invoice currency rather than relabeling EUR as USD', () => {
@@ -110,4 +122,29 @@ it('prints receivables in the invoice currency rather than relabeling EUR as USD
   render(<AccountsReceivablesPage aging={{ openInvoices: [eur], buckets: [], totalBalanceCents: 10000, flagged: [] }} highlightInvoiceId={null} onOpenDocument={jest.fn()} />);
   expect(screen.getByRole('listitem')).toHaveTextContent('€100.00');
   expect(screen.getByText('€100.00 owed')).toBeVisible();
+});
+
+// Exercise the real InvoiceFolio's local payment state, not a stateless substitute.
+it.each(['list', 'authority'])('retains the real folio payment draft through %s error and retry', (source) => {
+  mockInvoices = [invoice('editing')];
+  const { rerender } = render(<AccountsBook onClose={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Invoice editing' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+  const reference = screen.getByRole('textbox', { name: 'reference' });
+  fireEvent.change(reference, { target: { value: 'Unsaved wire reference' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'amount ($)' }), { target: { value: '37.50' } });
+  if (source === 'list') mockInvoiceState = { isError: true };
+  else mockAuthorityState = { isError: true };
+  rerender(<AccountsBook onClose={jest.fn()} />);
+  expect(screen.getByRole('textbox', { name: 'reference' })).toBe(reference);
+  expect(reference).toHaveValue('Unsaved wire reference');
+  expect(front()).toBeNull();
+  expect(screen.getByText('The studio book could not be opened.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(source === 'list' ? mockRetry : mockAuthorityRetry).toHaveBeenCalled();
+  mockInvoiceState = {}; mockAuthorityState = {};
+  rerender(<AccountsBook onClose={jest.fn()} />);
+  expect(screen.getByRole('textbox', { name: 'reference' })).toBe(reference);
+  expect(reference).toHaveValue('Unsaved wire reference');
+  expect(screen.getByRole('textbox', { name: 'amount ($)' })).toHaveValue('37.50');
 });

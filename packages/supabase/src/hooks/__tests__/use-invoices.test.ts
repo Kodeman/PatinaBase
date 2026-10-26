@@ -35,6 +35,7 @@ import {
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
   useClientInvoices,
+  useInvoices,
   useInvoice,
   useProjectInvoices,
   useUpdateDraftInvoice,
@@ -1595,5 +1596,34 @@ describe('computeArAging undated receivables', () => {
     expect(aging.buckets.find(b => b.key === 'current')?.invoices.map(i => i.id)).toEqual(['future', 'undated', 'partial']);
     expect(aging.buckets.find(b => b.key === 'current')?.balanceCents).toBe(29000);
     expect(inputs[0]).toBe(undated);
+  });
+});
+
+describe('useInvoices whole-book completeness', () => {
+  function pages(results: { data: unknown[] | null; error: Error | null }[]) {
+    const query: any = { then: (resolve: any) => Promise.resolve(results[0]).then(resolve) };
+    query.order = vi.fn(() => query);
+    query.eq = vi.fn(() => query);
+    query.range = vi.fn();
+    for (const result of results) query.range.mockResolvedValueOnce(result);
+    supabaseClient.from.mockReturnValue({ select: vi.fn(() => query) });
+    return query;
+  }
+  it('includes the older unpaid invoice after 1000 newer records with stable paging and native filters', async () => {
+    const newer = Array.from({ length: 1000 }, (_, i) => ({ id: 'new-' + i, status: 'paid' }));
+    const older = { id: 'older-unpaid', status: 'sent', total_cents: 9000 };
+    const query = pages([{ data: newer, error: null }, { data: [older], error: null }]);
+    const config = useInvoices({ projectId: 'project-a' }) as unknown as { queryFn: () => Promise<Invoice[]> };
+    const rows = await config.queryFn();
+    expect(rows).toHaveLength(1001);
+    expect(rows[1000]).toEqual(older);
+    expect(query.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
+    expect(query.order.mock.calls).toEqual([['created_at', { ascending: false }], ['id', { ascending: false }]]);
+    expect(query.eq).toHaveBeenCalledWith('project_id', 'project-a');
+  });
+  it('rejects a later-page refusal rather than publishing a partial book', async () => {
+    pages([{ data: Array.from({ length: 1000 }, (_, i) => ({ id: String(i) })), error: null }, { data: null, error: new Error('later page failed') }]);
+    const config = useInvoices() as unknown as { queryFn: () => Promise<Invoice[]> };
+    await expect(config.queryFn()).rejects.toThrow('later page failed');
   });
 });

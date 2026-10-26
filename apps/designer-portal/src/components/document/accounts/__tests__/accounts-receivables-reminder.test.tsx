@@ -78,3 +78,15 @@ it.each([
   expect(row).not.toHaveTextContent(raw);
   expect(mockChase).not.toHaveBeenCalled();
 });
+
+it('lets native reminder resolution decide when the profile email is null', async () => {
+  mockSend.mockRejectedValue(new Error('no_recipient'));
+  const withoutProfileEmail = { ...overdue, client: { ...overdue.client!, email: null } };
+  render(<AccountsReceivablesPage aging={{ ...aging, openInvoices: [withoutProfileEmail] }} highlightInvoiceId={null} onOpenDocument={jest.fn()} />);
+  const send = screen.getByRole('button', { name: 'Send reminder' });
+  expect(send).toBeEnabled();
+  fireEvent.click(send);
+  expect(mockSend).toHaveBeenCalledWith({ invoiceId: overdue.id, projectId: overdue.project_id, type: 'reminder' });
+  expect(await screen.findByText('Could not send the reminder — This invoice has no client email yet. Add their email, then send it.')).toBeVisible();
+  expect(mockChase).not.toHaveBeenCalled();
+});

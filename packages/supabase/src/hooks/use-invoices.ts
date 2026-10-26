@@ -482,14 +482,20 @@ export function useInvoices(filters?: InvoiceFilters) {
           payments:invoice_payments(*)
         `
         )
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
 
       if (filters?.status) query = query.eq('status', filters.status);
       if (filters?.projectId) query = query.eq('project_id', filters.projectId);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as Invoice[];
+      const pageSize = 1000;
+      const invoices: Invoice[] = [];
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await query.range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        invoices.push(...(data ?? []));
+        if ((data?.length ?? 0) < pageSize) return invoices;
+      }
     },
   });
 }

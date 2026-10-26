@@ -137,9 +137,8 @@ function ReceivableRow({
   // R136 — a studio invoice ages like any other, but has no house to open.
   const studioInvoice = invoice.project_id === null;
 
-  const recipientKnown = Boolean(invoice.client?.email?.trim());
   const doChase = async () => {
-    if (busy || !recipientKnown || deliveryUnread) return;
+    if (busy || deliveryUnread) return;
     setNote(null);
     try {
       // One act, two writes: the overdue-notice email + the chase timestamp the
@@ -223,7 +222,6 @@ function ReceivableRow({
             .filter(Boolean)
             .join(' · ')}`}
         </p>
-        {overdue && !recipientKnown && <p className="t-body-sm">Add the client email in the invoice folio before sending a reminder.</p>}
         {overdue && deliveryUnread && !delivery && <p className="t-body-sm">Delivery history is unread; reminders are held.</p>}
         {note && (
           <p
@@ -244,7 +242,7 @@ function ReceivableRow({
           surfaceKey="accounts"
           regionKey="receivable-row"
           variant="primary"
-          disabled={busy || !recipientKnown || deliveryUnread}
+          disabled={busy || deliveryUnread}
           onClick={() => void doChase()}
           loading={busy}
           loadingLabel="Sending…"
