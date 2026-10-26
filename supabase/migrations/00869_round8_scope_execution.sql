@@ -2291,6 +2291,40 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+-- The addendum has no commercial-document row yet when its pointer is set.
+-- Its recorded billing-source document supplies the project, without new locks.
+CREATE OR REPLACE FUNCTION public._guard_proposal_scope_edition()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, pg_temp AS $$
+BEGIN
+  IF (TG_OP = 'INSERT' AND NEW.drafted_against_scope_edition_id IS NULL)
+     OR (TG_OP = 'UPDATE' AND NEW.drafted_against_scope_edition_id IS NOT DISTINCT FROM OLD.drafted_against_scope_edition_id) THEN
+    RETURN NEW;
+  END IF;
+  IF current_user IS DISTINCT FROM (SELECT pg_get_userbyid(proowner) FROM pg_proc
+       WHERE oid = 'public.create_service_addendum(uuid,text)'::regprocedure)
+     OR current_setting('app.scope_edition_writer',true) IS DISTINCT FROM NEW.id::text THEN
+    RAISE EXCEPTION 'scope_edition_sanctioned_writer_required' USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.drafted_against_scope_edition_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.project_scope_editions edition
+    JOIN public.project_commercial_documents source ON source.project_id = edition.project_id
+    WHERE edition.id = NEW.drafted_against_scope_edition_id
+      AND source.proposal_id = NEW.parent_proposal_id
+      AND NEW.document_kind = 'service_addendum'
+      AND (NEW.project_id IS NULL OR NEW.project_id = edition.project_id)
+      AND NOT EXISTS (SELECT 1 FROM public.project_commercial_documents document
+        WHERE document.proposal_id = NEW.id AND document.project_id <> edition.project_id)
+  ) THEN
+    RAISE EXCEPTION 'scope_edition_project_mismatch' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public._guard_proposal_scope_edition() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS guard_proposal_scope_edition ON public.proposals;
+CREATE TRIGGER guard_proposal_scope_edition BEFORE INSERT OR UPDATE ON public.proposals
+FOR EACH ROW EXECUTE FUNCTION public._guard_proposal_scope_edition();
+
 -- Native create_service_addendum from 00816_us37_proposal_stamp_residuals.sql:358; bounded C2 graft only.
 CREATE OR REPLACE FUNCTION public.create_service_addendum(
   p_project_id uuid,
@@ -2386,7 +2420,9 @@ BEGIN
   UPDATE public.proposal_service_terms SET current_rate_version = current_rate_version + 1
   WHERE proposal_id = v_proposal_id;
   IF v_scope_edition_id IS NOT NULL THEN
+    PERFORM set_config('app.scope_edition_writer',v_proposal_id::text,true);
     UPDATE public.proposals SET drafted_against_scope_edition_id=v_scope_edition_id WHERE id=v_proposal_id;
+    PERFORM set_config('app.scope_edition_writer','',true);
     v_scope_parts := public._scope_parts_from_edition(v_scope_edition_id);
     PERFORM public._normalize_scope_package_parts(v_proposal_id,v_scope_parts);
     PERFORM set_config('app.scope_parts_writer',v_proposal_id::text,true);
@@ -2491,6 +2527,10 @@ BEGIN
   WHERE ap.proposal_id = v_source_proposal_id;
 
   IF v_proposal.drafted_against_scope_edition_id IS NOT NULL THEN
+    IF NOT EXISTS (SELECT 1 FROM public.project_scope_editions
+      WHERE id = v_proposal.drafted_against_scope_edition_id AND project_id = v_project_id) THEN
+      RAISE EXCEPTION 'scope_edition_project_mismatch' USING ERRCODE = 'check_violation';
+    END IF;
     -- Scope comes from the frozen predecessor, not mutable billing-source
     -- parts. Inherited bindings are carried in the edition, never re-declared.
     SELECT COALESCE(jsonb_agg(p ORDER BY ord),'[]') INTO v_parts

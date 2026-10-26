@@ -456,3 +456,86 @@ SELECT pg_temp.assert_true((SELECT count(*)=3 AND max(execution_seq)=3 FROM publ
  (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),'paused amendment still assigns execution sequence');
 SELECT pg_temp.assert_true((SELECT count(*)=1 FROM public.project_billing_authorities WHERE status='active' AND source_proposal_id=
  (SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='paused')),'paused amendment preserves native active billing authority');
+
+-- SQ-2088: the draft predecessor is a server-owned, project-bound reference.
+SELECT pg_temp.assert_true((SELECT NOT prosecdef AND proowner=(SELECT proowner FROM pg_proc
+ WHERE oid='public.create_service_addendum(uuid,text)'::regprocedure)
+ FROM pg_proc WHERE oid=to_regprocedure('public._guard_proposal_scope_edition()')),
+ 'pointer guard is invoker and shares native addendum owner');
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SET LOCAL ROLE authenticated;
+INSERT INTO scope_execution_results VALUES('pointer_guard',public.create_service_addendum(
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='build'),'Pointer guard draft'));
+SELECT public.copy_agreement_parts_from_authority((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='pointer_guard'),'Copy native fee parts before send');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT p.drafted_against_scope_edition_id=e.id FROM public.proposals p
+ JOIN public.project_scope_editions e ON e.project_id=(SELECT (value->>'projectId')::uuid
+ FROM scope_execution_results WHERE key='build') AND e.status='active'
+ WHERE p.id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')),
+ 'native addendum sets project-bound pointer');
+SELECT pg_temp.assert_true(current_setting('app.scope_edition_writer',true)='',
+ 'native addendum clears pointer writer marker');
+SELECT pg_temp.actor(2);
+SET LOCAL ROLE authenticated;
+WITH changed AS (UPDATE public.proposals SET title='Member edits ordinary draft text'
+ WHERE id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard') RETURNING id)
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM changed),'studio member can update guarded draft ordinary fields');
+SELECT pg_temp.expect_error($q$UPDATE public.proposals SET drafted_against_scope_edition_id=(
+ SELECT drafted_against_scope_edition_id FROM public.proposals WHERE id=(SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='pointer_guard')) WHERE id='f8693000-0000-4000-8000-000000000005'$q$,
+ '23514','scope_edition_sanctioned_writer_required','studio member cannot set draft pointer');
+SELECT pg_temp.expect_error($q$UPDATE public.proposals SET drafted_against_scope_edition_id=NULL
+ WHERE id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')$q$,
+ '23514','scope_edition_sanctioned_writer_required','studio member cannot clear draft pointer');
+SELECT set_config('app.scope_edition_writer',(SELECT value->>'proposalId' FROM scope_execution_results WHERE key='pointer_guard'),true);
+SELECT pg_temp.expect_error($q$UPDATE public.proposals SET drafted_against_scope_edition_id=NULL
+ WHERE id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')$q$,
+ '23514','scope_edition_sanctioned_writer_required','caller-set marker cannot authorize pointer change');
+SELECT set_config('app.scope_edition_writer','',true);
+SELECT pg_temp.expect_error($q$INSERT INTO public.proposals(id,designer_id,designer_client_id,client_id,title,total_amount,status,drafted_against_scope_edition_id)
+ SELECT 'f8693000-0000-4000-8000-000000000099','f8690000-0000-4000-8000-000000000001',
+ 'f8692000-0000-4000-8000-000000000001','f8690000-0000-4000-8000-000000000005','Caller pointer insert',0,'draft',drafted_against_scope_edition_id
+ FROM public.proposals WHERE id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')$q$,
+ '23514','scope_edition_sanctioned_writer_required','studio member cannot insert nonnull pointer');
+RESET ROLE;
+-- An authentic owner/marker pair still cannot bind a foreign project's edition.
+SELECT set_config('app.scope_edition_writer',(SELECT value->>'proposalId' FROM scope_execution_results WHERE key='pointer_guard'),true);
+SELECT pg_temp.expect_error($q$UPDATE public.proposals SET drafted_against_scope_edition_id=(SELECT id
+ FROM public.project_scope_editions WHERE source_proposal_id='f8693000-0000-4000-8000-000000000003')
+ WHERE id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')$q$,
+ '23514','scope_edition_project_mismatch','server marker cannot bind foreign project edition');
+SELECT set_config('app.scope_edition_writer','',true);
+-- Corrupt storage only inside the exception subtransaction; copy must defend itself.
+SELECT pg_temp.expect_error($q$DO $x$ BEGIN
+ SET LOCAL session_replication_role=replica;
+ UPDATE public.proposals SET drafted_against_scope_edition_id=(SELECT id FROM public.project_scope_editions
+ WHERE source_proposal_id='f8693000-0000-4000-8000-000000000003')
+ WHERE id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard');
+ SET LOCAL session_replication_role=origin;
+ PERFORM public.copy_agreement_parts_from_authority((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='pointer_guard'),'foreign pointer control');
+ END $x$;$q$,'23514','scope_edition_project_mismatch','copy independently refuses replica-planted foreign pointer');
+SELECT pg_temp.actor(1);
+SET LOCAL ROLE authenticated;
+SELECT public.send_commercial_document((SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard'),
+ public.get_commercial_document_send_snapshot((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='pointer_guard'))->>'documentFingerprint',NULL,now()+interval '30 days');
+SELECT pg_temp.assert_true((SELECT commercial_state='sent' FROM public.proposals WHERE id=(
+ SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')),'pointer refusal exercises sent proposal');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error($q$UPDATE public.proposals SET drafted_against_scope_edition_id=NULL
+ WHERE id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')$q$,
+ '23514','scope_edition_sanctioned_writer_required','studio member cannot change sent pointer');
+SELECT pg_temp.actor(5);
+SELECT public.sign_design_services_agreement((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='pointer_guard'),'Execution Client');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.assert_true((SELECT commercial_state='client_signed' FROM public.proposals WHERE id=(
+ SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')),'pointer refusal exercises client-signed proposal');
+SELECT pg_temp.expect_error($q$UPDATE public.proposals SET drafted_against_scope_edition_id=NULL
+ WHERE id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='pointer_guard')$q$,
+ '23514','scope_edition_sanctioned_writer_required','studio member cannot change signed pointer');
+RESET ROLE;
+SELECT pg_temp.actor(1);
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
