@@ -4060,3 +4060,50 @@ describe('Gallery review F3 settled approval mail', () => {
     link.remove();
   });
 });
+
+
+describe('current external work in the existing plan', () => {
+  function externalRead(reportedPriceCents: number | null) {
+    return adaptClientSelections({ origin: 'commercial', selections: [{
+      id: 'external-cabinets', kind: 'external', responsibility: 'external', externalFulfilmentId: 'external-1',
+      name: 'GC cabinetry', roomId: CREDENZA.roomId, roomName: CREDENZA.roomName,
+      quantity: 1, clientUnitPriceCents: null, clientLineTotalCents: null,
+      buyerPartyKind: 'gc', payerPartyKind: 'client', reportedPriceCents,
+      priceDescription: 'Bought by client/GC (not billed by studio)',
+      instrument: { documentId: 'do-not-pay', proposalId: 'do-not-sign' },
+      logisticsStatus: 'in_production', reported_price_cents: 998877,
+    }] }).selections[0];
+  }
+  it('separates current external amounts from unchanged studio ledger/checkpoint and all commercial acts', () => {
+    const baseline = renderThreshold();
+    openGallery('#key');
+    const ledger = document.querySelector('[data-testid="house-ledger"]');
+    expect(ledger).not.toBeNull();
+    const before = ledger!.textContent;
+    baseline.unmount();
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [CREDENZA, PAINTWORK, externalRead(1250000)] }));
+    const { container } = renderThreshold();
+    openGallery('#pieces-' + CREDENZA.roomId);
+    expect(screen.queryByText('GC cabinetry')).not.toBeInTheDocument();
+    openGallery('#key');
+    const current = screen.getByRole('region', { name: 'Current external work' });
+    expect(current).toHaveTextContent('GC cabinetry');
+    expect(current).toHaveTextContent('Bought by client/GC (not billed by studio)');
+    expect(current).toHaveTextContent('Reported external amount: $12,500');
+    expect(current).toHaveTextContent('Current context, not part of the recorded budget checkpoint or studio totals.');
+    expect(document.querySelector('[data-testid="house-ledger"]')!.textContent).toBe(before);
+    expect(current.querySelector('button, a, form')).toBeNull();
+    expect(current).not.toHaveTextContent(/\$0|998877|free furniture/);
+    expect(container.querySelector('[href*="do-not-pay"], [href*="do-not-sign"]')).toBeNull();
+  });
+  it.each([null, 0])('does not expose private fallback amounts when reported amount is %s', (amount) => {
+    selectionsMock.mockReturnValue(settled({ origin: 'commercial', selections: [externalRead(amount)] }));
+    renderThreshold();
+    openGallery('#key');
+    const current = screen.getByRole('region', { name: 'Current external work' });
+    if (amount === null) expect(current).not.toHaveTextContent(/reported external amount|\$/i);
+    else expect(current).toHaveTextContent('Reported external amount: $0');
+    expect(current).not.toHaveTextContent('998877');
+    expect(current.querySelector('button, a, form')).toBeNull();
+  });
+});

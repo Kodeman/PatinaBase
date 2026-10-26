@@ -1,4 +1,4 @@
-import { editionHero } from '../use-client-editorial';
+import { editionHero, readClientEditorial, parseClientEdition } from '../use-client-editorial';
 import { galleryHeroFits } from '@/lib/editorial/floors';
 import { heroEligible } from '@/lib/editorial/rank';
 import type { ClientProjectEditorial, EditorialAsset } from '@/lib/editorial/types';
@@ -49,5 +49,21 @@ describe('Gallery hero rule', () => {
     expect(editionHero({ ...editorial(photo), composition: { hero: null, held: [], chapters: [] } })).toBeNull();
     expect(editionHero(editorial(asset({ width: 1000, height: 800 })))?.id).toBe('photo');
     expect(editionHero(editorial(asset({ crops: {} })))).toBeNull();
+  });
+});
+
+
+describe('frozen responsibility ownership', () => {
+  it.each(['external', 'studio', undefined])('keeps stored %s responsibility despite a changed live reading, with no live fetch', async (responsibility) => {
+    const storedItem = { id: 'cabinet', nameAsSigned: 'Cabinet', ...(responsibility ? { responsibility, externalFulfilmentId: 'external-1' } : {}) };
+    const frozen = { ...editorial(asset()), rooms: [{ id: 'kitchen', items: [storedItem] }] };
+    const live = { ...frozen, rooms: [{ id: 'kitchen', items: [{ ...storedItem, responsibility: responsibility === 'external' ? 'studio' : 'external', reportedPriceCents: 999999 }] }] };
+    const rpc = jest.fn(async (name: string) => ({ data: name === 'get_client_project_edition' ? frozen : live, error: null }));
+    const result = await readClientEditorial(rpc, 'house');
+    expect(result?.rooms[0].items[0]).toEqual(storedItem);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('get_client_project_edition', { p_project_id: 'house' });
+    expect(JSON.stringify(result)).not.toContain('999999');
+    expect(parseClientEdition(frozen)?.rooms[0].items[0]).toEqual(storedItem);
   });
 });

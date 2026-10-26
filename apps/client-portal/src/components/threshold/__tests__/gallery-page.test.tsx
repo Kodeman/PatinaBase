@@ -243,3 +243,13 @@ it('Gallery review F3 keeps an unknown approval on the page instead of opening a
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(document.body.style.overflow).not.toBe('hidden');
 });
+
+
+it.each([null, 0, 720000])('keeps ordinary gallery price behavior for %s cents', (price) => {
+  const piece = { id: 'ordinary', kind: 'furnishings', name: 'Ordinary chair', quantity: 1,
+    clientLineTotalCents: price, logisticsStatus: 'specified', instrument: null } as ClientSelection;
+  const { container } = render(<GalleryPieces band={{ pieces: [piece], varianceLine: null } as RoomBandModel} />);
+  expect(container).toHaveTextContent('Ordinary chair');
+  if (price === 720000) expect(container).toHaveTextContent('$7,200.00');
+  else expect(container).not.toHaveTextContent(/\$/);
+});

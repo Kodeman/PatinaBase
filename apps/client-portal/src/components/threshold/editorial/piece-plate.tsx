@@ -1,5 +1,6 @@
 'use client';
 
+import { EXTERNAL_WORK_DESCRIPTION } from '@/lib/commercial-documents';
 import { NOTE_NOT_YOUR_PIECE, piecePhotoCaption } from '@/lib/editorial/caption';
 import { SIZES } from '@/lib/editorial/crop';
 import { TIER, tierOf } from '@/lib/editorial/rank';
@@ -18,7 +19,7 @@ function pieceNote(item: PiecePlateProps['item'], asset: EditorialAsset) {
 export interface PiecePlateProps {
   scopeId: string;
   showMakers: boolean;
-  item: Pick<EditorialItem, 'nameAsSigned' | 'status' | 'makerName' | 'category' | 'silhouetteKind'>;
+  item: Pick<EditorialItem, 'nameAsSigned' | 'status' | 'makerName' | 'category' | 'silhouetteKind' | 'responsibility' | 'externalFulfilmentId'>;
   /** Null: no photograph yet, so the piece is drawn. */
   asset: EditorialAsset | null;
   /** Where the piece stands, in words: "In production". */
@@ -37,6 +38,8 @@ export function PiecePlate({ scopeId, showMakers, item, asset, statusWords, pale
     <>
       <p className="ed-piece__name">{item.nameAsSigned}</p>
       <p className="ed-piece__status">{statusWords}</p>
+      {item.responsibility === 'external' && <p>{EXTERNAL_WORK_DESCRIPTION}</p>}
+      {item.responsibility == null && <p>Buying responsibility not recorded in this edition.</p>}
     </>
   );
 
