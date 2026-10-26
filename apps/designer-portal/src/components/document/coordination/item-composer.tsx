@@ -222,6 +222,7 @@ export function ItemComposer({
   const [pendingPartyName, setPendingPartyName] = useState<string | null>(null);
 
   const isEdit = Boolean(editItem);
+  const [audience, setAudience] = useState<'private' | 'shared' | null>(null);
   // R87 — delete stays draft-only. A published item (pending/expired/responded)
   // is never deleted; it's reopened or resolved so the R56 audit trail survives.
   // The composer only ever re-opens on drafts today (both call sites filter to
@@ -354,7 +355,7 @@ export function ItemComposer({
   const landsHint =
     court === 'designer'
       ? 'lands in your court'
-      : `sends to ${partyFor(court, { party: courtParties.find((p) => p.id === courtPartyId) }).label}`;
+      : `next move: ${partyFor(court, { party: courtParties.find((p) => p.id === courtPartyId) }).label}`;
 
   // ONE copy path for the empty court — flag ON and flag OFF render this exact
   // sentence, so the composer never says two different things about the same
@@ -367,7 +368,7 @@ export function ItemComposer({
   );
 
   const handleSave = async (asDraft: boolean) => {
-    if (saving || (editItem && isProjectArtifactApproval(editItem))) return;
+    if (audience !== 'shared' || saving || (editItem && isProjectArtifactApproval(editItem))) return;
     const title = prompt.trim();
     if (!title) return;
     setSaving(true);
@@ -456,7 +457,7 @@ export function ItemComposer({
     }
   };
 
-  const canSave = prompt.trim().length > 0 && !saving;
+  const canSave = audience === 'shared' && prompt.trim().length > 0 && !saving;
 
   if (editItem && isProjectArtifactApproval(editItem)) {
     return (
@@ -557,6 +558,24 @@ export function ItemComposer({
         </div>
       )}
 
+      <fieldset className="mb-4" aria-describedby="coordination-audience-help">
+        <legend className={fieldLabelCls}>Who can see this?</legend>
+        {(['private', 'shared'] as const).map((choice) => (
+          <label key={choice} className="mr-4 inline-flex min-h-11 items-center gap-2">
+            <input type="radio" name="coordination-audience" value={choice}
+              checked={audience === choice} disabled={saving}
+              onChange={() => setAudience(choice)} />
+            {choice === 'private' ? 'Private — studio only' : 'Shared — client and project parties'}
+          </label>
+        ))}
+        <p id="coordination-audience-help" role="status" className="text-[13px] text-[var(--text-muted)]">
+          {audience === 'shared'
+            ? 'Project parties can see shared drafts. The addressed client sees the item once published, not saved drafts. Court assignment does not make it private. Publishing to the client asks them to respond and sends the usual first-notice email and push.'
+            : audience === 'private'
+              ? 'Use the existing private note in the margin for studio-only words. This coordination sheet cannot save a private note; nothing here will be saved or published.'
+              : 'Choose an audience before saving or publishing. Saved coordination drafts are not private notes.'}
+        </p>
+      </fieldset>
       {/* ── Whose court — the 4-court grid ── */}
       <label className={fieldLabelCls}>
         Whose court &mdash; who owns the next move
@@ -822,6 +841,7 @@ export function ItemComposer({
         regionKey="item-composer"
         className="mt-6 border-t border-[var(--doc-ink-border)] pt-4"
       >
+        {audience !== 'private' && <>
         <DocumentAction
           actionKey="publish-coordination-item"
           variant="primary"
@@ -838,6 +858,7 @@ export function ItemComposer({
         >
           Save as draft
         </DocumentAction>
+        </>}
         <DocumentAction
           actionKey="cancel-coordination-item"
           variant="tertiary"
@@ -879,7 +900,7 @@ export function ItemComposer({
           ))}
 
         <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
-          {landsHint}
+          {audience === 'shared' ? landsHint : ''}
         </span>
       </DocumentActionGroup>
       {/* N12b (R83) — no Try again: Publish reaches the client (§5.1 S4);
