@@ -8,6 +8,9 @@ export interface StudioMoney {
   /** The studios whose whole book is this seat's: she is owner or admin there.
    *  Studio totals, Earnings and the export exist only when there is one. */
   bookStudioIds: readonly string[];
+  isLoading: boolean;
+  isError: boolean;
+  refetch: () => void;
   /** This studio's whole book — its totals, every invoice and PO total. */
   canSeeStudio: (studioId: string | null | undefined) => boolean;
   /** The money on one record: its own studio's book is hers, or she leads
@@ -33,9 +36,11 @@ export interface StudioMoney {
  * and read the whole book.
  */
 export function useStudioMoney(): StudioMoney {
-  const { user } = useAuth();
-  const { data: organizations } = useOrganizations();
-  const { data: led } = useLedProjectIds(user?.id);
+  const { user, isLoading: authLoading } = useAuth();
+  const organizationsQuery = useOrganizations();
+  const ledQuery = useLedProjectIds(user?.id);
+  const { data: organizations } = organizationsQuery;
+  const { data: led } = ledQuery;
   const bookStudioIds = useMemo(
     () =>
       (organizations ?? [])
@@ -56,5 +61,10 @@ export function useStudioMoney(): StudioMoney {
       canSeeStudio(studioId) || (Boolean(projectId) && Boolean(led?.has(projectId!))),
     [canSeeStudio, led],
   );
-  return { bookStudioIds, canSeeStudio, canSeeRecord };
+  return {
+    bookStudioIds, canSeeStudio, canSeeRecord,
+    isLoading: Boolean(authLoading || organizationsQuery.isLoading || ledQuery.isLoading),
+    isError: Boolean(organizationsQuery.isError || ledQuery.isError),
+    refetch: () => { void organizationsQuery.refetch(); void ledQuery.refetch(); },
+  };
 }
