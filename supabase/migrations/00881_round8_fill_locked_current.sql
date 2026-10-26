@@ -27,8 +27,7 @@ DECLARE
     NULLIF(btrim(p_request->>'roleIdentity'), ''), 'default');
   v_reference_id uuid := CASE WHEN p_request->>'selectionReferenceId' ~* '^[0-9a-f-]{36}$'
     THEN (p_request->>'selectionReferenceId')::uuid END;
-  v_placeholder_id uuid := CASE WHEN p_request->>'placeholderSelectionId' ~* '^[0-9a-f-]{36}$'
-    THEN (p_request->>'placeholderSelectionId')::uuid END;
+  v_placeholder_id uuid;
   v_configuration_id uuid := CASE WHEN p_request->>'configurationId' ~* '^[0-9a-f-]{36}$'
     THEN (p_request->>'configurationId')::uuid END;
   v_existing public.project_ffe_items%ROWTYPE;
@@ -40,6 +39,11 @@ DECLARE
   v_filled public.project_ffe_items%ROWTYPE;
   v_filled_cents bigint;
 BEGIN
+  BEGIN
+    v_placeholder_id := NULLIF(p_request->>'placeholderSelectionId', '')::uuid;
+  EXCEPTION WHEN invalid_text_representation THEN
+    v_placeholder_id := NULL;
+  END;
   IF v_actor IS NULL THEN RAISE EXCEPTION 'authentication required' USING ERRCODE = 'insufficient_privilege'; END IF;
   IF p_request IS NULL OR jsonb_typeof(p_request) <> 'object' OR v_project_id IS NULL THEN
     RAISE EXCEPTION 'placement request must name a project' USING ERRCODE = 'check_violation';

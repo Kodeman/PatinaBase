@@ -2,6 +2,7 @@
 \ir fill_locked_current_fixture.psql
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.fill_actor(1);
+\ir fill_locked_current_uuid_body.psql
 DO $$
 DECLARE
  l uuid; req jsonb; reply jsonb; original jsonb; before_row jsonb; after_row jsonb;
