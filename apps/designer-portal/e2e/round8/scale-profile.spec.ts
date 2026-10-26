@@ -236,6 +236,11 @@ test.describe('C00 native baseline scale profile', () => {
         report.failures.push(String(error));
       } finally {
         report.network = network.records;
+        const fieldReads = network.records.filter(r =>
+          r.method === 'GET' && ['/rest/v1/project_ffe_specs', '/rest/v1/project_ffe_selection_threads'].includes(String(r.endpoint)));
+        report.fieldReadMaxUrlBytes = Math.max(0, ...fieldReads.map(r => Number(r.requestUrlBytes)));
+        if (network.records.some(r => r.status === 414)) report.failures.push('Native transport returned HTTP 414');
+        if (report.fieldReadMaxUrlBytes >= 8192) report.failures.push('Native spec/thread GET exceeds the 8 KB transport bound');
         report.readinessPeak = network.readinessPeak;
         report.rpcLatencyMs = quantiles(network.records.filter(r => String(r.endpoint).includes('/rpc/')).map(r => Number(r.durationMs)).filter(Number.isFinite));
         mkdirSync(evidence!, { recursive: true });
