@@ -20,14 +20,19 @@ ROLLBACK TO legacy_currency_guard;
 
 SELECT pg_temp.presence_actor(4);
 SELECT pg_temp.presence_assert(public.get_project_ffe_readiness(pg_temp.presence_id(14))
- =jsonb_build_object('selectionId',pg_temp.presence_id(14),'responsibility','external'),
- 'reader external readiness has responsibility and no ordering checklist');
+ =jsonb_build_object('selectionId',pg_temp.presence_id(14),'responsibility','external',
+   'ready',false,'missingFields','[]'::jsonb),
+ 'reader external readiness is explicitly not orderable with an empty studio checklist');
 SELECT pg_temp.presence_actor(7);
 SELECT pg_temp.presence_error($q$SELECT public.get_project_ffe_readiness(pg_temp.presence_id(14))$q$,
  '42501',NULL,'reader external readiness retains studio authority before external branch');
 SELECT pg_temp.presence_actor(4);
-SELECT pg_temp.presence_assert(public.get_project_ffe_readiness(pg_temp.presence_id(15)) ? 'missingFields',
- 'reader ordinary readiness retains native ordering checklist');
+SELECT pg_temp.presence_assert(public.get_project_ffe_readiness(pg_temp.presence_id(15))
+ =jsonb_build_object('selectionId',pg_temp.presence_id(15),'ready',false,
+   'missingFields',jsonb_build_array('clientPrice','designDisposition','vendor')),
+ 'reader ordinary readiness retains exact native ordering checklist');
+SELECT 'READINESS_PROBE='||jsonb_build_array(public.get_project_ffe_readiness(pg_temp.presence_id(14)),
+ public.get_project_ffe_readiness(pg_temp.presence_id(15)))::text;
 SAVEPOINT external_closeout;
 SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM public.invoice_line_items
  WHERE ffe_item_id=pg_temp.presence_id(523)) AND NOT EXISTS(SELECT 1 FROM public.studio_purchases
@@ -66,6 +71,85 @@ SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM reader_results r,
  jsonb_array_elements(r.value->'externalSelections') x WHERE r.key='checkpoint'
  AND x->>'id'=pg_temp.presence_id(14)::text AND x->'clientLineTotalCents'='null'::jsonb),
  'reader checkpoint response retains external unpriced presence');
+-- The lead is in A+B; member 5 is B-only; member 6 is recorded-A.
+SAVEPOINT reader_tenant_matrix;
+SELECT pg_temp.presence_assert((SELECT price_visibility='studio_only' AND reported_price_cents=7654321
+ FROM public.project_external_fulfilments WHERE id=pg_temp.presence_id(30)),
+ 'reader tenant matrix starts with a real private C5 amount');
+SELECT pg_temp.presence_actor(5);
+SELECT pg_temp.presence_assert(public.is_studio_comember(pg_temp.presence_id(4))
+ AND NOT public.can_compose_project_plan(pg_temp.presence_id(2)),
+ 'reader B-only actor passes legacy person-pair but fails recorded-A authority');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.get_project_external_fulfilments(pg_temp.presence_id(2))$q$,
+ '42501','external_fulfilment_access','reader canonical external reader refuses B-only member');
+SELECT pg_temp.presence_error($q$SELECT public.get_project_working_budget(pg_temp.presence_id(2))$q$,
+ '42501','external_fulfilment_access','reader direct working budget refuses B-only member on external project');
+RESET ROLE;
+SELECT pg_temp.presence_error($q$SELECT public._external_presence_lines(pg_temp.presence_id(2),false)$q$,
+ '42501','external_fulfilment_access','reader private projection refuses B-only member rather than false empty');
+CREATE TEMP TABLE reader_budget_before AS SELECT
+ (SELECT jsonb_agg(to_jsonb(v) ORDER BY v.id) FROM public.project_budget_versions v WHERE project_id=pg_temp.presence_id(2)) versions,
+ (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM public.project_budget_lines l JOIN public.project_budget_versions v
+  ON v.id=l.budget_version_id WHERE v.project_id=pg_temp.presence_id(2)) lines,
+ (SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id) FROM public.project_budget_checkpoints c WHERE project_id=pg_temp.presence_id(2)) checkpoints;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.derive_working_budget_draft(pg_temp.presence_id(2))$q$,
+ '42501','external_fulfilment_access','reader derive refuses B-only member before private metadata escapes');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT versions IS NOT DISTINCT FROM
+ (SELECT jsonb_agg(to_jsonb(v) ORDER BY v.id) FROM public.project_budget_versions v WHERE project_id=pg_temp.presence_id(2))
+ AND lines IS NOT DISTINCT FROM (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM public.project_budget_lines l
+ JOIN public.project_budget_versions v ON v.id=l.budget_version_id WHERE v.project_id=pg_temp.presence_id(2))
+ AND checkpoints IS NOT DISTINCT FROM (SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id) FROM public.project_budget_checkpoints c
+ WHERE project_id=pg_temp.presence_id(2)) FROM reader_budget_before),
+ 'reader refused derive rolls back all version line and checkpoint effects');
+SELECT pg_temp.presence_actor(6);
+SET LOCAL ROLE authenticated;
+SELECT public.derive_working_budget_draft(pg_temp.presence_id(2)) AS member_budget \gset
+RESET ROLE;
+SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM jsonb_array_elements(:'member_budget'::jsonb->'externalSelections') x
+ WHERE x->>'id'=pg_temp.presence_id(14)::text AND x->>'reportedPriceCents'='7654321'
+ AND x->>'responsibility'='external'), 'reader recorded-A member retains private reported amount and metadata');
+CREATE TEMP TABLE reader_publish_before AS SELECT
+ (SELECT jsonb_agg(to_jsonb(v) ORDER BY v.id) FROM public.project_budget_versions v WHERE project_id=pg_temp.presence_id(2)) versions,
+ (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM public.project_budget_lines l JOIN public.project_budget_versions v
+  ON v.id=l.budget_version_id WHERE v.project_id=pg_temp.presence_id(2)) lines,
+ (SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id) FROM public.project_budget_checkpoints c WHERE project_id=pg_temp.presence_id(2)) checkpoints;
+SELECT pg_temp.presence_actor(5);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.publish_budget_checkpoint(pg_temp.presence_id(2),
+ (SELECT id FROM public.project_budget_versions WHERE project_id=pg_temp.presence_id(2) ORDER BY version DESC LIMIT 1))$q$,
+ '42501','external_fulfilment_access','reader publish refuses B-only member before private metadata escapes');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT versions IS NOT DISTINCT FROM
+ (SELECT jsonb_agg(to_jsonb(v) ORDER BY v.id) FROM public.project_budget_versions v WHERE project_id=pg_temp.presence_id(2))
+ AND lines IS NOT DISTINCT FROM (SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id) FROM public.project_budget_lines l
+ JOIN public.project_budget_versions v ON v.id=l.budget_version_id WHERE v.project_id=pg_temp.presence_id(2))
+ AND checkpoints IS NOT DISTINCT FROM (SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id) FROM public.project_budget_checkpoints c
+ WHERE project_id=pg_temp.presence_id(2)) FROM reader_publish_before),
+ 'reader refused publication rolls back all version line and checkpoint effects');
+SELECT pg_temp.presence_actor(6);
+SET LOCAL ROLE authenticated;
+SELECT public.publish_budget_checkpoint(pg_temp.presence_id(2),
+ (SELECT id FROM public.project_budget_versions WHERE project_id=pg_temp.presence_id(2) ORDER BY version DESC LIMIT 1)) AS member_checkpoint \gset
+SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM jsonb_array_elements(:'member_checkpoint'::jsonb->'externalSelections') x
+ WHERE x->>'reportedPriceCents'='7654321'), 'reader recorded-A member can publish with private projection');
+SELECT pg_temp.presence_assert(public.get_project_working_budget(pg_temp.presence_id(2)) IS NOT NULL,
+ 'reader recorded-A member retains direct budget reading');
+SELECT pg_temp.presence_actor(7);
+SELECT pg_temp.presence_assert(public.get_project_working_budget(pg_temp.presence_id(2)) IS NOT NULL,
+ 'reader authorized client retains published budget reading');
+RESET ROLE;
+-- The same B-only actor's ordinary legacy access is deliberately unchanged.
+SELECT pg_temp.presence_actor(5);
+SET LOCAL ROLE authenticated;
+SELECT public.derive_working_budget_draft(pg_temp.presence_id(12)) AS ordinary_budget \gset
+SELECT pg_temp.presence_assert(:'ordinary_budget'::jsonb->'externalSelections'='[]'::jsonb
+ AND public.get_project_working_budget(pg_temp.presence_id(12)) IS NOT NULL,
+ 'reader no-external legacy derive and direct budget access remain unchanged');
+RESET ROLE;
+ROLLBACK TO reader_tenant_matrix;
 SELECT pg_temp.presence_actor(7);
 SET LOCAL ROLE authenticated;
 SELECT public.get_client_project_threshold(pg_temp.presence_id(2)) AS client_result \gset

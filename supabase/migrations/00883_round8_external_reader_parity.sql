@@ -1,13 +1,20 @@
 -- 00883 — External reader parity and C2 external-binding amendment holds.
 -- Latest-body lineage: threshold 00840; USD guard 00661; derive 00758;
--- checkpoint 00835; editorial 00852; frozen edition 00847; readiness 00834;
+-- checkpoint 00835; working budget 00422; editorial 00852; frozen edition 00847; readiness 00834;
 -- send 00876; edition mint 00869.
 -- Countersign (00869) and reconciliation (00870) share _mint_scope_edition.
 -- No activation, backfill, transfer, or change to studio commercial snapshots.
 
 CREATE OR REPLACE FUNCTION public._external_presence_lines(p_project_id uuid,p_client_view boolean)
-RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
- SELECT COALESCE(jsonb_agg(jsonb_build_object(
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+BEGIN
+ -- Legacy budget callers authorize person-pairs, not the recorded project.
+ -- Refuse rather than returning an apparently genuine empty external schedule.
+ IF NOT p_client_view AND EXISTS (SELECT 1 FROM public.project_external_fulfilments
+   WHERE project_id=p_project_id) THEN
+  PERFORM public._external_assert_access(p_project_id);
+ END IF;
+ RETURN (SELECT COALESCE(jsonb_agg(jsonb_build_object(
   'id',item.id,'kind','external','responsibility','external',
   'externalFulfilmentId',f.id,'packageKey',f.package_key,
   'name',item.name,'threadId',item.selection_thread_id,'category',item.ffe_category,
@@ -27,7 +34,8 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_tem
  JOIN public.project_external_fulfilments f ON f.id=item.external_fulfilment_id AND f.project_id=item.project_id
  LEFT JOIN public.project_rooms room ON room.id=item.project_room_id
  WHERE item.project_id=p_project_id AND item.removed_at IS NULL
-   AND item.design_disposition NOT IN ('not_selected','superseded');
+   AND item.design_disposition NOT IN ('not_selected','superseded'));
+END;
 $$;
 REVOKE ALL ON FUNCTION public._external_presence_lines(uuid,boolean) FROM PUBLIC,anon,authenticated,service_role;
 
@@ -103,6 +111,110 @@ BEGIN
     RAISE EXCEPTION 'the working budget is denominated in USD; a selection priced in another currency cannot be added into it'
       USING ERRCODE = 'check_violation';
   END IF;
+END;
+$$;
+
+-- Grafted from 00422; only the C5-backed studio-read authority is added.
+CREATE OR REPLACE FUNCTION public.get_project_working_budget(p_project_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_project public.projects%ROWTYPE;
+  v_version public.project_budget_versions%ROWTYPE;
+  v_checkpoint public.project_budget_checkpoints%ROWTYPE;
+  v_is_studio boolean;
+BEGIN
+  SELECT * INTO v_project FROM public.projects WHERE id = p_project_id;
+  IF NOT FOUND OR auth.uid() IS NULL OR NOT (
+    v_project.client_id IS NOT DISTINCT FROM auth.uid()
+    OR public.is_studio_comember(v_project.designer_id)
+  ) THEN
+    RAISE EXCEPTION 'project % not found or access denied', p_project_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  v_is_studio := public.is_studio_comember(v_project.designer_id);
+  -- Preserve legacy/client budget authority, but never let a person-pair seat
+  -- expose C5-backed studio readings across the project's recorded tenant.
+  IF v_is_studio AND EXISTS (SELECT 1 FROM public.project_external_fulfilments
+    WHERE project_id=p_project_id) THEN
+    PERFORM public._external_assert_access(p_project_id);
+  END IF;
+  SELECT * INTO v_version FROM public.project_budget_versions
+  WHERE project_id = p_project_id
+    AND (status = 'published' OR public.is_studio_comember(v_project.designer_id))
+  ORDER BY version DESC LIMIT 1;
+  IF v_version.id IS NULL THEN RETURN NULL; END IF;
+  SELECT * INTO v_checkpoint FROM public.project_budget_checkpoints
+  WHERE budget_version_id = v_version.id;
+  -- 00414: the version note is the studio's internal working commentary, and
+  -- the override actor/reason is the studio's audited rationale for proceeding
+  -- past an unacknowledged checkpoint. Neither is client copy. The client's own
+  -- acknowledgement (acknowledgedBy/acknowledgedAt) stays — that is their act.
+  RETURN jsonb_build_object(
+    'version', jsonb_build_object(
+      'id', v_version.id, 'projectId', v_version.project_id,
+      'version', v_version.version, 'status', v_version.status,
+      'lowTotalCents', v_version.low_total_cents,
+      'targetTotalCents', v_version.target_total_cents,
+      'highTotalCents', v_version.high_total_cents,
+      'currency', 'USD', 'note', v_version.note,
+      'liveAuthorizedTotalCents', COALESCE((
+        SELECT SUM(a.client_line_total_cents)
+        FROM public.furnishing_authorization_items a
+        JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+        JOIN public.proposals p ON p.id = d.proposal_id
+        WHERE d.project_id = p_project_id
+          AND d.executed_at IS NOT NULL
+          AND p.commercial_state = 'executed'
+      ), 0),
+      'createdAt', v_version.created_at, 'publishedAt', v_version.published_at
+    ) - CASE WHEN v_is_studio THEN '{}'::text[] ELSE ARRAY['note'] END,
+    'lines', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+      'id', l.id, 'projectRoomId', l.project_room_id, 'roomName', l.room_name,
+      'category', l.category, 'lowCents', l.low_cents,
+      'targetCents', l.target_cents, 'highCents', l.high_cents,
+      'scheduledCents', l.scheduled_cents, 'authorizedCents', l.authorized_cents,
+      -- The publish stamp's `authorized` rollup, run at read time instead of at
+      -- publication. Kept character-for-character the same shape on purpose: if
+      -- one of the two ever needs a fix, the other needs the identical fix.
+      'liveAuthorizedCents', COALESCE((
+        SELECT SUM(a.client_line_total_cents)
+        FROM public.furnishing_authorization_items a
+        JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+        JOIN public.proposals p ON p.id = d.proposal_id
+        WHERE d.project_id = p_project_id
+          AND d.executed_at IS NOT NULL
+          AND p.commercial_state = 'executed'
+          AND CASE
+                WHEN l.project_room_id IS NOT NULL AND a.project_room_id IS NOT NULL
+                  THEN a.project_room_id = l.project_room_id
+                ELSE COALESCE(a.room_name, '') = l.room_name
+              END
+          AND COALESCE(a.category, 'Uncategorized') = l.category
+      ), 0),
+      'sortOrder', l.sort_order
+    ) ORDER BY l.sort_order, l.id) FROM public.project_budget_lines l
+      WHERE l.budget_version_id = v_version.id), '[]'::jsonb),
+    'checkpoint', CASE WHEN v_checkpoint.id IS NULL THEN NULL ELSE jsonb_build_object(
+      'id', v_checkpoint.id, 'projectId', v_checkpoint.project_id,
+      'versionId', v_checkpoint.budget_version_id,
+      'checkpointCode', v_checkpoint.checkpoint_code,
+      'status', v_checkpoint.status, 'snapshotFingerprint', v_checkpoint.snapshot_fingerprint,
+      'publishedAt', v_checkpoint.published_at,
+      'acknowledgedBy', v_checkpoint.acknowledged_by,
+      'acknowledgedAt', v_checkpoint.acknowledged_at,
+      'overrideBy', v_checkpoint.override_by,
+      'overrideReason', v_checkpoint.override_reason,
+      'overriddenAt', v_checkpoint.overridden_at
+    ) - CASE WHEN v_is_studio THEN '{}'::text[]
+             ELSE ARRAY['overrideBy', 'overrideReason'] END
+    END,
+    'isPurchaseAuthority', false
+  );
 END;
 $$;
 
@@ -1692,7 +1804,8 @@ BEGIN
   END IF;
   PERFORM public._ffe_require_studio_project(v_item.project_id);
   IF v_item.external_fulfilment_id IS NOT NULL THEN
-    RETURN jsonb_build_object('selectionId',v_item.id,'responsibility','external');
+    RETURN jsonb_build_object('selectionId',v_item.id,'responsibility','external',
+      'ready',false,'missingFields','[]'::jsonb);
   END IF;
   SELECT * INTO v_spec FROM public.project_ffe_specs WHERE ffe_item_id = v_item.id;
   SELECT COALESCE(template.required_field_rules->'fixed', '[]'::jsonb)
