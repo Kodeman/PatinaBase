@@ -238,7 +238,7 @@ export function OrdersLedger({
   // they leave the vendor groups so each order reads once.
   const heldQuery = useHeldPurchaseOrders();
   const heldRows = heldQuery.data;
-  const ordersKnown = !isLoading && !isError && !heldQuery.isLoading && !heldQuery.isError;
+  const ordersKnown = orders !== undefined && heldRows !== undefined;
   const releasableIds = useMemo(
     () =>
       new Set(
@@ -400,8 +400,10 @@ export function OrdersLedger({
       </nav>
 
       {(isError || heldQuery.isError) && (page === 'ledger' || page === 'vendors') && (
-        <div role="alert" className="doc-type-body py-3">
-          <p>The purchase orders could not be read. Try reading them again.</p>
+        <div role={ordersKnown ? 'status' : 'alert'} className="doc-type-body py-3">
+          <p>{ordersKnown
+            ? 'The purchase orders could not be refreshed. The last read is still shown; your edits are kept.'
+            : 'The purchase orders could not be read. Try reading them again.'}</p>
           <DocumentAction actionKey="retry-order-register" surfaceKey="orders" regionKey="read-failure" variant="secondary" onClick={() => { void refetch(); void heldQuery.refetch(); }}>
             Read the orders again
           </DocumentAction>
@@ -445,7 +447,7 @@ export function OrdersLedger({
               stats={ordersThroughput((orders ?? []).filter(inBook) as POForThroughput[])}
             />
           )}
-          {(isLoading || heldQuery.isLoading) && (
+          {!ordersKnown && (isLoading || heldQuery.isLoading) && (
             <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
               Opening the book…
             </p>

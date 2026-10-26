@@ -19,8 +19,8 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
-const mockHeld = { data: [] as Record<string, unknown>[], isLoading: false, isError: false, refetch: jest.fn() };
-beforeEach(() => { mockHeld.isLoading = false; mockHeld.isError = false; mockHeld.refetch.mockReset(); });
+const mockHeld = { data: [] as Record<string, unknown>[] | undefined, isLoading: false, isError: false, refetch: jest.fn() };
+beforeEach(() => { mockHeld.data = []; mockHeld.isLoading = false; mockHeld.isError = false; mockHeld.refetch.mockReset(); });
 const mockProjectLeads = { data: new Map<string, { leadUserId: string; leadName: string }>() };
 const mockCanSeeMargin = jest.fn(() => true);
 
@@ -76,7 +76,7 @@ jest.mock('./po-preview', () => ({
     <div data-testid="po-preview">Preview {purchaseOrderId}</div>
   ),
   LogAckInline: ({ purchaseOrderId }: { purchaseOrderId: string }) => (
-    <div data-testid="ack-unfold">Acknowledgment {purchaseOrderId}</div>
+    <div data-testid="ack-unfold">Acknowledgment {purchaseOrderId}<input aria-label="Acknowledgment draft" defaultValue="" /></div>
   ),
 }));
 
@@ -107,6 +107,7 @@ jest.mock('./line-unfold/record-payment', () => ({
     <div data-testid="money-band">
       {purchaseOrderId}
       {isPatinaCatalog ? ' · catalog' : ''}
+      <input aria-label="Payment draft" defaultValue="" />
     </div>
   ),
 }));
@@ -310,7 +311,8 @@ describe('OrdersLedger quiet register', () => {
 
   it.each(['orders', 'held'] as const)('refuses empty-book truth when the %s read fails and retries both owners', (owner) => {
     const refetch = jest.fn();
-    mockUsePurchaseOrders.mockReturnValue({ data: [], isLoading: false, isError: owner === 'orders', refetch });
+    mockUsePurchaseOrders.mockReturnValue({ data: owner === 'orders' ? undefined : [], isLoading: false, isError: owner === 'orders', refetch });
+    mockHeld.data = owner === 'held' ? undefined : [];
     mockHeld.isError = owner === 'held';
     const { container } = renderBook();
     expect(screen.getByRole('alert')).toHaveTextContent('The purchase orders could not be read.');
@@ -323,9 +325,55 @@ describe('OrdersLedger quiet register', () => {
 
   it('keeps the register unknown while the independent held read is loading', () => {
     mockHeld.isLoading = true;
+    mockHeld.data = undefined;
     const { container } = renderBook();
     expect(screen.getByText('Opening the book…')).toBeInTheDocument();
     expect(container.querySelector('[data-orders-register]')).toBeNull();
+  });
+
+  it.each(['orders', 'held'] as const)('keeps the ack editor and its value through a warm %s refusal and retry', (owner) => {
+    const refetch = jest.fn();
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false, isError: false, refetch });
+    const { rerender } = renderBook();
+    fireEvent.click(screen.getByRole('button', { name: 'log ack ↓' }));
+    const input = screen.getByLabelText('Acknowledgment draft');
+    fireEvent.change(input, { target: { value: 'Maker reference still being typed' } });
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false, isError: owner === 'orders', refetch });
+    mockHeld.isError = owner === 'held';
+    rerender(<OrdersLedger onClose={jest.fn()} />);
+    expect(screen.getByLabelText('Acknowledgment draft')).toBe(input);
+    expect(input).toHaveValue('Maker reference still being typed');
+    expect(screen.getByRole('status')).toHaveTextContent('could not be refreshed');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Read the orders again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(mockHeld.refetch).toHaveBeenCalledTimes(1);
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false, isError: false, refetch });
+    mockHeld.isError = false;
+    rerender(<OrdersLedger onClose={jest.fn()} />);
+    expect(screen.getByLabelText('Acknowledgment draft')).toBe(input);
+    expect(input).toHaveValue('Maker reference still being typed');
+  });
+
+  it.each(['orders', 'held'] as const)('keeps the payment editor and its value through a warm %s refusal and retry', (owner) => {
+    const refetch = jest.fn();
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false, isError: false, refetch });
+    const { rerender } = renderBook();
+    fireEvent.click(screen.getAllByRole('button', { name: 'money out ↓' })[0]);
+    const input = screen.getByLabelText('Payment draft');
+    fireEvent.change(input, { target: { value: 'Wire reference not yet saved' } });
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false, isError: owner === 'orders', refetch });
+    mockHeld.isError = owner === 'held';
+    rerender(<OrdersLedger onClose={jest.fn()} />);
+    expect(screen.getByLabelText('Payment draft')).toBe(input);
+    expect(input).toHaveValue('Wire reference not yet saved');
+    expect(screen.getByRole('status')).toHaveTextContent('could not be refreshed');
+    fireEvent.click(screen.getByRole('button', { name: 'Read the orders again' }));
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false, isError: false, refetch });
+    mockHeld.isError = false;
+    rerender(<OrdersLedger onClose={jest.fn()} />);
+    expect(screen.getByLabelText('Payment draft')).toBe(input);
+    expect(input).toHaveValue('Wire reference not yet saved');
   });
 
   it('opens as a two-line register with bulk controls hidden and row acts intact', () => {
