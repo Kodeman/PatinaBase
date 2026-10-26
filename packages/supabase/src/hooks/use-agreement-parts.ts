@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { AgreementPart } from '@patina/types';
+import { AGREEMENT_PART_KINDS, AGREEMENT_SCHEDULE_VARIANTS } from '@patina/types';
+import type { AgreementPart, ScopePackagePayload } from '@patina/types';
 import { createBrowserClient } from '../client';
 import { commercialKeys } from './use-commercial-documents';
 
@@ -70,8 +71,67 @@ export const agreementPartsKeys = {
 export const agreementPartsKey = (proposalId: string) =>
   agreementPartsKeys.list(proposalId);
 
+/** Refuse unreadable content rather than silently dropping a signed part. */
+export function scopeRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Malformed scope record');
+  }
+  return value as Record<string, unknown>;
+}
+
+export function readScopePackagePayload(value: unknown): ScopePackagePayload {
+  const payload = scopeRecord(value);
+  const responsibilities = scopeRecord(payload.responsibilities);
+  const slots = ['design', 'purchasing', 'payer', 'fabrication_contract', 'installation'];
+  const parties = ['studio', 'client', 'gc', 'other', 'none'];
+  if (typeof payload.label !== 'string' || !payload.label.trim()
+      || !['included', 'excluded', 'conditional'].includes(payload.inclusion as string)
+      || (payload.inclusion === 'conditional'
+        && (typeof payload.conditionText !== 'string' || !payload.conditionText.trim()))
+      || Object.keys(responsibilities).length !== slots.length
+      || slots.some((slot) => !parties.includes(responsibilities[slot] as string))) {
+    throw new Error('Malformed scope package');
+  }
+  if (payload.packageKey !== undefined && !validPackageKey(payload.packageKey)) {
+    throw new Error('Malformed scope package key');
+  }
+  if (payload.overrideOf != null && !validPackageKey(payload.overrideOf)) {
+    throw new Error('Malformed scope package override');
+  }
+  if (payload.roomIds !== undefined && !stringArray(payload.roomIds)) {
+    throw new Error('Malformed scope package rooms');
+  }
+  if (payload.serviceBindings !== undefined) {
+    const bindings = scopeRecord(payload.serviceBindings);
+    if (Object.keys(bindings).some((slot) => !['design', 'installation'].includes(slot)
+        || !stringArray(bindings[slot]))) {
+      throw new Error('Malformed scope service bindings');
+    }
+  }
+  // Provenance is open JSON on legacy records; only the native versioned pair
+  // is interpreted as an arrangement by the edition selector.
+  return payload as unknown as ScopePackagePayload;
+}
+
+function stringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
+function validPackageKey(value: unknown): value is string {
+  return typeof value === 'string' && /^pkg\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(value);
+}
+
 /** DB row → the camelCase domain shape in `@patina/types`. */
 export function mapAgreementPart(row: AgreementPartRow): AgreementPart {
+  if (!AGREEMENT_PART_KINDS.includes(row.kind as AgreementPart['kind'])) {
+    throw new Error(`Unsupported agreement part kind: ${row.kind}`);
+  }
+  if (row.variant != null && !AGREEMENT_SCHEDULE_VARIANTS.includes(row.variant as NonNullable<AgreementPart['variant']>)) {
+    throw new Error(`Unsupported agreement schedule variant: ${row.variant}`);
+  }
+  const payload = row.kind === 'scope_package'
+    ? readScopePackagePayload(row.payload)
+    : scopeRecord(row.payload ?? {});
   return {
     id: row.id,
     proposalId: row.proposal_id,
@@ -80,7 +140,7 @@ export function mapAgreementPart(row: AgreementPartRow): AgreementPart {
     variant: (row.variant ?? null) as AgreementPart['variant'],
     partKey: row.part_key,
     title: row.title,
-    payload: (row.payload ?? {}) as Record<string, unknown>,
+    payload: payload as Record<string, unknown>,
     required: row.required,
     clientVisible: row.client_visible,
     sourceTemplateKey: row.source_template_key ?? null,

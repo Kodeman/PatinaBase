@@ -42,6 +42,8 @@ const KIND_LABELS: Record<AgreementPartKind, string> = {
   schedule: "Schedule",
   attachment: "Attachment",
   attestation: "Attestation",
+  scope_package: "Scope package",
+  acceptance_signer_policy: "Signer policy",
 };
 
 const VARIANT_LABELS: Record<string, string> = {
