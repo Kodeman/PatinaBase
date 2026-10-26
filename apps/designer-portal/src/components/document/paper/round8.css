@@ -254,4 +254,12 @@
   [data-paper-renderer="round8"] [data-build-room-embedded="true"] button[aria-label^="Elevation,"] { display: inline-flex; }
 }
 
+/* The contents scroll independently of html. End their scrollport above the
+   measured dock, including the shared floating-control breathing room. */
+@media (min-width: 1180px) {
+  [data-paper-renderer="round8"] [data-contents-margin] {
+    max-height: calc(100dvh - (var(--r8-head) + 24px) - var(--doc-shell-floating-bottom));
+  }
+}
+
 /* end Round 8 paper renderer */
