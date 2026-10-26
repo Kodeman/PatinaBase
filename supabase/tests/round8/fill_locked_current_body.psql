@@ -136,4 +136,5 @@ BEGIN
  END LOOP;
  ASSERT has_function_privilege('authenticated','public.place_product_in_project_v2(jsonb)','EXECUTE'), 'authenticated_public_fill_grant_retained';
 END; $$;
+\ir fill_locked_current_links_body.psql
 \ir fill_locked_current_signed_body.psql

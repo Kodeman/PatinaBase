@@ -23,6 +23,7 @@ SELECT pg_temp.fill_id(n),pg_temp.fill_id(100),
 FROM generate_series(1,5) n;
 INSERT INTO public.organization_members(user_id,organization_id,role,status,joined_at) VALUES
  (pg_temp.fill_id(1),pg_temp.fill_id(101),'owner','active',now()),
+ (pg_temp.fill_id(6),pg_temp.fill_id(101),'member','active',now()),
  (pg_temp.fill_id(7),pg_temp.fill_id(101),'member','active',now());
 INSERT INTO public.projects(id,name,designer_id,created_by,studio_id,client_id,status) VALUES
  (pg_temp.fill_id(10),'Fill house',pg_temp.fill_id(1),pg_temp.fill_id(1),pg_temp.fill_id(100),pg_temp.fill_id(8),'active'),
@@ -70,7 +71,11 @@ CREATE FUNCTION pg_temp.fill_state() RETURNS jsonb LANGUAGE sql SECURITY DEFINER
  'threads',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM public.project_ffe_selection_threads t WHERE project_id=pg_temp.fill_id(10)),
  'receipts',(SELECT jsonb_agg(to_jsonb(r) ORDER BY actor_id,idempotency_key) FROM public.project_ffe_command_idempotency r WHERE actor_id::text LIKE 'f2084000-%'),
  'fills',(SELECT jsonb_agg(to_jsonb(f) ORDER BY f.id) FROM public.project_ffe_allowance_fills f JOIN public.project_ffe_items i ON i.id=f.ffe_item_id WHERE i.project_id=pg_temp.fill_id(10)),
- 'placements',(SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM public.proposal_board_items b JOIN public.project_ffe_items i ON i.id=b.project_ffe_item_id WHERE i.project_id=pg_temp.fill_id(10)));
+ 'boards',(SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM public.proposal_board_items b JOIN public.project_ffe_items i ON i.id=b.project_ffe_item_id WHERE i.project_id=pg_temp.fill_id(10)),
+ 'placements',(SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM public.project_ffe_placements p WHERE p.project_id=pg_temp.fill_id(10)),
+ 'placement_events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM public.project_ffe_placement_events e WHERE e.project_id=pg_temp.fill_id(10)),
+ 'pricing_events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM public.ffe_pricing_events e WHERE e.project_id=pg_temp.fill_id(10)),
+ 'groups',(SELECT jsonb_agg(to_jsonb(g) ORDER BY g.id) FROM public.project_line_groups g WHERE g.project_id=pg_temp.fill_id(10)));
 $$;
 CREATE FUNCTION pg_temp.fill_refused(request jsonb, state text) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE before_state jsonb := pg_temp.fill_state(); got text;
