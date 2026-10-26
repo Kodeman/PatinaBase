@@ -1130,7 +1130,9 @@ export interface ClientSelectionInstrument {
  * existing test fixture) defaults to 'furnishings' — the only kind that has
  * ever existed on this list.
  */
-export type ClientSelectionKind = 'furnishings' | 'trade';
+export type ClientSelectionKind = 'furnishings' | 'trade' | 'external';
+
+export const EXTERNAL_WORK_DESCRIPTION = 'Bought by client/GC (not billed by studio)';
 
 export interface ClientSelection {
   id: string;
@@ -1143,8 +1145,16 @@ export interface ClientSelection {
   unit?: FfeLineUnit;
   /** Every room the line is in, in placement order (00745); roomName stays the primary. */
   rooms?: ClientLineRoom[];
-  clientUnitPriceCents: number;
-  clientLineTotalCents: number;
+  clientUnitPriceCents: number | null;
+  clientLineTotalCents: number | null;
+  /** Only the server's client-safe external projection, never internal price fields. */
+  responsibility?: 'external';
+  externalFulfilmentId?: string | null;
+  packageKey?: string | null;
+  buyerPartyKind?: string | null;
+  payerPartyKind?: string | null;
+  reportedPriceCents?: number | null;
+  priceDescription?: string;
   itemType: string;
   logisticsStatus: FFEStageKey;
   /**
@@ -1213,24 +1223,36 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
         if (!id) return null;
         const tradeJourneyRaw = first(row, 'tradeJourney', 'trade_journey');
         const unit = lineUnit(row.unit);
+        const external = row.kind === 'external';
+        const unitPrice = first(row, 'clientUnitPriceCents', 'client_unit_price_cents');
+        const linePrice = first(row, 'clientLineTotalCents', 'client_line_total_cents');
         return {
           id,
-          kind: oneOf(row.kind, ['furnishings', 'trade'] as const, 'furnishings'),
+          kind: oneOf(row.kind, ['furnishings', 'trade', 'external'] as const, 'furnishings'),
           name: text(row.name),
           roomId: nullableText(first(row, 'roomId', 'room_id')),
           roomName: text(first(row, 'roomName', 'room_name'), 'General'),
           quantity: number(row.quantity, 1),
           unit,
           rooms: lineRooms(row.rooms, unit),
-          clientUnitPriceCents: number(first(row, 'clientUnitPriceCents', 'client_unit_price_cents')),
-          clientLineTotalCents: number(first(row, 'clientLineTotalCents', 'client_line_total_cents')),
+          clientUnitPriceCents: external || unitPrice == null ? null : number(unitPrice),
+          clientLineTotalCents: external || linePrice == null ? null : number(linePrice),
+          ...(external ? {
+            responsibility: 'external' as const,
+            externalFulfilmentId: nullableText(row.externalFulfilmentId),
+            packageKey: nullableText(row.packageKey),
+            buyerPartyKind: nullableText(row.buyerPartyKind),
+            payerPartyKind: nullableText(row.payerPartyKind),
+            reportedPriceCents: row.reportedPriceCents == null ? null : number(row.reportedPriceCents),
+            priceDescription: EXTERNAL_WORK_DESCRIPTION,
+          } : {}),
           itemType: text(first(row, 'itemType', 'item_type')),
           logisticsStatus: oneOf(row.logisticsStatus, FFE_STAGE_KEYS, 'specified'),
-          tradeJourney: tradeJourneyRaw === undefined || tradeJourneyRaw === null
+          tradeJourney: external || tradeJourneyRaw === undefined || tradeJourneyRaw === null
             ? null
             : oneOf(tradeJourneyRaw, TRADE_SCOPE_PROGRESS_STATES, 'none'),
-          allowance: adaptClientSelectionAllowance(first(row, 'allowance')),
-          instrument: adaptClientSelectionInstrument(first(row, 'instrument')),
+          allowance: external ? null : adaptClientSelectionAllowance(first(row, 'allowance')),
+          instrument: external ? null : adaptClientSelectionInstrument(first(row, 'instrument')),
           productId: nullableText(first(row, 'productId', 'product_id')),
           ...selectionImages(row),
           docCode: nullableText(first(row, 'docCode', 'doc_code')),

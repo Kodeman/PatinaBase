@@ -53,7 +53,7 @@ import {
 } from '@/hooks/use-project-correspondence';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { isClientActionableProjectApproval } from '@/lib/client-attention';
-import { commercialSummaryFromProposal, isOriginKind } from '@/lib/commercial-documents';
+import { EXTERNAL_WORK_DESCRIPTION, commercialSummaryFromProposal, isOriginKind } from '@/lib/commercial-documents';
 import type { ClientProjectReviewBundle } from '@/lib/project-review';
 import { standsUnfiled } from '@/lib/threshold/adopted-house';
 import { thresholdPhases } from '@/lib/threshold/canonical-phases';
@@ -786,10 +786,13 @@ export function Threshold({
     phaseId: approval.phaseId,
   }));
 
-  const selections =
+  const currentSelections =
     selectionsQuery.data?.origin === "commercial"
       ? selectionsQuery.data.selections
       : [];
+  const externalSelections = currentSelections.filter((selection) => selection.kind === 'external');
+  // External presence is context, never an ordinary studio piece or act.
+  const selections = currentSelections.filter((selection) => selection.kind !== 'external');
   const selectionById = new Map(
     selections.map((selection) => [selection.id, selection]),
   );
@@ -836,7 +839,7 @@ export function Threshold({
   // ── the model ──────────────────────────────────────────────────────────────
   const model = deriveThreshold({
     rooms,
-    selections: selectionsQuery.data,
+    selections: selectionsQuery.data ? { ...selectionsQuery.data, selections } : selectionsQuery.data,
     proposals: { signatureGates, instrumentReceipts },
     invoices,
     invoiceRead: house.read,
@@ -1405,7 +1408,17 @@ export function Threshold({
       menuAsks={menuAsks} asks={letterbox} otherHouses={otherHouses}
       plan={<><HouseLedger ledger={model.ledger} today={today} /><ProjectProgress {...progress} />{roomsUnread ? <p data-testid="threshold-rooms-error">Couldn’t load your rooms. Please refresh.</p> : <PlanKey
         geometry={planKeyGeometry(rooms ?? [], model.marks)} marks={model.marks}
-        keySentence={keySentence(model.drawnMarkCount)} />}</>}
+        keySentence={keySentence(model.drawnMarkCount)} />}
+        {externalSelections.length > 0 && <section aria-label="Current external work">
+          <h3>Current external work</h3>
+          <p>Current context, not part of the recorded budget checkpoint or studio totals.</p>
+          <ul>{externalSelections.map((selection) => <li key={selection.id}>
+            <p>{selection.name}</p>
+            <p>{EXTERNAL_WORK_DESCRIPTION}</p>
+            {selection.reportedPriceCents != null && <p>Reported external amount: {formatCurrency(selection.reportedPriceCents)}</p>}
+          </li>)}</ul>
+        </section>}
+      </>}
       documents={(dismiss) => <PapersSheet projectId={projectId} open embedded onDismiss={dismiss} />}
       bands={model.bands} pieces={(band) => <GalleryPieces band={band} issue={issue} extras={<>
         <RoomCapture projectId={projectId} roomId={band.roomId} roomName={band.name} />

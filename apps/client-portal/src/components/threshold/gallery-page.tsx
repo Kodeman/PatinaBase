@@ -118,7 +118,7 @@ function PieceImages({ piece }: { piece: ClientSelection }) {
 function PieceFacts({ piece }: { piece: ClientSelection }) {
   return <div><p>{piece.name}</p><p>{pieceStatus(piece)}</p>
     {piece.quantity > 1 && <p>{piece.quantity} of them</p>}
-    {piece.clientLineTotalCents > 0 && <p>{formatCurrency(piece.clientLineTotalCents)}</p>}
+    {piece.clientLineTotalCents != null && piece.clientLineTotalCents > 0 && <p>{formatCurrency(piece.clientLineTotalCents)}</p>}
     <PieceInstrument piece={piece} />
   </div>;
 }
