@@ -38,7 +38,10 @@ CREATE TABLE IF NOT EXISTS public.plan_sheet_packages (
 
 -- Room SHARE locks conflict with a concurrent project_id UPDATE. The parent
 -- guard reads references without locking children, so it never reverses the
--- native writer order: project -> sheet (if any) -> rooms by UUID -> join rows.
+-- set_plan_sheet_rooms order: project -> sheet -> rooms by UUID -> join rows.
+-- create_project_package takes project -> package -> assigned room; a
+-- key-only bind takes project -> package, with no room lock, avoiding a cycle
+-- with room DELETE -> ON DELETE SET NULL updating the home-room package.
 CREATE OR REPLACE FUNCTION public._guard_plan_composition() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE job uuid; target_job uuid;
@@ -55,7 +58,8 @@ BEGIN
        OR (OLD.package_key IS NOT NULL AND NEW.package_key IS DISTINCT FROM OLD.package_key)) THEN
       RAISE EXCEPTION 'package_key_immutable' USING ERRCODE='23514';
     END IF;
-    IF NEW.project_room_id IS NOT NULL THEN
+    IF NEW.project_room_id IS NOT NULL AND (TG_OP = 'INSERT'
+       OR (TG_OP = 'UPDATE' AND NEW.project_room_id IS DISTINCT FROM OLD.project_room_id)) THEN
       SELECT project_id INTO target_job FROM public.project_rooms WHERE id=NEW.project_room_id FOR SHARE;
       IF target_job IS DISTINCT FROM NEW.project_id THEN
         RAISE EXCEPTION 'plan_sheet_link_off_project' USING ERRCODE='23514';

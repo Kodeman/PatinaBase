@@ -80,7 +80,12 @@ INSERT INTO public.project_scope_editions(id,project_id,edition_number,kind,comm
 INSERT INTO public.project_scope_edition_packages(edition_id,package_key,label,inclusion,responsibilities)
 SELECT 'f8716000-0000-4000-8000-000000000001',k,k,'included',
 '{"design":"studio","purchasing":"gc","payer":"gc","fabrication_contract":"gc","installation":"gc"}'::jsonb
-FROM unnest(ARRAY['pkg.kitchen-cabinetry','pkg.other'])k;
+FROM unnest(ARRAY['pkg.kitchen-cabinetry','pkg.other','pkg.home-room'])k;
+-- Pre-existing home assignment: avoid retaining the INSERT guard's room lock
+-- before measuring the key-only bind in this transaction.
+INSERT INTO public.project_packages(id,project_id,package_kind,code,title,project_room_id,idempotency_key,request_hash)
+VALUES ('f8719000-0000-4000-8000-000000000001','f8712000-0000-4000-8000-000000000001',
+ 'build','LOCK','Key-only bind','f8713000-0000-4000-8000-000000000004','key-only','fixture');
 SET LOCAL session_replication_role=origin;
 
 CREATE FUNCTION pg_temp.c1_create(code text,key text DEFAULT NULL,request text DEFAULT 'create') RETURNS public.project_packages LANGUAGE sql AS $$
@@ -92,6 +97,21 @@ GRANT EXECUTE ON FUNCTION pg_temp.c1_assert(boolean,text), pg_temp.c1_error(text
 SELECT set_config('request.jwt.claim.sub','f8710000-0000-4000-8000-000000000002',true);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.c1_assert(public.can_compose_project_plan('f8712000-0000-4000-8000-000000000001'),'A member admitted');
+SELECT pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM pg_locks WHERE pid=pg_backend_pid()
+ AND relation='public.project_rooms'::regclass AND mode='RowShareLock'),
+ 'key-only bind starts without a room SHARE lock');
+SELECT pg_temp.c1_assert((public.bind_project_package_key('f8719000-0000-4000-8000-000000000001','pkg.home-room')).package_key='pkg.home-room',
+ 'key-only bind with assigned home room succeeds');
+-- This transaction inserted the fixture, so the FK rechecks even an unchanged
+-- home and takes KEY SHARE. Inspect tuple modes to distinguish the guard's SHARE
+-- lock from that native FK lock, rather than conflating both as RowShareLock.
+SELECT pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM extensions.pgrowlocks('public.project_rooms') l
+ WHERE l.locked_row=(SELECT ctid FROM public.project_rooms WHERE id='f8713000-0000-4000-8000-000000000004')
+ AND pg_backend_pid()=ANY(l.pids) AND NOT (l.modes <@ ARRAY['For Key Share']::text[])),
+ 'key-only bind takes no room SHARE lock');
+SELECT pg_temp.c1_assert((SELECT project_room_id='f8713000-0000-4000-8000-000000000004'
+ FROM public.project_packages WHERE id='f8719000-0000-4000-8000-000000000001'),
+ 'key-only bind retains assigned home room');
 SELECT pg_temp.c1_assert((SELECT count(*)=0 FROM public.plan_sheet_rooms),'populated legacy sheets get no guessed links');
 INSERT INTO c1_ids SELECT 'bound',(pg_temp.c1_create('K','pkg.kitchen-cabinetry')).id;
 SELECT pg_temp.c1_assert((pg_temp.c1_create('K','pkg.kitchen-cabinetry')).id=(SELECT id FROM c1_ids WHERE name='bound'),'identical create replays UUID');
@@ -129,6 +149,17 @@ SELECT pg_temp.c1_error($q$SELECT public.set_plan_sheet_packages('f8714000-0000-
 SELECT pg_temp.c1_error($q$SELECT public.create_project_package('f8712000-0000-4000-8000-000000000001','build','F','Foreign room','foreign-room','f8713000-0000-4000-8000-000000000002')$q$,'23514','plan_sheet_link_off_project','package home room cannot cross project');
 SELECT pg_temp.c1_error($q$UPDATE public.project_packages SET package_key=NULL$q$,'42501',NULL,'direct package writes denied');
 RESET ROLE;
+SELECT pg_temp.c1_error($q$UPDATE public.project_packages SET project_room_id='f8713000-0000-4000-8000-000000000002'
+ WHERE id='f8719000-0000-4000-8000-000000000001'$q$,'23514','plan_sheet_link_off_project',
+ 'home room reassignment to another project refuses');
+SELECT pg_temp.c1_assert((SELECT project_room_id='f8713000-0000-4000-8000-000000000004'
+ FROM public.project_packages WHERE id='f8719000-0000-4000-8000-000000000001'),
+ 'refused home room reassignment retains prior room');
+UPDATE public.project_packages SET project_room_id='f8713000-0000-4000-8000-000000000001'
+ WHERE id='f8719000-0000-4000-8000-000000000001';
+SELECT pg_temp.c1_assert((SELECT project_room_id='f8713000-0000-4000-8000-000000000001'
+ FROM public.project_packages WHERE id='f8719000-0000-4000-8000-000000000001'),
+ 'home room reassignment within project succeeds');
 -- Archive is trusted maintenance; identity is retained, live display code reusable.
 UPDATE public.project_packages SET archived_at=now() WHERE id=(SELECT id FROM c1_ids WHERE name='bound');
 SELECT set_config('request.jwt.claim.sub','f8710000-0000-4000-8000-000000000002',true);
