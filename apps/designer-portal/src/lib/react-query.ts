@@ -93,8 +93,8 @@ const createQueryCache = (isRetired: () => boolean) => new QueryCache({
       meta: query.meta,
     });
 
-    // Don't show toast for background refetches
-    if (query.state.fetchStatus === 'fetching' && query.state.data !== undefined) {
+    // Failed refetches are already idle here; retained data identifies a warm query.
+    if (query.state.data !== undefined) {
       return;
     }
 
