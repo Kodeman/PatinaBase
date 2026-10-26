@@ -10,6 +10,8 @@ import { render, screen } from '@testing-library/react';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { NoteBody } from '../margin-bodies';
 
+jest.mock('@/hooks/use-paper-renderer', () => ({ usePaperRenderer: () => ({ renderer: 'round8' }) }));
+jest.mock('../paper/unfold-instrument', () => ({ openUnfold: jest.fn() }));
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
   useApplyDecisionOverride: () => ({ mutate: jest.fn(), isPending: false }),

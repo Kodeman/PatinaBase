@@ -20,8 +20,8 @@
  * are the status tracking; this sheet's strip exists so an approved
  * amendment has an apply door before those entries are wired post-merge.
  *
- * Entry today: the R14 margin-note escalation (margin-bodies) seeds compose
- * with the note's words and the note records what it became. The Account
+ * Entry today: the R14 margin-note escalation (margin-bodies) carries only
+ * the note identity; client-facing wording is composed here. The Account
  * band's entry is Track 8's to mount (post-merge wiring).
  */
 
