@@ -20,9 +20,13 @@
 
 import { useRef, useState } from 'react';
 import {
+  useProfile,
+  useProjectRoster,
   useReissuePlanTransmittalLink,
   useRevokePlanTransmittalLink,
   type PlanRoomBundle,
+  type PlanPrint,
+  type Database,
 } from '@patina/supabase';
 import {
   deriveCurrentSet,
@@ -62,9 +66,66 @@ function RevLetterBadge({ letter }: { letter: string | null }) {
   );
 }
 
+export function PlanPrintProvenance({ print, projectId }: { print: PlanPrint; projectId: string }) {
+  const roster = useProjectRoster(projectId);
+  const profile = useProfile();
+  const rosterName = roster.data?.find((person) => person.profile_id === print.created_by)?.display_name?.trim();
+  const ownName = profile.data?.id === print.created_by
+    ? profile.data?.display_name?.trim() || profile.data?.full_name?.trim()
+    : undefined;
+  const filer = rosterName || ownName;
+  return (
+    <span className="t-meta block break-words" data-print-filer={print.created_by ?? undefined}>
+      Source: {print.source || 'not recorded'}
+      {print.source_filename ? ` · ${print.source_filename}` : ''}
+      {' · '}{print.created_by ? `Filed by ${filer || 'a person whose name is unavailable'}` : 'Filer not recorded'}
+    </span>
+  );
+}
+
+/** Present composition by IDs; these live links are not an issued manifest. */
+export function PlanSheetComposition({
+  bundle,
+  sheetId,
+  rooms = [],
+}: {
+  bundle: PlanRoomBundle;
+  sheetId: string;
+  rooms?: Pick<Database['public']['Tables']['project_rooms']['Row'], 'id' | 'name'>[];
+}) {
+  const roomLinks = (bundle.sheetRooms ?? []).filter((row) => row.sheet_id === sheetId);
+  const packageLinks = (bundle.sheetPackages ?? []).filter((row) => row.sheet_id === sheetId);
+  return (
+    <span className="t-meta block break-words" data-sheet-composition={sheetId}>
+      <span className="block">
+        {roomLinks.length === 0 ? 'No room link · whole-job drawing' : 'Rooms: '}
+        {roomLinks.map((link, index) => (
+          <span key={link.project_room_id} data-room-id={link.project_room_id}>
+            {index > 0 ? ' · ' : ''}
+            {rooms.find((room) => room.id === link.project_room_id)?.name ?? 'Room no longer on this job'}
+          </span>
+        ))}
+      </span>
+      {packageLinks.length === 0 && <span className="block">No package link</span>}
+      {packageLinks.map((link) => {
+        const pack = bundle.packages?.find((row) => row.id === link.package_id);
+        return (
+          <span className="block" key={link.package_id} data-package-id={link.package_id}>
+            {pack
+              ? `${pack.code} · ${pack.title}${pack.archived_at ? ' · Archived' : ''} · ${pack.package_key ?? 'Composition only · no agreed-scope key'}`
+              : 'Linked package unavailable'}
+          </span>
+        );
+      })}
+      <span className="block">Current composition · not an issued package or authority to fabricate</span>
+    </span>
+  );
+}
+
 export interface PlanRoomSetProps {
   projectId: string;
   bundle: PlanRoomBundle;
+  rooms?: Pick<Database['public']['Tables']['project_rooms']['Row'], 'id' | 'name'>[];
   onOpenSheet: (sheetId: string) => void;
   onIssue: () => void;
   onChooseFile: () => void;
@@ -73,6 +134,7 @@ export interface PlanRoomSetProps {
 export function PlanRoomSet({
   projectId,
   bundle,
+  rooms,
   onOpenSheet,
   onIssue,
   onChooseFile,
@@ -235,6 +297,7 @@ export function PlanRoomSet({
               <span className="line-clamp-2 text-[0.82rem] text-[var(--color-charcoal)]">
                 {row.title}
               </span>
+              <PlanSheetComposition bundle={bundle} sheetId={row.sheetId} rooms={rooms} />
               {held.length > 0 && (
                 <span className="mt-0.5 flex flex-col gap-0.5">
                   {held.map(({ holder, sheet }) => (
@@ -256,7 +319,7 @@ export function PlanRoomSet({
         })}
       </div>
 
-      <PlanIssueHistory bundle={bundle} />
+      <PlanIssueHistory bundle={bundle} projectId={projectId} />
 
       <SectionEyebrow count={log.length}>Drawing register</SectionEyebrow>
       {/* The header sits OUTSIDE the list: a column heading is not a list item,
@@ -417,7 +480,7 @@ export function PlanRoomSet({
 }
 
 /** Issue rows are frozen snapshots, never reconstructed from the current set. */
-export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
+export function PlanIssueHistory({ bundle, projectId }: { bundle: PlanRoomBundle; projectId: string }) {
   const [openIssuePrintId, setOpenIssuePrintId] = useState<string | null>(null);
   const issuePrintOpener = useRef<HTMLElement | null>(null);
   const snapshot = bundle.issuePrints.find(
@@ -461,9 +524,10 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
                   const sheet = bundle.sheets.find(
                     (row) => row.id === print.sheet_id,
                   );
-                  const available = bundle.prints.some(
+                  const source = bundle.prints.find(
                     (row) => row.id === print.print_id,
                   );
+                  const available = Boolean(source);
                   return (
                     <li
                       key={print.id}
@@ -481,8 +545,9 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
                           : 'not current / superseded'}
                       </p>
                       <p className="t-meta break-all">
-                        Print {print.print_id} · SHA-256 {print.sha256}
+                        SHA-256 {print.sha256}
                       </p>
+                      {source && <PlanPrintProvenance print={source} projectId={projectId} />}
                       <DocumentActionRow
                         surfaceKey="plan-room"
                         regionKey={print.id}

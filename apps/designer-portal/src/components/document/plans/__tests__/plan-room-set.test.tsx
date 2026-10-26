@@ -3,6 +3,8 @@ import type { PlanRoomBundle } from '@patina/supabase';
 import { PlanRoomSet } from '../plan-room-set';
 
 jest.mock('@patina/supabase', () => ({
+  useProfile: () => ({ data: null }),
+  useProjectRoster: () => ({ data: [] }),
   createBrowserClient: () => ({
     from: () => ({
       select: () => ({ eq: () => ({ maybeSingle: () => mockRead() }) }),
@@ -154,7 +156,7 @@ it('retains frozen print identity, hash, content and recipient holdings when cur
     '[data-issued-print-id="print-a"]',
   ) as HTMLElement;
   expect(row).toHaveTextContent('A-1 · Frozen title · Rev A');
-  expect(row).toHaveTextContent('Print print-a · SHA-256 hash-a');
+  expect(row).toHaveTextContent('SHA-256 hash-a');
   expect(row).toHaveTextContent('Issued · not current / superseded');
   expect(row).not.toHaveTextContent('New live title');
   expect(
@@ -253,6 +255,6 @@ it('fetches exact issued bytes only on demand and retries without refiling', asy
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(
-    screen.getByText(/Print print-a · SHA-256 hash-a/),
+    screen.getByText(/SHA-256 hash-a/),
   ).toBeInTheDocument();
 });

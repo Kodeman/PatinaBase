@@ -11,6 +11,8 @@ import {
 import { DesignChapter } from "../design-chapter";
 
 jest.mock("@patina/supabase", () => ({
+  useProjectRoster: () => ({ data: [] }),
+  useProfile: () => ({ data: null }),
   useProjectRooms: jest.fn(),
   useProjectRoomScans: jest.fn(),
   useGeneratedRoomFilesByScan: jest.fn(),
@@ -261,13 +263,11 @@ test("Work this room passes the exact room ID and initiating control to the unfo
 test("shows current prints once at project level using print identity rather than array order", () => {
   mount();
   const drawings = screen.getByRole("region", {
-    name: "Project-level drawings",
+    name: "Project drawings",
   });
   expect(
-    within(drawings).getByText(
-      "Project-level prints — not assigned to individual rooms.",
-    ),
-  ).toBeInTheDocument();
+    within(drawings).getByRole("region", { name: "Drawings for the whole job" }),
+  ).toHaveTextContent("A-201 · Room plan");
   expect(
     within(drawings).getByText("Current print 2 · revision B · Oct 23, 2026 · Client-shared current"),
   ).toBeInTheDocument();

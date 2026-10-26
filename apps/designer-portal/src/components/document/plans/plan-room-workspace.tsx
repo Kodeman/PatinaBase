@@ -16,7 +16,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePlanRoom, type FilePlanPrintsResult } from '@patina/supabase';
+import { usePlanRoom, useProjectRooms, type FilePlanPrintsResult } from '@patina/supabase';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { fmtDay } from '@/lib/document/format';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
@@ -66,6 +66,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
   // One query, one derivation. Holders come from the bundle everywhere in this
   // room (band, set, ceremony) so no two surfaces can disagree mid-load.
   const room = usePlanRoom(projectId ?? '');
+  const rooms = useProjectRooms(projectId ?? '');
   const bundle = room.data;
 
   useEffect(() => {
@@ -144,7 +145,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
 
   return (
     <main
-      className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]"
+      className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)] max-[1179px]:pb-[var(--doc-shell-bottom-inset,0px)]"
       onDragOver={(event) => {
         // Claim the event only for real files, so a drag inside the room (a
         // text selection, an image) still behaves normally.
@@ -276,6 +277,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
         <PlanRoomSet
           projectId={projectId}
           bundle={bundle}
+          rooms={rooms.data}
           onOpenSheet={(sheetId) => {
             planRoomEvents.sheetOpened({ project_id: projectId, sheet_id: sheetId });
             setSelectedSheetId(sheetId);
@@ -336,6 +338,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
           projectId={projectId}
           bundle={bundle}
           sheetId={selectedSheetId}
+          rooms={rooms.data}
           onBack={() => setView('set')}
           onIssue={() => setView('issue')}
         />

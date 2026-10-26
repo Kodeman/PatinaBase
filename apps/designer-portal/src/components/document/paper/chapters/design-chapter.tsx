@@ -18,7 +18,7 @@ import {
 import { InlineErrorSurface } from "@/components/feedback/inline-error-surface";
 import { CaptureContextSection } from "@/components/room-file/capture-context-section";
 import { DocumentAction, DocumentActionRow } from "../../document-action";
-import { PlanIssueHistory } from "../../plans/plan-room-set";
+import { PlanIssueHistory, PlanSheetComposition, PlanPrintProvenance } from "../../plans/plan-room-set";
 
 type ProjectRoom = Database["public"]["Tables"]["project_rooms"]["Row"];
 // The existing SELECT * includes this linkage; RoomScan predates migration 00265.
@@ -225,19 +225,21 @@ function ConceptEvidence({
 function ProjectPrints({
   projectId,
   routeId,
+  rooms,
 }: {
   projectId: string;
   routeId: string;
+  rooms: ProjectRoom[];
 }) {
   const plans = usePlanRoom(projectId);
   return (
     <section
-      aria-label="Project-level drawings"
+      aria-label="Project drawings"
       className="mt-8 border-t border-[var(--border-default)] pt-4"
     >
       <h3 className="font-heading text-xl">Project drawings</h3>
       <p className="t-meta mt-2">
-        Project-level prints — not assigned to individual rooms.
+        Room and package links use exact saved identities. Names do not assign drawings.
       </p>
       <ReadNotice label="Project drawings" query={plans} />
       {!plans.isError && plans.data && (
@@ -245,26 +247,46 @@ function ProjectPrints({
           {plans.data.sheets.length === 0 ? (
             <p className="t-body-sm mt-3">No project drawings filed yet.</p>
           ) : (
-            <ul className="mt-3 divide-y divide-[var(--border-default)]">
-              {plans.data.sheets.map((sheet) => {
-                const current = plans.data.prints.find(
-                  (print) => print.id === sheet.current_print_id,
-                );
+            <div className="mt-3">
+              {[
+                ...rooms.map((room) => ({ id: room.id, name: room.name })),
+                { id: 'whole-job', name: 'Drawings for the whole job' },
+                { id: 'unavailable-room', name: 'Drawings with an unavailable room' },
+              ].map((group) => {
+                const sheets = plans.data.sheets.filter((sheet) => {
+                  const links = (plans.data.sheetRooms ?? []).filter((link) => link.sheet_id === sheet.id);
+                  if (group.id === 'whole-job') return links.length === 0;
+                  if (group.id === 'unavailable-room') return links.some((link) => !rooms.some((room) => room.id === link.project_room_id));
+                  return links.some((link) => link.project_room_id === group.id);
+                });
+                if (sheets.length === 0) return null;
                 return (
-                  <li key={sheet.id} className="t-body-sm py-3">
-                    {sheet.sheet_number} · {sheet.title}
-                    <span className="t-meta block">
-                      {current
-                        ? `Current print ${current.print_number} · revision ${current.rev_letter} · ${stamp(current.created_at)}`
-                        : "No current print recorded"}
-                      {sheet.state === "shared" ? " · Client-shared current" : " · Studio only"}
-                    </span>
-                  </li>
+                  <section key={group.id} aria-label={group.name}>
+                    <h4 className="font-heading text-lg">{group.name}</h4>
+                    <ul className="divide-y divide-[var(--border-default)]">
+                      {sheets.map((sheet) => {
+                        const current = plans.data.prints.find((print) => print.id === sheet.current_print_id);
+                        return (
+                          <li key={sheet.id} className="t-body-sm py-3" data-drawing-sheet-id={sheet.id}>
+                            {sheet.sheet_number} · {sheet.title}
+                            <span className="t-meta block">
+                              {current
+                                ? `Current print ${current.print_number} · revision ${current.rev_letter} · ${stamp(current.created_at)}`
+                                : "No current print recorded"}
+                              {sheet.state === "shared" ? " · Client-shared current" : " · Studio only"}
+                            </span>
+                            {current && <PlanPrintProvenance print={current} projectId={projectId} />}
+                            <PlanSheetComposition bundle={plans.data} sheetId={sheet.id} rooms={rooms} />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
                 );
               })}
-            </ul>
+            </div>
           )}
-          <PlanIssueHistory bundle={plans.data} />
+          <PlanIssueHistory bundle={plans.data} projectId={projectId} />
           <DocumentActionRow surfaceKey="design" regionKey="project-drawings">
             <DocumentAction
               actionKey="open-project-drawings"
@@ -396,7 +418,7 @@ export function DesignChapter({
           )}
         </>
       )}
-      <ProjectPrints projectId={projectId} routeId={routeId} />
+      <ProjectPrints projectId={projectId} routeId={routeId} rooms={roomRows} />
     </div>
   );
 }
