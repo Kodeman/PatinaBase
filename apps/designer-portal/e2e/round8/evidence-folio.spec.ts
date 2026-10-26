@@ -195,7 +195,8 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     await expect(viewer).toHaveCount(0);
     await expect(opener).toBeFocused();
     await page.goto(`/doc/${JOB}/plans`, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: /Fictional changed live title/ }).click();
+    await page.getByRole('button', { name: /Fictional changed live title/ })
+      .filter({ has: page.getByText(`D02-${info.project.name}`, { exact: true }) }).click();
     const currentOpener = page.getByRole('button', { name: 'Open drawing revision', exact: true });
     await currentOpener.click();
     await expect(viewer).toBeVisible();
