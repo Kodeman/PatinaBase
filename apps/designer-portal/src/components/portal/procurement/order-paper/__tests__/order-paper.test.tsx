@@ -17,6 +17,7 @@ const mockFetchPayments = jest.fn();
 const mockSetShipTo = jest.fn();
 const mockSetShipToLocation = jest.fn();
 const mockPush = jest.fn();
+const mockItems = { data: [] as Record<string, unknown>[], isLoading: false, isError: false, refetch: jest.fn() };
 const mockCoverage: { data: Record<string, unknown> } = { data: {} };
 const mockQuotes: { data: unknown[] } = { data: [] };
 const mockPlacements: { data: { ffeItemId: string; projectRoomId: string }[] } = { data: [] };
@@ -41,7 +42,7 @@ jest.mock('@patina/supabase', () => ({
   useStartPoCheckout: () => ({ mutateAsync: mockStartCheckout, isPending: false }),
   fetchPOPayments: (...args: unknown[]) => mockFetchPayments(...args),
   useFfeInvoiceCoverage: () => ({ data: mockCoverage.data, isLoading: false, isError: false }),
-  useProcurementItems: () => ({ data: [] }),
+  useProcurementItems: () => mockItems,
   useStudioIdentity: (params: { projectId?: string }) => ({
     data: params.projectId ? { studioId: 'org-studio', name: 'Middle West Studio' } : undefined,
   }),
@@ -138,6 +139,7 @@ jest.mock('@/lib/analytics/procurement-events', () => ({
 
 import {
   OrderPaper,
+  ExistingOrderPaper,
   OrderPaperQueue,
   sharedRoomName,
   type OrderPaperPurchaseOrder,
@@ -171,10 +173,44 @@ const renderPaper = (props: Partial<Parameters<typeof OrderPaper>[0]> = {}) =>
     />,
   );
 
+describe('ExistingOrderPaper native line reads', () => {
+  const po: OrderPaperPurchaseOrder = {
+    id: 'po-9', project_id: 'project-1', vendor_id: HEWN.id, total_cents: 1248000,
+    status: 'draft', sent_at: null, po_number: 'PO-9', payment_pattern: 'fifty_fifty', is_patina_catalog: false,
+  };
+  const paper = () => <ExistingOrderPaper open onClose={jest.fn()} purchaseOrder={po} vendor={HEWN} projectName={PROJECT.name} />;
+
+  it('does not offer order actions while its native line read is loading', () => {
+    mockItems.isLoading = true;
+    render(paper());
+    expect(screen.getByRole('status')).toHaveTextContent('Reading the order lines…');
+    expect(screen.queryByRole('button', { name: /Review for/ })).not.toBeInTheDocument();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('retries failed native line reads without exposing blank order actions', () => {
+    mockItems.isError = true;
+    const { rerender } = render(paper());
+    expect(screen.getByRole('alert')).toHaveTextContent('The order lines could not be read.');
+    expect(screen.queryByRole('button', { name: /Review for/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Read the order lines again' }));
+    expect(mockItems.refetch).toHaveBeenCalledTimes(1);
+    mockItems.isError = false;
+    mockItems.data = [{ ...SOFA, purchase_order_id: po.id }];
+    rerender(paper());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Sofa, COM')).toBeInTheDocument();
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
 const terminal = (name = 'Review for Hewn · $12,480') => screen.getByRole('button', { name });
 const shipToGroup = () => screen.getByRole('group', { name: 'Ship to' });
 
 beforeEach(() => {
+  mockItems.data = [];
+  mockItems.isLoading = false;
+  mockItems.isError = false;
   jest.clearAllMocks();
   mockCoverage.data = { 'line-sofa': { coverage: 'paid' } };
   mockQuotes.data = [];
@@ -547,7 +583,7 @@ describe('the shared review entrance', () => {
     fireEvent.click(terminal());
     await screen.findByTitle('Purchase order PDF');
     const sheet = screen.getByRole('dialog', { name: 'Purchase order preview' });
-    expect(sheet.parentElement).toBe(document.body);
+    // This suite mocks DocSheet; real portal, insets and focus live in po-preview.test.tsx.
     expect(within(sheet).getByText('Sends to orders@hewn.example')).toBeInTheDocument();
     expect(within(sheet).getByLabelText('Note to the vendor')).toHaveValue('Walnut, please.');
     expect(within(sheet).getByRole('button', { name: 'Send to vendor' })).toBeEnabled();

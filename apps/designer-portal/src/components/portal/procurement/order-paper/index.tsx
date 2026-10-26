@@ -245,8 +245,11 @@ function ExistingPaperLines({
   vendor: OrderPaperVendor;
   projectName: string;
 }) {
-  const { data: items } = useProcurementItems({ purchaseOrderId: purchaseOrder.id }) as {
+  const { data: items, isLoading, isError, refetch } = useProcurementItems({ purchaseOrderId: purchaseOrder.id }) as {
     data: ItemRow[] | undefined;
+    isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
   const ffeItems = useMemo<OrderPaperFFEItem[]>(
     () =>
@@ -264,6 +267,18 @@ function ExistingPaperLines({
         })),
     [items, purchaseOrder.id],
   );
+  if (isLoading || isError) {
+    return (
+      <DocSheet open title={`Purchase order ${purchaseOrder.po_number ?? ''}`.trim()} onClose={onClose} returnFocusTo={returnFocusTo}>
+        {isError ? (
+          <div role="alert">
+            <p>The order lines could not be read.</p>
+            <button type="button" onClick={() => void refetch()}>Read the order lines again</button>
+          </div>
+        ) : <p role="status">Reading the order lines…</p>}
+      </DocSheet>
+    );
+  }
   return (
     <OrderPaper
       open

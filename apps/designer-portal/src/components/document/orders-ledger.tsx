@@ -127,7 +127,6 @@ export function OrdersLedger({
     isError: boolean;
     refetch: () => unknown;
   };
-  const ordersKnown = !isLoading && !isError;
   // Q10 (walk W-D5): studio totals are an owner's or admin's; any other seat
   // sees the money on the jobs she leads. Vendors applies the same rule
   // (SQ-751 F3).
@@ -236,7 +235,9 @@ export function OrdersLedger({
 
   // C-32 (SQ-430): the orders waiting on THIS seat's release lead the page;
   // they leave the vendor groups so each order reads once.
-  const { data: heldRows } = useHeldPurchaseOrders();
+  const heldQuery = useHeldPurchaseOrders();
+  const heldRows = heldQuery.data;
+  const ordersKnown = !isLoading && !isError && !heldQuery.isLoading && !heldQuery.isError;
   const releasableIds = useMemo(
     () =>
       new Set(
@@ -397,10 +398,10 @@ export function OrdersLedger({
         ))}
       </nav>
 
-      {isError && (page === 'ledger' || page === 'vendors') && (
+      {(isError || heldQuery.isError) && (page === 'ledger' || page === 'vendors') && (
         <div role="alert" className="doc-type-body py-3">
           <p>The purchase orders could not be read. Try reading them again.</p>
-          <DocumentAction actionKey="retry-order-register" surfaceKey="orders" regionKey="read-failure" variant="secondary" onClick={() => void refetch()}>
+          <DocumentAction actionKey="retry-order-register" surfaceKey="orders" regionKey="read-failure" variant="secondary" onClick={() => { void refetch(); void heldQuery.refetch(); }}>
             Read the orders again
           </DocumentAction>
         </div>
@@ -443,7 +444,7 @@ export function OrdersLedger({
               stats={ordersThroughput((orders ?? []).filter(inBook) as POForThroughput[])}
             />
           )}
-          {isLoading && (
+          {(isLoading || heldQuery.isLoading) && (
             <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
               Opening the book…
             </p>

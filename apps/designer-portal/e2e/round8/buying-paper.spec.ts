@@ -26,10 +26,10 @@ function seed() {
     INSERT INTO public.vendors(id, name) VALUES
       ('${id(1)}', 'P01 Fictional Same-name Maker'), ('${id(2)}', 'P01 Fictional Same-name Maker');
     INSERT INTO public.purchase_orders(id, designer_id, project_id, vendor_id, payment_pattern, po_number, status, sent_at)
-    SELECT '${id(101)}', '${DESIGNER}', '${JOB}', '${id(1)}',
-      enum_first(NULL::public.purchase_order_payment_pattern), 'P01-DRAFT', 'draft', NULL
-    UNION ALL SELECT '${id(102)}', '${DESIGNER}', '${JOB}', '${id(2)}',
-      enum_first(NULL::public.purchase_order_payment_pattern), 'P01-SENT', 'confirmed', now();
+    VALUES ('${id(101)}', '${DESIGNER}', '${JOB}', '${id(1)}',
+      enum_first(NULL::public.purchase_order_payment_pattern), 'P01-DRAFT', 'draft', NULL),
+      ('${id(102)}', '${DESIGNER}', '${JOB}', '${id(2)}',
+      enum_first(NULL::public.purchase_order_payment_pattern), 'P01-SENT', 'confirmed', now());
     COMMIT;`);
 }
 
@@ -39,8 +39,8 @@ async function openOrders(page: Page) {
   await page.keyboard.press('ControlOrMeta+k');
   const palette = page.getByRole('dialog', { name: 'Studio search' });
   await expect(palette).toBeVisible();
-  await palette.getByRole('textbox').fill('orders');
-  await palette.getByText('Orders', { exact: true }).click();
+  await palette.getByRole('combobox', { name: 'Studio search' }).fill('orders', { timeout: 10_000 });
+  await palette.getByRole('option', { name: 'Purchase orders ledger g o', exact: true }).click({ timeout: 10_000 });
   const ledger = page.getByRole('dialog', { name: 'Purchase orders' });
   await expect(ledger).toBeVisible();
   return ledger;
@@ -69,7 +69,8 @@ test.describe('P01 native buying paper', () => {
       const paperOpener = draft.getByRole('button', { name: 'Send →', exact: true });
       // Remove pre-focus: Safari pointer clicks do not necessarily focus buttons.
       await ledger.evaluate((node) => { node.tabIndex = -1; node.focus(); });
-      await paperOpener.dispatchEvent('click');
+      await paperOpener.evaluate((node) => node.addEventListener('mousedown', (event) => event.preventDefault(), { once: true }));
+      await paperOpener.click();
       const paper = page.getByRole('dialog', { name: 'Purchase order P01-DRAFT', exact: true });
       await expect(paper).toBeVisible();
       await page.keyboard.press('Escape');
@@ -78,7 +79,8 @@ test.describe('P01 native buying paper', () => {
 
       const previewOpener = sent.getByRole('button', { name: 'Resend', exact: true });
       await ledger.evaluate((node) => node.focus());
-      await previewOpener.dispatchEvent('click');
+      await previewOpener.evaluate((node) => node.addEventListener('mousedown', (event) => event.preventDefault(), { once: true }));
+      await previewOpener.click();
       const preview = page.getByRole('dialog', { name: 'Purchase order preview', exact: true });
       await expect(preview).toBeVisible();
       await expect(preview).toHaveAttribute('aria-modal', 'true');
@@ -109,7 +111,7 @@ test.describe('P01 native buying paper', () => {
       await expect(alert).toHaveCount(0, { timeout: 30_000 });
       await expect(ledger.locator('[data-orders-register]')).toBeVisible();
     } finally {
-      await page.unroute(route);
+      if (!page.isClosed()) await page.unroute(route);
     }
   });
 });
