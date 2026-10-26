@@ -1,0 +1,2 @@
+-- Backward-compatible entry point; the canonical suite owns its rollback.
+\ir external_presence_test.sql

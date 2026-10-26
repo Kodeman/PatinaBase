@@ -1,0 +1,120 @@
+-- Include-only, after external_presence_money_body.psql, in its rollback.
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.project_external_fulfilments(id,project_id,scope_edition_id,package_key,units,kind,
+ buyer_party_kind,payer_party_kind,contracting_party_kind,created_by,client_request_id,request_hash)
+VALUES(pg_temp.presence_id(500),pg_temp.presence_id(2),pg_temp.presence_id(20),'pkg.chairs',ARRAY['exit-chair'],
+ 'client_furnishing','client','client','none',pg_temp.presence_id(4),'exit-fixture','fixture');
+INSERT INTO public.project_ffe_selection_threads(id,project_id,primary_ffe_item_id,created_by)
+SELECT pg_temp.presence_id(1500+n),pg_temp.presence_id(2),pg_temp.presence_id(n),pg_temp.presence_id(4)
+ FROM generate_series(501,502)n;
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,scope_package_key,external_fulfilment_id,
+ unit_price_cents,line_total_cents,design_disposition)
+SELECT pg_temp.presence_id(n),pg_temp.presence_id(2),'External exit fixture',pg_temp.presence_id(1500+n),
+ CASE WHEN n=501 THEN 'pkg.chairs' END,CASE WHEN n=501 THEN pg_temp.presence_id(500) END,0,0,'selected'
+ FROM generate_series(501,502)n;
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.presence_actor(4);
+-- The single-provenance constraint catches stamps even from a native definer.
+-- Use real document identities, and retain the mutation marker to reach the
+-- table invariant instead of merely testing the older direct-write guard.
+SELECT set_config('app.ffe_mutation_rpc','on',true);
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_items SET trade_scope_document_id=pg_temp.presence_id(424)
+ WHERE id=pg_temp.presence_id(501)$q$,'23514','project_ffe_items_single_provenance_check',
+ 'external presence cannot acquire a trade-scope stamp through a privileged writer');
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_items SET source_commercial_document_id=pg_temp.presence_id(424)
+ WHERE id=pg_temp.presence_id(501)$q$,'23514','project_ffe_items_single_provenance_check',
+ 'external presence cannot acquire a studio commercial stamp');
+SELECT set_config('app.ffe_mutation_rpc','',true);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_assert((public.archive_project_selection(pg_temp.presence_id(501),'External exit')->>'archived')::boolean,
+ 'native archive remains an external exit act');
+SELECT pg_temp.presence_assert((public.restore_project_selection(pg_temp.presence_id(501))->>'restored')::boolean,
+ 'native restore works while the recorded external responsibility is active');
+SELECT public.archive_project_selection(pg_temp.presence_id(501),'External exit again');
+RESET ROLE;
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.restore_project_selection(pg_temp.presence_id(501))$q$,
+ '55000','scope_editions_inactive','external restoration cannot bypass the inactive capability');
+-- Ordinary legacy work stays operable while the new capability is inactive.
+SELECT public.archive_project_selection(pg_temp.presence_id(502),'Ordinary exit');
+SELECT pg_temp.presence_assert((public.restore_project_selection(pg_temp.presence_id(502))->>'restored')::boolean,
+ 'ordinary unbound archive and restore retain native inactive-capability behavior');
+RESET ROLE;
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_scope_editions SET status='superseded' WHERE id=pg_temp.presence_id(20);
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.restore_project_selection(pg_temp.presence_id(501))$q$,
+ '55000','scope_edition_not_active','external restoration rechecks the current active edition');
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_scope_editions SET status='active' WHERE id=pg_temp.presence_id(20);
+SET LOCAL session_replication_role=origin;
+-- This is a native-scope co-member for legacy work, but not a recorded-A
+-- member for consequential C5 writes. Guest/client/suspended paths are covered
+-- by the assignment/conversion matrix in external_presence_body.psql.
+SELECT pg_temp.presence_actor(5);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.restore_project_selection(pg_temp.presence_id(501))$q$,
+ '42501',NULL,'other-studio co-member cannot restore an external responsibility');
+SELECT pg_temp.presence_actor(6);
+SELECT public.record_external_fulfilment_event(pg_temp.presence_id(500),'cancelled','{}',NULL,'exit-cancel');
+SELECT pg_temp.presence_error($q$SELECT public.restore_project_selection(pg_temp.presence_id(501))$q$,
+ '23514','external_presence_cancelled_restore_refused','native restore cannot resurrect a cancelled external fulfilment');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT removed_at IS NOT NULL AND external_fulfilment_id=pg_temp.presence_id(500)
+ AND unit_price_cents=0 AND line_total_cents=0 AND trade_scope_document_id IS NULL AND source_commercial_document_id IS NULL
+ FROM public.project_ffe_items WHERE id=pg_temp.presence_id(501)),
+ 'refused restoration and stamps retain archived zero-valued external identity');
+-- Use a separate job so the unchanged close_project installed census is exact.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.projects(id,name,designer_id,created_by,studio_id,status)
+VALUES(pg_temp.presence_id(520),'Archived install job',pg_temp.presence_id(4),pg_temp.presence_id(4),pg_temp.presence_id(10),'active');
+INSERT INTO public.project_scope_editions(id,project_id,edition_number,kind,commercial_document_id,source_proposal_id,
+ agreement_fingerprint,effective_at,content,content_hash,status)
+VALUES(pg_temp.presence_id(521),pg_temp.presence_id(520),1,'baseline',pg_temp.presence_id(525),pg_temp.presence_id(526),
+ 'fixture',now(),'{}','fixture','active');
+INSERT INTO public.project_scope_edition_packages(edition_id,package_key,label,inclusion,responsibilities)
+SELECT pg_temp.presence_id(521),package_key,label,inclusion,responsibilities
+ FROM public.project_scope_edition_packages WHERE edition_id=pg_temp.presence_id(20) AND package_key='pkg.chairs';
+INSERT INTO public.project_external_fulfilments(id,project_id,scope_edition_id,package_key,units,kind,
+ buyer_party_kind,payer_party_kind,contracting_party_kind,created_by,client_request_id,request_hash)
+VALUES(pg_temp.presence_id(522),pg_temp.presence_id(520),pg_temp.presence_id(521),'pkg.chairs',ARRAY['archived-chair'],
+ 'client_furnishing','client','client','none',pg_temp.presence_id(4),'archived-install-fixture','fixture');
+INSERT INTO public.project_ffe_selection_threads(id,project_id,primary_ffe_item_id,created_by)
+VALUES(pg_temp.presence_id(1523),pg_temp.presence_id(520),pg_temp.presence_id(523),pg_temp.presence_id(4));
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,unit_price_cents,line_total_cents,design_disposition)
+VALUES(pg_temp.presence_id(523),pg_temp.presence_id(520),'Archived install chair',pg_temp.presence_id(1523),12000,12000,'selected');
+SET LOCAL session_replication_role=origin;
+CREATE TEMP TABLE presence_archived_install_event AS SELECT NULL::uuid AS id;
+GRANT SELECT,UPDATE ON presence_archived_install_event TO authenticated;
+SELECT pg_temp.presence_actor(6);
+SET LOCAL ROLE authenticated;
+SELECT public.set_ffe_item_external_fulfilment(pg_temp.presence_id(523),pg_temp.presence_id(522),1,'archive-convert');
+SELECT public.record_external_fulfilment_event(pg_temp.presence_id(522),'contract_reported','{"contractAmountCents":12000}',NULL,'archive-contract');
+SELECT public.archive_project_selection(pg_temp.presence_id(523),'Await external installation');
+UPDATE presence_archived_install_event SET id=(public.record_external_fulfilment_event(
+ pg_temp.presence_id(522),'installed','{}',NULL,'archive-installed')->>'eventId')::uuid;
+SELECT pg_temp.presence_actor(4);
+SELECT public.verify_external_fulfilment_event((SELECT id FROM presence_archived_install_event),'archive-verify');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT status='installed' AND removed_at IS NOT NULL AND row_version=4
+ FROM public.project_ffe_items WHERE id=pg_temp.presence_id(523)),
+ 'verified installation advances archived bound identity through the trusted writer');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_assert((public.restore_project_selection(pg_temp.presence_id(523))->>'restored')::boolean,
+ 'native restore succeeds after archived identity was verified installed');
+SELECT pg_temp.presence_assert((public.verify_external_fulfilment_event((SELECT id FROM presence_archived_install_event),'archive-verify')->>'replayed')::boolean,
+ 'archived installation replay does not update the restored identity again');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT status='installed' AND removed_at IS NULL AND row_version=5
+ AND external_fulfilment_id=pg_temp.presence_id(522) AND unit_price_cents=0 AND line_total_cents=0
+ FROM public.project_ffe_items WHERE id=pg_temp.presence_id(523)),
+ 'restored external identity is installed without changing pricing or replaying installation');
+SELECT pg_temp.presence_assert((SELECT count(*)=0 FROM public.project_ffe_items
+ WHERE project_id=pg_temp.presence_id(520) AND status<>'installed'),
+ 'restore after verified installation passes the native close_project installed census');
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
