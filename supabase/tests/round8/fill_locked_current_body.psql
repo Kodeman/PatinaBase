@@ -1,0 +1,138 @@
+-- SQ-2084: real authenticated RPC/DB assertions, never mocked payload equality.
+\ir fill_locked_current_fixture.psql
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.fill_actor(1);
+DO $$
+DECLARE
+ l uuid; req jsonb; reply jsonb; original jsonb; before_row jsonb; after_row jsonb;
+ thread uuid; label text; scope text; kind text; disposition text; n integer:=0;
+BEGIN
+ FOREACH kind IN ARRAY ARRAY['allowance','fixed','tbd'] LOOP
+  FOREACH scope IN ARRAY ARRAY['room','throughout','unassigned'] LOOP
+   FOREACH disposition IN ARRAY ARRAY['alternate','not_selected'] LOOP
+    n:=n+1;
+    l:=pg_temp.fill_new('preserve-'||n,kind);
+    SELECT selection_thread_id,doc_code INTO thread,label FROM public.project_ffe_items WHERE id=l;
+    req:=pg_temp.fill_request(l,'fill-'||n,CASE WHEN kind='tbd' THEN 'fixed' ELSE kind END);
+    -- Distinct ordinary editor changes the requirement after A captured req.
+    PERFORM pg_temp.fill_actor(2);
+    PERFORM public.triage_project_ffe_items(jsonb_build_object('projectId',pg_temp.fill_id(10),
+     'selectionIds',jsonb_build_array(l),'assignmentScope',scope,
+     'roomId',CASE WHEN scope='room' THEN pg_temp.fill_id(21) END,'disposition',disposition));
+    PERFORM public.set_project_ffe_line_build_fields(l,'{"quantity":6}');
+    PERFORM pg_temp.fill_budgets(l,30000,80000);
+    SELECT to_jsonb(i) INTO before_row FROM public.project_ffe_items i WHERE id=l;
+    PERFORM pg_temp.fill_actor(1);
+    IF n=1 THEN req:=req||jsonb_build_object('configurationId',pg_temp.fill_id(40)); END IF;
+    reply:=public.place_product_in_project_v2(req);
+    SELECT to_jsonb(i) INTO after_row FROM public.project_ffe_items i WHERE id=l;
+    ASSERT after_row->>'product_id'=pg_temp.fill_id(30)::text
+     AND after_row->>'project_room_id' IS NOT DISTINCT FROM before_row->>'project_room_id'
+     AND after_row->>'assignment_scope'=scope AND after_row->>'design_disposition'=disposition
+     AND (after_row->>'quantity')::integer=6
+     AND (after_row->>'budget_min_cents')::integer=30000
+     AND (after_row->>'budget_max_cents')::integer=80000,
+     'fill_preserves_locked_current_context';
+    ASSERT after_row->>'selection_thread_id'=thread::text AND after_row->>'doc_code'=label
+     AND after_row->>'unit'='yard' AND (after_row->>'rough_cents')::integer=150000
+     AND after_row->>'item_type'=CASE WHEN kind='tbd' THEN 'fixed' ELSE kind END
+     AND (after_row->>'line_total_cents')::bigint=6*(after_row->>'unit_price_cents')::bigint
+     AND EXISTS (SELECT 1 FROM public.project_ffe_selection_threads WHERE id=thread AND need_label='Retain this need'),
+     'fill_preserves_identity_metadata_and_current_quantity';
+    ASSERT reply->>'outcome'='filled' AND reply->>'selectionId'=l::text
+     AND reply->>'assignmentScope'=scope
+     AND reply->>'roomId' IS NOT DISTINCT FROM after_row->>'project_room_id',
+     'fill_response_describes_current_context';
+    IF n=1 THEN
+     ASSERT EXISTS (SELECT 1 FROM public.project_ffe_specs WHERE ffe_item_id=l AND configuration_id=pg_temp.fill_id(40)),
+      'configured_fill_keeps_native_binding';
+    END IF;
+    ASSERT EXISTS (SELECT 1 FROM jsonb_array_elements(pg_temp.fill_state()->'receipts') r
+     WHERE r->>'actor_id'=auth.uid()::text AND r->>'idempotency_key'=req->>'idempotencyKey'
+      AND r->>'request_hash'=encode(extensions.digest(req::text,'sha256'),'hex') AND r->'response'=reply),
+     'fill_receipt_hashes_original_body';
+    original:=reply;
+    PERFORM pg_temp.fill_actor(2);
+    PERFORM public.triage_project_ffe_items(jsonb_build_object('projectId',pg_temp.fill_id(10),
+     'selectionIds',jsonb_build_array(l),'assignmentScope','unassigned','disposition','not_selected'));
+    PERFORM pg_temp.fill_budgets(l,NULL,NULL);
+    PERFORM pg_temp.fill_actor(1);
+    before_row:=pg_temp.fill_state();
+    ASSERT public.place_product_in_project_v2(req)=original,'retry_returns_original_receipt_after_context_change';
+    ASSERT pg_temp.fill_state()=before_row,'retry_never_restores_receipt_context';
+    PERFORM pg_temp.fill_refused(req||'{"quantity":5}', '23505');
+    -- Another authorized actor owns a different receipt namespace, not A's reply.
+    PERFORM pg_temp.fill_actor(3);
+    PERFORM pg_temp.fill_refused(req,'23000');
+    PERFORM pg_temp.fill_actor(1);
+   END LOOP;
+  END LOOP;
+ END LOOP;
+ RAISE NOTICE 'PASS: 18 populated current-context/metadata/quantity/response/raw-receipt/replay cases';
+
+ -- No intervening edit, nullable legacy budgets, and old extension bodies.
+ FOR n IN 1..3 LOOP
+  l:=pg_temp.fill_new('legacy-'||n);
+  PERFORM pg_temp.fill_budgets(l,CASE WHEN n=2 THEN 0 END,CASE WHEN n=3 THEN 80000 END);
+  SELECT to_jsonb(i) INTO before_row FROM public.project_ffe_items i WHERE id=l;
+  reply:=public.place_product_in_project_v2(pg_temp.fill_request(l,'legacy-fill-'||n));
+  SELECT to_jsonb(i) INTO after_row FROM public.project_ffe_items i WHERE id=l;
+  ASSERT after_row->'budget_min_cents'=before_row->'budget_min_cents'
+   AND after_row->'budget_max_cents'=before_row->'budget_max_cents'
+   AND after_row->>'project_room_id'=pg_temp.fill_id(20)::text,
+   'fill_preserves_null_legacy_budgets_without_backfill';
+ END LOOP;
+ l:=pg_temp.fill_new('old-extension','tbd');
+ reply:=public.place_product_in_project_v2(pg_temp.fill_request(l,'old-extension-fill','fixed')
+   - ARRAY['itemType','budgetMinCents','budgetMaxCents','quantity']);
+ ASSERT reply->>'outcome'='filled','unversioned_extension_and_schedule_body_still_fills';
+
+ -- A fixed/allowance edit must never be silently undone in either direction.
+ FOREACH kind IN ARRAY ARRAY['fixed','allowance'] LOOP
+  l:=pg_temp.fill_new('type-'||kind,kind);
+  PERFORM pg_temp.fill_refused(pg_temp.fill_request(l,'type-fill-'||kind,
+   CASE WHEN kind='fixed' THEN 'allowance' ELSE 'fixed' END),'23514');
+ END LOOP;
+ RAISE NOTICE 'PASS: fill_does_not_reclassify_changed_allowance and old-body/NULL compatibility';
+
+ l:=pg_temp.fill_new('denied'); req:=pg_temp.fill_request(l,'denied-fill');
+ FOREACH n IN ARRAY ARRAY[4,5,6,7,8] LOOP
+  PERFORM pg_temp.fill_actor(n);
+  PERFORM pg_temp.fill_refused(req,'42501');
+ END LOOP;
+ PERFORM pg_temp.fill_actor(1);
+ PERFORM pg_temp.fill_refused(req||jsonb_build_object('roomId',pg_temp.fill_id(22)),'23000');
+ PERFORM pg_temp.fill_refused(req||'{"assignmentScope":"bad"}','23514');
+ PERFORM pg_temp.fill_refused(req||'{"disposition":"bad"}','23514');
+ PERFORM pg_temp.fill_refused(req||'{"roomId":null}','23514');
+ PERFORM pg_temp.fill_refused(req||'{"budgetMaxCents":-1}','23514');
+ PERFORM pg_temp.fill_refused(req||jsonb_build_object('productId',pg_temp.fill_id(31)),'42501');
+ PERFORM pg_temp.fill_refused(req||jsonb_build_object('configurationId',pg_temp.fill_id(41)),'23000');
+ PERFORM pg_temp.fill_refused(req||'{"roleConfigurationIdentity":"other"}','23000');
+ reply:=public.place_product_in_project_v2(req);
+ -- Replay must reauthorize the actor, even if a successful receipt exists.
+ PERFORM pg_temp.fill_actor(2);
+ l:=pg_temp.fill_new('member-fill'); req:=pg_temp.fill_request(l,'member-filled');
+ reply:=public.place_product_in_project_v2(req);
+ PERFORM pg_temp.fill_actor(1);
+ PERFORM pg_temp.fill_remove_member(2);
+ PERFORM pg_temp.fill_actor(2);
+ PERFORM pg_temp.fill_refused(req,'42501');
+ PERFORM pg_temp.fill_actor(1);
+ RAISE NOTICE 'PASS: actor/tenant/direct-call authority and atomic malformed/foreign/type refusals';
+END; $$;
+RESET ROLE;
+DO $$
+DECLARE role_name text; fn text;
+BEGIN
+ FOREACH role_name IN ARRAY ARRAY['anon','service_role','agent_reader','agent_writer'] LOOP
+  ASSERT NOT has_function_privilege(role_name,'public.place_product_in_project_v2(jsonb)','EXECUTE'),
+   'public_fill_acl_remains_denied';
+ END LOOP;
+ FOREACH fn IN ARRAY ARRAY['_place_product_in_project_v2_00444_impl','_place_product_in_project_v2_00441_wrapper','_place_product_in_project_v2_00438_impl'] LOOP
+  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role','agent_reader','agent_writer'] LOOP
+   ASSERT NOT has_function_privilege(role_name,'public.'||fn||'(jsonb)','EXECUTE'),'private_fill_acl_remains_denied';
+  END LOOP;
+ END LOOP;
+ ASSERT has_function_privilege('authenticated','public.place_product_in_project_v2(jsonb)','EXECUTE'), 'authenticated_public_fill_grant_retained';
+END; $$;
