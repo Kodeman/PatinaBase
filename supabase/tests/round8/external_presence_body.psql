@@ -230,10 +230,10 @@ UPDATE public.organization_members SET status='active' WHERE user_id=pg_temp.pre
 UPDATE public.project_external_fulfilments SET reported_price_cents=7654321 WHERE id=pg_temp.presence_id(30);
 INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,unit_price_cents,line_total_cents,
  quantity,trade_price_cents,retail_unit_cents,price_basis,pending_cost_prev_cents,pending_cost_changed_at,
- pending_markup_held_percent,currency)
+ pending_markup_held_percent,currency,design_disposition)
 SELECT pg_temp.presence_id(n),pg_temp.presence_id(2),'Conversion fixture',pg_temp.presence_id(100+n),
  12345+n,(12345+n)*2,2,10000,18000,'markup',9000,'2026-01-01T00:00:00Z'::timestamptz,45,
- CASE WHEN n=40 THEN 'EUR' ELSE 'USD' END FROM generate_series(40,41)n;
+ CASE WHEN n=40 THEN 'EUR' ELSE 'USD' END,'selected' FROM generate_series(40,41)n;
 SET LOCAL session_replication_role=origin;
 -- The native markup trigger, not fixture arithmetic, owns the source snapshot.
 UPDATE public.project_ffe_items SET notes=notes WHERE id IN (pg_temp.presence_id(40),pg_temp.presence_id(41));
@@ -255,6 +255,19 @@ SELECT pg_temp.presence_error($q$SELECT public.set_ffe_item_external_fulfilment(
  '40001','external_conversion_version_conflict','conversion checks native item version');
 SELECT pg_temp.presence_assert((public.set_ffe_item_external_fulfilment(b.id,pg_temp.presence_id(30),b.row_version,'convert-'||b.id)->'pricingSnapshot')=b.pricing,
  'each converted line receipt holds its exact native pricing snapshot') FROM presence_before b ORDER BY id;
+-- Native purchasing APIs stay active, but external lines cannot enter them.
+SELECT pg_temp.presence_error($q$SELECT public.record_studio_purchase(jsonb_build_object(
+ 'projectId',pg_temp.presence_id(2),'ffeItemId',pg_temp.presence_id(40),
+ 'kind','antique_auction','payeeName','External supplier','amountCents',100))$q$,
+ '23514','external_presence_studio_purchase_refused','native studio purchase refuses converted external line');
+RESET ROLE;
+SELECT pg_temp.presence_error($q$UPDATE public.project_ffe_items SET purchase_order_id=pg_temp.presence_id(999)
+ WHERE id=pg_temp.presence_id(40)$q$,
+ '23514','external_presence_purchase_order_refused','native PO trigger refuses external line before legacy early return');
+SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM public.studio_purchases WHERE ffe_item_id=pg_temp.presence_id(40))
+ AND (SELECT purchase_order_id IS NULL FROM public.project_ffe_items WHERE id=pg_temp.presence_id(40)),
+ 'refused native purchasing leaves no external payable or PO binding');
+SET LOCAL ROLE authenticated;
 SELECT pg_temp.presence_error($q$SELECT public.set_ffe_line_pricing(pg_temp.presence_id(40),'quantity',3)$q$,
  '23514','External presence lines are not studio commerce.','native pricing writer refuses external quantity');
 SELECT pg_temp.presence_error($q$SELECT public.set_ffe_item_external_fulfilment(pg_temp.presence_id(40),pg_temp.presence_id(30),3,'convert-'||pg_temp.presence_id(40))$q$,
