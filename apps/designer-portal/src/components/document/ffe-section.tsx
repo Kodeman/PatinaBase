@@ -173,6 +173,8 @@ import {
 import { useRoomLens } from './room-lens-context';
 import { InstallManifest } from './buying/install-manifest';
 import { JobDestinationsDoor } from './destinations/job-destinations-sheet';
+import { lineQueryState } from './pieces/line-query';
+import { LineQueryReading } from './pieces/build-room-shell';
 import { PiecesOverview } from './pieces/pieces-overview';
 import { piecesRoomAnchorId } from '@/lib/document/pieces/build-room-url';
 import {
@@ -609,7 +611,7 @@ function RecordChangeLineAct({ itemId }: { itemId: string }) {
       regionKey="ffe-line-record-change"
       variant="secondary"
       className="mt-1"
-      onClick={() => openRecordAChange({ origin: 'line', itemId })}
+      onClick={(event) => openRecordAChange({ origin: 'line', itemId, returnFocusTo: event.currentTarget })}
     >
       {NAMED_ACTS.recordChange}
     </DocumentAction>
@@ -1417,14 +1419,9 @@ function FFESectionBody({
     scope: FfeAssignmentScope;
   } | null>(null);
   // The shared FF&E query includes the lifecycle evidence used by the trail.
-  const { data: items, isLoading, isError, refetch } = useProjectFFEItems(
-    projectId,
-  ) as {
-    data: FFERow[] | undefined;
-    isLoading: boolean;
-    isError: boolean;
-    refetch: () => Promise<unknown>;
-  };
+  const linesQuery = useProjectFFEItems(projectId);
+  const { data: items, isLoading, isError, refetch } = linesQuery;
+  const lineState = lineQueryState(linesQuery);
   const selectionIds = useMemo(
     () => (items ?? []).map((item) => String(item.id)),
     [items],
@@ -2472,6 +2469,7 @@ function FFESectionBody({
       }
       className="mt-[var(--doc-region-gap)] scroll-mt-16"
     >
+      <LineQueryReading state={lineState} />
       {mode === 'install' || selecting ? (
         <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
           {/* This branch and the RegionHead below are mutually exclusive, so
@@ -2616,7 +2614,7 @@ function FFESectionBody({
                 // its exit moves no box. Both hold at either density.
                 status={
                   <>
-                    {ffeQuiet ? ffeQuietStatus : ffeStateLine}
+                    {lineState.total === null ? 'Schedule total unknown' : ffeQuiet ? ffeQuietStatus : ffeStateLine}
                     {!readinessQuery.isError && readinessQuery.isLoading && (
                       <SectionLoadingLine variant="inline" label="Checking readiness" />
                     )}
@@ -2656,9 +2654,9 @@ function FFESectionBody({
                         regionKey="ffe-more"
                         variant="tertiary"
                         onClick={() => {
-                          // The router hands focus back to its opener: More.
+                          const returnFocusTo = ffeMoreRef.current;
                           closeFfeMore();
-                          openRecordAChange({ origin: 'pieces-head' });
+                          openRecordAChange({ origin: 'pieces-head', returnFocusTo });
                         }}
                       >
                         Record a selection change
@@ -2697,7 +2695,7 @@ function FFESectionBody({
               regionKey="install-head-record-change"
               variant="secondary"
               className="mb-2"
-              onClick={() => openRecordAChange({ origin: 'pieces-head' })}
+              onClick={(event) => openRecordAChange({ origin: 'pieces-head', returnFocusTo: event.currentTarget })}
             >
               {NAMED_ACTS.recordChange}
             </DocumentAction>
@@ -2867,7 +2865,7 @@ function FFESectionBody({
           </span>
         </div>
       ))}
-      {overview ? (
+      {lineState.total === null ? null : overview ? (
         // US-21 Q14 (a1): the room overview. A room row unfolds to its lines;
         // a line unfolds as it always has (a released one to the buyer's
         // instrument).
