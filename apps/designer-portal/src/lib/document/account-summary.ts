@@ -8,9 +8,9 @@
 
 import type { Invoice } from '@patina/supabase';
 
-/** Money in: total collected across all invoices (Σ amount_paid_cents). */
+/** Money in: recorded receipts, never a draft balance (Σ amount_paid_cents). */
 export function collectedCents(invoices: Invoice[]): number {
-  return invoices.reduce((s, i) => s + (i.amount_paid_cents || 0), 0);
+  return invoices.filter((i) => i.status !== 'draft').reduce((s, i) => s + (i.amount_paid_cents || 0), 0);
 }
 
 /** Gross billed: issued (non-draft, non-void) invoice totals. */
