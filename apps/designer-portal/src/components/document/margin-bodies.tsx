@@ -903,13 +903,9 @@ export function NoteBody({
           co-member reads the note and not the capture. Say so, rather than
           showing her a note with a missing play button and no explanation. */}
       {field.fieldCaptureId && !field.captureVisible ? (
-        <Quiet>The recording is the author&rsquo;s.</Quiet>
+        <Quiet>The capture is unavailable to you.</Quiet>
       ) : null}
-      {row.payload.author_name ? (
-        <p className="mb-2 text-[11px] text-[var(--text-muted)]">
-          {String(row.payload.author_name)}
-        </p>
-      ) : null}
+      {projectId && <Quiet>Atomic escalation is unavailable.</Quiet>}
       {projectId && (
         <DocumentActionGroup
           surfaceKey="open-document"
