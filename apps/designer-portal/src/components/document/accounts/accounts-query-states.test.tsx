@@ -193,7 +193,7 @@ describe('designer Accounts query failures', () => {
     mockLedProjectIds.add('employer-led');
     mockUseInvoices.mockReturnValue({
       data: [
-        { id: 'solo-1', project_id: 'solo-job', studio_id: 'solo', amount_paid_cents: 50_000 },
+        { id: 'solo-1', project_id: 'solo-job', studio_id: 'solo', status: 'paid', currency: 'USD', total_cents: 50_000, amount_paid_cents: 50_000 },
         { id: 'employer-1', project_id: 'employer-unled', studio_id: 'employer', amount_paid_cents: 900_000 },
         { id: 'employer-2', project_id: 'employer-led', studio_id: 'employer', amount_paid_cents: 700_000 },
         { id: 'employer-3', project_id: null, studio_id: 'employer', amount_paid_cents: 300_000 },
@@ -210,8 +210,8 @@ describe('designer Accounts query failures', () => {
     // The studio totals sum her own studio's records alone.
     // US-28 S8 — said once as text, never figure tiles.
     const front = frontMatter() as HTMLElement;
-    expect(front).toHaveTextContent('$1 is out with clients; none of it is overdue.');
-    expect(front).toHaveTextContent('$500 collected.');
+    expect(front).toHaveTextContent('$500.00 issued; $500.00 received; $0.00 due.');
+    expect(front).toHaveTextContent('$0.00 overdue.');
     expect(front).not.toHaveTextContent(/\$9,000|\$7,000|\$3,000|\$19,000/);
     expect(mockMarginStudios.at(-1)).toEqual(['solo']);
   });

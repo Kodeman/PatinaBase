@@ -482,14 +482,20 @@ export function useInvoices(filters?: InvoiceFilters) {
           payments:invoice_payments(*)
         `
         )
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
 
       if (filters?.status) query = query.eq('status', filters.status);
       if (filters?.projectId) query = query.eq('project_id', filters.projectId);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as Invoice[];
+      const pageSize = 1000;
+      const invoices: Invoice[] = [];
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await query.range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        invoices.push(...(data ?? []));
+        if ((data?.length ?? 0) < pageSize) return invoices;
+      }
     },
   });
 }
@@ -670,7 +676,7 @@ export interface ArAgingBucket {
 }
 
 export interface ArAging {
-  /** Open receivables (sent / partially_paid with a due date), due-date ascending. */
+  /** Open receivables (sent / partially_paid), due-date ascending with undated last. */
   openInvoices: Invoice[];
   /** Open invoices that exhausted the automated reminder cadence (ar_flagged_at set). */
   flagged: Invoice[];
@@ -700,11 +706,12 @@ function arBucketKey(daysOverdue: number): ArBucketKey {
 
 export function computeArAging(invoices: Invoice[]): ArAging {
   const openInvoices = invoices
-    .filter(
-      (inv) =>
-        (inv.status === 'sent' || inv.status === 'partially_paid') && inv.due_date != null
-    )
-    .sort((a, b) => (a.due_date! < b.due_date! ? -1 : a.due_date! > b.due_date! ? 1 : 0));
+    .filter((inv) => inv.status === 'sent' || inv.status === 'partially_paid')
+    .sort((a, b) => {
+      if (a.due_date == null) return b.due_date == null ? 0 : 1;
+      if (b.due_date == null) return -1;
+      return a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0;
+    });
 
   const buckets: ArAgingBucket[] = (
     ['current', 'days_1_30', 'days_31_60', 'days_61_90', 'days_90_plus'] as ArBucketKey[]

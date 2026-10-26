@@ -28,11 +28,14 @@ vi.mock('@tanstack/react-query', () => ({
 
 // Import AFTER mocks.
 import {
+  computeArAging,
+  type Invoice,
   useFfeInvoiceCoverage,
   buildLineRow,
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
   useClientInvoices,
+  useInvoices,
   useInvoice,
   useProjectInvoices,
   useUpdateDraftInvoice,
@@ -1573,5 +1576,54 @@ describe('useUpdateDraftInvoice atomic edit', () => {
     expect(supabaseClient.rpc.mock.calls[0][1]).toMatchObject({ p_entry_ids: [], p_billing_lines: [] });
     config.onSuccess({ id: 'studio-draft', project_id: null });
     expect(invalidatedKeys()).toContainEqual(['invoices', 'studio-draft']);
+  });
+});
+
+// Undated open invoices are still money owed; no date means current, not absent.
+describe('computeArAging undated receivables', () => {
+  it('counts undated open balances as current and sorts them after dated invoices without counting drafts', () => {
+    const row = (id: string, status: Invoice['status'], due_date: string | null, total_cents = 10000, amount_paid_cents = 0) =>
+      ({ id, status, due_date, total_cents, amount_paid_cents } as Invoice);
+    const undated = row('undated', 'sent', null, 4000);
+    const partial = row('partial', 'partially_paid', null, 20000, 5000);
+    const future = row('future', 'sent', '2999-01-01');
+    const past = row('past', 'sent', '2000-01-01');
+    const inputs = [undated, row('draft', 'draft', null, 999999), future, partial, past,
+      row('void', 'void', null), row('paid', 'paid', null)];
+    const aging = computeArAging(inputs);
+    expect(aging.openInvoices.map(i => i.id)).toEqual(['past', 'future', 'undated', 'partial']);
+    expect(aging.totalBalanceCents).toBe(39000);
+    expect(aging.buckets.find(b => b.key === 'current')?.invoices.map(i => i.id)).toEqual(['future', 'undated', 'partial']);
+    expect(aging.buckets.find(b => b.key === 'current')?.balanceCents).toBe(29000);
+    expect(inputs[0]).toBe(undated);
+  });
+});
+
+describe('useInvoices whole-book completeness', () => {
+  function pages(results: { data: unknown[] | null; error: Error | null }[]) {
+    const query: any = { then: (resolve: any) => Promise.resolve(results[0]).then(resolve) };
+    query.order = vi.fn(() => query);
+    query.eq = vi.fn(() => query);
+    query.range = vi.fn();
+    for (const result of results) query.range.mockResolvedValueOnce(result);
+    supabaseClient.from.mockReturnValue({ select: vi.fn(() => query) });
+    return query;
+  }
+  it('includes the older unpaid invoice after 1000 newer records with stable paging and native filters', async () => {
+    const newer = Array.from({ length: 1000 }, (_, i) => ({ id: 'new-' + i, status: 'paid' }));
+    const older = { id: 'older-unpaid', status: 'sent', total_cents: 9000 };
+    const query = pages([{ data: newer, error: null }, { data: [older], error: null }]);
+    const config = useInvoices({ projectId: 'project-a' }) as unknown as { queryFn: () => Promise<Invoice[]> };
+    const rows = await config.queryFn();
+    expect(rows).toHaveLength(1001);
+    expect(rows[1000]).toEqual(older);
+    expect(query.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
+    expect(query.order.mock.calls).toEqual([['created_at', { ascending: false }], ['id', { ascending: false }]]);
+    expect(query.eq).toHaveBeenCalledWith('project_id', 'project-a');
+  });
+  it('rejects a later-page refusal rather than publishing a partial book', async () => {
+    pages([{ data: Array.from({ length: 1000 }, (_, i) => ({ id: String(i) })), error: null }, { data: null, error: new Error('later page failed') }]);
+    const config = useInvoices() as unknown as { queryFn: () => Promise<Invoice[]> };
+    await expect(config.queryFn()).rejects.toThrow('later page failed');
   });
 });
