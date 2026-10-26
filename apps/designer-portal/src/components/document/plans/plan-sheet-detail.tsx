@@ -13,7 +13,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { useSetPlanSheetState, type PlanRoomBundle } from '@patina/supabase';
+import { useSetPlanSheetState, type Database, type PlanRoomBundle } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 import { planRoomEvents } from '@/lib/analytics/plan-room-events';
 import { DocumentAction, DocumentActionGroup, DocumentActionRow } from '../document-action';
@@ -27,6 +27,7 @@ export interface PlanSheetDetailProps {
   projectId: string;
   bundle: PlanRoomBundle;
   sheetId: string;
+  rooms?: Pick<Database['public']['Tables']['project_rooms']['Row'], 'id' | 'name'>[];
   onBack: () => void;
   onIssue: () => void;
 }
@@ -35,6 +36,7 @@ export function PlanSheetDetail({
   projectId,
   bundle,
   sheetId,
+  rooms,
   onBack,
   onIssue,
 }: PlanSheetDetailProps) {
@@ -127,7 +129,7 @@ export function PlanSheetDetail({
           {currentPrint ? ` · current since ${fmtDay(currentPrint.created_at)}` : ''}
         </p>
 
-        <PlanSheetComposition bundle={bundle} sheetId={sheet.id} />
+        <PlanSheetComposition bundle={bundle} sheetId={sheet.id} rooms={rooms} />
         <DocumentActionGroup
           surfaceKey="plan-room"
           regionKey="sheet-actions"
@@ -235,7 +237,7 @@ export function PlanSheetDetail({
                     {print.source_filename ? ` · ${print.source_filename}` : ''} ·{' '}
                     <span title={print.sha256}>sha {print.sha256.slice(0, 8)}</span>
                   </p>
-                  <PlanPrintProvenance print={print} />
+                  <PlanPrintProvenance print={print} projectId={projectId} />
                   {bundle.issuePrints.filter((row) => row.print_id === print.id).map((row) => (
                     <p key={row.id} className="t-meta">Issued as {row.sheet_number} · {row.sheet_title}</p>
                   ))}

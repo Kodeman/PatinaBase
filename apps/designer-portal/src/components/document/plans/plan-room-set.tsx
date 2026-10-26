@@ -20,6 +20,7 @@
 
 import { useRef, useState } from 'react';
 import {
+  useProjectRoster,
   useReissuePlanTransmittalLink,
   useRevokePlanTransmittalLink,
   type PlanRoomBundle,
@@ -64,12 +65,14 @@ function RevLetterBadge({ letter }: { letter: string | null }) {
   );
 }
 
-export function PlanPrintProvenance({ print }: { print: PlanPrint }) {
+export function PlanPrintProvenance({ print, projectId }: { print: PlanPrint; projectId: string }) {
+  const roster = useProjectRoster(projectId);
+  const filer = roster.data?.find((person) => person.profile_id === print.created_by)?.display_name?.trim();
   return (
-    <span className="t-meta block break-words">
+    <span className="t-meta block break-words" data-print-filer={print.created_by ?? undefined}>
       Source: {print.source || 'not recorded'}
       {print.source_filename ? ` · ${print.source_filename}` : ''}
-      {' · '}Filed by {print.created_by ?? 'unrecorded actor'}
+      {' · '}{print.created_by ? `Filed by ${filer || 'a person whose name is unavailable'}` : 'Filer not recorded'}
     </span>
   );
 }
@@ -82,7 +85,7 @@ export function PlanSheetComposition({
 }: {
   bundle: PlanRoomBundle;
   sheetId: string;
-  rooms?: Database['public']['Tables']['project_rooms']['Row'][];
+  rooms?: Pick<Database['public']['Tables']['project_rooms']['Row'], 'id' | 'name'>[];
 }) {
   const roomLinks = (bundle.sheetRooms ?? []).filter((row) => row.sheet_id === sheetId);
   const packageLinks = (bundle.sheetPackages ?? []).filter((row) => row.sheet_id === sheetId);
@@ -91,9 +94,9 @@ export function PlanSheetComposition({
       <span className="block">
         {roomLinks.length === 0 ? 'No room link · whole-job drawing' : 'Rooms: '}
         {roomLinks.map((link, index) => (
-          <span key={link.project_room_id}>
+          <span key={link.project_room_id} data-room-id={link.project_room_id}>
             {index > 0 ? ' · ' : ''}
-            {rooms.find((room) => room.id === link.project_room_id)?.name ?? `Linked room ${link.project_room_id}`}
+            {rooms.find((room) => room.id === link.project_room_id)?.name ?? 'Room no longer on this job'}
           </span>
         ))}
       </span>
@@ -116,6 +119,7 @@ export function PlanSheetComposition({
 export interface PlanRoomSetProps {
   projectId: string;
   bundle: PlanRoomBundle;
+  rooms?: Pick<Database['public']['Tables']['project_rooms']['Row'], 'id' | 'name'>[];
   onOpenSheet: (sheetId: string) => void;
   onIssue: () => void;
   onChooseFile: () => void;
@@ -124,6 +128,7 @@ export interface PlanRoomSetProps {
 export function PlanRoomSet({
   projectId,
   bundle,
+  rooms,
   onOpenSheet,
   onIssue,
   onChooseFile,
@@ -286,7 +291,7 @@ export function PlanRoomSet({
               <span className="line-clamp-2 text-[0.82rem] text-[var(--color-charcoal)]">
                 {row.title}
               </span>
-              <PlanSheetComposition bundle={bundle} sheetId={row.sheetId} />
+              <PlanSheetComposition bundle={bundle} sheetId={row.sheetId} rooms={rooms} />
               {held.length > 0 && (
                 <span className="mt-0.5 flex flex-col gap-0.5">
                   {held.map(({ holder, sheet }) => (
@@ -308,7 +313,7 @@ export function PlanRoomSet({
         })}
       </div>
 
-      <PlanIssueHistory bundle={bundle} />
+      <PlanIssueHistory bundle={bundle} projectId={projectId} />
 
       <SectionEyebrow count={log.length}>Drawing register</SectionEyebrow>
       {/* The header sits OUTSIDE the list: a column heading is not a list item,
@@ -469,7 +474,7 @@ export function PlanRoomSet({
 }
 
 /** Issue rows are frozen snapshots, never reconstructed from the current set. */
-export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
+export function PlanIssueHistory({ bundle, projectId }: { bundle: PlanRoomBundle; projectId: string }) {
   const [openIssuePrintId, setOpenIssuePrintId] = useState<string | null>(null);
   const issuePrintOpener = useRef<HTMLElement | null>(null);
   const snapshot = bundle.issuePrints.find(
@@ -534,9 +539,9 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
                           : 'not current / superseded'}
                       </p>
                       <p className="t-meta break-all">
-                        Print {print.print_id} · SHA-256 {print.sha256}
+                        SHA-256 {print.sha256}
                       </p>
-                      {source && <PlanPrintProvenance print={source} />}
+                      {source && <PlanPrintProvenance print={source} projectId={projectId} />}
                       <DocumentActionRow
                         surfaceKey="plan-room"
                         regionKey={print.id}
