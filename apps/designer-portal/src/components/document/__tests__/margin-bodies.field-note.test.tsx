@@ -87,7 +87,7 @@ describe('NoteBody — the field note', () => {
         projectId="project-1"
       />,
     );
-    expect(screen.getByText('The recording is the author’s.')).toBeInTheDocument();
+    expect(screen.getByText('The capture is unavailable to you.')).toBeInTheDocument();
     expect(screen.queryByText('A first reading. The recording is here.')).not.toBeInTheDocument();
   });
 
@@ -106,7 +106,7 @@ describe('NoteBody — the field note', () => {
     expect(screen.queryByText('Ask about the runner.')).not.toBeInTheDocument();
     expect(screen.queryByTestId(/field-note-audio-/)).not.toBeInTheDocument();
     expect(screen.queryByText('A first reading. The recording is here.')).not.toBeInTheDocument();
-    expect(screen.queryByText('The recording is the author’s.')).not.toBeInTheDocument();
+    expect(screen.queryByText('The capture is unavailable to you.')).not.toBeInTheDocument();
     expect(screen.getByText('Leah Kochaver')).toBeInTheDocument();
   });
 
@@ -128,7 +128,7 @@ describe('NoteBody — the field note', () => {
     );
     expect(screen.getByText(LONG)).toBeInTheDocument();
     expect(screen.queryByText('A first reading. The recording is here.')).not.toBeInTheDocument();
-    expect(screen.queryByText('The recording is the author’s.')).not.toBeInTheDocument();
+    expect(screen.queryByText('The capture is unavailable to you.')).not.toBeInTheDocument();
   });
 
   it('still renders the escalated line rather than a body', () => {
