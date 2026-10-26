@@ -43,8 +43,10 @@ SELECT ('f1991300-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
  CASE WHEN n=1 THEN 'client_signed' ELSE 'sent' END,now(),
  CASE WHEN n=1 THEN now() END,CASE WHEN n=1 THEN now() END,CASE WHEN n=1 THEN 'Fictional Client' END
 FROM generate_series(1,2)n;
+INSERT INTO public.proposal_phases(id,proposal_id,name,phase_key,fee_cents,sort_order,lane,duration_days) VALUES
+('f1991500-0000-4000-8000-000000000001','f1991300-0000-4000-8000-000000000001','Design','concept_development',0,1,'main',5);
 CREATE TEMP TABLE expected_scope AS SELECT jsonb_build_object(
- 'packageKey','pkg.kitchen','label','Kitchen cabinetry','inclusion','conditional',
+ 'packageKey','pkg.kitchen','label','Kitchen cabinetry','inclusion','included',
  'conditionText', E'Only after site approval.\nKeep existing stone.',
  'responsibilities',jsonb_build_object('design','studio','purchasing','client','payer','other','fabrication_contract','gc','installation','none'),
  'serviceBindings',jsonb_build_object('design',jsonb_build_array('f1991500-0000-4000-8000-000000000001'))
