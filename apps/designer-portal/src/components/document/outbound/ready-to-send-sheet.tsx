@@ -170,6 +170,7 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
         ids.forEach((id) => attempted.current.add(attemptKey(id)));
         answer = await sendDrafts.mutateAsync(ids);
       } catch (e) {
+        ids.forEach((id) => attempted.current.delete(`${id}:finalize`));
         console.error('[ready-to-send] send failed', e);
         setResults((was) => {
           const next = new Map(was);
@@ -185,6 +186,7 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
           edits.current.delete(id);
           return { id, ok: true };
         }
+        attempted.current.delete(`${id}:finalize`);
         return { id, ok: false, error: receipt?.error || SEND_UNCONFIRMED };
       });
       setResults((was) => {
