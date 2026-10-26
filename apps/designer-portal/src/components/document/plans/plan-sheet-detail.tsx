@@ -66,7 +66,11 @@ export function PlanSheetDetail({
   const shared = sheet.state === 'shared';
   const openPrint = prints.find((print) => print.id === openPrintId) ?? null;
 
-  const openSnapshot = bundle.issuePrints.find((row) => row.print_id === openPrint?.id);
+  // The print rail has no selected issue: use its first recorded issue, not query row order.
+  const firstIssue = bundle.issues
+    .filter((issue) => bundle.issuePrints.some((row) => row.issue_id === issue.id && row.print_id === openPrint?.id))
+    .sort((a, b) => a.issue_number - b.issue_number)[0];
+  const openSnapshot = bundle.issuePrints.find((row) => row.issue_id === firstIssue?.id && row.print_id === openPrint?.id);
 
   const historyFor = (printId: string): string | null => {
     const issueIds = bundle.issuePrints

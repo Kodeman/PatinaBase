@@ -94,6 +94,8 @@ it('keeps issued title and original print provenance after the live sheet and fi
 });
 
 it('returns each current and historical viewer to its actual trigger and uses the issued title', async () => {
+  mockBundle.issues.unshift({ ...mockBundle.issues[0], id: 'later-issue', issue_number: 2 });
+  mockBundle.issuePrints.unshift({ ...mockBundle.issuePrints[0], id: 'later-snapshot', issue_id: 'later-issue', sheet_title: 'Later reissue title' });
   render(<PlanSheetDetail projectId="job" sheetId="sheet-a" bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
   const current = screen.getByRole('button', { name: 'Open drawing revision' });
   // Another focused control must not become the inferred opener.
