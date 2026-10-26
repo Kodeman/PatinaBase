@@ -297,6 +297,17 @@ function asArray<T>(value: T[] | null | undefined): T[] {
   return value ?? [];
 }
 
+async function readCompositionPages<T>(query: any): Promise<T[]> {
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await query.range(offset, offset + 999);
+    if (error) throw error;
+    const page = asArray<T>(data);
+    rows.push(...page);
+    if (page.length < 1000) return rows;
+  }
+}
+
 export function usePlanRoom(projectId: string) {
   return useQuery<PlanRoomBundle>({
     queryKey: planRoomKeys.room(projectId),
@@ -329,9 +340,9 @@ export function usePlanRoom(projectId: string) {
         issuePrintsResult,
         transmittalsResult,
         tokensResult,
-        sheetRoomsResult,
-        sheetPackagesResult,
-        packagesResult,
+        sheetRooms,
+        sheetPackages,
+        packages,
       ] = await Promise.all([
         // plan_prints / plan_issue_prints carry no project_id; scope through
         // their parents, with the zero-uuid sentinel keeping an empty IN valid.
@@ -368,11 +379,20 @@ export function usePlanRoom(projectId: string) {
             "id, transmittal_id, project_id, status, expires_at, first_opened_at, view_count, last_used_at, created_at",
           )
           .eq("project_id", projectId),
-        supabase.from("plan_sheet_rooms").select("*").in("sheet_id",
-          sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"]),
-        supabase.from("plan_sheet_packages").select("*").in("sheet_id",
-          sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"]),
-        supabase.from("project_packages").select("*").eq("project_id", projectId),
+        readCompositionPages<PlanSheetRoom>(
+          supabase.from("plan_sheet_rooms").select("*").in("sheet_id",
+            sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"])
+            .order("sheet_id", { ascending: true }).order("project_room_id", { ascending: true }),
+        ),
+        readCompositionPages<PlanSheetPackage>(
+          supabase.from("plan_sheet_packages").select("*").in("sheet_id",
+            sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"])
+            .order("sheet_id", { ascending: true }).order("package_id", { ascending: true }),
+        ),
+        readCompositionPages<ProjectPackage>(
+          supabase.from("project_packages").select("*").eq("project_id", projectId)
+            .order("id", { ascending: true }),
+        ),
       ]);
       const firstError = [
         printsResult,
@@ -380,16 +400,13 @@ export function usePlanRoom(projectId: string) {
         issuePrintsResult,
         transmittalsResult,
         tokensResult,
-        sheetRoomsResult,
-        sheetPackagesResult,
-        packagesResult,
       ].find((result) => result.error)?.error;
       if (firstError) throw firstError;
 
       return {
-        sheetRooms: asArray<PlanSheetRoom>(sheetRoomsResult.data),
-        sheetPackages: asArray<PlanSheetPackage>(sheetPackagesResult.data),
-        packages: asArray<ProjectPackage>(packagesResult.data),
+        sheetRooms,
+        sheetPackages,
+        packages,
         sheets,
         prints: asArray<PlanPrint>(printsResult.data),
         batches: asArray<PlanPrintBatch>(batchesResult.data),

@@ -8,18 +8,21 @@ function queryBuilder(result: QueryResult = { data: [], error: null }) {
     eq: ReturnType<typeof vi.fn>;
     in: ReturnType<typeof vi.fn>;
     order: ReturnType<typeof vi.fn>;
+    range: ReturnType<typeof vi.fn>;
     then: (resolve: (value: QueryResult) => unknown) => Promise<unknown>;
   } = {
     select: vi.fn(),
     eq: vi.fn(),
     in: vi.fn(),
     order: vi.fn(),
+    range: vi.fn(),
     then: (resolve) => Promise.resolve(result).then(resolve),
   };
   builder.select.mockReturnValue(builder);
   builder.eq.mockReturnValue(builder);
   builder.in.mockReturnValue(builder);
   builder.order.mockReturnValue(builder);
+  builder.range.mockReturnValue(builder);
   return builder;
 }
 
@@ -246,6 +249,37 @@ describe('usePlanRoom', () => {
   it.each(['plan_sheet_rooms','plan_sheet_packages','project_packages'])('propagates %s composition failures instead of false empty', async (table) => {
     builders[table]=queryBuilder({data:null,error:new Error('composition down')});
     await expect(config().queryFn()).rejects.toThrow('composition down');
+  });
+
+  const compositionReads = [
+    { table: 'plan_sheet_rooms', field: 'sheetRooms', keys: ['sheet_id', 'project_room_id'] },
+    { table: 'plan_sheet_packages', field: 'sheetPackages', keys: ['sheet_id', 'package_id'] },
+    { table: 'project_packages', field: 'packages', keys: ['id'] },
+  ] as const;
+
+  it.each(compositionReads)('returns every $table row across two ordered pages', async ({ table, field, keys }) => {
+    const rows = Array.from({ length: 1001 }, (_, index) =>
+      Object.fromEntries(keys.map((key) => [key, `${key}-${String(index).padStart(4, '0')}`])),
+    );
+    // Unpaged PostgREST reads are capped at 1000, even though 1001 rows exist.
+    const builder = queryBuilder({ data: rows.slice(0, 1000), error: null });
+    builder.range.mockImplementation((from: number, to: number) =>
+      Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
+    );
+    builders[table] = builder;
+
+    const bundle = await config().queryFn();
+    expect(bundle[field]).toEqual(rows);
+    expect(builder.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
+    expect(builder.order.mock.calls).toEqual(keys.map((key) => [key, { ascending: true }]));
+  });
+
+  it.each(compositionReads)('propagates a later $table page failure without returning partial composition', async ({ table }) => {
+    const builder = queryBuilder({ data: Array.from({ length: 1000 }, (_, id) => ({ id })), error: null });
+    builder.range.mockReturnValueOnce(builder).mockResolvedValueOnce({ data: null, error: new Error('second page down') });
+    builders[table] = builder;
+    await expect(config().queryFn()).rejects.toThrow('second page down');
+    expect(builder.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
   });
 
   it('propagates a sheets read error', async () => {

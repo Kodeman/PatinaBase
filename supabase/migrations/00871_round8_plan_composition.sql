@@ -36,23 +36,35 @@ CREATE TABLE IF NOT EXISTS public.plan_sheet_packages (
   PRIMARY KEY (sheet_id,package_id)
 );
 
--- Trigger guards also cover UPDATE and the optional package home room.
+-- Room SHARE locks conflict with a concurrent project_id UPDATE. The parent
+-- guard reads references without locking children, so it never reverses the
+-- native writer order: project -> sheet (if any) -> rooms by UUID -> join rows.
 CREATE OR REPLACE FUNCTION public._guard_plan_composition() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE job uuid; target_job uuid;
 BEGIN
-  IF TG_TABLE_NAME = 'project_packages' THEN
+  IF TG_TABLE_NAME = 'project_rooms' THEN
+    IF NEW.project_id IS DISTINCT FROM OLD.project_id AND (
+      EXISTS (SELECT 1 FROM public.plan_sheet_rooms WHERE project_room_id=OLD.id)
+      OR EXISTS (SELECT 1 FROM public.project_packages WHERE project_room_id=OLD.id)
+    ) THEN
+      RAISE EXCEPTION 'plan_composition_room_project_immutable' USING ERRCODE='23514';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'project_packages' THEN
     IF TG_OP = 'UPDATE' AND (NEW.project_id IS DISTINCT FROM OLD.project_id
        OR (OLD.package_key IS NOT NULL AND NEW.package_key IS DISTINCT FROM OLD.package_key)) THEN
       RAISE EXCEPTION 'package_key_immutable' USING ERRCODE='23514';
     END IF;
-    IF NEW.project_room_id IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM public.project_rooms WHERE id=NEW.project_room_id AND project_id=NEW.project_id
-    ) THEN RAISE EXCEPTION 'plan_sheet_link_off_project' USING ERRCODE='23514'; END IF;
+    IF NEW.project_room_id IS NOT NULL THEN
+      SELECT project_id INTO target_job FROM public.project_rooms WHERE id=NEW.project_room_id FOR SHARE;
+      IF target_job IS DISTINCT FROM NEW.project_id THEN
+        RAISE EXCEPTION 'plan_sheet_link_off_project' USING ERRCODE='23514';
+      END IF;
+    END IF;
   ELSE
     SELECT project_id INTO job FROM public.plan_sheets WHERE id=NEW.sheet_id;
     IF TG_TABLE_NAME='plan_sheet_rooms' THEN
-      SELECT project_id INTO target_job FROM public.project_rooms WHERE id=NEW.project_room_id;
+      SELECT project_id INTO target_job FROM public.project_rooms WHERE id=NEW.project_room_id FOR SHARE;
     ELSE
       SELECT project_id INTO target_job FROM public.project_packages WHERE id=NEW.package_id;
     END IF;
@@ -64,6 +76,9 @@ BEGIN
 END;
 $$;
 REVOKE ALL ON FUNCTION public._guard_plan_composition() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS guard_plan_composition_room_project ON public.project_rooms;
+CREATE TRIGGER guard_plan_composition_room_project BEFORE UPDATE OF project_id ON public.project_rooms
+FOR EACH ROW EXECUTE FUNCTION public._guard_plan_composition();
 DROP TRIGGER IF EXISTS guard_plan_composition ON public.project_packages;
 CREATE TRIGGER guard_plan_composition BEFORE INSERT OR UPDATE ON public.project_packages
 FOR EACH ROW EXECUTE FUNCTION public._guard_plan_composition();
@@ -177,6 +192,7 @@ BEGIN
     RAISE EXCEPTION 'plan_composition_forbidden' USING ERRCODE='42501'; END IF;
   PERFORM 1 FROM public.plan_sheets WHERE id=p_sheet_id FOR UPDATE;
   SELECT COALESCE(array_agg(DISTINCT id ORDER BY id),'{}'::uuid[]) INTO ids FROM unnest(p_project_room_ids) id;
+  PERFORM 1 FROM public.project_rooms WHERE id=ANY(ids) ORDER BY id FOR SHARE;
   IF EXISTS (SELECT 1 FROM unnest(ids) AS requested(id) LEFT JOIN public.project_rooms r ON r.id=requested.id
     WHERE r.id IS NULL OR r.project_id<>job) THEN
     RAISE EXCEPTION 'plan_sheet_link_off_project' USING ERRCODE='23514'; END IF;

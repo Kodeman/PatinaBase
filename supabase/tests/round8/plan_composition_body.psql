@@ -63,6 +63,9 @@ FROM generate_series(1,3)n;
 INSERT INTO public.project_rooms(id,project_id,name)
 SELECT ('f8713000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
 ('f8712000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'C1 room' FROM generate_series(1,3)n;
+INSERT INTO public.project_rooms(id,project_id,name) VALUES
+('f8713000-0000-4000-8000-000000000004','f8712000-0000-4000-8000-000000000001','Package home'),
+('f8713000-0000-4000-8000-000000000005','f8712000-0000-4000-8000-000000000001','Unlinked room');
 INSERT INTO public.plan_sheets(id,project_id,sheet_number,title,state,current_print_id)
 SELECT ('f8714000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
 ('f8712000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'K-201','Not a room inference',
@@ -105,6 +108,20 @@ SELECT public.set_plan_sheet_rooms('f8714000-0000-4000-8000-000000000004',ARRAY[
 SELECT public.set_plan_sheet_packages('f8714000-0000-4000-8000-000000000001',ARRAY[(SELECT id FROM c1_ids WHERE name='bound')]);
 SELECT public.set_plan_sheet_packages('f8714000-0000-4000-8000-000000000004',ARRAY[(SELECT id FROM c1_ids WHERE name='bound')]);
 SELECT pg_temp.c1_assert((SELECT count(*)=2 FROM public.plan_sheet_packages),'A reads exact package joins without transmittals');
+SELECT pg_temp.c1_error($q$UPDATE public.project_rooms SET project_id='f8712000-0000-4000-8000-000000000002' WHERE id='f8713000-0000-4000-8000-000000000001'$q$,
+ '23514','plan_composition_room_project_immutable','linked room reparent refuses');
+SELECT pg_temp.c1_assert((SELECT count(*)=2 AND bool_and(r.project_id=s.project_id)
+ FROM public.plan_sheet_rooms j JOIN public.project_rooms r ON r.id=j.project_room_id
+ JOIN public.plan_sheets s ON s.id=j.sheet_id),'refused reparent retains same-project sheet links');
+SELECT public.create_project_package('f8712000-0000-4000-8000-000000000001','build','HOME','Home room','home-room','f8713000-0000-4000-8000-000000000004');
+SELECT pg_temp.c1_error($q$UPDATE public.project_rooms SET project_id='f8712000-0000-4000-8000-000000000002' WHERE id='f8713000-0000-4000-8000-000000000004'$q$,
+ '23514','plan_composition_room_project_immutable','package home room reparent refuses');
+UPDATE public.project_rooms SET project_id=project_id WHERE id='f8713000-0000-4000-8000-000000000001';
+SELECT pg_temp.c1_assert((SELECT project_id='f8712000-0000-4000-8000-000000000001' FROM public.project_rooms WHERE id='f8713000-0000-4000-8000-000000000004'),
+ 'refused reparent retains package home project');
+UPDATE public.project_rooms SET project_id='f8712000-0000-4000-8000-000000000002' WHERE id='f8713000-0000-4000-8000-000000000005';
+SELECT pg_temp.c1_assert((SELECT project_id='f8712000-0000-4000-8000-000000000002' FROM public.project_rooms WHERE id='f8713000-0000-4000-8000-000000000005'),
+ 'unlinked room can still move');
 SELECT pg_temp.c1_error($q$SELECT public.set_plan_sheet_rooms('f8714000-0000-4000-8000-000000000001',ARRAY['f8713000-0000-4000-8000-000000000002']::uuid[])$q$,'23514','plan_sheet_link_off_project','foreign room atomic refusal');
 SELECT pg_temp.c1_assert((SELECT count(*)=2 FROM public.plan_sheet_rooms),'bad replacement retains prior room sets');
 SELECT pg_temp.c1_assert(public.set_plan_sheet_packages('f8714000-0000-4000-8000-000000000004',ARRAY[(SELECT id FROM c1_ids WHERE name='null'),(SELECT id FROM c1_ids WHERE name='null')])->'packageIds'=to_jsonb(ARRAY[(SELECT id FROM c1_ids WHERE name='null')]),'package set replaces exactly and dedupes');
