@@ -14,6 +14,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
+import { isElementRendered } from './active-dialog';
 import { DocumentAction } from '../document-action';
 import { lockBodyScroll, trapTabWithin } from '@/lib/full-screen-boundary';
 
@@ -87,13 +88,13 @@ export function FullScreenViewerShell({
       window.cancelAnimationFrame(focusFrame);
       document.removeEventListener('keydown', onKeyDown, true);
       unlockBodyScroll();
-      const focusTarget = returnFocusRef.current?.isConnected
-        ? returnFocusRef.current
-        : restoreRef.current;
+      const targets = [returnFocusRef.current, restoreRef.current];
       restoreRef.current = null;
-      if (!focusTarget?.isConnected) return;
       window.requestAnimationFrame(() => {
-        focusTarget.focus({ preventScroll: true });
+        const target = targets.find(
+          (element) => element?.isConnected && isElementRendered(element),
+        );
+        target?.focus({ preventScroll: true });
       });
     };
   }, []);

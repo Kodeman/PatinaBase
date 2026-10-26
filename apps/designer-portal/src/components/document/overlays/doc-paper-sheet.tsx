@@ -12,26 +12,49 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { isElementRendered } from './active-dialog';
 
 export function DocPaperSheet({
   open,
   onClose,
   title,
   children,
+  returnFocusTo,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  /** Actual opening control; null/omitted keeps the programmatic focus fallback. */
+  returnFocusTo?: HTMLElement | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef(returnFocusTo);
+
+  useEffect(() => {
+    returnFocusRef.current = returnFocusTo;
+  }, [returnFocusTo]);
 
   useEffect(() => {
     if (!open) return;
     restoreRef.current = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
 
+    return () => {
+      const targets = [returnFocusRef.current, restoreRef.current];
+      restoreRef.current = null;
+      window.requestAnimationFrame(() => {
+        const target = targets.find(
+          (element) => element?.isConnected && isElementRendered(element),
+        );
+        target?.focus({ preventScroll: true });
+      });
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -41,7 +64,6 @@ export function DocPaperSheet({
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      restoreRef.current?.focus?.();
     };
   }, [open, onClose]);
 
