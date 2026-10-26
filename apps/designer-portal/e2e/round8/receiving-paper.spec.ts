@@ -16,12 +16,17 @@ function residue() {
     (SELECT count(*) FROM public.purchase_orders WHERE id::text LIKE '${PREFIX}%') +
     (SELECT count(*) FROM public.project_ffe_items WHERE id::text LIKE '${PREFIX}%') +
     (SELECT count(*) FROM public.vendors WHERE id::text LIKE '${PREFIX}%') +
+    (SELECT count(*) FROM public.studio_locations WHERE id::text LIKE '${PREFIX}%') +
+    (SELECT count(*) FROM public.project_ffe_specs WHERE ffe_item_id='${LINE}') +
+    (SELECT count(*) FROM public.project_ffe_selection_threads WHERE primary_ffe_item_id='${LINE}') +
     (SELECT count(*) FROM svc_media.media_assets WHERE id::text LIKE '${PREFIX}%');`);
 }
 
 function seed() {
   expect(residue(), 'P02 namespace starts empty').toBe('0');
   psqlRun(`BEGIN; SET LOCAL statement_timeout = '5s';
+    INSERT INTO public.studio_locations(id,organization_id,kind,label)
+      SELECT '${id(5)}',studio_id,'receiver','P02 Fictional Receiver' FROM public.projects WHERE id='${JOB}';
     INSERT INTO public.vendors(id,name) VALUES ('${id(1)}','P02 Fictional Receiving Maker');
     INSERT INTO public.project_ffe_items(id,project_id,name,status,quantity,vendor_id,unit_price_cents,design_disposition)
       VALUES ('${LINE}','${JOB}','P02 Fictional Chair','specified',4,'${id(1)}',100,'selected');
@@ -39,10 +44,15 @@ function cleanup() {
     DELETE FROM public.damage_claims WHERE receiving_inspection_id IN
       (SELECT id FROM public.receiving_inspections WHERE purchase_order_id='${PO}');
     DELETE FROM public.receiving_inspections WHERE purchase_order_id='${PO}';
+    SET LOCAL session_replication_role=replica;
+    DELETE FROM public.project_ffe_specs WHERE ffe_item_id='${LINE}';
+    DELETE FROM public.project_ffe_selection_threads WHERE primary_ffe_item_id='${LINE}' AND project_id='${JOB}';
     DELETE FROM public.project_ffe_items WHERE id='${LINE}' AND project_id='${JOB}';
+    SET LOCAL session_replication_role=origin;
     DELETE FROM public.purchase_orders WHERE id='${PO}' AND project_id='${JOB}' AND designer_id='${DESIGNER}';
     DELETE FROM public.vendors WHERE id='${id(1)}' AND name='P02 Fictional Receiving Maker';
     DELETE FROM svc_media.media_assets WHERE id='${ASSET}' AND project_id='${JOB}';
+    DELETE FROM public.studio_locations WHERE id='${id(5)}' AND label='P02 Fictional Receiver';
     COMMIT;`);
   expect(residue(), 'P02 fixture residue').toBe('0');
 }
@@ -89,11 +99,12 @@ test('P02 partial damaged delivery preserves native receipt, photo, claim and re
     await expect(opener, 'receipt returns to actual pointer opener without prefocus').toBeFocused();
     await opener.click();
     await receipt.getByLabel('Opened and checked?', { exact: true }).selectOption('yes');
+    await receipt.getByLabel('Arrival location', { exact: true }).selectOption(id(5));
     await receipt.getByRole('spinbutton', { name: 'Received quantity for P02 Fictional Chair', exact: true }).fill('2');
     await receipt.getByLabel('Condition of P02 Fictional Chair', { exact: true }).selectOption('damaged');
     await receipt.getByLabel('Noted on the BOL', { exact: true }).check();
     await receipt.locator('input[type="file"]').setInputFiles({ name: 'p02-damage.png', mimeType: 'image/png', buffer: Buffer.from(PNG, 'base64') });
-    await expect(receipt.getByRole('list', { name: 'Photos to attach' })).toContainText('p02-damage.png');
+    await expect(receipt.getByRole('list', { name: 'Photos to attach' }).getByRole('img', { name: 'p02-damage.png', exact: true })).toBeVisible();
     await receipt.getByRole('button', { name: 'Save receipt', exact: true }).click();
     await expect(receipt).toContainText('Claim draft ready');
     await expect.poll(() => psqlScalar(`SELECT count(*) FROM public.receiving_inspections i
