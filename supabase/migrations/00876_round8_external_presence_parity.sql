@@ -279,9 +279,10 @@ BEGIN
  IF p_client_request_id IS NULL OR length(btrim(p_client_request_id))=0 THEN
   RAISE EXCEPTION 'external_conversion_request_required' USING ERRCODE='check_violation';
  END IF;
- -- Keep lifecycle/authority writers excluded, but allow FK KEY SHARE from a
- -- purchase already holding the item; its item lock decides the winner.
- PERFORM 1 FROM public.projects WHERE id=project FOR NO KEY UPDATE;
+ -- SHARE excludes lifecycle/authority UPDATEs without blocking placement's
+ -- KEY SHARE → label → SHARE upgrade or a purchase's item → FK KEY SHARE.
+ -- This path and its item triggers never upgrade or update the project row.
+ PERFORM 1 FROM public.projects WHERE id=project FOR SHARE;
  PERFORM public._ffe_lock_job_labels(project);
  h:=encode(extensions.digest(jsonb_build_array(p_item_id,p_fulfilment_id,p_row_version)::text,'sha256'),'hex');
  SELECT * INTO receipt FROM public.project_ffe_external_conversion_receipts

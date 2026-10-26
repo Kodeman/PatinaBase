@@ -6,10 +6,33 @@ BEGIN
  RAISE NOTICE 'PASS: %',label;
 END $$;
 
-SELECT pg_temp.presence_assert(
- strpos(pg_get_functiondef('public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text)'::regprocedure),
-  'FROM public.projects WHERE id=project FOR NO KEY UPDATE;')>0,
- 'conversion project prelock permits purchase FK KEY SHARE before the item lock');
+DO $lock_order$
+DECLARE
+ conversion text:=regexp_replace(pg_get_functiondef(
+  'public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text)'::regprocedure),'--[^\n]*','','g');
+ placement text:=pg_get_functiondef('public.place_product_configuration_in_project(uuid,uuid,uuid,uuid,text,jsonb)'::regprocedure);
+ impl text:=pg_get_functiondef('public._place_product_configuration_in_project_impl(uuid,uuid,uuid,uuid,text,jsonb)'::regprocedure);
+ project_lock integer; label_lock integer; fulfilment_lock integer; item_lock integer;
+BEGIN
+ project_lock:=strpos(conversion,'FROM public.projects WHERE id=project FOR SHARE;');
+ label_lock:=strpos(conversion,'PERFORM public._ffe_lock_job_labels(project);');
+ fulfilment_lock:=strpos(conversion,'f:=public._external_lock(');
+ item_lock:=strpos(conversion,'FROM public.project_ffe_items WHERE id=p_item_id FOR UPDATE;');
+ PERFORM pg_temp.presence_assert(project_lock>0 AND label_lock>project_lock
+  AND fulfilment_lock>label_lock AND item_lock>fulfilment_lock,
+  'conversion takes a placement-compatible lifecycle lock before label, fulfilment and item');
+ PERFORM pg_temp.presence_assert(conversion !~* 'UPDATE\s+public\.projects\y'
+  AND conversion !~* 'FROM\s+public\.projects[^;]*FOR\s+(UPDATE|NO\s+KEY\s+UPDATE)',
+  'conversion never upgrades or writes the project after its compatible prelock');
+ PERFORM pg_temp.presence_assert(
+  strpos(placement,'PERFORM public._ffe_lock_job_labels(p_project_id);')>0
+  AND strpos(placement,'v_result := public._place_product_configuration_in_project_impl(')
+   >strpos(placement,'PERFORM public._ffe_lock_job_labels(p_project_id);')
+  AND strpos(impl,'FROM public.projects WHERE id = p_project_id FOR SHARE;')
+   >strpos(impl,'PERFORM public._ffe_lock_job_labels(p_project_id);')
+  AND strpos(impl,'PERFORM public._ffe_lock_job_labels(p_project_id);')>0,
+  'native placement wrapper and impl retain label before project SHARE upgrade');
+END $lock_order$;
 SELECT pg_temp.presence_assert(EXISTS (
  SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='project_ffe_items'
  AND column_name='row_version' AND data_type='bigint' AND is_nullable='NO'),

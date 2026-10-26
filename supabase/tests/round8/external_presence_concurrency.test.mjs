@@ -113,8 +113,8 @@ const expected = (expression, state, message) => `DO $expected$ DECLARE s text; 
 const fixture = `BEGIN;
 SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
-SELECT '${id(4)}','presence-owner@test.invalid','',now(),now(),now(),'authenticated','authenticated'
-UNION ALL SELECT '${id(6)}','presence-member@test.invalid','',now(),now(),now(),'authenticated','authenticated';
+SELECT '${id(4)}'::uuid,'presence-owner@test.invalid','',now(),now(),now(),'authenticated','authenticated'
+UNION ALL SELECT '${id(6)}'::uuid,'presence-member@test.invalid','',now(),now(),now(),'authenticated','authenticated';
 INSERT INTO public.profiles(id,email,full_name,is_designer)
 SELECT id,email,'Presence concurrency fixture',true FROM auth.users WHERE id::text LIKE 'f87e0000-%';
 INSERT INTO public.organizations(id,type,name,slug,status)
@@ -137,14 +137,21 @@ INSERT INTO public.project_external_fulfilments(id,project_id,scope_edition_id,p
  buyer_party_kind,payer_party_kind,contracting_party_kind,created_by,client_request_id,request_hash)
 SELECT ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(2)}','${id(20)}','pkg.chairs',
  ARRAY['chair-'||n],'client_furnishing','gc','gc','gc','${id(4)}','fixture-'||n,'fixture'
- FROM generate_series(500,507)n;
+ FROM generate_series(500,508)n;
 INSERT INTO public.project_ffe_selection_threads(id,project_id,primary_ffe_item_id,created_by)
 SELECT ('f87e0000-0000-4000-8000-'||lpad((n+1000)::text,12,'0'))::uuid,'${id(2)}',
- ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(4)}' FROM generate_series(100,107)n;
-INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,unit_price_cents,line_total_cents,quantity,design_disposition)
+ ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(4)}' FROM generate_series(100,108)n;
+-- 00808 backfills native rows and labels every insert; replica setup must
+-- preserve that invariant so a purchase status edit does not allocate a label.
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,doc_code,unit_price_cents,line_total_cents,quantity,design_disposition)
 SELECT ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(2)}','Presence race chair',
- ('f87e0000-0000-4000-8000-'||lpad((n+1000)::text,12,'0'))::uuid,100,100,1,'selected'
- FROM generate_series(100,107)n;
+ ('f87e0000-0000-4000-8000-'||lpad((n+1000)::text,12,'0'))::uuid,'RACE-'||n,100,100,1,'selected'
+ FROM generate_series(100,108)n;
+INSERT INTO public.products(id,name,captured_at,layer,owner_user_id,price_trade,price_retail,configuration_mode)
+VALUES('${id(600)}','Presence placement race',now(),'personal','${id(4)}',100,150,'standard');
+INSERT INTO public.product_configurations(id,product_id,owner_user_id,studio_id,project_id,version,schema_revision,
+ evaluation,snapshot,snapshot_hash,is_complete,is_valid,is_library_template,retail_price_cents,trade_price_cents)
+VALUES('${id(601)}','${id(600)}','${id(4)}','${id(10)}',NULL,1,1,'{}','{"selections":[]}',repeat('b',64),true,true,false,150,100);
 SET LOCAL session_replication_role=origin;
 COMMIT;`;
 
@@ -207,6 +214,35 @@ test('C5 conversion serializes pricing, retries, cancellation and installation',
   await contended(a,b,pid,`${begin(6)} ${expected(convert(104,503,1,'after-install'),'55000','fulfilment_terminal')} COMMIT;`);
   assert.equal(await a.query(`SELECT status='installed' AND row_version=3 AND unit_price_cents=0 AND line_total_cents=0
    FROM public.project_ffe_items WHERE id='${id(103)}';`),'t','verified installation advances bound item once; concurrent conversion refuses');
+
+  // Pause the actual placement wrapper's KEY SHARE + label prefix before
+  // its impl upgrades the project to SHARE. Conversion touches another item,
+  // so only the project/label order (not an item collision) can decide this.
+  await a.query(`${begin(4)} SELECT public._ffe_lock_job_labels('${id(2)}');`);
+  const afterPlacement = b.query(`${begin(6)} SELECT ${convert(108,508,1,'placement-first')}; COMMIT;`);
+  afterPlacement.catch(() => {});
+  let placed;
+  try {
+   await waitForBlock(a,pid);
+   placed = JSON.parse(await a.query(`SELECT public.place_product_configuration_in_project('${id(2)}','${id(601)}');`));
+   await a.query('COMMIT;');
+   const converted = JSON.parse(await afterPlacement);
+   assert.equal(converted.itemId,id(108),'conversion commits on the distinct existing item');
+  } catch (error) { a.kill(); b.kill(); await afterPlacement.catch(() => {}); throw error; }
+  assert.doesNotMatch(a.errors+b.errors,/40P01/i,'placement SHARE upgrade versus conversion never deadlocks');
+  const placedId = placed.selectionId ?? placed.ffeItemId;
+  assert.match(placedId,/^[a-f0-9-]{36}$/,'native placement returns a real item');
+  assert.notEqual(placedId,id(108),'placement and conversion use different items');
+  assert.equal(await a.query(`SELECT EXISTS(SELECT 1 FROM public.project_ffe_items item
+   JOIN public.project_ffe_specs spec ON spec.ffe_item_id=item.id
+   JOIN public.product_configurations config ON config.id=spec.configuration_id
+   WHERE item.id='${placedId}' AND item.project_id='${id(2)}' AND item.product_id='${id(600)}'
+    AND item.external_fulfilment_id IS NULL AND item.unit_price_cents=150 AND config.project_id='${id(2)}'
+    AND config.previous_configuration_id='${id(601)}' AND config.ffe_item_id=item.id)
+   AND EXISTS(SELECT 1 FROM public.project_ffe_items WHERE id='${id(108)}'
+    AND external_fulfilment_id='${id(508)}' AND unit_price_cents=0 AND line_total_cents=0)
+   AND (SELECT count(*)=1 FROM public.project_ffe_external_conversion_receipts WHERE item_id='${id(108)}');`),
+   't','placement clone and zero-valued conversion both persist exactly once');
 
   // Pause the native purchase immediately after its item-lock prefix. The
   // contender must hold the conversion project prelock while waiting for it;
