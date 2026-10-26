@@ -44,6 +44,7 @@ import {
 } from '@/lib/document/margin-derivation';
 import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
 import { MarginItemBody } from '../margin-bodies';
+import { flushSync } from 'react-dom';
 import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import { overdueStampLabel } from '@/lib/document/overdue-condition';
 import { openLedger } from '../command-bar';
@@ -148,7 +149,12 @@ function restoreSheetFocus(
   kind: keyof typeof SHEET_RETURN_FALLBACKS,
   captured: HTMLElement | null,
 ) {
+  const releasedFocus = document.activeElement;
+  const releasedUrl = window.location.href;
   window.requestAnimationFrame(() => {
+    // A navigation or reader movement hands focus to the next owner.
+    if (window.location.href !== releasedUrl) return;
+    if (document.activeElement !== releasedFocus && document.activeElement !== document.body) return;
     // A drawer action may replace this sheet with a DocSheet in the same
     // commit. That new modal owns focus; never pull it back to shell chrome.
     if (topActiveModalDialog()) return;
@@ -1083,6 +1089,7 @@ export function MobileSheets({
               projectId={projectId}
               clientName={activeDoc?.clientName ?? ''}
               decisionRows={allItems.filter((i) => i.kind === 'decision')}
+              onBeforeRoomOpen={() => flushSync(closeSheet)}
             />
           </div>
         )}

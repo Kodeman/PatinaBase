@@ -14,61 +14,83 @@ async function openNote(page: Page) {
     await page.getByRole('group', { name: 'In this document', exact: true }).getByRole('button', { name: /^Margin/ }).click();
     await page.locator('[data-margin-row]').filter({ hasText: 'N02 fictional observation' }).getByRole('button').first().click();
   } else {
-    const toggle = page.getByRole('complementary', { name: 'In the margin', exact: true })
-      .getByRole('button', { name: 'Note N02 fictional observation ABOUT THE WHOLE JOB', exact: true });
-    await toggle.click({ timeout: 30_000 });
+    await page.getByRole('complementary', { name: 'In the margin', exact: true })
+      .getByRole('button', { name: 'Note N02 fictional observation ABOUT THE WHOLE JOB', exact: true }).click({ timeout: 30_000 });
   }
   await expect(page.getByLabel('Note context')).toBeVisible();
 }
 
-test('mocked contextual Field payload returns to the recorded room and actual amendment trigger', async ({ authenticatedPage: page }, info) => {
-  test.setTimeout(240_000);
+async function mockedNote(page: Page, state: { visible: boolean; refused: boolean }) {
   const api = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
   expect(api.hostname).toBe('127.0.0.1');
-  let visible = true;
-  // Local API doubles exercise the mounted reader without applying inactive
-  // 00874 to the shared DB. F01 and all other reads use the live local stack.
-  const items = `${api.origin}/rest/v1/margin_items*`;
-  const notes = `${api.origin}/rest/v1/margin_notes*`;
-  await page.route(items, route => route.fulfill({ json: [{
+  // Only note reads are mocked: inactive 00874 is not applied to the shared DB.
+  await page.route(`${api.origin}/rest/v1/margin_items*`, route => route.fulfill({ json: [{
     kind: 'note', item_id: NOTE, project_id: JOB, proposal_id: null,
     anchor_kind: 'letterhead', anchor_id: null, state: 'open',
     title: 'N02 fictional observation', detail: '', ts: '2026-10-26T00:00:00Z',
     payload: { body: 'Fictional private Field observation', author_name: 'Fictional observer',
-      field_capture_id: 'f2066000-0000-4000-8000-000000000002', capture_visible: visible,
+      field_capture_id: 'f2066000-0000-4000-8000-000000000002', capture_visible: state.visible,
       project_room_id: ROOM, has_audio: false, photo_paths: [] },
   }] }));
-  await page.route(notes, route => route.fulfill({ json: [{
-    id: NOTE, project_id: JOB, subject_kind: 'plan_print', subject_id: 'recorded-print-only',
-  }] }));
-  try {
-    await openNote(page);
-    const context = page.getByLabel('Note context');
-    await expect(context).toContainText('plan print · recorded-print-only');
-    await expect(context.locator('dt').filter({ hasText: /^Issue$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('Not recorded');
-    await expect(page.getByText('Atomic escalation is unavailable.', { exact: true })).toBeVisible();
-    const shell = await page.locator('[data-document-shell]').elementHandle();
-    const amendment = page.getByRole('button', { name: '→ Amendment', exact: true });
-    // WebKit clicks need not focus a button: do not pre-focus this trigger.
-    await amendment.click();
-    await expect(page.getByRole('dialog').filter({ has: page.locator('[data-overlay-amendment]') })).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(amendment).toBeFocused();
-    expect(await shell!.evaluate(node => node === document.querySelector('[data-document-shell]'))).toBe(true);
-    await page.screenshot({ path: info.outputPath('context-return.png') });
-    await page.getByRole('link', { name: `Return to room · ${ROOM}`, exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`room=${ROOM}`));
-    await expect(page.locator('[data-testid="build-room"][data-build-room-embedded="true"]')).toBeVisible({ timeout: 30_000 });
+  await page.route(`${api.origin}/rest/v1/margin_notes*`, route => state.refused
+    ? route.fulfill({ status: 503, json: { message: 'Fictional metadata refusal' } })
+    : route.fulfill({ json: [{ id: NOTE, project_id: JOB, subject_kind: 'plan_print', subject_id: 'recorded-print-only' }] }));
+}
 
-    // A new read changes the visible metadata, never a private-capture lookup.
-    visible = false;
-    await openNote(page);
-    await expect(page.getByText('The capture is unavailable to you.', { exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: /^Return to room/ })).toHaveCount(0);
-    await expect(page.getByLabel('Note context')).toContainText('recorded-print-only');
-    await page.screenshot({ path: info.outputPath('capture-unavailable.png') });
-  } finally {
-    await page.unroute(items);
-    await page.unroute(notes);
-  }
+test('metadata refusal keeps the mounted note and announces unavailable context, not an empty margin', async ({ authenticatedPage: page }) => {
+  test.setTimeout(240_000);
+  await mockedNote(page, { visible: true, refused: true });
+  await openNote(page);
+  await expect(page.getByRole('status').filter({ hasText: 'Note context is unavailable' })).toBeVisible();
+  await expect(page.getByText('Fictional private Field observation', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Note context')).not.toContainText('recorded-print-only');
+});
+
+test('mocked contextual Field payload returns through the native room owner and actual amendment trigger', async ({ authenticatedPage: page }, info) => {
+  test.setTimeout(240_000);
+  const state = { visible: true, refused: false };
+  await mockedNote(page, state);
+  await openNote(page);
+  const context = page.getByLabel('Note context');
+  await expect(context).toContainText('plan print · recorded-print-only');
+  await expect(context.locator('dt').filter({ hasText: /^Issue$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('Not recorded');
+  const shell = await page.locator('[data-document-shell]').elementHandle();
+  const amendment = page.getByRole('button', { name: '→ Amendment', exact: true });
+  await amendment.click();
+  await expect(page.getByRole('dialog').filter({ has: page.locator('[data-overlay-amendment]') })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(amendment).toBeFocused();
+  const roomDoor = page.getByRole('link', { name: `Return to room · ${ROOM}`, exact: true });
+  await roomDoor.click();
+  await expect(page).toHaveURL(new RegExp(`room=${ROOM}`));
+  const room = page.locator('[data-testid="build-room"][data-build-room-embedded="true"]');
+  await expect(room).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[role="dialog"][aria-modal="true"]')).toHaveCount(0);
+  const heading = room.locator('h1, h2').first();
+  await heading.scrollIntoViewIfNeeded();
+  await expect.poll(() => heading.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return hit === node || node.contains(hit);
+  })).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(room).toHaveCount(0);
+  if ((page.viewportSize()?.width ?? 1440) >= 1180) await expect(roomDoor).toBeFocused();
+  expect(await shell!.evaluate(node => node === document.querySelector('[data-document-shell]'))).toBe(true);
+  await page.screenshot({ path: info.outputPath('room-return.png') });
+
+  state.visible = false;
+  await openNote(page);
+  await expect(page.getByText('The capture is unavailable to you.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Return to room/ })).toHaveCount(0);
+  await expect(page.getByLabel('Note context')).toContainText('recorded-print-only');
+});
+
+test('@renderer-off note room return lands on the existing pieces route', async ({ authenticatedPage: page }) => {
+  test.setTimeout(240_000);
+  await mockedNote(page, { visible: true, refused: false });
+  await openNote(page);
+  await page.getByRole('link', { name: `Return to room · ${ROOM}`, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/doc/${JOB}/pieces\\?lens=spec&room=${ROOM}`));
+  await expect(page.getByTestId('build-room')).toBeVisible({ timeout: 60_000 });
 });

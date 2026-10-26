@@ -4,6 +4,11 @@ import type { MarginItemRow } from '@/lib/document/margin-derivation';
 
 const mockEscalate = jest.fn();
 const mockMedia = jest.fn();
+const mockCompose = jest.fn();
+const mockOpenUnfold = jest.fn();
+let mockRenderer = 'round8';
+jest.mock('@/hooks/use-paper-renderer', () => ({ usePaperRenderer: () => ({ renderer: mockRenderer }) }));
+jest.mock('../../paper/unfold-instrument', () => ({ openUnfold: (...args: unknown[]) => mockOpenUnfold(...args) }));
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => ({ data: { id: 'project', name: 'Fictional house', proposal: null } }),
   useScopeChangeRequests: () => ({ data: [] }),
@@ -15,7 +20,7 @@ jest.mock('@/hooks/use-margin-notes', () => ({
   useEscalateNoteToDecision: () => ({ mutate: mockEscalate, isPending: false, isError: false }),
 }));
 jest.mock('@/hooks/use-amendments', () => ({
-  useComposeAmendment: () => ({ mutate: jest.fn(), isPending: false }),
+  useComposeAmendment: () => ({ mutate: mockCompose, isPending: false }),
   useSendAmendment: () => ({ mutate: jest.fn(), isPending: false }),
   useApplyAmendment: () => ({ mutate: jest.fn(), isPending: false }),
 }));
@@ -39,7 +44,7 @@ function value(label: string) {
   const term = within(screen.getByLabelText('Note context')).getByText(label, { selector: 'dt' });
   return term.nextElementSibling!;
 }
-beforeEach(() => { mockEscalate.mockClear(); mockMedia.mockClear(); });
+beforeEach(() => { mockEscalate.mockClear(); mockMedia.mockClear(); mockCompose.mockClear(); mockOpenUnfold.mockClear(); mockRenderer = 'round8'; });
 afterEach(() => jest.restoreAllMocks());
 
 describe('contextual Field reading', () => {
@@ -84,6 +89,41 @@ describe('contextual Field reading', () => {
     expect(screen.queryByText(/private-room/)).not.toBeInTheDocument();
   });
 
+  it('opens the native room owner with the actual clicked control', () => {
+    const before = jest.fn();
+    render(<NoteBody row={note({ subject_kind: 'project_room', subject_id: 'room' })} projectId="project" onBeforeRoomOpen={before} />);
+    const link = screen.getByRole('link');
+    fireEvent.click(link);
+    expect(before).toHaveBeenCalledTimes(1);
+    expect(mockOpenUnfold).toHaveBeenCalledWith(
+      { kind: 'pieces', lens: 'spec', room: 'room', line: null },
+      { documentId: 'project', chapter: 'ffe', room: 'room', lens: 'spec' }, link);
+  });
+
+  it('uses the existing pieces route under the legacy renderer', () => {
+    mockRenderer = 'legacy';
+    show({ subject_kind: 'project_room', subject_id: 'room' });
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/doc/project/pieces?lens=spec&room=room');
+    expect(mockOpenUnfold).not.toHaveBeenCalled();
+  });
+
+  it('shows metadata unavailability without dropping the note body', () => {
+    show({ context_unavailable: true, body: 'Retained observation', field_capture_id: 'capture' });
+    expect(screen.getByRole('status')).toHaveTextContent('Note context is unavailable');
+    expect(screen.getByText('Retained observation')).toBeVisible();
+  });
+
+  it('saves an unedited Amendment draft with no private note text', async () => {
+    const sentinel = 'PRIVATE FIELD NOTE MUST NOT LEAVE THE MARGIN';
+    show({ body: sentinel });
+    fireEvent.click(screen.getByRole('button', { name: '→ Amendment' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save as draft' }));
+    expect(mockCompose).toHaveBeenCalledTimes(1);
+    const payload = mockCompose.mock.calls[0][0];
+    expect(payload).toMatchObject({ title: 'Amendment from a studio note', description: '', noteId: 'note', send: false });
+    expect(JSON.stringify(payload)).not.toContain(sentinel);
+  });
+
   it('leaves absent legacy lineage explicitly unrecorded', () => {
     show({ author_name: 'Legacy author' });
     for (const label of ['Subject', 'Room', 'Print', 'Issue', 'Scope', 'Next owner']) {
@@ -106,7 +146,7 @@ describe('contextual Field reading', () => {
     expect(trigger).not.toHaveFocus();
     fireEvent.click(trigger);
     await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible());
-    expect(screen.getAllByDisplayValue('Retain the observation in a draft')).toHaveLength(2);
+    expect(screen.queryByDisplayValue('Retain the observation in a draft')).not.toBeInTheDocument();
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
     await waitFor(() => expect(trigger).toHaveFocus());
   });

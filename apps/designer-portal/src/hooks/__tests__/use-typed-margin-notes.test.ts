@@ -124,13 +124,14 @@ describe('typed margin note reads', () => {
     expect(notes.or).toHaveBeenCalledWith('project_id.eq.project');
   });
 
-  it('surfaces a refused metadata read rather than presenting an empty or fabricated subject', async () => {
+  it('retains margin rows with explicit context-unavailable signal when metadata is refused', async () => {
     const refusal = new Error('metadata read refused');
     mockFrom.mockImplementation((table: string) => table === 'margin_items' ? query([row]) : query(null, refusal));
     const { wrapper } = setup();
     const { result } = renderHook(() => useMarginItems('project', null), { wrapper });
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error).toBe(refusal);
-    expect(result.current.data).toBeUndefined();
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data?.[0]).toMatchObject({ item_id: 'note', payload: { body: 'private',
+      context_unavailable: true, subject_kind: null, subject_id: null } });
   });
 });
