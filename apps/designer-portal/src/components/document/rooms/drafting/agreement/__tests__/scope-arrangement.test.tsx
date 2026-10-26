@@ -104,10 +104,17 @@ describe("inactive scope arrangements", () => {
     expect(screen.getByText(/Inherited bindings unavailable/)).toBeVisible();
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
-  it.each(["edition-missing", "edition-source"])("does not invent bindings when source/package binding is absent (%s)", id => {
+  it("states the recorded source edition was not returned rather than claiming it has no bindings", () => {
+    render(<InheritedBindingReading state={{ status: "recorded", editions: [edition()] }} editionId="edition-missing" packageKey="pkg.kitchen" />);
+    expect(screen.getByText("Inherited bindings unavailable — the recorded source scope edition was not returned.")).toBeVisible();
+    expect(screen.queryByText(/source edition records no bindings/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+  });
+  it("states no bindings for this package only when the source edition was returned", () => {
     const source = edition(); source.phases[0].packageKey = "pkg.other";
-    render(<InheritedBindingReading state={{ status: "recorded", editions: [source] }} editionId={id} packageKey="pkg.kitchen" />);
+    render(<InheritedBindingReading state={{ status: "recorded", editions: [source] }} editionId="edition-source" packageKey="pkg.kitchen" />);
     expect(screen.getByText(/source edition records no bindings/)).toBeVisible();
+    expect(screen.queryByText(/source scope edition was not returned/)).not.toBeInTheDocument();
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
   it("distinguishes a loading reading from cold failure and supports retry", () => {
@@ -117,6 +124,17 @@ describe("inactive scope arrangements", () => {
     reading({ status: "error", error: new Error("refused") });
     view.rerender(<PartEditor part={part()} libraryOn readOnly={false} onChange={jest.fn()} scopeProjectId="job-1" inheritedScopeEditionId="edition-source" />);
     expect(screen.getByRole("alert")).toHaveTextContent("bindings are unknown");
+    fireEvent.click(screen.getByRole("button", { name: "Retry scope reading" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+  it("shows only the unknown-bindings alert and Retry after an empty-cache refetch error", () => {
+    const error = new Error("refresh refused");
+    reading({ status: "error", error }, error);
+    editor();
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("The source scope edition could not be read. Its bindings are unknown.");
+    expect(screen.queryByText(/last recorded bindings remain/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry scope reading" }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });

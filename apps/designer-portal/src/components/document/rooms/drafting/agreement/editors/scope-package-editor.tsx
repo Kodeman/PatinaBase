@@ -95,7 +95,7 @@ function InheritedScopeBindings({ projectId, editionId, packageKey }: {
   return <section aria-label="Inherited service bindings" className="space-y-2">
     <h3 className="t-head">Inherited service bindings · read-only</h3>
     <InheritedBindingReading state={query.editionState} editionId={editionId} packageKey={packageKey} />
-    {query.refetchError && <p role="alert">The scope refresh failed. The last recorded bindings remain below.</p>}
+    {query.editionState.status === "recorded" && query.refetchError && <p role="alert">The scope refresh failed. The last recorded bindings remain below.</p>}
     {(query.editionState.status === "error" || query.refetchError) && <button type="button" className="g-act g-act--tertiary" onClick={() => void query.refetch()}>Retry scope reading</button>}
   </section>;
 }
@@ -107,10 +107,11 @@ export function InheritedBindingReading({ state, editionId, packageKey }: {
   if (state.status === "error") return <p role="alert">The source scope edition could not be read. Its bindings are unknown.</p>;
   if (state.status !== "recorded") return <p className="t-meta">Inherited bindings unavailable — no recorded scope edition.</p>;
   const edition = state.editions.find((entry) => entry.id === editionId);
-  const bindings = edition?.phases.filter((phase) => phase.packageKey === packageKey && phase.serviceSlot != null) ?? [];
+  if (!edition) return <p className="t-meta">Inherited bindings unavailable — the recorded source scope edition was not returned.</p>;
+  const bindings = edition.phases.filter((phase) => phase.packageKey === packageKey && phase.serviceSlot != null);
   if (!bindings.length) return <p className="t-meta">Inherited bindings unavailable — the source edition records no bindings for this package.</p>;
   return <div>
-    <p className="t-meta">Scope edition {edition!.editionNumber} · {edition!.status}</p>
+    <p className="t-meta">Scope edition {edition.editionNumber} · {edition.status}</p>
     <ul className="t-body-sm">{bindings.map((phase) => <li key={phase.sourceProposalPhaseId}>
       {phase.serviceSlot === "design" ? "Design" : "Installation"} · phase {phase.sourceProposalPhaseId} · bound in edition {phase.boundInEdition}
     </li>)}</ul>
