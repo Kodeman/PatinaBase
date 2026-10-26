@@ -166,12 +166,96 @@ REVOKE ALL ON TABLE public.evidence_manifest_requests FROM PUBLIC, anon, authent
 GRANT SELECT ON TABLE public.evidence_manifests TO authenticated;
 GRANT SELECT ON TABLE public.evidence_manifest_requests TO authenticated;
 
+-- Native evidence is retained by relational RESTRICT FKs, including cascades.
+-- Only fixture teardown under session_replication_role=replica may bypass this.
+CREATE TABLE IF NOT EXISTS public.evidence_manifest_members (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ manifest_id uuid NOT NULL REFERENCES public.evidence_manifests(id) ON DELETE RESTRICT,
+ plan_issue_id uuid REFERENCES public.plan_issues(id) ON DELETE RESTRICT,
+ plan_issue_print_id uuid REFERENCES public.plan_issue_prints(id) ON DELETE RESTRICT,
+ plan_print_id uuid REFERENCES public.plan_prints(id) ON DELETE RESTRICT,
+ product_configuration_id uuid REFERENCES public.product_configurations(id) ON DELETE RESTRICT,
+ custom_commission_revision_id uuid REFERENCES public.custom_commission_revisions(id) ON DELETE RESTRICT,
+ review_item_id uuid REFERENCES public.project_review_items(id) ON DELETE RESTRICT,
+ approval_artifact_id uuid REFERENCES public.project_approval_artifacts(id) ON DELETE RESTRICT,
+ po_spec_snapshot_id uuid REFERENCES public.po_spec_snapshots(id) ON DELETE RESTRICT,
+ coordination_item_revision_id uuid REFERENCES public.coordination_item_revisions(id) ON DELETE RESTRICT,
+ CHECK (num_nonnulls(plan_issue_id,plan_issue_print_id,plan_print_id,product_configuration_id,custom_commission_revision_id,review_item_id,approval_artifact_id,po_spec_snapshot_id,coordination_item_revision_id)=1)
+);
+CREATE INDEX IF NOT EXISTS evidence_manifest_members_manifest ON public.evidence_manifest_members(manifest_id);
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_plan_issue_id ON public.evidence_manifest_members(plan_issue_id,manifest_id) WHERE plan_issue_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_plan_issue_print_id ON public.evidence_manifest_members(plan_issue_print_id,manifest_id) WHERE plan_issue_print_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_plan_print_id ON public.evidence_manifest_members(plan_print_id,manifest_id) WHERE plan_print_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_product_configuration_id ON public.evidence_manifest_members(product_configuration_id,manifest_id) WHERE product_configuration_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_custom_commission_revision_id ON public.evidence_manifest_members(custom_commission_revision_id,manifest_id) WHERE custom_commission_revision_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_review_item_id ON public.evidence_manifest_members(review_item_id,manifest_id) WHERE review_item_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_approval_artifact_id ON public.evidence_manifest_members(approval_artifact_id,manifest_id) WHERE approval_artifact_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_po_spec_snapshot_id ON public.evidence_manifest_members(po_spec_snapshot_id,manifest_id) WHERE po_spec_snapshot_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS evidence_manifest_members_coordination_item_revision_id ON public.evidence_manifest_members(coordination_item_revision_id,manifest_id) WHERE coordination_item_revision_id IS NOT NULL;
+ALTER TABLE public.evidence_manifest_members ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.evidence_manifest_members FROM PUBLIC, anon, authenticated, service_role;
+DROP TRIGGER IF EXISTS evidence_manifest_immutable ON public.evidence_manifest_members;
+CREATE TRIGGER evidence_manifest_immutable BEFORE UPDATE OR DELETE ON public.evidence_manifest_members
+ FOR EACH ROW EXECUTE FUNCTION public._plan_room_immutable_row();
+
+-- Do not lock parents from child triggers: mint already holds source FOR SHARE.
+-- Preserve native lifecycle-only configuration/revision updates; their content
+-- comparisons are the existing 00403 immutability comparisons.
+CREATE OR REPLACE FUNCTION public._guard_evidence_member_pinned()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE pinned boolean; ignored text[]:='{}';
+BEGIN
+ IF TG_OP='UPDATE' THEN
+  IF TG_TABLE_NAME='product_configurations' THEN
+   ignored:=ARRAY['status','name','updated_at','issued_at','is_library_template','promoted_at','ffe_item_id'];
+  ELSIF TG_TABLE_NAME='custom_commission_revisions' THEN
+   ignored:=ARRAY['status','issued_at','transition_note','updated_at'];
+  END IF;
+  IF (to_jsonb(NEW)-ignored) IS NOT DISTINCT FROM (to_jsonb(OLD)-ignored) THEN RETURN NEW; END IF;
+ END IF;
+ EXECUTE format('SELECT EXISTS(SELECT 1 FROM public.evidence_manifest_members WHERE %I=$1)',TG_ARGV[0])
+  INTO pinned USING OLD.id;
+ IF pinned THEN
+  RAISE EXCEPTION 'evidence_member_pinned' USING ERRCODE='object_not_in_prerequisite_state';
+ END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public._guard_evidence_member_pinned() FROM PUBLIC, anon, authenticated, service_role;
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.plan_issues;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.plan_issues
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('plan_issue_id');
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.plan_issue_prints;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.plan_issue_prints
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('plan_issue_print_id');
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.plan_prints;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.plan_prints
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('plan_print_id');
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.product_configurations;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.product_configurations
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('product_configuration_id');
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.custom_commission_revisions;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.custom_commission_revisions
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('custom_commission_revision_id');
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.project_review_items;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.project_review_items
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('review_item_id');
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.project_approval_artifacts;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.project_approval_artifacts
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('approval_artifact_id');
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.po_spec_snapshots;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.po_spec_snapshots
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('po_spec_snapshot_id');
+DROP TRIGGER IF EXISTS a_evidence_member_pinned ON public.coordination_item_revisions;
+CREATE TRIGGER a_evidence_member_pinned BEFORE UPDATE OR DELETE ON public.coordination_item_revisions
+ FOR EACH ROW EXECUTE FUNCTION public._guard_evidence_member_pinned('coordination_item_revision_id');
+
 -- Resolve and lock one native member. File hashes are re-read from immutable
 -- print rows; JSON snapshots use the native canonicalizer, never caller hashes.
 CREATE OR REPLACE FUNCTION public._evidence_manifest_member(p_project_id uuid,p_member jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE
- k text:=p_member->>'kind'; i uuid; r jsonb; j uuid; v jsonb; h text; frozen boolean:=true;
+ k text:=p_member->>'kind'; i uuid; r jsonb; j uuid; v jsonb; h text; v_configuration_id uuid; frozen boolean:=true;
 BEGIN
  IF jsonb_typeof(p_member) IS DISTINCT FROM 'object' THEN
   RAISE EXCEPTION 'manifest_member_invalid' USING ERRCODE='check_violation';
@@ -198,8 +282,10 @@ BEGIN
   h:=public._configuration_snapshot_hash(r->'snapshot');
   IF h IS DISTINCT FROM r->>'snapshot_hash' THEN frozen:=false; END IF;
  WHEN 'custom_commission_revision' THEN
-  SELECT to_jsonb(t),c.project_id INTO r,j FROM public.custom_commission_revisions t
-   JOIN public.product_configurations c ON c.id=t.configuration_id WHERE t.id=i FOR SHARE OF t,c;
+  SELECT t.configuration_id INTO v_configuration_id FROM public.custom_commission_revisions t WHERE t.id=i;
+  SELECT c.project_id INTO j FROM public.product_configurations c WHERE c.id=v_configuration_id FOR SHARE;
+  SELECT to_jsonb(t) INTO r FROM public.custom_commission_revisions t
+   WHERE t.id=i AND t.configuration_id=v_configuration_id FOR SHARE;
   v:=jsonb_build_object('rev',r->'revision_number'); frozen:=(r->>'status') IN ('approved','issued');
   h:=encode(extensions.digest(public._plan_room_canonical_json(jsonb_build_object(
    'configurationId',r->'configuration_id','revision',r->'revision_number',
@@ -251,6 +337,8 @@ BEGIN
  IF NOT FOUND OR NOT public.can_compose_project_plan(p_project_id) THEN
   RAISE EXCEPTION 'manifest_access_denied' USING ERRCODE='insufficient_privilege';
  END IF;
+ -- Shared C5 serialization precedes package/member locks (native placement 00808/00809).
+ PERFORM public._ffe_lock_job_labels(p_project_id);
  IF p_purpose IS NULL OR p_purpose NOT IN ('fabrication_instruction','service_acceptance','package_issue')
     OR p_idempotency_key IS NULL OR btrim(p_idempotency_key)='' OR jsonb_typeof(p_members) IS DISTINCT FROM 'array' THEN
   RAISE EXCEPTION 'manifest_request_invalid' USING ERRCODE='check_violation';
@@ -281,6 +369,20 @@ BEGIN
    VALUES(p_project_id,p_package_id,p_purpose,members,mh,rh,p_idempotency_key,auth.uid())
    ON CONFLICT DO NOTHING RETURNING * INTO manifest;
   minted:=FOUND;
+  IF minted THEN
+   INSERT INTO public.evidence_manifest_members(manifest_id,plan_issue_id,plan_issue_print_id,plan_print_id,product_configuration_id,custom_commission_revision_id,review_item_id,approval_artifact_id,po_spec_snapshot_id,coordination_item_revision_id)
+    SELECT manifest.id,
+     CASE WHEN value->>'kind'='plan_issue' THEN (value->>'id')::uuid END,
+     CASE WHEN value->>'kind'='plan_issue_print' THEN (value->>'id')::uuid END,
+     CASE WHEN value->>'kind'='plan_print' THEN (value->>'id')::uuid END,
+     CASE WHEN value->>'kind'='product_configuration' THEN (value->>'id')::uuid END,
+     CASE WHEN value->>'kind'='custom_commission_revision' THEN (value->>'id')::uuid END,
+     CASE WHEN value->>'kind'='review_item' THEN (value->>'id')::uuid END,
+     CASE WHEN value->>'kind'='approval_artifact' THEN (value->>'id')::uuid END,
+     CASE WHEN value->>'kind'='po_spec_snapshot' THEN (value->>'id')::uuid END,
+     CASE WHEN value->>'kind'='coordination_item_revision' THEN (value->>'id')::uuid END
+    FROM jsonb_array_elements(members);
+  END IF;
   IF NOT minted THEN
    -- A concurrent same-key call must be compared before accepting dedupe.
    SELECT * INTO receipt FROM public.evidence_manifest_requests WHERE project_id=p_project_id AND idempotency_key=p_idempotency_key;
