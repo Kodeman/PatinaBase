@@ -1,0 +1,48 @@
+-- Include-only: the wrapper must own BEGIN/ROLLBACK.
+-- Item-version checkpoint tests; the remaining C5 safety assertions are pending.
+CREATE FUNCTION pg_temp.presence_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
+ RAISE NOTICE 'PASS: %',label;
+END $$;
+
+SELECT pg_temp.presence_assert(EXISTS (
+ SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='project_ffe_items'
+ AND column_name='row_version' AND data_type='bigint' AND is_nullable='NO'),
+ 'item row version is a required bigint concurrency authority');
+SELECT pg_temp.presence_assert(NOT has_function_privilege('anon','public._ffe_bump_item_row_version()','EXECUTE')
+ AND NOT has_function_privilege('authenticated','public._ffe_bump_item_row_version()','EXECUTE')
+ AND NOT has_function_privilege('service_role','public._ffe_bump_item_row_version()','EXECUTE')
+ AND NOT EXISTS(SELECT 1 FROM aclexplode((SELECT proacl FROM pg_proc
+  WHERE oid='public._ffe_bump_item_row_version()'::regprocedure)) WHERE grantee=0 AND privilege_type='EXECUTE'),
+ 'item version helper is revoked from all API roles');
+SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM public.project_ffe_items
+ WHERE id='f8760000-0000-4000-8000-000000000001'), 'item version fixture namespace starts empty');
+
+-- Only seed setup bypasses native setup triggers; all measured updates below
+-- run with every native item trigger enabled and real parent rows present.
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+VALUES('f8760000-0000-4000-8000-000000000004','presence-version@test.invalid','',now(),now(),now(),'authenticated','authenticated');
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+VALUES('f8760000-0000-4000-8000-000000000004','presence-version@test.invalid','Presence version fixture',true);
+INSERT INTO public.projects(id,name,designer_id,created_by,status)
+VALUES('f8760000-0000-4000-8000-000000000002','Presence version fixture',
+ 'f8760000-0000-4000-8000-000000000004','f8760000-0000-4000-8000-000000000004','active');
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id)
+VALUES('f8760000-0000-4000-8000-000000000001','f8760000-0000-4000-8000-000000000002',
+ 'External presence version fixture','f8760000-0000-4000-8000-000000000003');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.presence_assert((SELECT row_version=1 FROM public.project_ffe_items
+ WHERE id='f8760000-0000-4000-8000-000000000001'), 'new item starts at version one');
+UPDATE public.project_ffe_items SET notes=notes WHERE id='f8760000-0000-4000-8000-000000000001';
+SELECT pg_temp.presence_assert((SELECT row_version=2 FROM public.project_ffe_items
+ WHERE id='f8760000-0000-4000-8000-000000000001'), 'no-op update advances item version');
+UPDATE public.project_ffe_items SET row_version=9000 WHERE id='f8760000-0000-4000-8000-000000000001';
+SELECT pg_temp.presence_assert((SELECT row_version=3 FROM public.project_ffe_items
+ WHERE id='f8760000-0000-4000-8000-000000000001'), 'caller-supplied update version is ignored');
+UPDATE public.project_ffe_items SET notes='native item edit' WHERE id='f8760000-0000-4000-8000-000000000001';
+SELECT pg_temp.presence_assert((SELECT row_version=4 AND notes='native item edit' FROM public.project_ffe_items
+ WHERE id='f8760000-0000-4000-8000-000000000001'), 'native item edit advances item version');
+SELECT pg_temp.presence_assert(NOT (SELECT enabled FROM public.server_capabilities WHERE key='scope_editions'),
+ 'scope capability remains inactive');
