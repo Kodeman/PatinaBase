@@ -11,11 +11,17 @@ async function openNote(page: Page) {
   await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
   if ((page.viewportSize()?.width ?? 1440) < 1180) {
     await page.getByRole('button', { name: 'More studio actions', exact: true }).click();
-    await page.getByRole('group', { name: 'In this document', exact: true }).getByRole('button', { name: /^Margin/ }).click();
-    await page.locator('[data-margin-row]').filter({ hasText: 'N02 fictional observation' }).getByRole('button').first().click();
+    const marginDoor = page.getByRole('group', { name: 'In this document', exact: true }).getByRole('button', { name: /^Margin/ });
+    await expect(marginDoor).toBeVisible({ timeout: 30_000 });
+    await marginDoor.click();
+    const noteDoor = page.locator('[data-margin-row]').filter({ hasText: 'N02 fictional observation' }).getByRole('button').first();
+    await expect(noteDoor).toBeVisible({ timeout: 30_000 });
+    await noteDoor.click();
   } else {
-    await page.getByRole('complementary', { name: /^(?:In the margin|Margin)$/ })
-      .getByRole('button', { name: 'Note N02 fictional observation ABOUT THE WHOLE JOB', exact: true }).click({ timeout: 30_000 });
+    const noteDoor = page.getByRole('complementary', { name: /^(?:In the margin|Margin)$/ })
+      .getByRole('button', { name: 'Note N02 fictional observation ABOUT THE WHOLE JOB', exact: true });
+    await expect(noteDoor).toBeVisible({ timeout: 30_000 });
+    await noteDoor.click();
   }
   await expect(page.getByLabel('Note context')).toBeVisible();
 }
@@ -66,6 +72,7 @@ test('mocked contextual Field payload returns through the native room owner and 
   const room = page.locator('[data-testid="build-room"][data-build-room-embedded="true"]');
   await expect(room).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('[role="dialog"][aria-modal="true"]')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
   const heading = room.locator('h1, h2').first();
   await heading.scrollIntoViewIfNeeded();
   await expect.poll(() => heading.evaluate(node => {
