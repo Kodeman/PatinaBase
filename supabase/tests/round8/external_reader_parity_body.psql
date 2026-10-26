@@ -96,7 +96,8 @@ INSERT INTO public.client_editions(id,project_id,seq,status,kind,composition,fac
 SELECT pg_temp.presence_id(8832),pg_temp.presence_id(2),1,'approved','full','{}',value,now()
  FROM reader_results WHERE key='editorial';
 SET LOCAL session_replication_role=replica;
-UPDATE public.project_ffe_items SET name='Changed after edition freeze' WHERE id=pg_temp.presence_id(14);
+UPDATE public.project_ffe_items SET name='Changed after edition freeze',external_fulfilment_id=NULL
+ WHERE id=pg_temp.presence_id(14);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.presence_actor(7);
 INSERT INTO reader_results VALUES('frozen',public.get_client_project_edition(pg_temp.presence_id(2)));
