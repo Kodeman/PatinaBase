@@ -574,8 +574,10 @@ describe('acknowledgment basis availability', () => {
   });
 
   it('holds a missing order instead of recording an empty matching acknowledgment', () => {
-    mockState.basis = undefined;
+    mockState.basis = { vendorId: null, projectId: null, requestedShipOn: null, lines: [] };
     render(<AckCheckForm purchaseOrderId="po-1" />);
+    expect(screen.queryByText('Everything agrees.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Everything agrees|confirmed as ordered/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Read the order before logging' }));
     expect(mockLog).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('before logging an acknowledgment');

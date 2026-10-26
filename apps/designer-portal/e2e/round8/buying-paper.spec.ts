@@ -94,6 +94,58 @@ test.describe('P01 native buying paper', () => {
     }
   });
 
+  test('initial line refusal retries; a warm refusal and retry keep the same live header draft', async ({ authenticatedPage: page }) => {
+    seed();
+    const route = `**/rest/v1/project_ffe_items?*purchase_order_id=eq.${id(101)}*`;
+    let fail = true;
+    let hold: (() => void) | undefined;
+    let intercepted = false;
+    let warm = false;
+    await page.route(route, async (request) => {
+      if (!fail) return request.continue();
+      if (warm) {
+        intercepted = true;
+        await new Promise<void>((resolve) => { hold = resolve; });
+      }
+      await request.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'P01 deliberate line refusal' }) });
+    });
+    try {
+      const ledger = await openOrders(page);
+      const draft = ledger.locator('[data-orders-po-row]').filter({ hasText: 'P01-DRAFT' });
+      await draft.getByRole('button', { name: 'Send →', exact: true }).click();
+      const paper = page.getByRole('dialog', { name: 'Purchase order P01-DRAFT', exact: true });
+      await expect(paper.getByRole('alert')).toContainText('The order lines could not be read.');
+      await expect(paper.getByLabel('Sidemark')).toHaveCount(0);
+      fail = false;
+      await paper.getByRole('button', { name: 'Read the order lines again' }).click();
+      const sidemark = paper.getByLabel('Sidemark');
+      await expect(sidemark).toBeVisible();
+      await sidemark.evaluate((node) => node.setAttribute('data-p01-retained', 'yes'));
+      // A native successful header write invalidates the line query. Hold its
+      // response until a newer visible draft exists, then refuse only that GET.
+      fail = true;
+      warm = true;
+      await sidemark.fill('P01-SAVED');
+      await sidemark.press('Tab');
+      await expect.poll(() => intercepted).toBe(true);
+      await sidemark.fill('P01-LIVE-DRAFT');
+      hold?.();
+      await expect(paper.getByRole('status')).toContainText('could not be refreshed');
+      await expect(sidemark).toHaveValue('P01-LIVE-DRAFT');
+      await expect(sidemark).toHaveAttribute('data-p01-retained', 'yes');
+      fail = false;
+      await paper.getByRole('button', { name: 'Read the order lines again' }).click();
+      await expect(paper.getByRole('status')).toHaveCount(0);
+      await expect(sidemark).toHaveValue('P01-LIVE-DRAFT');
+      await expect(sidemark).toHaveAttribute('data-p01-retained', 'yes');
+      expect(psqlScalar(`SELECT count(*) FROM public.purchase_orders WHERE id = '${id(101)}' AND sent_at IS NULL AND status = 'draft';`), 'header editing and read retry never send').toBe('1');
+    } finally {
+      hold?.();
+      if (!page.isClosed()) await page.unroute(route);
+      cleanup();
+    }
+  });
+
   test('an unavailable register is not an empty book and can retry the native read', async ({ authenticatedPage: page }) => {
     const route = '**/rest/v1/purchase_orders?*';
     let fail = true;

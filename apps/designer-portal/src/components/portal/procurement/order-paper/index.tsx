@@ -21,7 +21,7 @@
  * header write at once and the terminal act opens the shared review.
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useQueryClient } from '@tanstack/react-query';
@@ -267,7 +267,7 @@ function ExistingPaperLines({
         })),
     [items, purchaseOrder.id],
   );
-  if (isLoading || isError) {
+  if (items === undefined && (isLoading || isError)) {
     return (
       <DocSheet open title={`Purchase order ${purchaseOrder.po_number ?? ''}`.trim()} onClose={onClose} returnFocusTo={returnFocusTo}>
         {isError ? (
@@ -280,10 +280,16 @@ function ExistingPaperLines({
     );
   }
   return (
-    <OrderPaper
+    <PaperSheet
       open
       onClose={onClose}
       returnFocusTo={returnFocusTo}
+      readNotice={isError ? (
+        <div role="status" className="doc-type-body">
+          <p>The order lines could not be refreshed. The last read is still shown; your edits are kept.</p>
+          <button type="button" onClick={() => void refetch()}>Read the order lines again</button>
+        </div>
+      ) : null}
       vendor={vendor}
       project={{ id: purchaseOrder.project_id, name: projectName }}
       ffeItems={ffeItems}
@@ -315,7 +321,8 @@ function PaperSheet({
   purchaseOrder,
   queue,
   onCreated,
-}: OrderPaperProps) {
+  readNotice,
+}: OrderPaperProps & { readNotice?: ReactNode }) {
   const router = useRouter();
   const qc = useQueryClient();
   const alive = useRef(true);
@@ -876,6 +883,7 @@ function PaperSheet({
       kind="order-paper"
     >
       <div data-order-paper className="flex flex-col gap-5">
+        {readNotice}
         {/* Letterhead: the studio's, because this paper goes to a vendor. */}
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">

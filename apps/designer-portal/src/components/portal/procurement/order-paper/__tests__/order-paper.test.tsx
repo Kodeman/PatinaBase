@@ -17,7 +17,7 @@ const mockFetchPayments = jest.fn();
 const mockSetShipTo = jest.fn();
 const mockSetShipToLocation = jest.fn();
 const mockPush = jest.fn();
-const mockItems = { data: [] as Record<string, unknown>[], isLoading: false, isError: false, refetch: jest.fn() };
+const mockItems = { data: [] as Record<string, unknown>[] | undefined, isLoading: false, isError: false, refetch: jest.fn() };
 const mockCoverage: { data: Record<string, unknown> } = { data: {} };
 const mockQuotes: { data: unknown[] } = { data: [] };
 const mockPlacements: { data: { ffeItemId: string; projectRoomId: string }[] } = { data: [] };
@@ -180,8 +180,28 @@ describe('ExistingOrderPaper native line reads', () => {
   };
   const paper = () => <ExistingOrderPaper open onClose={jest.fn()} purchaseOrder={po} vendor={HEWN} projectName={PROJECT.name} />;
 
+  it('keeps the mounted header draft through a warm line refusal and retry, including cached empty lines', () => {
+    const { rerender } = render(paper());
+    const sidemark = screen.getByLabelText('Sidemark');
+    fireEvent.change(sidemark, { target: { value: 'A still-visible draft' } });
+    mockItems.isError = true;
+    rerender(paper());
+    expect(screen.getByLabelText('Sidemark')).toBe(sidemark);
+    expect(sidemark).toHaveValue('A still-visible draft');
+    expect(screen.getByRole('status')).toHaveTextContent('could not be refreshed');
+    fireEvent.click(screen.getByRole('button', { name: 'Read the order lines again' }));
+    expect(mockItems.refetch).toHaveBeenCalledTimes(1);
+    mockItems.isError = false;
+    mockItems.data = [{ ...SOFA, purchase_order_id: po.id }];
+    rerender(paper());
+    expect(screen.getByLabelText('Sidemark')).toBe(sidemark);
+    expect(sidemark).toHaveValue('A still-visible draft');
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it('does not offer order actions while its native line read is loading', () => {
     mockItems.isLoading = true;
+    mockItems.data = undefined;
     render(paper());
     expect(screen.getByRole('status')).toHaveTextContent('Reading the order lines…');
     expect(screen.queryByRole('button', { name: /Review for/ })).not.toBeInTheDocument();
@@ -190,6 +210,7 @@ describe('ExistingOrderPaper native line reads', () => {
 
   it('retries failed native line reads without exposing blank order actions', () => {
     mockItems.isError = true;
+    mockItems.data = undefined;
     const { rerender } = render(paper());
     expect(screen.getByRole('alert')).toHaveTextContent('The order lines could not be read.');
     expect(screen.queryByRole('button', { name: /Review for/ })).not.toBeInTheDocument();

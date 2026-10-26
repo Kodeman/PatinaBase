@@ -158,7 +158,8 @@ export function OrdersLedger({
   );
   // R18: send / resend through the shared preview-confirm.
   const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
-  const [paperPo, setPaperPo] = useState<AnyRecord | null>(null);
+  const [paperPoId, setPaperPoId] = useState<string | null>(null);
+  const paperPo = orders?.find((po) => po.id === paperPoId);
   const orderOpener = useRef<HTMLElement | null>(null);
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -642,7 +643,7 @@ export function OrdersLedger({
                           variant="secondary"
                           onClick={(event) => {
                             orderOpener.current = event.currentTarget;
-                            setPaperPo(po);
+                            setPaperPoId(po.id);
                           }}
                         >
                           Open →
@@ -852,7 +853,7 @@ export function OrdersLedger({
                                 (po.status === 'draft' ||
                                   po.status === 'held_for_release') &&
                                 !po.is_patina_catalog
-                                  ? setPaperPo(po)
+                                  ? setPaperPoId(po.id)
                                   : setPreviewPo(po);
                               }}
                             >
@@ -968,7 +969,7 @@ export function OrdersLedger({
           {paperPo && (
             <ExistingOrderPaper
               open
-              onClose={() => setPaperPo(null)}
+              onClose={() => setPaperPoId(null)}
               returnFocusTo={orderOpener.current}
               purchaseOrder={paperPo}
               vendor={

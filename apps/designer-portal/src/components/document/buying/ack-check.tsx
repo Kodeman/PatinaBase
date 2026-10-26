@@ -73,7 +73,7 @@ export function useAckBasis(purchaseOrderId: string | null | undefined) {
   );
   const isLoading = query.isLoading || costLines.isLoading;
   const isError = query.isError || costLines.isError;
-  const basis: AckBasis | undefined = !isLoading && !isError && query.data ? {
+  const basis: AckBasis | undefined = !isLoading && !isError && query.data?.projectId && query.data.vendorId ? {
     ...query.data,
     freightCents: freight.length
       ? freight.reduce((sum, l) => sum + (l.estimate_cents ?? 0), 0)
@@ -212,13 +212,13 @@ export function AckCheckForm({
   const setValue = (key: string, value: string) => setValues({ ...current, [key]: value });
 
   const confirm = async () => {
-    if (logAck.isPending || isLoading || isError || !basis || invalid) return;
+    if (logAck.isPending || isLoading || isError || !basis?.projectId || invalid) return;
     setError(null);
     try {
       const { ack, lines } = ackPayload(rows, current, { vendorOrderRef: poNo, confirmedEta: eta });
       await logAck.mutateAsync({
         purchaseOrderId,
-        projectId: basis?.projectId ?? '',
+        projectId: basis.projectId,
         ack,
         lines,
       });

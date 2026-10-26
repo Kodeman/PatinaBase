@@ -58,8 +58,8 @@ jest.mock('@/hooks/use-studio-money', () => ({
 
 // The paper's own suites live under order-paper/__tests__.
 jest.mock('@/components/portal/procurement/order-paper', () => ({
-  ExistingOrderPaper: ({ purchaseOrder }: { purchaseOrder: { id: string } }) => (
-    <div data-testid="order-paper">Paper {purchaseOrder.id}</div>
+  ExistingOrderPaper: ({ purchaseOrder, onClose }: { purchaseOrder: { id: string; sidemark?: string }; onClose: () => void }) => (
+    <div data-testid="order-paper">Paper {purchaseOrder.id} {purchaseOrder.sidemark}<button onClick={onClose}>Put paper back</button></div>
   ),
 }));
 
@@ -864,6 +864,20 @@ describe('OrdersLedger · Send the purchase order lands on its row (walk D3)', (
     const send = draftedSend();
     expect(send).toHaveTextContent('Send →');
     await waitFor(() => expect(document.activeElement).toBe(send));
+  });
+
+  it('uses the current native PO row after refetch and on reopening, not the clicked snapshot', () => {
+    const { rerender } = render(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    fireEvent.click(draftedSend()!);
+    const currentOrders = [...ORDERS, { ...DRAFTED, sidemark: 'Current row header' }];
+    mockUsePurchaseOrders.mockReturnValue({ data: currentOrders, isLoading: false, isError: true });
+    rerender(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    expect(screen.getByTestId('order-paper')).toHaveTextContent('Current row header');
+    mockUsePurchaseOrders.mockReturnValue({ data: currentOrders, isLoading: false, isError: false });
+    rerender(<OrdersLedger onClose={jest.fn()} initialContext={lensed} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Put paper back' }));
+    fireEvent.click(draftedSend()!);
+    expect(screen.getByTestId('order-paper')).toHaveTextContent('Current row header');
   });
 
   it('unarmed, the book opens without moving focus', async () => {
