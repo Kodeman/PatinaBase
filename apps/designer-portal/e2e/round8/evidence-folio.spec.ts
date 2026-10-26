@@ -3,12 +3,12 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { test, expect } from '../fixtures/auth';
 import { adminDb } from '../helpers/supabase-admin';
-import { psqlAsUserRow, psqlScalar } from '../helpers/psql';
+import { psqlAsUserRow, psqlScalar, psqlRun } from '../helpers/psql';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const DESIGNER = 'f0180000-0000-4000-8000-000000000002';
 const rpc = (sql: string) =>
-  JSON.parse(psqlAsUserRow(DESIGNER, `SELECT ${sql}::text;`)[0]);
+  JSON.parse(psqlAsUserRow(DESIGNER, `SELECT to_jsonb(${sql})::text;`)[0]);
 
 test('issued evidence stays frozen as current advances; private viewer retries and returns to its opener', async ({
   authenticatedPage: page,
@@ -56,6 +56,14 @@ test('issued evidence stays frozen as current advances; private viewer retries a
       print: printInput(0, bytes),
     });
     const { sheetId, printId } = filed.prints[0];
+    const roomId = psqlScalar(`SELECT id FROM project_rooms WHERE project_id='${JOB}' ORDER BY id LIMIT 1`);
+    expect(roomId, 'fixture has an exact room identity').toMatch(/^[0-9a-f-]{36}$/);
+    const pack = rpc(`public.create_project_package('${JOB}', 'cabinetry', 'D02-${info.project.name}', 'Fictional exact package', '${prefix}-package', '${roomId}', NULL)`);
+    const unrelated = rpc(`public.create_project_package('${JOB}', 'cabinetry', 'D02-other-${info.project.name}', 'Fictional lookalike package', '${prefix}-other', '${roomId}', NULL)`);
+    rpc(`public.set_plan_sheet_rooms('${sheetId}', ARRAY['${roomId}']::uuid[])`);
+    rpc(`public.set_plan_sheet_packages('${sheetId}', ARRAY['${pack.id}']::uuid[])`);
+    expect(psqlScalar(`SELECT package_id FROM plan_sheet_packages WHERE sheet_id='${sheetId}'`)).toBe(pack.id);
+    expect(psqlScalar(`SELECT count(*) FROM plan_sheet_packages WHERE sheet_id='${sheetId}' AND package_id='${unrelated.id}'`)).toBe('0');
     const issue = rpc(
       `public.create_plan_issue('${JOB}', 'D02 frozen ${info.project.name}', '${prefix}-issue')`,
     ).issue;
@@ -111,6 +119,10 @@ test('issued evidence stays frozen as current advances; private viewer retries a
       ),
     ).toBe('t');
 
+    // Mutate only our exact fixture sheet: an issued title must never follow this live label.
+    psqlRun(`UPDATE plan_sheets SET title='Fictional changed live title' WHERE id='${sheetId}' AND project_id='${JOB}';`);
+    const originalFiler = psqlScalar(`SELECT created_by FROM plan_prints WHERE id='${printId}'`);
+    expect(originalFiler).toBe(DESIGNER);
     const signedRequests: string[] = [];
     page.on('request', (request) => {
       if (request.url().includes('/storage/v1/object/sign/project-documents/'))
@@ -126,6 +138,11 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     await expect(page.locator('html')).not.toHaveClass(
       /\barr-(?:pre|on|press)\b/,
     );
+    const drawing = page.locator(`[data-drawing-sheet-id="${sheetId}"]`);
+    await expect(drawing).toContainText('Fictional exact package');
+    await expect(drawing).toContainText('Composition only · no agreed-scope key');
+    await expect(drawing).not.toContainText('Fictional lookalike package');
+    await expect(drawing).toContainText('Fictional changed live title');
     const history = page.getByRole('region', { name: 'Issued print history' });
     await expect(history).toBeVisible();
     const issueEntry = history
@@ -134,6 +151,9 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     await issueEntry.locator('summary').click();
     const print = issueEntry.locator(`[data-issued-print-id="${printId}"]`);
     await expect(print).toContainText('not current / superseded');
+    await expect(print).toContainText('Fictional evidence plan');
+    await expect(print).not.toContainText('Fictional changed live title');
+    await expect(print).toContainText(`Filed by ${originalFiler}`);
     await expect(print).toContainText(printInput(0, bytes).sha256);
     await expect(issueEntry).toContainText('receipt not confirmed');
     expect(
@@ -174,14 +194,47 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     await page.keyboard.press('Escape');
     await expect(viewer).toHaveCount(0);
     await expect(opener).toBeFocused();
+    await page.goto(`/doc/${JOB}/plans`, { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: /Fictional changed live title/ }).click();
+    const currentOpener = page.getByRole('button', { name: 'Open drawing revision', exact: true });
+    await currentOpener.click();
+    await expect(viewer).toBeVisible();
+    await viewer.getByRole('button', { name: 'Back to the document', exact: true }).click();
+    await expect(currentOpener).toBeFocused();
+    const historicalOpener = page.locator('[data-plan-print-row]').filter({ hasText: 'Rev A' }).getByRole('button', { name: 'Open revision', exact: true });
+    await historicalOpener.click();
+    await expect(viewer).toContainText('Fictional evidence plan');
+    await expect(viewer).not.toContainText('Fictional changed live title');
+    await page.keyboard.press('Escape');
+    await expect(historicalOpener).toBeFocused();
     expect(frozenRead()).toBe(frozen);
     console.log(
       '[D02 readback] frozen IDs/hash/metadata/recipient transmittals and private PDF bytes unchanged; current advanced',
     );
   } finally {
-    const { error } = await adminDb.storage
-      .from('project-documents')
-      .remove(paths);
-    if (error) throw error;
+    try {
+      psqlRun(`
+        BEGIN;
+        DELETE FROM plan_sheet_packages WHERE package_id IN (
+          SELECT id FROM project_packages WHERE project_id='${JOB}'
+          AND idempotency_key IN ('${prefix}-package', '${prefix}-other')
+        );
+        DELETE FROM plan_sheet_rooms WHERE sheet_id IN (
+          SELECT sheet_id FROM plan_prints WHERE batch_id IN (
+            SELECT id FROM plan_print_batches WHERE project_id='${JOB}'
+            AND idempotency_key='${prefix}-a'
+          )
+        );
+        DELETE FROM project_packages WHERE project_id='${JOB}'
+          AND idempotency_key IN ('${prefix}-package', '${prefix}-other');
+        COMMIT;
+      `);
+      expect(psqlScalar(`SELECT count(*) FROM project_packages WHERE project_id='${JOB}' AND idempotency_key IN ('${prefix}-package', '${prefix}-other')`), 'prefix-owned package residue').toBe('0');
+    } finally {
+      const { error } = await adminDb.storage
+        .from('project-documents')
+        .remove(paths);
+      if (error) throw error;
+    }
   }
 });

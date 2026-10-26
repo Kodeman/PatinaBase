@@ -12,7 +12,7 @@
  * sheet revises. The studio's own people reach every print regardless.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSetPlanSheetState, type PlanRoomBundle } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 import { planRoomEvents } from '@/lib/analytics/plan-room-events';
@@ -21,6 +21,7 @@ import { SectionEyebrow } from '../section-eyebrow';
 import { Stamp } from '../stamp';
 import { StatusChip } from '../status-chip';
 import { PlanPrintViewer } from './plan-print-viewer';
+import { PlanPrintProvenance, PlanSheetComposition } from './plan-room-set';
 
 export interface PlanSheetDetailProps {
   projectId: string;
@@ -38,6 +39,7 @@ export function PlanSheetDetail({
   onIssue,
 }: PlanSheetDetailProps) {
   const [openPrintId, setOpenPrintId] = useState<string | null>(null);
+  const printOpener = useRef<HTMLElement | null>(null);
   const [stateError, setStateError] = useState<string | null>(null);
   const setSheetState = useSetPlanSheetState(projectId);
 
@@ -63,6 +65,8 @@ export function PlanSheetDetail({
   const currentPrint = prints.find((print) => print.id === sheet.current_print_id) ?? null;
   const shared = sheet.state === 'shared';
   const openPrint = prints.find((print) => print.id === openPrintId) ?? null;
+
+  const openSnapshot = bundle.issuePrints.find((row) => row.print_id === openPrint?.id);
 
   const historyFor = (printId: string): string | null => {
     const issueIds = bundle.issuePrints
@@ -119,6 +123,7 @@ export function PlanSheetDetail({
           {currentPrint ? ` · current since ${fmtDay(currentPrint.created_at)}` : ''}
         </p>
 
+        <PlanSheetComposition bundle={bundle} sheetId={sheet.id} />
         <DocumentActionGroup
           surfaceKey="plan-room"
           regionKey="sheet-actions"
@@ -129,8 +134,9 @@ export function PlanSheetDetail({
             actionKey="open-current-print"
             variant="primary"
             disabled={!currentPrint}
-            onClick={() => {
+            onClick={(event) => {
               if (!currentPrint) return;
+              printOpener.current = event.currentTarget;
               planRoomEvents.printViewed({
                 project_id: projectId,
                 print_id: currentPrint.id,
@@ -225,6 +231,10 @@ export function PlanSheetDetail({
                     {print.source_filename ? ` · ${print.source_filename}` : ''} ·{' '}
                     <span title={print.sha256}>sha {print.sha256.slice(0, 8)}</span>
                   </p>
+                  <PlanPrintProvenance print={print} />
+                  {bundle.issuePrints.filter((row) => row.print_id === print.id).map((row) => (
+                    <p key={row.id} className="t-meta">Issued as {row.sheet_number} · {row.sheet_title}</p>
+                  ))}
                   {history && (
                     <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                       {history}
@@ -238,7 +248,8 @@ export function PlanSheetDetail({
                   <DocumentAction
                     actionKey="open-plan-print"
                     variant="tertiary"
-                    onClick={() => {
+                    onClick={(event) => {
+                      printOpener.current = event.currentTarget;
                       planRoomEvents.printViewed({
                         project_id: projectId,
                         print_id: print.id,
@@ -258,8 +269,10 @@ export function PlanSheetDetail({
 
       {openPrint && (
         <PlanPrintViewer
-          sheetNumber={sheet.sheet_number}
-          sheetTitle={sheet.title}
+          key={openPrint.id}
+          returnFocusTo={printOpener.current}
+          sheetNumber={openSnapshot?.sheet_number ?? sheet.sheet_number}
+          sheetTitle={openSnapshot?.sheet_title ?? (openPrint.id === sheet.current_print_id ? sheet.title : (openPrint.source_filename ?? 'Historical title not recorded'))}
           revLetter={openPrint.rev_letter}
           filedAt={openPrint.created_at}
           projectDocumentId={openPrint.project_document_id}
