@@ -62,7 +62,10 @@ export interface BuildRoomRoom {
   name: string;
 }
 
+type LineQueryState = ReturnType<typeof import("./line-query").lineQueryState>;
+
 export interface BuildRoomShellProps {
+  lineQuery?: LineQueryState;
   as?: "main" | "section";
   embedded?: boolean;
   /** Embedded hosts own the unfold history and restore its opening control. */
@@ -302,6 +305,7 @@ export function BuildRoomShell({
   room,
   canSeeMoney,
   surfaceCount = 0,
+  lineQuery,
   onNavigate,
   onReturn,
   onAddRoom,
@@ -545,7 +549,7 @@ export function BuildRoomShell({
           data-testid="build-room-place"
           className="hidden shrink-0 font-mono text-[12px] tabular-nums text-[var(--sheet-ink)] md:block"
         >
-          {summary}
+          {lineQuery?.total === null ? "Schedule total unknown" : summary}
         </p>
 
         {pickerOpen ? (
@@ -582,6 +586,7 @@ export function BuildRoomShell({
         {LENS_READING[activeLens]}
       </p>
 
+      {lineQuery && <LineQueryReading state={lineQuery} />}
       <div className="flex min-h-0 flex-1">
         <nav
           aria-label="Rooms"
@@ -616,6 +621,29 @@ export function BuildRoomShell({
         </Body>
       </div>
     </div>
+  );
+}
+
+/** Completeness belongs to the canonical query, not the currently scoped room. */
+export function LineQueryReading({ state }: { state: LineQueryState }) {
+  const count = state.total === null
+    ? "Schedule total unknown"
+    : "Whole schedule · " + state.total + (state.total === 1 ? " line" : " lines") + " · " + state.pages + (state.pages === 1 ? " page" : " pages");
+  const reading = state.error
+    ? "The schedule could not be refreshed."
+    : state.loading
+      ? "Reading the schedule…"
+      : state.refreshing
+        ? "Refreshing the schedule…"
+        : state.stale
+          ? "Showing the last complete schedule; not yet refreshed."
+          : "Schedule up to date.";
+  return (
+    <p role={state.error ? "alert" : "status"} data-line-query=""
+      className="px-4 py-2 text-[12px] text-[var(--sheet-ink-muted)]">
+      {count}. {state.error && state.total === null ? "The schedule could not be read." : reading}
+      {state.error && state.total !== null ? " Showing the last complete schedule." : null}
+    </p>
   );
 }
 

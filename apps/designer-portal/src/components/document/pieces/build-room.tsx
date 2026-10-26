@@ -15,7 +15,8 @@ import {
   useProjectRoomPlacements,
   useRemovedProjectLines,
 } from "@patina/supabase";
-import { BuildRoomShell } from "@/components/document/pieces/build-room-shell";
+import { lineQueryState } from "./line-query";
+import { LineQueryReading, BuildRoomShell } from "@/components/document/pieces/build-room-shell";
 import { PiecesSkeleton } from "@/components/loading";
 import {
   FinishesLens,
@@ -80,9 +81,9 @@ export function BuildRoom({
   const projectId = row?.project_id ?? null;
 
   const { data: rooms, isPending: roomsPending } = useDocumentRooms(projectId);
-  const { data: lines, isPending: linesPending } = useProjectFFEItems(
-    projectId ?? "",
-  );
+  const linesQuery = useProjectFFEItems(projectId ?? "");
+  const { data: lines, isPending: linesPending } = linesQuery;
+  const lineState = lineQueryState(linesQuery);
   const { data: placements, isPending: placementsPending } =
     useProjectRoomPlacements(projectId);
   const { data: removed } = useRemovedProjectLines(projectId ?? "");
@@ -164,13 +165,14 @@ export function BuildRoom({
   // yet", the room tables then landed above it (a 300px push) and the
   // placements then emptied it (CLS 0.18). The shaped placeholder holds until
   // all three have answered; a failed read stops holding.
-  if (roomsPending || linesPending || placementsPending) {
-    return <PiecesSkeleton />;
+  if (roomsPending || (linesPending && !lineState.error) || placementsPending) {
+    return <><LineQueryReading state={lineState} /><PiecesSkeleton /></>;
   }
 
   return (
     <BuildRoomShell
       embedded={embedded}
+      lineQuery={lineState}
       onRequestClose={onRequestClose}
       readerHasMoved={readerHasMoved}
       docId={docId}
@@ -186,6 +188,9 @@ export function BuildRoom({
       onReturn={onReturn}
       onAddRoom={onAddRoom}
     >
+      {lineState.total === null ? (
+        <button type="button" onClick={() => void linesQuery.refetch()}>Try again</button>
+      ) : <>
       {lens === "rough" ? (
         <RoughInLens
           docId={docId}
@@ -233,6 +238,7 @@ export function BuildRoom({
           canSeeMoney={canSeeMoney}
         />
       )}
+      </>}
     </BuildRoomShell>
   );
 }
