@@ -1,0 +1,133 @@
+-- Owned BEGIN/ROLLBACK supplied by *_isolated.psql or *_test.sql.
+CREATE FUNCTION pg_temp.billing_assert(ok boolean, name text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',name; END IF;
+  RAISE NOTICE 'PASS: %',name;
+END $$;
+CREATE FUNCTION pg_temp.billing_error(command text, state text, message text, name text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+  BEGIN EXECUTE command;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+  END;
+  PERFORM pg_temp.billing_assert(actual_state=state AND actual_message=message,
+    name||format(' [got %s/%s]',actual_state,actual_message));
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.billing_assert(boolean,text),pg_temp.billing_error(text,text,text,text) TO authenticated,service_role;
+
+-- Structural lock-order regression; runtime two-session proof is the separate N().
+DO $$ DECLARE draw text; issue text; guard text; BEGIN
+  draw:=pg_get_functiondef('public.issue_agreement_draw_invoice(uuid,text)'::regprocedure);
+  issue:=pg_get_functiondef('app_private.issue_invoice_for_actor(uuid,date,uuid)'::regprocedure);
+  guard:=pg_get_functiondef('public.set_invoice_studio_id()'::regprocedure);
+  PERFORM pg_temp.billing_assert(strpos(draw,'WHERE id = v_pinned_project_id FOR UPDATE')>0
+    AND strpos(draw,'WHERE id = v_pinned_project_id FOR UPDATE')<strpos(draw,'WHERE id = p_proposal_id FOR UPDATE'),
+    'draw pins project before proposal lock');
+  PERFORM pg_temp.billing_assert(strpos(draw,'v_proposal.project_id IS DISTINCT FROM v_pinned_proposal_project_id')>0
+    AND strpos(draw,'v_document.project_id IS DISTINCT FROM v_pinned_document_project_id')>0,
+    'draw refuses moved proposal and document anchors');
+  PERFORM pg_temp.billing_assert(strpos(issue,E'AND project.studio_id = v_project.studio_id\n  FOR UPDATE;')>0,
+    'private issuance serializes project without SHARE upgrade');
+  PERFORM pg_temp.billing_assert(strpos(issue,'SELECT proposal.* INTO v_proposal')<strpos(issue,'SELECT document.* INTO v_document'),
+    'private issuance locks proposal before executed service document');
+  PERFORM pg_temp.billing_assert(strpos(issue,'AND document.proposal_id = v_proposal.id')>0
+    AND strpos(issue,'AND document.document_kind = v_document_kind')>0,
+    'private issuance rechecks document topology under lock');
+  PERFORM pg_temp.billing_assert(strpos(guard,'v_immutable_update := true')>0
+    AND strpos(split_part(guard,'IF NOT v_immutable_update THEN',1),'FOR UPDATE')=0
+    AND strpos(split_part(guard,'IF NOT v_immutable_update THEN',1),'FOR SHARE')=0,
+    'invoice UPDATE guard takes no parent row locks');
+END $$;
+
+\ir billing_lock_order_fixture.psql
+SELECT set_config('request.jwt.claims','{"sub":"f8820000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.billing_error($q$SELECT public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','')$q$,
+ '42501','design-build draw not found or access denied','blank draw stays opaque');
+SELECT pg_temp.billing_error($q$SELECT public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000099','deposit')$q$,
+ '42501','design-build draw not found or access denied','missing draw stays opaque');
+SELECT set_config('request.jwt.claims','{"sub":"f8820000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+SELECT pg_temp.billing_error($q$SELECT public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','deposit')$q$,
+ '42501','design-build draw not found or access denied','foreign draw stays opaque');
+SELECT set_config('request.jwt.claims','{"sub":"f8820000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+SELECT pg_temp.billing_error($q$SELECT public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','rough_in')$q$,
+ '23514','earlier draws must be issued and paid before this one','prior draw payment gate unchanged');
+RESET ROLE;
+
+-- The sign-route machine caller can bill a project-less deposit, but nothing else.
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
+DO $$ DECLARE answer jsonb; BEGIN
+  answer:=public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000001','deposit');
+  PERFORM pg_temp.billing_assert((answer->>'netCents')::int=10000 AND answer->>'invoiceStatus'='sent'
+    AND length(answer->>'payToken')>0,'projectless signing deposit still issues and mints raw pay link');
+END $$;
+SELECT pg_temp.billing_error($q$SELECT public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','rough_in')$q$,
+ '42501','design-build draw not found or access denied','service caller cannot bill later draw');
+RESET ROLE;
+-- Deliberately corrupt only fixture topology to exercise the locked-anchor refusal.
+SET LOCAL session_replication_role=replica;
+UPDATE public.proposals SET project_id='f8824000-0000-4000-8000-000000000099'
+WHERE id='f8823000-0000-4000-8000-000000000002';
+SET LOCAL session_replication_role=origin;
+SELECT set_config('request.jwt.claims','{"sub":"f8820000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.billing_error($q$SELECT public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','deposit')$q$,
+ '42501','design-build draw not found or access denied','mismatched project anchors refuse before billing');
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+UPDATE public.proposals SET project_id='f8824000-0000-4000-8000-000000000001'
+WHERE id='f8823000-0000-4000-8000-000000000002';
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE answer jsonb; BEGIN
+  answer:=public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','deposit');
+  PERFORM pg_temp.billing_assert((answer->>'netCents')::int=10000 AND answer->>'invoiceStatus'='sent'
+    AND length(answer->>'payToken')>0,'existing-project draw still issues exact net and pay link');
+END $$;
+SELECT pg_temp.billing_error($q$SELECT public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','deposit')$q$,
+ '23514','the draw "Fixture deposit" is already billed on a live invoice','live invoice cannot double bill');
+RESET ROLE;
+
+-- Exercise the private countersign consumer using an executed service-document line.
+SELECT pg_temp.billing_error($q$SELECT app_private.issue_invoice_for_actor('f8826000-0000-4000-8000-000000000001',current_date,'f8820000-0000-4000-8000-000000000003')$q$,
+ '42501','issue_invoice: invoice not found or access denied','private foreign actor stays opaque');
+DO $$ DECLARE invoice public.invoices; BEGIN
+  invoice:=app_private.issue_invoice_for_actor('f8826000-0000-4000-8000-000000000001',current_date,
+    'f8820000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.billing_assert(invoice.status='sent' AND invoice.total_cents=2500 AND invoice.due_date=current_date,
+    'executed service-document invoice issues with unchanged arithmetic');
+END $$;
+SELECT pg_temp.billing_assert((SELECT count(*)=3 FROM public.invoices WHERE designer_id='f8820000-0000-4000-8000-000000000001'),
+ 'readback exactly three invoices with no duplicates');
+-- Trusted fixture transitions isolate the existing void/reissue and lower-paid rules.
+SET LOCAL session_replication_role=replica;
+UPDATE public.invoices SET status='void' WHERE id=(SELECT invoice_id FROM public.agreement_draw_invoices
+ WHERE proposal_id='f8823000-0000-4000-8000-000000000002' AND draw_key='deposit');
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE answer jsonb; old_invoice uuid; BEGIN
+  SELECT invoice_id INTO old_invoice FROM public.agreement_draw_invoices
+    WHERE proposal_id='f8823000-0000-4000-8000-000000000002' AND draw_key='deposit';
+  answer:=public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','deposit');
+  PERFORM pg_temp.billing_assert((answer->>'invoiceId')::uuid<>old_invoice AND (answer->>'netCents')::int=10000
+    AND (SELECT deposit_invoice_id=(answer->>'invoiceId')::uuid FROM public.project_commercial_documents
+      WHERE id='f8825000-0000-4000-8000-000000000002'),'void deposit reissues and repoints document');
+END $$;
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+UPDATE public.invoices SET status='paid',amount_paid_cents=total_cents,paid_at=now() WHERE id=(SELECT invoice_id
+ FROM public.agreement_draw_invoices WHERE proposal_id='f8823000-0000-4000-8000-000000000002' AND draw_key='deposit');
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE answer jsonb; BEGIN
+  answer:=public.issue_agreement_draw_invoice('f8823000-0000-4000-8000-000000000002','rough_in');
+  PERFORM pg_temp.billing_assert((answer->>'amountCents')::int=20000 AND (answer->>'retainageCents')::int=1000
+    AND (answer->>'netCents')::int=19000 AND (SELECT total_cents=19000 FROM public.invoices
+      WHERE id=(answer->>'invoiceId')::uuid),'paid lower draw permits exact retained net amount');
+END $$;
+RESET ROLE;
+SELECT pg_temp.billing_assert((SELECT NOT enabled FROM public.server_capabilities WHERE key='scope_editions'),
+ 'scope execution remains inactive');
