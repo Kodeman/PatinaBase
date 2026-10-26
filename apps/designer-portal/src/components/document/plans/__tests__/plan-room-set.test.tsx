@@ -3,6 +3,7 @@ import type { PlanRoomBundle } from '@patina/supabase';
 import { PlanRoomSet } from '../plan-room-set';
 
 jest.mock('@patina/supabase', () => ({
+  useProfile: () => ({ data: null }),
   useProjectRoster: () => ({ data: [] }),
   createBrowserClient: () => ({
     from: () => ({

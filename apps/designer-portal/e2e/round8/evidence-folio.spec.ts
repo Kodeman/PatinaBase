@@ -58,7 +58,7 @@ test('issued evidence stays frozen as current advances; private viewer retries a
     const { sheetId, printId } = filed.prints[0];
     const roomId = psqlScalar(`SELECT id FROM project_rooms WHERE project_id='${JOB}' ORDER BY id LIMIT 1`);
     const roomName = psqlScalar(`SELECT name FROM project_rooms WHERE id='${roomId}' AND project_id='${JOB}'`);
-    expect(roomName).toBe('Living room');
+    expect(roomName).toBe('Living Room');
     expect(roomId, 'fixture has an exact room identity').toMatch(/^[0-9a-f-]{36}$/);
     const pack = rpc(`public.create_project_package('${JOB}', 'cabinetry', 'D02-${info.project.name}', 'Fictional exact package', '${prefix}-package', '${roomId}', NULL)`);
     const unrelated = rpc(`public.create_project_package('${JOB}', 'cabinetry', 'D02-other-${info.project.name}', 'Fictional lookalike package', '${prefix}-other', '${roomId}', NULL)`);

@@ -20,6 +20,7 @@
 
 import { useRef, useState } from 'react';
 import {
+  useProfile,
   useProjectRoster,
   useReissuePlanTransmittalLink,
   useRevokePlanTransmittalLink,
@@ -67,7 +68,12 @@ function RevLetterBadge({ letter }: { letter: string | null }) {
 
 export function PlanPrintProvenance({ print, projectId }: { print: PlanPrint; projectId: string }) {
   const roster = useProjectRoster(projectId);
-  const filer = roster.data?.find((person) => person.profile_id === print.created_by)?.display_name?.trim();
+  const profile = useProfile();
+  const rosterName = roster.data?.find((person) => person.profile_id === print.created_by)?.display_name?.trim();
+  const ownName = profile.data?.id === print.created_by
+    ? profile.data?.display_name?.trim() || profile.data?.full_name?.trim()
+    : undefined;
+  const filer = rosterName || ownName;
   return (
     <span className="t-meta block break-words" data-print-filer={print.created_by ?? undefined}>
       Source: {print.source || 'not recorded'}

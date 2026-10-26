@@ -5,6 +5,7 @@ import { PlanSheetDetail } from '../plan-sheet-detail';
 import { DesignChapter } from '../../paper/chapters/design-chapter';
 
 jest.mock('@patina/supabase', () => ({
+  useProfile: () => ({ data: { id: 'signed-in-filer', display_name: '  Sam Studio  ', full_name: 'Samuel Studio' } }),
   useProjectRoster: () => ({ data: [
     { profile_id: 'original-filer', display_name: '  Morgan Maker  ' },
     { profile_id: 'new-lead', display_name: 'Leah Designer' },
@@ -141,6 +142,18 @@ it('uses neutral unavailable-room copy while retaining the exact link', () => {
   expect(container).toHaveTextContent('Room no longer on this job');
   expect(container).not.toHaveTextContent('room-a');
   expect(container.querySelector('[data-room-id="room-a"]')).not.toBeNull();
+});
+
+it('resolves the exact signed-in filer outside the project roster without relabeling other filers', () => {
+  const { container, rerender } = render(<PlanPrintProvenance projectId="job" print={{ ...mockBundle.prints[0], created_by: 'signed-in-filer' }} />);
+  expect(container).toHaveTextContent('Filed by Sam Studio');
+  expect(container).not.toHaveTextContent('signed-in-filer');
+  rerender(<PlanPrintProvenance projectId="job" print={mockBundle.prints[0]} />);
+  expect(container).toHaveTextContent('Filed by Morgan Maker');
+  expect(container).not.toHaveTextContent('Sam Studio');
+  rerender(<PlanPrintProvenance projectId="job" print={{ ...mockBundle.prints[0], created_by: 'missing-filer' }} />);
+  expect(container).toHaveTextContent('Filed by a person whose name is unavailable');
+  expect(container).not.toHaveTextContent('Sam Studio');
 });
 
 it.each([['missing-filer', 'Filed by a person whose name is unavailable'], [null, 'Filer not recorded']])(
