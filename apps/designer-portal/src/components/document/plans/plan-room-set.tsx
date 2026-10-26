@@ -23,6 +23,8 @@ import {
   useReissuePlanTransmittalLink,
   useRevokePlanTransmittalLink,
   type PlanRoomBundle,
+  type PlanPrint,
+  type Database,
 } from '@patina/supabase';
 import {
   deriveCurrentSet,
@@ -58,6 +60,55 @@ function RevLetterBadge({ letter }: { letter: string | null }) {
   return (
     <span className="inline-flex min-h-[22px] min-w-[22px] items-center justify-center border border-[var(--color-aged-oak)] px-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
       {letter ?? '—'}
+    </span>
+  );
+}
+
+export function PlanPrintProvenance({ print }: { print: PlanPrint }) {
+  return (
+    <span className="t-meta block break-words">
+      Source: {print.source || 'not recorded'}
+      {print.source_filename ? ` · ${print.source_filename}` : ''}
+      {' · '}Filed by {print.created_by ?? 'unrecorded actor'}
+    </span>
+  );
+}
+
+/** Present composition by IDs; these live links are not an issued manifest. */
+export function PlanSheetComposition({
+  bundle,
+  sheetId,
+  rooms = [],
+}: {
+  bundle: PlanRoomBundle;
+  sheetId: string;
+  rooms?: Database['public']['Tables']['project_rooms']['Row'][];
+}) {
+  const roomLinks = (bundle.sheetRooms ?? []).filter((row) => row.sheet_id === sheetId);
+  const packageLinks = (bundle.sheetPackages ?? []).filter((row) => row.sheet_id === sheetId);
+  return (
+    <span className="t-meta block break-words" data-sheet-composition={sheetId}>
+      <span className="block">
+        {roomLinks.length === 0 ? 'No room link · whole-job drawing' : 'Rooms: '}
+        {roomLinks.map((link, index) => (
+          <span key={link.project_room_id}>
+            {index > 0 ? ' · ' : ''}
+            {rooms.find((room) => room.id === link.project_room_id)?.name ?? `Linked room ${link.project_room_id}`}
+          </span>
+        ))}
+      </span>
+      {packageLinks.length === 0 && <span className="block">No package link</span>}
+      {packageLinks.map((link) => {
+        const pack = bundle.packages?.find((row) => row.id === link.package_id);
+        return (
+          <span className="block" key={link.package_id} data-package-id={link.package_id}>
+            {pack
+              ? `${pack.code} · ${pack.title}${pack.archived_at ? ' · Archived' : ''} · ${pack.package_key ?? 'Composition only · no agreed-scope key'}`
+              : 'Linked package unavailable'}
+          </span>
+        );
+      })}
+      <span className="block">Current composition · not an issued package or authority to fabricate</span>
     </span>
   );
 }
@@ -235,6 +286,7 @@ export function PlanRoomSet({
               <span className="line-clamp-2 text-[0.82rem] text-[var(--color-charcoal)]">
                 {row.title}
               </span>
+              <PlanSheetComposition bundle={bundle} sheetId={row.sheetId} />
               {held.length > 0 && (
                 <span className="mt-0.5 flex flex-col gap-0.5">
                   {held.map(({ holder, sheet }) => (
@@ -461,9 +513,10 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
                   const sheet = bundle.sheets.find(
                     (row) => row.id === print.sheet_id,
                   );
-                  const available = bundle.prints.some(
+                  const source = bundle.prints.find(
                     (row) => row.id === print.print_id,
                   );
+                  const available = Boolean(source);
                   return (
                     <li
                       key={print.id}
@@ -483,6 +536,7 @@ export function PlanIssueHistory({ bundle }: { bundle: PlanRoomBundle }) {
                       <p className="t-meta break-all">
                         Print {print.print_id} · SHA-256 {print.sha256}
                       </p>
+                      {source && <PlanPrintProvenance print={source} />}
                       <DocumentActionRow
                         surfaceKey="plan-room"
                         regionKey={print.id}

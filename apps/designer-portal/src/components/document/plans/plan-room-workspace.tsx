@@ -144,7 +144,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
 
   return (
     <main
-      className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]"
+      className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)] max-[1179px]:pb-[var(--doc-shell-bottom-inset,0px)]"
       onDragOver={(event) => {
         // Claim the event only for real files, so a drag inside the room (a
         // text selection, an image) still behaves normally.
