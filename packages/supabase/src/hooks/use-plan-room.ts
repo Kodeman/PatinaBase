@@ -105,7 +105,39 @@ export interface PlanTransmittalTokenSafe {
   created_at: string;
 }
 
+export interface ProjectPackage {
+  id: string;
+  project_id: string;
+  package_kind: 'cabinetry' | 'build';
+  code: string;
+  package_key: string | null;
+  title: string;
+  project_room_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  archived_at: string | null;
+  idempotency_key: string;
+  request_hash: string;
+}
+
+export interface PlanSheetRoom {
+  sheet_id: string;
+  project_room_id: string;
+  added_by: string | null;
+  added_at: string;
+}
+
+export interface PlanSheetPackage {
+  sheet_id: string;
+  package_id: string;
+  added_by: string | null;
+  added_at: string;
+}
+
 export interface PlanRoomBundle {
+  sheetRooms: PlanSheetRoom[];
+  sheetPackages: PlanSheetPackage[];
+  packages: ProjectPackage[];
   sheets: PlanSheet[];
   prints: PlanPrint[];
   batches: PlanPrintBatch[];
@@ -297,6 +329,9 @@ export function usePlanRoom(projectId: string) {
         issuePrintsResult,
         transmittalsResult,
         tokensResult,
+        sheetRoomsResult,
+        sheetPackagesResult,
+        packagesResult,
       ] = await Promise.all([
         // plan_prints / plan_issue_prints carry no project_id; scope through
         // their parents, with the zero-uuid sentinel keeping an empty IN valid.
@@ -333,6 +368,11 @@ export function usePlanRoom(projectId: string) {
             "id, transmittal_id, project_id, status, expires_at, first_opened_at, view_count, last_used_at, created_at",
           )
           .eq("project_id", projectId),
+        supabase.from("plan_sheet_rooms").select("*").in("sheet_id",
+          sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"]),
+        supabase.from("plan_sheet_packages").select("*").in("sheet_id",
+          sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"]),
+        supabase.from("project_packages").select("*").eq("project_id", projectId),
       ]);
       const firstError = [
         printsResult,
@@ -340,10 +380,16 @@ export function usePlanRoom(projectId: string) {
         issuePrintsResult,
         transmittalsResult,
         tokensResult,
+        sheetRoomsResult,
+        sheetPackagesResult,
+        packagesResult,
       ].find((result) => result.error)?.error;
       if (firstError) throw firstError;
 
       return {
+        sheetRooms: asArray<PlanSheetRoom>(sheetRoomsResult.data),
+        sheetPackages: asArray<PlanSheetPackage>(sheetPackagesResult.data),
+        packages: asArray<ProjectPackage>(packagesResult.data),
         sheets,
         prints: asArray<PlanPrint>(printsResult.data),
         batches: asArray<PlanPrintBatch>(batchesResult.data),
