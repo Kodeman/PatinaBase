@@ -18,6 +18,26 @@ ROLLBACK TO legacy_currency_guard;
 \ir external_presence_money_body.psql
 \ir external_presence_exit_body.psql
 
+SELECT pg_temp.presence_actor(4);
+SELECT pg_temp.presence_assert(public.get_project_ffe_readiness(pg_temp.presence_id(14))
+ =jsonb_build_object('selectionId',pg_temp.presence_id(14),'responsibility','external'),
+ 'reader external readiness has responsibility and no ordering checklist');
+SELECT pg_temp.presence_actor(7);
+SELECT pg_temp.presence_error($q$SELECT public.get_project_ffe_readiness(pg_temp.presence_id(14))$q$,
+ '42501',NULL,'reader external readiness retains studio authority before external branch');
+SELECT pg_temp.presence_actor(4);
+SELECT pg_temp.presence_assert(public.get_project_ffe_readiness(pg_temp.presence_id(15)) ? 'missingFields',
+ 'reader ordinary readiness retains native ordering checklist');
+SAVEPOINT external_closeout;
+SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM public.invoice_line_items
+ WHERE ffe_item_id=pg_temp.presence_id(523)) AND NOT EXISTS(SELECT 1 FROM public.studio_purchases
+ WHERE ffe_item_id=pg_temp.presence_id(523)), 'reader installed external line has no paid or payable row');
+SELECT public.close_project(pg_temp.presence_id(520),(SELECT jsonb_agg(jsonb_build_object('key',key,'completed',true))
+ FROM unnest(ARRAY['walkthrough','punch_list','payment','photography','photos','case_study']) key));
+SELECT pg_temp.presence_assert((SELECT status='completed' FROM public.projects WHERE id=pg_temp.presence_id(520)),
+ 'reader verified installed zero-price external work passes native closeout without studio payment');
+ROLLBACK TO external_closeout;
+
 -- An external allowance may retain planning metadata, but never studio money.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_ffe_items SET project_room_id=pg_temp.presence_id(426),assignment_scope='room',
@@ -55,6 +75,14 @@ SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM reader_results r,jsonb_array
  WHERE r.key='client' AND x->>'id'=pg_temp.presence_id(14)::text AND x->>'kind'='external'
  AND x->'clientLineTotalCents'='null'::jsonb AND x->'reportedPriceCents'='null'::jsonb),
  'reader threshold exposes external label without studio or private reported price');
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilments SET price_visibility='client_visible' WHERE id=pg_temp.presence_id(30);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM jsonb_array_elements(
+ public.get_client_project_threshold(pg_temp.presence_id(2))->'selections') x
+ WHERE x->>'id'=pg_temp.presence_id(14)::text AND x->>'reportedPriceCents'='7654321'
+ AND x->'clientLineTotalCents'='null'::jsonb),
+ 'reader client-visible reported price stays labelled and outside studio money');
 SELECT pg_temp.presence_actor(4);
 INSERT INTO reader_results VALUES('editorial',public._build_project_editorial(pg_temp.presence_id(2)));
 SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM reader_results r,jsonb_array_elements(r.value->'rooms') room,
@@ -63,6 +91,29 @@ SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM reader_results r,jsonb_array
  'reader frozen editorial preserves external presence without prices');
 SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM public.studio_purchases WHERE ffe_item_id=pg_temp.presence_id(14)),
  'reader matrix retains no studio payable for external line');
+-- The existing facts column, not a new budget snapshot or today's item row.
+INSERT INTO public.client_editions(id,project_id,seq,status,kind,composition,facts,approved_at)
+SELECT pg_temp.presence_id(8832),pg_temp.presence_id(2),1,'approved','full','{}',value,now()
+ FROM reader_results WHERE key='editorial';
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_ffe_items SET name='Changed after edition freeze' WHERE id=pg_temp.presence_id(14);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.presence_actor(7);
+INSERT INTO reader_results VALUES('frozen',public.get_client_project_edition(pg_temp.presence_id(2)));
+SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM reader_results r,jsonb_array_elements(r.value->'rooms') room,
+ jsonb_array_elements(room->'items') x WHERE r.key='frozen' AND x->>'id'=pg_temp.presence_id(14)::text
+ AND x->>'responsibility'='external' AND x->>'externalFulfilmentId'=pg_temp.presence_id(30)::text
+ AND x->>'nameAsSigned'<>'Changed after edition freeze' AND NOT(x ? 'reportedPriceCents')),
+ 'reader frozen edition retains external metadata and frozen words after live item changes');
+SAVEPOINT old_snapshot;
+UPDATE public.client_editions SET facts=jsonb_set(facts,'{rooms}',(SELECT jsonb_agg(jsonb_set(room,'{items}',
+ (SELECT jsonb_agg(item-ARRAY['responsibility','externalFulfilmentId']) FROM jsonb_array_elements(room->'items') item)))
+ FROM jsonb_array_elements(facts->'rooms') room)) WHERE id=pg_temp.presence_id(8832);
+SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM jsonb_array_elements(
+ public.get_client_project_edition(pg_temp.presence_id(2))->'rooms') room,jsonb_array_elements(room->'items') item
+ WHERE item ? 'responsibility' OR item ? 'externalFulfilmentId'),
+ 'reader old edition never fills absent external metadata from live rows');
+ROLLBACK TO old_snapshot;
 
 -- B02a real PostgreSQL oracle. Enclosing runner owns BEGIN/ROLLBACK.
 -- BEGIN shared assertion helpers
@@ -196,12 +247,12 @@ CREATE FUNCTION pg_temp.reader_job() RETURNS uuid LANGUAGE sql AS $$
 CREATE FUNCTION pg_temp.reader_external(request text) RETURNS jsonb LANGUAGE sql AS $$
  SELECT public.create_external_fulfilment(pg_temp.reader_job(),(SELECT id FROM public.project_scope_editions
  WHERE project_id=pg_temp.reader_job() AND status='active'),'pkg.kitchen','client_furnishing',ARRAY['chair'],NULL,NULL,request); $$;
-CREATE FUNCTION pg_temp.reader_amendment(payer text) RETURNS uuid LANGUAGE plpgsql AS $$
+CREATE FUNCTION pg_temp.reader_amendment(payer text,rail text DEFAULT 'payer') RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE draft jsonb; p uuid; parts jsonb;
 BEGIN
  draft:=public.create_service_addendum(pg_temp.reader_job(),'Reader amendment'); p:=(draft->>'proposalId')::uuid;
  PERFORM public.copy_agreement_parts_from_authority(p,'Reader amendment composition');
- SELECT jsonb_agg(CASE WHEN x->>'kind'='scope_package' THEN jsonb_set(x,'{payload,responsibilities,payer}',to_jsonb(payer))
+ SELECT jsonb_agg(CASE WHEN x->>'kind'='scope_package' THEN jsonb_set(x,ARRAY['payload','responsibilities',rail],to_jsonb(payer))
  ELSE x END ORDER BY ord) INTO parts FROM jsonb_array_elements(pg_temp.parts(p)) WITH ORDINALITY a(x,ord);
  PERFORM public.upsert_agreement_parts(p,parts,'Reader responsibility change');
  RETURN p;
@@ -224,6 +275,19 @@ SELECT pg_temp.reader_counter();
 SELECT pg_temp.assert_true((SELECT count(*)=2 FROM public.project_scope_editions WHERE project_id=pg_temp.reader_job()),
  'hold compatible amendment still executes with external binding');
 ROLLBACK TO compatible_amendment;
+SAVEPOINT incompatible_rails;
+INSERT INTO amendment_fixture VALUES('amendment',jsonb_build_object('proposalId',pg_temp.reader_amendment('studio','purchasing')));
+SELECT pg_temp.expect_error('SELECT pg_temp.reader_send()','23514','scope_amendment_external_binding_live',
+ 'hold purchasing studio refuses live binding');
+ROLLBACK TO incompatible_rails;
+INSERT INTO amendment_fixture VALUES('amendment',jsonb_build_object('proposalId',pg_temp.reader_amendment('studio','fabrication_contract')));
+SELECT pg_temp.expect_error('SELECT pg_temp.reader_send()','23514','scope_amendment_external_binding_live',
+ 'hold fabrication contract studio refuses live binding');
+ROLLBACK TO incompatible_rails;
+INSERT INTO amendment_fixture VALUES('amendment',jsonb_build_object('proposalId',pg_temp.reader_amendment('none')));
+SELECT pg_temp.expect_error('SELECT pg_temp.reader_send()','23514','scope_amendment_external_binding_live',
+ 'hold unknown payer refuses live binding');
+ROLLBACK TO incompatible_rails;
 INSERT INTO amendment_fixture VALUES('amendment',jsonb_build_object('proposalId',pg_temp.reader_amendment('studio')));
 SELECT pg_temp.expect_error('SELECT pg_temp.reader_send()','23514','scope_amendment_external_binding_live',
  'hold send refuses uncontracted live binding');
@@ -232,9 +296,36 @@ SELECT public.record_external_fulfilment_event((SELECT (value->>'fulfilmentId'):
  'contract_reported','{"contractAmountCents":100}',NULL,'reader-contract-send');
 SELECT pg_temp.expect_error('SELECT pg_temp.reader_send()','23514','scope_amendment_external_transfer_unowned',
  'hold send refuses contracted live transfer');
+SELECT pg_temp.actor(2);
+INSERT INTO amendment_fixture VALUES('cancellation',public.record_external_fulfilment_event(
+ (SELECT (value->>'fulfilmentId')::uuid FROM amendment_fixture WHERE key='external1'),
+ 'cancelled','{}',NULL,'reader-contracted-cancel'));
+SELECT pg_temp.actor(1);
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilments SET status='cancelled' WHERE id=
+ (SELECT (value->>'fulfilmentId')::uuid FROM amendment_fixture WHERE key='external1');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error('SELECT pg_temp.reader_send()','23514','scope_amendment_external_transfer_unowned',
+ 'hold reported contracted cancellation does not release transfer');
+SELECT public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM amendment_fixture WHERE key='cancellation'),
+ 'reader-verified-cancel');
+SELECT pg_temp.reader_send();
+SELECT pg_temp.assert_true((SELECT commercial_state='sent' FROM public.proposals WHERE id=pg_temp.reader_proposal()),
+ 'hold verified contracted cancellation with no live item permits send');
 ROLLBACK TO send_contract;
 SELECT public.record_external_fulfilment_event((SELECT (value->>'fulfilmentId')::uuid FROM amendment_fixture WHERE key='external1'),
  'cancelled','{}',NULL,'reader-cancel-first');
+SAVEPOINT cancelled_live_item;
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,scope_package_key,external_fulfilment_id,
+ unit_price_cents,line_total_cents,design_disposition)
+VALUES('f8830000-0000-4000-8000-000000000800',pg_temp.reader_job(),'Live cancelled external line',
+ 'f8830000-0000-4000-8000-000000000801','pkg.kitchen',
+ (SELECT (value->>'fulfilmentId')::uuid FROM amendment_fixture WHERE key='external1'),0,0,'selected');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error('SELECT pg_temp.reader_send()','23514','scope_amendment_external_binding_live',
+ 'hold cancelled fulfilment with live external item still blocks');
+ROLLBACK TO cancelled_live_item;
 SELECT pg_temp.send_and_sign(pg_temp.reader_proposal());
 INSERT INTO amendment_fixture VALUES('external2',pg_temp.reader_external('reader-external2'));
 SELECT pg_temp.expect_error('SELECT pg_temp.reader_counter()','23514','scope_amendment_external_binding_live',
