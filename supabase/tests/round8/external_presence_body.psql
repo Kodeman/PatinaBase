@@ -6,6 +6,10 @@ BEGIN
  RAISE NOTICE 'PASS: %',label;
 END $$;
 
+SELECT pg_temp.presence_assert(
+ strpos(pg_get_functiondef('public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text)'::regprocedure),
+  'FROM public.projects WHERE id=project FOR NO KEY UPDATE;')>0,
+ 'conversion project prelock permits purchase FK KEY SHARE before the item lock');
 SELECT pg_temp.presence_assert(EXISTS (
  SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='project_ffe_items'
  AND column_name='row_version' AND data_type='bigint' AND is_nullable='NO'),

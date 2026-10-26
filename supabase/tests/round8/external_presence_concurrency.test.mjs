@@ -101,6 +101,9 @@ const actor = n => `DO $actor$ BEGIN PERFORM set_config('request.jwt.claim.sub',
 const begin = n => `BEGIN; ${actor(n)}`;
 const convert = (item, fulfilment, version, key) =>
  `public.set_ffe_item_external_fulfilment('${id(item)}','${id(fulfilment)}',${version},'${key}')`;
+const purchase = item => `public.record_studio_purchase(jsonb_build_object(
+ 'projectId','${id(2)}','ffeItemId','${id(item)}','kind','antique_auction',
+ 'payeeName','Presence race supplier','amountCents',100))`;
 const expected = (expression, state, message) => `DO $expected$ DECLARE s text; m text; BEGIN
  BEGIN PERFORM ${expression};
  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS s=RETURNED_SQLSTATE,m=MESSAGE_TEXT; END;
@@ -134,14 +137,14 @@ INSERT INTO public.project_external_fulfilments(id,project_id,scope_edition_id,p
  buyer_party_kind,payer_party_kind,contracting_party_kind,created_by,client_request_id,request_hash)
 SELECT ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(2)}','${id(20)}','pkg.chairs',
  ARRAY['chair-'||n],'client_furnishing','gc','gc','gc','${id(4)}','fixture-'||n,'fixture'
- FROM generate_series(500,505)n;
+ FROM generate_series(500,507)n;
 INSERT INTO public.project_ffe_selection_threads(id,project_id,primary_ffe_item_id,created_by)
 SELECT ('f87e0000-0000-4000-8000-'||lpad((n+1000)::text,12,'0'))::uuid,'${id(2)}',
- ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(4)}' FROM generate_series(100,105)n;
+ ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(4)}' FROM generate_series(100,107)n;
 INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,unit_price_cents,line_total_cents,quantity,design_disposition)
 SELECT ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(2)}','Presence race chair',
  ('f87e0000-0000-4000-8000-'||lpad((n+1000)::text,12,'0'))::uuid,100,100,1,'selected'
- FROM generate_series(100,105)n;
+ FROM generate_series(100,107)n;
 SET LOCAL session_replication_role=origin;
 COMMIT;`;
 
@@ -204,6 +207,31 @@ test('C5 conversion serializes pricing, retries, cancellation and installation',
   await contended(a,b,pid,`${begin(6)} ${expected(convert(104,503,1,'after-install'),'55000','fulfilment_terminal')} COMMIT;`);
   assert.equal(await a.query(`SELECT status='installed' AND row_version=3 AND unit_price_cents=0 AND line_total_cents=0
    FROM public.project_ffe_items WHERE id='${id(103)}';`),'t','verified installation advances bound item once; concurrent conversion refuses');
+
+  // Pause the native purchase immediately after its item-lock prefix. The
+  // contender must hold the conversion project prelock while waiting for it;
+  // the purchase's immediate project FK must still be able to take KEY SHARE.
+  await a.query(`${begin(6)} SELECT id FROM public.project_ffe_items WHERE id='${id(106)}' FOR UPDATE;`);
+  const afterPurchase = b.query(`${begin(6)} ${expected(convert(106,506,1,'purchase-first'),'40001','external_conversion_version_conflict')} COMMIT;`);
+  afterPurchase.catch(() => {});
+  try {
+   await waitForBlock(a,pid);
+   await a.query(`SELECT ${purchase(106)}; COMMIT;`);
+   await afterPurchase;
+  } catch (error) { a.kill(); b.kill(); await afterPurchase.catch(() => {}); throw error; }
+  assert.doesNotMatch(a.errors+b.errors,/40P01/i,'purchase-versus-conversion never deadlocks');
+  assert.equal(await a.query(`SELECT external_fulfilment_id IS NULL AND status='ordered'
+   AND (SELECT count(*)=1 FROM public.studio_purchases WHERE ffe_item_id='${id(106)}')
+   AND NOT EXISTS(SELECT 1 FROM public.project_ffe_external_conversion_receipts WHERE item_id='${id(106)}')
+   FROM public.project_ffe_items WHERE id='${id(106)}';`),'t','purchase alone wins; blocked conversion has a typed version refusal');
+
+  await a.query(`${begin(6)} SELECT ${convert(107,507,1,'before-purchase')};`);
+  await contended(a,b,pid,`${begin(6)} ${expected(purchase(107),'23514','external_presence_studio_purchase_refused')} COMMIT;`);
+  assert.doesNotMatch(a.errors+b.errors,/40P01/i,'conversion-versus-purchase never deadlocks');
+  assert.equal(await a.query(`SELECT external_fulfilment_id='${id(507)}'
+   AND NOT EXISTS(SELECT 1 FROM public.studio_purchases WHERE ffe_item_id='${id(107)}')
+   AND (SELECT count(*)=1 FROM public.project_ffe_external_conversion_receipts WHERE item_id='${id(107)}')
+   FROM public.project_ffe_items WHERE id='${id(107)}';`),'t','conversion alone wins; blocked purchase has a typed external refusal');
 
   await a.query(`${begin(6)} SELECT ${convert(105,505,1,'same-receipt')};`);
   const replay = b.query(`${begin(6)} SELECT (${convert(105,505,1,'same-receipt')}->>'replayed')::boolean; COMMIT;`);

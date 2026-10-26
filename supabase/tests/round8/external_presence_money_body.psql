@@ -105,11 +105,16 @@ SELECT pg_temp.presence_assert((SELECT (result->>'itemCount')::integer=1 FROM pr
  JOIN public.project_ffe_items i ON i.id=a.source_ffe_item_id
  WHERE i.id=pg_temp.presence_id(41) AND a.client_line_total_cents=i.line_total_cents),
  'native non-external draft preserves the exact priced schedule snapshot');
+CREATE TEMP TABLE presence_send_review AS
+ SELECT public._commercial_document_fingerprint(pg_temp.presence_id(430)) AS fingerprint;
+GRANT SELECT ON presence_send_review TO authenticated;
+CREATE TEMP TABLE presence_labor_before AS
+ SELECT count(*) AS children FROM public.project_ffe_items WHERE parent_ffe_item_id=pg_temp.presence_id(14);
 SET LOCAL ROLE authenticated;
-SELECT pg_temp.presence_error($q$SELECT public.send_commercial_document(pg_temp.presence_id(430),'unused-external-fingerprint')$q$,
+SELECT pg_temp.presence_error($q$SELECT public.send_commercial_document(pg_temp.presence_id(430),(SELECT fingerprint FROM presence_send_review))$q$,
  '23514','external_presence_authorization_refused','native send refuses an old priced external snapshot before dispatch');
 SELECT pg_temp.presence_actor(7);
-SELECT pg_temp.presence_error($q$SELECT public.send_commercial_document(pg_temp.presence_id(430),'unused-external-fingerprint')$q$,
+SELECT pg_temp.presence_error($q$SELECT public.send_commercial_document(pg_temp.presence_id(430),(SELECT fingerprint FROM presence_send_review))$q$,
  '42501','not found or access denied','send preserves native client-versus-author access before external refusal');
 SELECT pg_temp.presence_actor(7);
 SELECT pg_temp.presence_error($q$SELECT public.execute_furnishings_authorization(pg_temp.presence_id(431),'Presence Client')$q$,
@@ -117,12 +122,14 @@ SELECT pg_temp.presence_error($q$SELECT public.execute_furnishings_authorization
 SELECT pg_temp.presence_actor(6);
 SELECT pg_temp.presence_error($q$SELECT public.execute_furnishings_authorization_on_paper(pg_temp.presence_id(431),'Presence Client',current_date,NULL,NULL)$q$,
  '23514','external_presence_authorization_refused','native paper execution refuses external snapshot before signature or deposit');
-SELECT pg_temp.presence_error($q$SELECT public.add_labor_line(pg_temp.presence_id(14),'{}',0)$q$,
+SELECT pg_temp.presence_error($q$SELECT public.add_labor_line(pg_temp.presence_id(14),'{"name":"External refused labor"}',0)$q$,
  '23514','external_presence_labor_parent_refused','external parent cannot acquire studio labor even with zero price');
 SELECT pg_temp.presence_actor(5);
-SELECT pg_temp.presence_error($q$SELECT public.add_labor_line(pg_temp.presence_id(14),'{}',0)$q$,
+SELECT pg_temp.presence_error($q$SELECT public.add_labor_line(pg_temp.presence_id(14),'{"name":"External refused labor"}',0)$q$,
  '42501','project not found or access denied','labor constructor preserves native project access first');
 RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT count(*) FROM public.project_ffe_items WHERE parent_ffe_item_id=pg_temp.presence_id(14))
+ =(SELECT children FROM presence_labor_before), 'external labor refusal creates no child line');
 SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM public.commercial_document_signatures WHERE proposal_id=pg_temp.presence_id(431))
  AND NOT EXISTS(SELECT 1 FROM public.proposal_send_dispatches WHERE proposal_id=pg_temp.presence_id(430))
  AND NOT EXISTS(SELECT 1 FROM public.invoices WHERE project_id=pg_temp.presence_id(2) AND id<>pg_temp.presence_id(320))

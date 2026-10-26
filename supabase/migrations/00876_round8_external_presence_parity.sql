@@ -279,7 +279,9 @@ BEGIN
  IF p_client_request_id IS NULL OR length(btrim(p_client_request_id))=0 THEN
   RAISE EXCEPTION 'external_conversion_request_required' USING ERRCODE='check_violation';
  END IF;
- PERFORM 1 FROM public.projects WHERE id=project FOR UPDATE;
+ -- Keep lifecycle/authority writers excluded, but allow FK KEY SHARE from a
+ -- purchase already holding the item; its item lock decides the winner.
+ PERFORM 1 FROM public.projects WHERE id=project FOR NO KEY UPDATE;
  PERFORM public._ffe_lock_job_labels(project);
  h:=encode(extensions.digest(jsonb_build_array(p_item_id,p_fulfilment_id,p_row_version)::text,'sha256'),'hex');
  SELECT * INTO receipt FROM public.project_ffe_external_conversion_receipts
@@ -509,8 +511,9 @@ BEGIN
  IF e.event_kind='installed' THEN
   PERFORM set_config('patina.external_install_event',e.id::text,true);
   PERFORM set_config('app.ffe_mutation_rpc','on',true);
+  -- Retained archived identities must already be installed when restored.
   UPDATE public.project_ffe_items SET status='installed'
-   WHERE external_fulfilment_id=f.id AND removed_at IS NULL AND status IS DISTINCT FROM 'installed';
+   WHERE external_fulfilment_id=f.id AND status IS DISTINCT FROM 'installed';
   PERFORM set_config('app.ffe_mutation_rpc',COALESCE(mutation_marker,''),true);
   PERFORM set_config('patina.external_install_event',COALESCE(install_marker,''),true);
  END IF;
