@@ -139,6 +139,71 @@ describe('readiness batch transport', () => {
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['batch', 'singleton'])('rejects a wrong nested selection ID on %s transport', async (transport) => {
+    respond((name) => name.endsWith('_batch')
+      ? transport === 'batch'
+        ? { data: [{ selectionId: 'a', readiness: ready('b'), error: null }], error: null }
+        : { data: null, error: unavailable }
+      : { data: ready('b'), error: null });
+    await expect(options(['a']).queryFn()).rejects.toThrow('Authoritative FF&E readiness was not returned');
+    expect(rpc).toHaveBeenCalledTimes(transport === 'batch' ? 1 : 2);
+  });
+
+  it('rejects the two-row overwrite response without returning partial readiness', async () => {
+    respond(() => ({ data: [
+      { selectionId: 'a', readiness: ready('a'), error: null },
+      { selectionId: 'b', readiness: { ...ready('a'), ready: true, missingFields: [] }, error: null },
+    ], error: null }));
+    await expect(options(['a', 'b']).queryFn()).rejects.toThrow('Authoritative FF&E readiness was not returned');
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains matching not-ready rows and their authoritative consumer map identities', async () => {
+    const rows = [ready('a'), { ...ready('b'), responsibility: { kind: 'external' }, checklist: null }];
+    respond(() => ({ data: rows.map((readiness) => ({ selectionId: readiness.selectionId, readiness, error: null })), error: null }));
+    const result = await options(['b', 'a']).queryFn() as typeof rows;
+    expect(result).toEqual(rows);
+    expect([...new Map(result.map((row) => [row.selectionId, row])).entries()]).toEqual([
+      ['a', rows[0]], ['b', rows[1]],
+    ]);
+    expect(result.every((row) => row.ready === false)).toBe(true);
+  });
+
+  describe.each(['batch', 'singleton'])('%s UUID identity', (transport) => {
+    const canonical = 'aabbccdd-1234-5678-90ab-aabbccddeeff';
+    it.each([
+      canonical,
+      canonical.toUpperCase(),
+      `{${canonical}}`,
+      'AABBCCDD1234567890ABAABBCCDDEEFF',
+      '{AABB-CCDD-1234-5678-90AB-AABB-CCDD-EEFF}',
+      'aabbccdd-1234567890ab-aabbccddeeff',
+    ])('accepts native UUID spelling %s without relabelling singleton output', async (input) => {
+      const payload = { ...ready(canonical), responsibility: { kind: 'external' }, checklist: null };
+      respond((name) => name.endsWith('_batch')
+        ? transport === 'batch'
+          ? { data: [{ selectionId: input, readiness: payload, error: null }], error: null }
+          : { data: null, error: unavailable }
+        : { data: payload, error: null });
+      await expect(options([input]).queryFn()).resolves.toEqual([payload]);
+      expect(rpc).toHaveBeenCalledTimes(transport === 'batch' ? 1 : 2);
+      expect(rpc).toHaveBeenCalledWith('get_project_ffe_readiness_batch', { p_ffe_item_ids: [input] });
+      if (transport === 'singleton') {
+        expect(rpc).toHaveBeenCalledWith('get_project_ffe_readiness', { p_ffe_item_id: input });
+      }
+    });
+
+    it('rejects a different UUID rather than relabelling its readiness', async () => {
+      const payload = ready('aabbccdd-1234-5678-90ab-aabbccddee00');
+      respond((name) => name.endsWith('_batch')
+        ? transport === 'batch'
+          ? { data: [{ selectionId: canonical, readiness: payload, error: null }], error: null }
+          : { data: null, error: unavailable }
+        : { data: payload, error: null });
+      await expect(options([canonical]).queryFn()).rejects.toThrow('Authoritative FF&E readiness was not returned');
+    });
+  });
+
   it('falls back only for the remaining IDs if a later batch becomes unavailable', async () => {
     const ids = idsFor(201);
     respond((name, args) => name.endsWith('_batch')

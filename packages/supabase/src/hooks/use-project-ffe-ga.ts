@@ -71,9 +71,18 @@ function normalizePlacement(data: unknown): PlaceProductInProjectResult {
   };
 }
 
-function normalizeReadiness(data: unknown): ProjectFfeReadiness {
+function readinessIdentity(selectionId: string): string {
+  // PostgreSQL UUID input allows braces and optional hyphens after four digits.
+  const uuid = selectionId.replace(/^\{(.*)\}$/, '$1');
+  return /^(?:[0-9a-f]{4}-?){7}[0-9a-f]{4}$/i.test(uuid)
+    ? uuid.replace(/-/g, '').toLowerCase()
+    : selectionId;
+}
+
+function normalizeReadiness(data: unknown, selectionId: string): ProjectFfeReadiness {
   const row = (data ?? {}) as JsonRecord;
-  if (typeof row.selectionId !== 'string' || typeof row.ready !== 'boolean') {
+  if (typeof row.selectionId !== 'string' || typeof row.ready !== 'boolean'
+    || readinessIdentity(row.selectionId) !== readinessIdentity(selectionId)) {
     throw new Error('Authoritative FF&E readiness was not returned');
   }
   return {
@@ -96,7 +105,7 @@ function normalizeReadinessBatch(data: unknown, ids: readonly string[]): Project
       throw new Error('Authoritative FF&E readiness batch was not returned');
     }
     if (row.error !== null) throw row.error;
-    return normalizeReadiness(row.readiness);
+    return normalizeReadiness(row.readiness, ids[index]);
   });
 }
 
@@ -140,7 +149,7 @@ export function useProjectFfeReadiness(selectionIds: readonly string[]) {
             p_ffe_item_id: ids[index],
           });
           if (error) throw error;
-          results[index] = normalizeReadiness(data);
+          results[index] = normalizeReadiness(data, ids[index]);
         }
       };
       await Promise.all(
