@@ -1,12 +1,13 @@
 -- 00876 — C5 external presence safety and item concurrency authority.
 -- Builds on 00875 external fulfilments and the native FF&E pricing writers.
 -- Ruling #198: spec versions are optional overlays, not item edit authority.
--- This checkpoint adds assignment, immutable conversion receipts (ruling #206),
--- native pricing preservation, cancellation and verified-install safety.
--- Commercial writer grafts below preserve their native bodies. The full native
--- census, exit coverage and concurrency harness remain required before submission;
--- no mutation RPC is activated here. Native graft lineage: pricing lock 00809;
--- record/verify external events 00875. Other native bytes stay intact.
+-- Adds assignment, immutable conversion receipts (ruling #206), native pricing
+-- preservation, cancellation, restore and verified-install safety. Commercial
+-- writer grafts below preserve their native bodies. Bounded monetary census is
+-- retained in verification/SQ-2069/resume7-monetary-census.json; reader parity is
+-- SQ-2127. The N harness awaits the W3-exit committed-state DB window.
+-- No mutation RPC is activated here. Native graft lineage: pricing lock 00809;
+-- restore 00808 via shared binding trigger; record/verify external events 00875.
 ALTER TABLE public.project_ffe_items
   ADD COLUMN IF NOT EXISTS row_version bigint NOT NULL DEFAULT 1;
 
@@ -99,6 +100,23 @@ BEGIN
       WHERE f.id=NEW.external_fulfilment_id AND f.project_id=NEW.project_id
         AND f.package_key=NEW.scope_package_key) THEN
       RAISE EXCEPTION 'external_presence_binding_mismatch' USING ERRCODE='check_violation';
+    END IF;
+    -- Native restore (00808) holds the job-label lock before item locks, as do
+    -- cancellation and edition writers. Recheck responsibility without reversing
+    -- that lock order; archiving remains an exit act and keeps its native policy.
+    IF TG_OP='UPDATE' AND OLD.removed_at IS NOT NULL AND NEW.removed_at IS NULL THEN
+      IF current_user<>pg_get_userbyid((SELECT proowner FROM pg_proc
+        WHERE oid='public.restore_project_selection(uuid)'::regprocedure))
+        OR COALESCE(current_setting('app.ffe_mutation_rpc',true),'')<>'on' THEN
+        RAISE EXCEPTION 'external_presence_restore_rpc_required' USING ERRCODE='insufficient_privilege';
+      END IF;
+      PERFORM public._assert_scope_composition_enabled();
+      PERFORM public._external_assert_access(NEW.project_id);
+      PERFORM public._external_assert_active(NEW.project_id,NEW.scope_package_key);
+      IF EXISTS(SELECT 1 FROM public.project_external_fulfilments f
+        WHERE f.id=NEW.external_fulfilment_id AND f.status='cancelled') THEN
+        RAISE EXCEPTION 'external_presence_cancelled_restore_refused' USING ERRCODE='check_violation';
+      END IF;
     END IF;
     IF NEW.status='installed' AND (TG_OP='INSERT' OR OLD.status IS DISTINCT FROM NEW.status)
       AND NOT (current_user=pg_get_userbyid((SELECT proowner FROM pg_proc
