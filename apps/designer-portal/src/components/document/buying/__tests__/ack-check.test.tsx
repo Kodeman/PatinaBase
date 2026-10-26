@@ -9,12 +9,18 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 
 const mockLog = jest.fn();
 const mockResolve = jest.fn();
+const mockRefetchBasis = jest.fn();
+const mockRefetchCosts = jest.fn();
 const mockState: {
   basis: Record<string, unknown> | undefined;
+  basisLoading: boolean;
+  basisError: boolean;
+  costsLoading: boolean;
+  costsError: boolean;
   acks: Record<string, unknown>[];
   costLines: Record<string, unknown>[];
   quotes: Record<string, unknown>[];
-} = { basis: undefined, acks: [], costLines: [], quotes: [] };
+} = { basis: undefined, basisLoading: false, basisError: false, costsLoading: false, costsError: false, acks: [], costLines: [], quotes: [] };
 
 jest.mock('@patina/supabase', () => ({
   isChangeOrderRequired: (error: { message?: unknown } | null) =>
@@ -22,9 +28,9 @@ jest.mock('@patina/supabase', () => ({
   poAckBasisKey: (id: string) => ['buying-phase2', 'ack-basis', id],
   useLogPoAcknowledgment: () => ({ mutateAsync: mockLog, isPending: false }),
   useResolveAckLine: () => ({ mutateAsync: mockResolve, isPending: false }),
-  usePoAckBasis: () => ({ data: mockState.basis, isLoading: false, isError: false }),
+  usePoAckBasis: () => ({ data: mockState.basis, isLoading: mockState.basisLoading, isError: mockState.basisError, refetch: mockRefetchBasis }),
   usePoAcknowledgments: (id: string | null) => ({ data: id ? mockState.acks : undefined }),
-  usePoCostLines: () => ({ data: mockState.costLines }),
+  usePoCostLines: () => ({ data: mockState.costLines, isLoading: mockState.costsLoading, isError: mockState.costsError, refetch: mockRefetchCosts }),
   useVendorQuotes: () => ({ data: mockState.quotes }),
   useProcurementDrafts: () => ({ data: [] }),
 }));
@@ -113,6 +119,9 @@ beforeEach(() => {
   mockLog.mockReset().mockResolvedValue({ id: 'ack-1', purchase_order_id: 'po-1' });
   mockResolve.mockReset().mockResolvedValue({});
   mockState.basis = { ...BASIS, freightCents: undefined };
+  mockState.basisLoading = mockState.basisError = mockState.costsLoading = mockState.costsError = false;
+  mockRefetchBasis.mockReset().mockResolvedValue({});
+  mockRefetchCosts.mockReset().mockResolvedValue({});
   mockState.acks = [];
   mockState.costLines = [{ kind: 'freight', estimate_cents: 42000 }];
   mockState.quotes = [];
@@ -533,5 +542,42 @@ describe('flag off — the form stands open as today', () => {
     expect(screen.getByTestId('line-po-cell')).toHaveTextContent(
       `Sent to vendor ${fmtDay(SENT)} · awaiting acknowledgment`,
     );
+  });
+});
+
+
+describe('acknowledgment basis availability', () => {
+  it.each(['basisError', 'costsError'] as const)('holds logging and any agreement claim when %s, then retries both native reads', async (failure) => {
+    mockState[failure] = true;
+    const { rerender } = render(<AckCheckForm purchaseOrderId="po-1" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('order details or freight could not be read');
+    fireEvent.click(screen.getByRole('button', { name: 'Read the order before logging' }));
+    expect(mockLog).not.toHaveBeenCalled();
+    expect(screen.queryByText('Everything agrees.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Read the order again' }));
+    expect(mockRefetchBasis).toHaveBeenCalledTimes(1);
+    expect(mockRefetchCosts).toHaveBeenCalledTimes(1);
+    mockState[failure] = false;
+    rerender(<AckCheckForm purchaseOrderId="po-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Everything agrees — log it' }));
+    await waitFor(() => expect(mockLog).toHaveBeenCalledTimes(1));
+    expect(mockLog.mock.calls[0][0].lines).not.toHaveLength(0);
+  });
+
+  it.each(['basisLoading', 'costsLoading'] as const)('does not log an incomplete comparison while %s', (loading) => {
+    mockState[loading] = true;
+    render(<AckCheckForm purchaseOrderId="po-1" />);
+    expect(screen.getByText('Reading the order…')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Read the order before logging' }));
+    expect(mockLog).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('ack-check-summary')).not.toBeInTheDocument();
+  });
+
+  it('holds a missing order instead of recording an empty matching acknowledgment', () => {
+    mockState.basis = undefined;
+    render(<AckCheckForm purchaseOrderId="po-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Read the order before logging' }));
+    expect(mockLog).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('before logging an acknowledgment');
   });
 });

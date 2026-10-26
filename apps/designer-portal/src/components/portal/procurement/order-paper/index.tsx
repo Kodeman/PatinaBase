@@ -120,6 +120,7 @@ export interface OrderPaperQueuePosition {
 export interface OrderPaperProps {
   open: boolean;
   onClose: () => void;
+  returnFocusTo?: HTMLElement | null;
   vendor: OrderPaperVendor;
   project: OrderPaperProject;
   ffeItems: OrderPaperFFEItem[];
@@ -219,6 +220,7 @@ export function OrderPaperQueue({
 export function ExistingOrderPaper(props: {
   open: boolean;
   onClose: () => void;
+  returnFocusTo?: HTMLElement | null;
   purchaseOrder: OrderPaperPurchaseOrder;
   vendor: OrderPaperVendor;
   projectName: string;
@@ -232,11 +234,13 @@ type ItemRow = Record<string, any>;
 
 function ExistingPaperLines({
   onClose,
+  returnFocusTo,
   purchaseOrder,
   vendor,
   projectName,
 }: {
   onClose: () => void;
+  returnFocusTo?: HTMLElement | null;
   purchaseOrder: OrderPaperPurchaseOrder;
   vendor: OrderPaperVendor;
   projectName: string;
@@ -264,6 +268,7 @@ function ExistingPaperLines({
     <OrderPaper
       open
       onClose={onClose}
+      returnFocusTo={returnFocusTo}
       vendor={vendor}
       project={{ id: purchaseOrder.project_id, name: projectName }}
       ffeItems={ffeItems}
@@ -288,6 +293,7 @@ function shipToBlocksSend(isPatinaMaker: boolean, hasShipTo: boolean, forBuyer: 
 
 function PaperSheet({
   onClose,
+  returnFocusTo,
   vendor,
   project,
   ffeItems,
@@ -437,6 +443,7 @@ function PaperSheet({
   const shipToFixId = useId();
   const [shipToInvalid, setShipToInvalid] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const previewOpener = useRef<HTMLElement | null>(null);
   // Maker lane: payment not started, or deferred inside a queue.
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [deferredPaymentId, setDeferredPaymentId] = useState<string | null>(null);
@@ -846,6 +853,7 @@ function PaperSheet({
     <DocSheet
       open
       onClose={() => !busy && onClose()}
+      returnFocusTo={returnFocusTo}
       title={existing?.po_number ? `Purchase order ${existing.po_number}` : 'The order paper'}
       pageLabel={runningHead}
       icon={FileText}
@@ -1187,7 +1195,10 @@ function PaperSheet({
                   held={terminalHeld}
                   aria-describedby={terminalHeld ? 'order-paper-held-reason' : undefined}
                   holds={shipToHolds}
-                  onClick={() => prepareReviewOrMark('send')}
+                  onClick={(event) => {
+                    previewOpener.current = event.currentTarget;
+                    void prepareReviewOrMark('send');
+                  }}
                 >
                   {label}
                 </DocumentAction>
@@ -1280,7 +1291,10 @@ function PaperSheet({
                   regionKey="secondary"
                   variant="tertiary"
                   disabled={busy !== null}
-                  onClick={() => setPreviewOpen(true)}
+                  onClick={(event) => {
+                    previewOpener.current = event.currentTarget;
+                    setPreviewOpen(true);
+                  }}
                 >
                   See the PDF
                 </DocumentAction>
@@ -1306,6 +1320,7 @@ function PaperSheet({
         <PoPreview
           open={previewOpen}
           onOpenChange={setPreviewOpen}
+          returnFocusTo={previewOpener.current}
           purchaseOrderId={poId}
           vendorName={vendor.name}
           vendorEmailHint={clientVendorEmailHint(vendor)}
