@@ -72,6 +72,8 @@ let projectsOverride: Array<Record<string, unknown>> | null = null;
 let invoicesOverride: Array<Record<string, unknown>> | null = null;
 /** m4-r4 — whether the invoice-number lookup answers or fails. */
 let invoicesFail = false;
+let weekReadState: ReadState = 'ready';
+let unbilledReadFails = false;
 
 /** Each money read's settle state — a figure must never precede an answer. */
 type ReadState = 'ready' | 'pending' | 'error';
@@ -189,10 +191,17 @@ function makeClient() {
         if (table === 'invoices') return invoicesOverride ?? [];
         return [];
       };
+      if (table === 'project_time_entries' && weekReadState === 'pending') {
+        const pending: Record<string, unknown> = { then: () => new Promise(() => {}) };
+        for (const method of ['select', 'eq', 'gte', 'lt', 'not', 'order']) pending[method] = () => pending;
+        return pending;
+      }
       const builder: Record<string, unknown> = {
         then: (resolve: (value: unknown) => unknown) =>
           Promise.resolve(
-            table === 'invoices' && invoicesFail
+            (table === 'invoices' && invoicesFail) ||
+            (table === 'project_time_entries' && weekReadState === 'error') ||
+            (table === 'project_unbilled_time' && unbilledReadFails)
               ? { data: null, error: { message: 'invoice numbers refused' } }
               : { data: rowsFor(), error: null },
           ).then(resolve),
@@ -386,6 +395,8 @@ beforeEach(() => {
   projectsOverride = null;
   invoicesOverride = null;
   invoicesFail = false;
+  weekReadState = 'ready';
+  unbilledReadFails = false;
   mockBuildTimeExportCsv.mockClear();
   mockDownloadTimeExportCsv.mockClear();
 });
@@ -730,7 +741,7 @@ describe('the Hours scope lens', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('leaves no one stranded when the membership read fails', () => {
+  it('leaves no one stranded when the membership read fails', async () => {
     // The old belt was `if (!orgs) return`, and a FAILED read never produces
     // `orgs` — so a viewer whose membership read errored was left in the
     // project scope with no lens, no rollup, no front matter and no rows, with
@@ -743,7 +754,7 @@ describe('the Hours scope lens', () => {
       screen.queryByRole('button', { name: 'The entries' }),
     ).not.toBeInTheDocument();
     // Her own week is what she certainly keeps: R5's front matter.
-    expect(screen.getByText('utilization')).toBeInTheDocument();
+    expect(await screen.findByText('utilization')).toBeInTheDocument();
   });
 
   it('says it is reading rather than landing before the standing is known', () => {
@@ -1231,5 +1242,43 @@ describe('the Export act (W5, m10-r3)', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/Invoice numbers could not be read/);
     expect(alert).toHaveTextContent(/blank Invoice # for invoiced hours/);
+  });
+});
+
+
+describe('the holder’s own Hours read truth', () => {
+  it('does not call a loading week empty or print a zero total', async () => {
+    weekReadState = 'pending';
+    renderLedger();
+    expect(await screen.findByText('Reading your hours…')).toBeInTheDocument();
+    expect(screen.queryByText('No time entries yet')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Today ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText('utilization')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bill week → Accounts' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Log time', exact: true })).toBeInTheDocument();
+  });
+
+  it('retries a refused own-week read without printing an empty week', async () => {
+    weekReadState = 'error';
+    renderLedger();
+    expect(await screen.findByText('Your hours could not be read.')).toBeInTheDocument();
+    expect(screen.queryByText('No time entries yet')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Today ·/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bill week → Accounts' })).toBeDisabled();
+    weekReadState = 'ready';
+    fireEvent.click(screen.getByRole('button', { name: 'Read your hours again' }));
+    await waitFor(() => expect(screen.queryByText('Your hours could not be read.')).not.toBeInTheDocument());
+    expect(await screen.findByText(/Today ·/)).toBeInTheDocument();
+  });
+
+  it('keeps a refused unbilled balance distinct and retries its native read', async () => {
+    unbilledReadFails = true;
+    renderLedger();
+    expect(await screen.findByText('Your unbilled balance could not be read.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Draft time invoice' })).not.toBeInTheDocument();
+    unbilledReadFails = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Read your balance again' }));
+    await waitFor(() => expect(screen.queryByText('Your unbilled balance could not be read.')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Log time', exact: true })).toBeInTheDocument();
   });
 });
