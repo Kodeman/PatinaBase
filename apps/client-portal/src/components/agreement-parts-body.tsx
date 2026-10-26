@@ -5,6 +5,9 @@ import {
   agreementRetainerActivation,
 } from '@patina/types';
 
+import { readScopePackagePayload } from '@patina/supabase';
+import type { ScopePackagePayload, ScopePartyKind } from '@patina/types';
+
 import type { CommercialAgreementPart } from '@/lib/commercial-documents';
 
 /* ── THE AGREEMENT, READ AS PARTS ────────────────────────────────────────────
@@ -321,6 +324,53 @@ function PerPhaseLeaf({ part, currency }: { part: CommercialAgreementPart; curre
   );
 }
 
+const SCOPE_PARTIES: Record<ScopePartyKind, string> = {
+  studio: 'Studio', client: 'Client', gc: 'General contractor', other: 'Other', none: 'None',
+};
+const SCOPE_RESPONSIBILITIES = [
+  ['design', 'Design'], ['purchasing', 'Purchasing'], ['payer', 'Payer'],
+  ['fabrication_contract', 'Fabrication contract'], ['installation', 'Installation'],
+] as const;
+
+function ScopePackageLeaf({ part }: { part: CommercialAgreementPart }) {
+  let scope: ScopePackagePayload;
+  try {
+    scope = readScopePackagePayload(part.payload);
+  } catch {
+    return <><PartHeading title={part.title} /><RecordedLine /></>;
+  }
+  return (
+    <>
+      <PartHeading title={part.title} />
+      <p className="type-body mt-2 whitespace-pre-wrap">{scope.label}</p>
+      <dl className="type-body-small mt-4 space-y-2">
+        <div><dt className="type-label">Inclusion</dt><dd>{
+          { included: 'Included', excluded: 'Excluded', conditional: 'Conditional' }[scope.inclusion]
+        }</dd></div>
+        {SCOPE_RESPONSIBILITIES.map(([slot, label]) => (
+          <div key={slot}><dt className="type-label">{label}</dt><dd>{SCOPE_PARTIES[scope.responsibilities[slot]]}</dd></div>
+        ))}
+      </dl>
+      {typeof scope.conditionText === 'string' && scope.conditionText.trim() && (
+        <div className="mt-4"><h3 className="type-label">Conditions</h3>
+          <p className="type-body-small whitespace-pre-wrap">{scope.conditionText}</p></div>
+      )}
+      {(['design', 'installation'] as const).map((slot) => {
+        const bindings = scope.serviceBindings?.[slot];
+        if (!bindings?.length) return null;
+        return (
+          <div key={slot} className="mt-4">
+            <h3 className="type-label">{slot === 'design' ? 'Design' : 'Installation'} service bindings</h3>
+            <ul className="type-body-small list-disc pl-5">
+              {bindings.map((phaseId, index) => <li key={index} className="break-all">{phaseId}</li>)}
+            </ul>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function ScheduleLeaf({ part, currency }: { part: CommercialAgreementPart; currency: string }) {
   switch (part.variant) {
     case 'rate_card':
@@ -363,7 +413,9 @@ function PartSection({ part, currency }: { part: CommercialAgreementPart; curren
       ? ClauseLeaf({ part })
       : part.kind === 'list'
         ? ListLeaf({ part })
-        : part.kind === 'schedule'
+        : part.kind === 'scope_package'
+          ? ScopePackageLeaf({ part })
+          : part.kind === 'schedule'
           ? ScheduleLeaf({ part, currency })
           : // `phases`, and any kind a later wave writes onto an agreement this
             // build already shipped. Its title, and one sentence.
