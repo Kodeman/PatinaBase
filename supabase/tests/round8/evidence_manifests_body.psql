@@ -34,6 +34,9 @@ INSERT INTO public.product_configurations(id,product_id,project_id,owner_user_id
  ('f8770000-0000-4000-8000-000000000045','f8770000-0000-4000-8000-000000000402','f8770000-0000-4000-8000-000000000021','f8770000-0000-4000-8000-000000000001',1,1,'approved','{}','{}',public._configuration_snapshot_hash('{}'),now(),'f8770000-0000-4000-8000-000000000001'),
  ('f8770000-0000-4000-8000-000000000046','f8770000-0000-4000-8000-000000000402','f8770000-0000-4000-8000-000000000020','f8770000-0000-4000-8000-000000000001',1,1,'saved','{}','{}',public._configuration_snapshot_hash('{}'),now(),'f8770000-0000-4000-8000-000000000001');
 INSERT INTO public.custom_commission_revisions(id,configuration_id,revision_number,status,brief,drawings,quote,provenance,submitted_at,quoted_at,approved_at) VALUES ('f8770000-0000-4000-8000-000000000047','f8770000-0000-4000-8000-000000000044',1,'approved','{}','[]','{}','{}',now(),now(),now());
+INSERT INTO public.custom_commission_revisions(id,configuration_id,revision_number,status,brief,drawings,quote,provenance,submitted_at,quoted_at,approved_at) VALUES
+ ('f8770000-0000-4000-8000-000000000079','f8770000-0000-4000-8000-000000000044',2,'client_review','{}','[]','{"retailPriceCents":100}','{}',now(),now(),NULL),
+ ('f8770000-0000-4000-8000-000000000080','f8770000-0000-4000-8000-000000000045',1,'approved','{}','[]','{}','{}',now(),now(),now());
 INSERT INTO public.project_review_editions(id,project_id,edition_number,title,status,published_at,snapshot_hash) VALUES ('f8770000-0000-4000-8000-000000000048','f8770000-0000-4000-8000-000000000020',1,'Fixture','published',now(),repeat('a',64)),('f8770000-0000-4000-8000-000000000049','f8770000-0000-4000-8000-000000000020',2,'Draft','draft',NULL,NULL);
 INSERT INTO public.project_review_items(id,edition_id,source_ffe_item_id,selection_thread_id,item_snapshot,content_hash) VALUES ('f8770000-0000-4000-8000-000000000050','f8770000-0000-4000-8000-000000000048','f8770000-0000-4000-8000-000000000403','f8770000-0000-4000-8000-000000000404','{}','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),('f8770000-0000-4000-8000-000000000051','f8770000-0000-4000-8000-000000000049','f8770000-0000-4000-8000-000000000403','f8770000-0000-4000-8000-000000000404','{}','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 INSERT INTO public.client_decisions(id,designer_client_id,project_id,title,designer_id) VALUES ('f8770000-0000-4000-8000-000000000052','f8770000-0000-4000-8000-000000000405','f8770000-0000-4000-8000-000000000020','Fixture','f8770000-0000-4000-8000-000000000001');
@@ -241,3 +244,57 @@ RESET ROLE;
 ROLLBACK TO null_subject_helper;
 REVOKE EXECUTE ON FUNCTION public.escalate_margin_note(uuid,uuid) FROM authenticated;
 UPDATE public.server_capabilities SET enabled=false WHERE key='margin_note_escalation';
+
+-- Static lock-order control: exception subtransactions release their locks, so
+-- checking pg_locks after a caught refusal cannot prove the pre-refusal order.
+DO $$ DECLARE branch text; first_lock integer; BEGIN
+ branch:=split_part(split_part(pg_get_functiondef('public._evidence_manifest_member(uuid,jsonb)'::regprocedure),
+  'WHEN ''custom_commission_revision'' THEN',2),'WHEN ''review_item'' THEN',1);
+ first_lock:=strpos(branch,'FOR SHARE');
+ PERFORM pg_temp.c1_assert(first_lock>0 AND strpos(branch,'manifest_member_not_frozen')>0
+  AND strpos(branch,'manifest_member_not_frozen')<first_lock,
+  'ineligible revision precheck precedes configuration and revision SHARE (static order)');
+END $$;
+SELECT set_config('request.jwt.claim.sub','f8770000-0000-4000-8000-000000000002',true);
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('unapproved-revision',items=>jsonb_build_array(
+ jsonb_set(jsonb_set((SELECT member FROM members WHERE kind='custom_commission_revision'),'{id}',
+ '"f8770000-0000-4000-8000-000000000079"'),'{rev}','2')))$q$,
+ '23514','manifest_member_not_frozen','unapproved custom revision refuses');
+SELECT pg_temp.c1_error($q$SELECT pg_temp.mint('foreign-revision',items=>jsonb_build_array(
+ jsonb_set((SELECT member FROM members WHERE kind='custom_commission_revision'),'{id}',
+ '"f8770000-0000-4000-8000-000000000080"')))$q$,
+ '23514','manifest_member_off_project','custom revision from foreign configuration refuses');
+SELECT pg_temp.c1_assert((SELECT members @> jsonb_build_array((SELECT member FROM pg_temp.members
+ WHERE kind='custom_commission_revision')) FROM public.evidence_manifests
+ WHERE id=(SELECT (result->>'manifestId')::uuid FROM results WHERE key='original')),
+ 'approved custom revision remains in minted manifest');
+
+-- Test-only interposition between the eligibility read and the locked reads.
+-- Simulate otherwise immutable source drift without a second DB connection;
+-- each refused call rolls the mutation back, then restore the exact helper.
+DO $$ DECLARE original text; seam text; assignment text; label text; before_counts bigint[]; BEGIN
+ original:=pg_get_functiondef('public._evidence_manifest_member(uuid,jsonb)'::regprocedure);
+ seam:='SELECT c.project_id INTO j FROM public.product_configurations c WHERE c.id=v_configuration_id FOR SHARE;';
+ PERFORM pg_temp.c1_assert(array_length(string_to_array(original,seam),1)=2,'one locked configuration seam for drift injection');
+ SELECT ARRAY[(SELECT count(*) FROM public.evidence_manifests),(SELECT count(*) FROM public.evidence_manifest_requests),
+  (SELECT count(*) FROM public.evidence_manifest_members)] INTO before_counts;
+ ALTER TABLE public.custom_commission_revisions DISABLE TRIGGER USER;
+ FOREACH label IN ARRAY ARRAY['status','hash'] LOOP
+  assignment:=CASE label WHEN 'status' THEN 'status=''client_review''' ELSE 'brief='' {"changed":true}''::jsonb' END;
+  EXECUTE replace(original,seam,
+   'UPDATE public.custom_commission_revisions SET '||assignment||' WHERE id=i; '||seam);
+  PERFORM pg_temp.c1_error($q$SELECT pg_temp.mint('drift-revision',items=>jsonb_build_array(
+   (SELECT member FROM members WHERE kind='custom_commission_revision')))$q$,'23514',
+   CASE label WHEN 'status' THEN 'manifest_member_not_frozen' ELSE 'manifest_member_identity_mismatch' END,
+   'locked custom revision revalidates '||label||' after eligible precheck (injected drift)');
+ END LOOP;
+ EXECUTE original;
+ ALTER TABLE public.custom_commission_revisions ENABLE TRIGGER USER;
+ PERFORM pg_temp.c1_assert(before_counts=ARRAY[(SELECT count(*) FROM public.evidence_manifests),
+  (SELECT count(*) FROM public.evidence_manifest_requests),(SELECT count(*) FROM public.evidence_manifest_members)],
+  'revision refusals write no manifests receipts or pins');
+ PERFORM pg_temp.c1_assert((SELECT status='approved' AND brief='{}'::jsonb FROM public.custom_commission_revisions
+  WHERE id='f8770000-0000-4000-8000-000000000047'),'injected revision drift rolls back');
+END $$;
+SELECT pg_temp.c1_assert(NOT EXISTS(SELECT 1 FROM public.evidence_manifest_requests
+ WHERE idempotency_key IN ('unapproved-revision','foreign-revision','drift-revision')),'all refused revision keys remain absent');
