@@ -1,0 +1,24 @@
+\set ON_ERROR_STOP on
+SELECT :'HOST' = '127.0.0.1' AND :'PORT' = '54322' AS local_stack \gset
+\if :local_stack
+\else
+\quit 3
+\endif
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '60s';
+CREATE TEMP TABLE fill_native_before AS
+SELECT oid, prosrc, proacl FROM pg_proc WHERE oid IN (
+ 'public.place_product_in_project_v2(jsonb)'::regprocedure,
+ 'public._place_product_in_project_v2_00444_impl(jsonb)'::regprocedure,
+ 'public._place_product_in_project_v2_00441_wrapper(jsonb)'::regprocedure,
+ 'public._place_product_in_project_v2_00438_impl(jsonb)'::regprocedure);
+\ir ../../migrations/00881_round8_fill_locked_current.sql
+DO $$ BEGIN
+ ASSERT NOT EXISTS (SELECT 1 FROM fill_native_before b JOIN pg_proc p ON p.oid=b.oid
+   WHERE p.proacl IS DISTINCT FROM b.proacl OR
+    (p.oid <> 'public.place_product_in_project_v2(jsonb)'::regprocedure AND p.prosrc <> b.prosrc)),
+   'native_bridges_and_effective_acl_unchanged';
+END; $$;
+\ir fill_locked_current_body.psql
+ROLLBACK;
