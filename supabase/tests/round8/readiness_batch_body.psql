@@ -164,7 +164,7 @@ SELECT pg_temp.batch_assert(public.get_project_ffe_readiness_batch(ARRAY[]::text
 SELECT pg_temp.batch_assert(jsonb_array_length(public.get_project_ffe_readiness_batch(array_fill(pg_temp.batch_id(1)::text,ARRAY[100])))=100,
   '100-entry boundary retains every duplicate');
 SELECT pg_temp.batch_error($q$SELECT public.get_project_ffe_readiness_batch(NULL)$q$,'22023','null array rejected');
-SELECT pg_temp.batch_error($q$SELECT public.get_project_ffe_readiness_batch(array_fill('bad',ARRAY[101]))$q$,'22023','oversize rejected before any entries');
+SELECT pg_temp.batch_error($q$SELECT public.get_project_ffe_readiness_batch(array_fill('bad'::text,ARRAY[101]))$q$,'22023','oversize rejected before any entries');
 SELECT pg_temp.batch_error($q$SELECT public.get_project_ffe_readiness_batch(ARRAY[['bad','bad']])$q$,'22023','multidimensional input rejected');
 SELECT pg_temp.batch_actor(102);
 DO $$ DECLARE actual jsonb; BEGIN
