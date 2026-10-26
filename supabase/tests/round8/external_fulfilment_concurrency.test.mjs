@@ -26,7 +26,7 @@ class Session {
     this.buffer = '';
     this.errors = '';
     this.pending = null;
-    this.child = spawn('psql', [url, '-XAtq', '-v', 'ON_ERROR_STOP=1'], {
+    this.child = spawn('psql', [url, '-XAtq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'], {
       detached: true, stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PGCONNECT_TIMEOUT: '3', PGOPTIONS: '-c statement_timeout=15000 -c lock_timeout=10000' },
     });
@@ -122,7 +122,43 @@ function waitForBlock(holder, waitingPid) {
   END $wait$;`);
 }
 
-test('C5 binds before native approval in both lock orders and orders verification by lock sequence', { timeout: 180000 }, async () => {
+const firstLock = `SELECT public._ffe_lock_job_labels('${id(201)}');`;
+
+// Hold only the resolver's first lock, then let the binder reach it. A correct
+// binder waits WITHOUT the decision lock. The test-local inverse takes that
+// decision first, producing an actual cycle when the resolver continues.
+async function lockOrderBarrier(open, fid, inverted) {
+  const holder = open();
+  const contender = open();
+  try {
+    await holder.query(section('helpers'));
+    await contender.query(section('helpers'));
+    const pid = Number(await contender.query('SELECT pg_backend_pid();'));
+    await holder.query(`${begin(1)} ${firstLock}`);
+    const binding = contender.query(`${begin(1)}
+     ${inverted ? `SELECT id FROM public.client_decisions WHERE id='${id(606)}' FOR SHARE;` : ''}
+     SELECT ${bind(fid, 6)}; ROLLBACK;`);
+    binding.catch(() => {});
+    await waitForBlock(holder, pid);
+    const resolution = holder.query(`${approve(6)} ROLLBACK;`);
+    const results = await Promise.allSettled([resolution, binding]);
+    const failures = results.filter(result => result.status === 'rejected');
+    if (inverted) {
+      assert.ok(failures.some(result => /(?:40P01|55P03)/.test(result.reason.message)),
+        'decision→job-label negative control must deadlock or hit database lock_timeout');
+      assert.ok(failures.every(result => /(?:40P01|55P03)/.test(result.reason.message)),
+        'negative control must not pass on an unrelated SQL/connection failure');
+    } else {
+      assert.equal(failures.length, 0, 'native job-label→decision order completes under first-lock barrier');
+    }
+  } finally {
+    // Failed psql exits roll back; successful calls explicitly roll back, so
+    // both schedules leave the same submitted decision for the next schedule.
+    await Promise.all([holder.close(), contender.close()]);
+  }
+}
+
+test('C5 first-lock barrier rejects inversion and verification competes for sequence allocation', { timeout: 180000 }, async () => {
   assert.equal(process.env.EXTERNAL_FULFILMENT_DB_WINDOW, 'owned', 'orchestrator-handed committed DB window required');
   const sessions = new Set();
   const open = () => { const s = new Session(); sessions.add(s); return s; };
@@ -145,6 +181,11 @@ test('C5 binds before native approval in both lock orders and orders verificatio
     await b.query(section('helpers'));
     const pidB = Number(await b.query('SELECT pg_backend_pid();'));
     assert.ok(Number.isInteger(pidB) && pidB > 0);
+
+    await lockOrderBarrier(open, fid, false);
+    await lockOrderBarrier(open, fid, true);
+    assert.equal(await a.query(`SELECT NOT EXISTS(SELECT 1 FROM public.project_external_fulfilment_evidence_bindings WHERE decision_id='${id(606)}')
+     AND (SELECT status='submitted' FROM public.coordination_item_revisions WHERE id='${id(706)}');`), 't', 'native and inverted barrier schedules both roll back');
 
     // Binder first: native approval really waits, then commits an approved round.
     await a.query(begin(1));
@@ -184,12 +225,18 @@ test('C5 binds before native approval in both lock orders and orders verificatio
     assert.equal(await a.query(`SELECT b.bound_at>r.reviewed_at AND r.reviewed_at=${quote(approvalStart)}::timestamptz
      FROM public.project_external_fulfilment_evidence_bindings b JOIN public.coordination_item_revisions r ON r.decision_id=b.decision_id WHERE b.decision_id='${id(605)}';`), 't', 'binding precedes native approval despite later bound_at');
 
-    // Earlier-started verifier commits last. Last verification wins even though
-    // its event was recorded later and its transaction timestamp is earlier.
+    // Earlier-started verifier commits last. B holds ONLY the first lock while
+    // A enters the real verifier and blocks. B then verifies concurrently with
+    // A's outstanding call, so both allocate sequences through the native seam.
+    const pidA = Number(await a.query('SELECT pg_backend_pid();'));
     await a.query(begin(2));
     await a.query('SELECT now();');
-    await b.query(`${begin(2)} SELECT public.verify_external_fulfilment_event(${quote(c200)},'v200'); COMMIT;`);
-    await a.query(`SELECT public.verify_external_fulfilment_event(${quote(c300)},'v300'); COMMIT;`);
+    await b.query(`${begin(2)} ${firstLock}`);
+    const laterVerification = a.query(`SELECT public.verify_external_fulfilment_event(${quote(c300)},'v300'); COMMIT;`);
+    laterVerification.catch(() => {});
+    await waitForBlock(b, pidA);
+    await b.query(`SELECT public.verify_external_fulfilment_event(${quote(c200)},'v200'); COMMIT;`);
+    await laterVerification;
     assert.equal(await a.query(`SELECT older.verified_at<newer.verified_at AND older.verification_seq=2 AND newer.verification_seq=1
      AND public._fabrication_instructed_amount_cents(${quote(fid)})=300000
      FROM public.project_external_fulfilment_events older CROSS JOIN public.project_external_fulfilment_events newer

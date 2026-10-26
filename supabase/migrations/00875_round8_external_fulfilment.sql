@@ -369,18 +369,31 @@ BEGIN
    FROM public.project_external_fulfilments f WHERE f.project_id=p_project_id);
 END $$;
 
-DO $$ DECLARE t text; f regprocedure; BEGIN
+DO $$ DECLARE t text; BEGIN
  FOREACH t IN ARRAY ARRAY['project_external_fulfilments','project_external_fulfilment_events','project_external_fulfilment_evidence_bindings','project_external_fulfilment_verifications'] LOOP
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
-  EXECUTE format('REVOKE ALL ON TABLE public.%I FROM PUBLIC,anon,authenticated,service_role',t);
   EXECUTE format('DROP TRIGGER IF EXISTS external_immutable ON public.%I',t);
   EXECUTE format('CREATE TRIGGER external_immutable BEFORE INSERT OR UPDATE OR DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION public._external_guard()',t);
  END LOOP;
- FOR f IN SELECT oid::regprocedure FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN (
-  '_external_units_valid','_external_rail_refusal','_fabrication_instructed_amount_cents','_external_assert_access','_external_assert_replay',
-  '_external_lock','_external_assert_active','_external_guard','_external_refresh_status','create_external_fulfilment',
-  'record_external_fulfilment_event','verify_external_fulfilment_event','bind_fulfilment_evidence','get_project_external_fulfilments') LOOP
-  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated,service_role',f);
- END LOOP;
 END $$;
+
+-- Keep ACLs top-level so the legacy-grants seed extractor preserves them.
+REVOKE ALL ON TABLE public.project_external_fulfilments FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON TABLE public.project_external_fulfilment_events FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON TABLE public.project_external_fulfilment_evidence_bindings FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON TABLE public.project_external_fulfilment_verifications FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._external_units_valid(text[]) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._external_rail_refusal(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._fabrication_instructed_amount_cents(uuid) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._external_assert_access(uuid) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._external_assert_replay(uuid,uuid,text,text) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._external_lock(uuid) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._external_assert_active(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._external_guard() FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public._external_refresh_status(uuid) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public.create_external_fulfilment(uuid,uuid,text,text,text[],uuid,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public.record_external_fulfilment_event(uuid,text,jsonb,text[],text) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public.verify_external_fulfilment_event(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public.bind_fulfilment_evidence(uuid,uuid,text[],text) FROM PUBLIC,anon,authenticated,service_role;
+REVOKE ALL ON FUNCTION public.get_project_external_fulfilments(uuid) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.get_project_external_fulfilments(uuid) TO authenticated;
