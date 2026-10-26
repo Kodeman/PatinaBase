@@ -266,11 +266,17 @@ export function HoursLedger({
     [weekOffset],
   );
 
-  const { data: entries, refetch } = useQuery({
+  const {
+    data: entries,
+    refetch,
+    isPending: weekPending,
+    isError: weekError,
+  } = useQuery({
     queryKey: ["document-hours-week", weekOffset, lensProjectId],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
       if (!userData?.user?.id) return [];
       let query = supabase
         .from("project_time_entries")
@@ -410,11 +416,17 @@ export function HoursLedger({
   //     whose RLS reads the whole studio, this printed the studio's balance
   //     under the word "mine". The week read above is already `.eq('user_id',
   //     me)`; this is the same scope, on the same sheet.
-  const { data: unbilledAllRows, refetch: refetchUnbilled } = useQuery({
+  const {
+    data: unbilledAllRows,
+    refetch: refetchUnbilled,
+    isPending: unbilledPending,
+    isError: unbilledError,
+  } = useQuery({
     queryKey: ["document-hours-unbilled", lensProjectId],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
       if (!userData?.user?.id) return [];
       let query = supabase
         .from("project_unbilled_time")
@@ -884,7 +896,7 @@ export function HoursLedger({
                 total naming someone else — and, in the project scope, 'Week · 0
                 min' above the document's own hours. They belong to the one
                 scope whose week they are. */}
-            {scope === "mine" && (
+            {scope === "mine" && !weekPending && !weekError && (
               <>
                 {weekOffset === 0 && (
                   <>Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; </>
@@ -919,7 +931,7 @@ export function HoursLedger({
         {scope === "mine" && (
           <button
             type="button"
-            disabled={weekUnbilled.length === 0}
+            disabled={weekPending || weekError || weekUnbilled.length === 0}
             title={
               weekUnbilled.length === 0
                 ? "Nothing unbilled this week"
@@ -1022,8 +1034,20 @@ export function HoursLedger({
         </p>
       )}
 
+      {scope === "mine" && weekPending && (
+        <p role="status" className="py-3 t-body-sm">Reading your hours…</p>
+      )}
+      {scope === "mine" && weekError && (
+        <div role="alert" className="py-3 t-body-sm">
+          Your hours could not be read.
+          <DocumentAction actionKey="retry-hours-week" surfaceKey="hours" regionKey="week-read" variant="tertiary" onClick={() => void refetch()}>
+            Read your hours again
+          </DocumentAction>
+        </div>
+      )}
+
       {/* Front-matter (R5): utilization — the shown week + the balance. */}
-      {scope === "mine" && (
+      {scope === "mine" && !weekPending && !weekError && (
         <LedgerFrontMatter
           caption="utilization"
           stats={[
@@ -1209,7 +1233,18 @@ export function HoursLedger({
           document's own unbilled rows-with-total, but only listed beneath it —
           the entries act there lists the WEEK's ledger rows, a different set —
           so it is hidden rather than captioned into a half-truth.) */}
-      {scope === "mine" && (unbilledMinutes > 0 || ratePendingMinutes > 0) && (
+      {scope === "mine" && unbilledPending && (
+        <p role="status" className="py-3 t-body-sm">Reading your unbilled balance…</p>
+      )}
+      {scope === "mine" && unbilledError && (
+        <div role="alert" className="py-3 t-body-sm">
+          Your unbilled balance could not be read.
+          <DocumentAction actionKey="retry-hours-unbilled" surfaceKey="hours" regionKey="unbilled-read" variant="tertiary" onClick={() => void refetchUnbilled()}>
+            Read your balance again
+          </DocumentAction>
+        </div>
+      )}
+      {scope === "mine" && !unbilledPending && !unbilledError && (unbilledMinutes > 0 || ratePendingMinutes > 0) && (
         <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           <span className="text-[var(--color-clay-ink)]">
             unbilled · all time
@@ -1281,7 +1316,7 @@ export function HoursLedger({
       {/* The zero-entries state (help-desk Wave 1, copy §E.3): nothing this
           week AND no unbilled balance anywhere reads as "never logged" — the
           teaching state. A designer with history keeps the quiet week lines. */}
-      {scope === "mine" &&
+      {scope === "mine" && !weekPending && !weekError && !unbilledPending && !unbilledError &&
         days.length === 0 &&
         (weekOffset === 0 &&
         unbilledMinutes === 0 &&
@@ -1304,7 +1339,7 @@ export function HoursLedger({
           </p>
         ))}
 
-      {scope === "mine" &&
+      {scope === "mine" && !weekPending && !weekError &&
         days.map(([day, rows]) => (
           <section key={day} className="mb-4">
             <p className="mb-1 flex items-baseline justify-between font-mono text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">

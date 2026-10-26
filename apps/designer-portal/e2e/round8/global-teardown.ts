@@ -43,6 +43,20 @@ export default async function globalTeardown(): Promise<void> {
     SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
     DELETE FROM public.room_scans WHERE id = 'f0180000-0000-4000-8000-000000000020';
     DELETE FROM public.projects WHERE id = '${JOB}';
+    DELETE FROM public.audit_logs
+      WHERE organization_id IN (
+        SELECT o.id FROM public.organizations o
+        WHERE o.id IN (
+          SELECT organization_id FROM public.organization_members
+          WHERE user_id IN ('${ACTORS[0]}', '${ACTORS[1]}')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM public.organization_members m
+          WHERE m.organization_id = o.id
+            AND m.user_id NOT IN ('${ACTORS[0]}', '${ACTORS[1]}')
+        )
+      )
+        OR user_id IN ('${ACTORS[0]}', '${ACTORS[1]}');
     SET LOCAL ROLE service_role;
     DELETE FROM public.organizations o
     WHERE o.id IN (
