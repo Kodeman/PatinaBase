@@ -120,6 +120,7 @@ export interface OrderPaperQueuePosition {
 export interface OrderPaperProps {
   open: boolean;
   onClose: () => void;
+  returnFocusTo?: HTMLElement | null;
   vendor: OrderPaperVendor;
   project: OrderPaperProject;
   ffeItems: OrderPaperFFEItem[];
@@ -219,6 +220,7 @@ export function OrderPaperQueue({
 export function ExistingOrderPaper(props: {
   open: boolean;
   onClose: () => void;
+  returnFocusTo?: HTMLElement | null;
   purchaseOrder: OrderPaperPurchaseOrder;
   vendor: OrderPaperVendor;
   projectName: string;
@@ -232,17 +234,22 @@ type ItemRow = Record<string, any>;
 
 function ExistingPaperLines({
   onClose,
+  returnFocusTo,
   purchaseOrder,
   vendor,
   projectName,
 }: {
   onClose: () => void;
+  returnFocusTo?: HTMLElement | null;
   purchaseOrder: OrderPaperPurchaseOrder;
   vendor: OrderPaperVendor;
   projectName: string;
 }) {
-  const { data: items } = useProcurementItems({ purchaseOrderId: purchaseOrder.id }) as {
+  const { data: items, isLoading, isError, refetch } = useProcurementItems({ purchaseOrderId: purchaseOrder.id }) as {
     data: ItemRow[] | undefined;
+    isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
   const ffeItems = useMemo<OrderPaperFFEItem[]>(
     () =>
@@ -260,10 +267,23 @@ function ExistingPaperLines({
         })),
     [items, purchaseOrder.id],
   );
+  if (isLoading || isError) {
+    return (
+      <DocSheet open title={`Purchase order ${purchaseOrder.po_number ?? ''}`.trim()} onClose={onClose} returnFocusTo={returnFocusTo}>
+        {isError ? (
+          <div role="alert">
+            <p>The order lines could not be read.</p>
+            <button type="button" onClick={() => void refetch()}>Read the order lines again</button>
+          </div>
+        ) : <p role="status">Reading the order lines…</p>}
+      </DocSheet>
+    );
+  }
   return (
     <OrderPaper
       open
       onClose={onClose}
+      returnFocusTo={returnFocusTo}
       vendor={vendor}
       project={{ id: purchaseOrder.project_id, name: projectName }}
       ffeItems={ffeItems}
@@ -288,6 +308,7 @@ function shipToBlocksSend(isPatinaMaker: boolean, hasShipTo: boolean, forBuyer: 
 
 function PaperSheet({
   onClose,
+  returnFocusTo,
   vendor,
   project,
   ffeItems,
@@ -437,6 +458,7 @@ function PaperSheet({
   const shipToFixId = useId();
   const [shipToInvalid, setShipToInvalid] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const previewOpener = useRef<HTMLElement | null>(null);
   // Maker lane: payment not started, or deferred inside a queue.
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [deferredPaymentId, setDeferredPaymentId] = useState<string | null>(null);
@@ -846,6 +868,7 @@ function PaperSheet({
     <DocSheet
       open
       onClose={() => !busy && onClose()}
+      returnFocusTo={returnFocusTo}
       title={existing?.po_number ? `Purchase order ${existing.po_number}` : 'The order paper'}
       pageLabel={runningHead}
       icon={FileText}
@@ -1187,7 +1210,10 @@ function PaperSheet({
                   held={terminalHeld}
                   aria-describedby={terminalHeld ? 'order-paper-held-reason' : undefined}
                   holds={shipToHolds}
-                  onClick={() => prepareReviewOrMark('send')}
+                  onClick={(event) => {
+                    previewOpener.current = event.currentTarget;
+                    void prepareReviewOrMark('send');
+                  }}
                 >
                   {label}
                 </DocumentAction>
@@ -1280,7 +1306,10 @@ function PaperSheet({
                   regionKey="secondary"
                   variant="tertiary"
                   disabled={busy !== null}
-                  onClick={() => setPreviewOpen(true)}
+                  onClick={(event) => {
+                    previewOpener.current = event.currentTarget;
+                    setPreviewOpen(true);
+                  }}
                 >
                   See the PDF
                 </DocumentAction>
@@ -1306,6 +1335,7 @@ function PaperSheet({
         <PoPreview
           open={previewOpen}
           onOpenChange={setPreviewOpen}
+          returnFocusTo={previewOpener.current}
           purchaseOrderId={poId}
           vendorName={vendor.name}
           vendorEmailHint={clientVendorEmailHint(vendor)}
