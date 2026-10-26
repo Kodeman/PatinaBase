@@ -883,3 +883,118 @@ BEGIN
   RETURN v_row;
 END;
 $$;
+
+-- External presence cannot create studio receivables or labor prices.
+-- Native invoice slot guard: 00709. Existing signature, ACL and stage-slot rules retained.
+CREATE OR REPLACE FUNCTION public.guard_invoice_line_ffe_stage()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+  v_other text;
+BEGIN
+  IF NEW.ffe_item_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtextextended('invoice_line_ffe_slot:' || NEW.ffe_item_id::text, 0));
+
+  -- Keep the source shared-locked until the invoice write commits. Conversion
+  -- takes FOR UPDATE and then checks invoice references, so either winner
+  -- excludes the other even for a direct line insert or a zero-cent bill.
+  PERFORM 1 FROM public.project_ffe_items
+    WHERE id = NEW.ffe_item_id FOR SHARE;
+  IF EXISTS (SELECT 1 FROM public.project_ffe_items
+    WHERE id = NEW.ffe_item_id AND external_fulfilment_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'external_presence_invoice_refused'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT li.billing_stage INTO v_other
+    FROM public.invoice_line_items AS li
+   WHERE li.ffe_item_id = NEW.ffe_item_id
+     AND li.id <> NEW.id
+     AND (li.billing_stage = 'full') <> (NEW.billing_stage = 'full')
+   LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'uniq_invoice_line_items_ffe_item: line % already holds a % slot; bill it in full or as a deposit and balance, not both',
+      NEW.ffe_item_id, v_other
+      USING ERRCODE = 'unique_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- Native labor-price writer: 00737 → 00755 → 00810. Job-label/item lock order retained.
+CREATE OR REPLACE FUNCTION public.set_labor_line_price(
+  p_ffe_item_id uuid,
+  p_unit_price_cents integer
+)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_temp' AS $$
+DECLARE
+  v_item public.project_ffe_items%ROWTYPE;
+BEGIN
+  PERFORM public._ffe_lock_job_labels(item.project_id)
+  FROM public.project_ffe_items AS item WHERE item.id = p_ffe_item_id;
+  SELECT * INTO v_item FROM public.project_ffe_items
+   WHERE id = p_ffe_item_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  PERFORM public._ffe_require_studio_project(v_item.project_id);
+
+  IF v_item.external_fulfilment_id IS NOT NULL THEN
+    RAISE EXCEPTION 'external_presence_labor_price_refused'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_unit_price_cents IS NULL OR p_unit_price_cents < 0 THEN
+    RAISE EXCEPTION 'set_labor_line_price: the price is whole cents, 0 or more'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_item.line_kind IS DISTINCT FROM 'labor' THEN
+    RAISE EXCEPTION 'Only a labor line takes a price here.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_item.removed_at IS NOT NULL THEN
+    RAISE EXCEPTION 'This line was removed.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- Released: on a sent, signed or executed authorization (the
+  -- ffe_line_authorization check, 00736 → 00705:79), or on a PO.
+  IF v_item.purchase_order_id IS NOT NULL
+     OR public.ffe_line_authorization_state(v_item.id) IS NOT NULL THEN
+    RAISE EXCEPTION 'Released labor changes through Record a change.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- 00755 (F-B1): a drafted line is frozen on its draft until sent or voided.
+  IF EXISTS (
+    SELECT 1 FROM public.furnishing_authorization_items a
+    JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+    JOIN public.proposals p ON p.id = d.proposal_id
+    WHERE a.source_ffe_item_id = v_item.id
+      AND COALESCE(p.commercial_state, 'draft') = 'draft'
+  ) THEN
+    RAISE EXCEPTION 'This line is on a drafted release. Send it or void the draft first.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+  UPDATE public.project_ffe_items
+     SET unit_price_cents = p_unit_price_cents,
+         line_total_cents = quantity * p_unit_price_cents,
+         updated_at = now()
+   WHERE id = v_item.id
+  RETURNING * INTO v_item;
+
+  RETURN jsonb_build_object(
+    'selectionId', v_item.id,
+    'unitPriceCents', v_item.unit_price_cents,
+    'lineTotalCents', v_item.line_total_cents
+  );
+END;
+$$;

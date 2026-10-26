@@ -1,0 +1,56 @@
+-- Include-only: continues the presence fixtures inside the owner's rollback.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.invoices(id,project_id,designer_id,client_id,studio_id,status)
+VALUES(pg_temp.presence_id(320),pg_temp.presence_id(2),pg_temp.presence_id(4),pg_temp.presence_id(7),pg_temp.presence_id(10),'draft');
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,line_kind,parent_ffe_item_id,
+ link_kind,quantity,unit_price_cents,line_total_cents,scope_package_key,external_fulfilment_id)
+VALUES
+(pg_temp.presence_id(310),pg_temp.presence_id(2),'External labor',pg_temp.presence_id(410),'labor',pg_temp.presence_id(14),'labor',2,0,0,'pkg.chairs',pg_temp.presence_id(30)),
+(pg_temp.presence_id(311),pg_temp.presence_id(2),'Studio labor',pg_temp.presence_id(411),'labor',pg_temp.presence_id(15),'labor',2,0,0,NULL,NULL);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.presence_actor(6);
+
+-- The shared native table writer covers full/deposit/balance and re-pointing,
+-- including zero-cent bills which must not create a studio receivable either.
+SELECT pg_temp.presence_error($q$INSERT INTO public.invoice_line_items(invoice_id,kind,ffe_item_id,description,billing_stage,unit_amount_cents,amount_cents)
+ VALUES(pg_temp.presence_id(320),'ffe',pg_temp.presence_id(14),'External full','full',0,0)$q$,
+ '23514','external_presence_invoice_refused','external full invoice line refused even at zero cents');
+SELECT pg_temp.presence_error($q$INSERT INTO public.invoice_line_items(invoice_id,kind,ffe_item_id,description,billing_stage,billing_stage_pct,unit_amount_cents,amount_cents)
+ VALUES(pg_temp.presence_id(320),'ffe',pg_temp.presence_id(14),'External deposit','deposit',50,0,0)$q$,
+ '23514','external_presence_invoice_refused','external deposit invoice line refused');
+SELECT pg_temp.presence_error($q$INSERT INTO public.invoice_line_items(invoice_id,kind,ffe_item_id,description,billing_stage,unit_amount_cents,amount_cents)
+ VALUES(pg_temp.presence_id(320),'ffe',pg_temp.presence_id(14),'External balance','balance',0,0)$q$,
+ '23514','external_presence_invoice_refused','external balance invoice line refused');
+INSERT INTO public.invoice_line_items(id,invoice_id,kind,ffe_item_id,description,unit_amount_cents,amount_cents)
+VALUES(pg_temp.presence_id(321),pg_temp.presence_id(320),'ffe',pg_temp.presence_id(15),'Studio full',100,100);
+SELECT pg_temp.presence_error($q$UPDATE public.invoice_line_items SET ffe_item_id=pg_temp.presence_id(14) WHERE id=pg_temp.presence_id(321)$q$,
+ '23514','external_presence_invoice_refused','existing invoice cannot be repointed to external presence');
+SELECT pg_temp.presence_assert((SELECT ffe_item_id=pg_temp.presence_id(15) FROM public.invoice_line_items WHERE id=pg_temp.presence_id(321))
+ AND NOT EXISTS(SELECT 1 FROM public.invoice_line_items WHERE ffe_item_id=pg_temp.presence_id(14)),
+ 'refused invoice writes preserve the native line and create no external receivable');
+SELECT pg_temp.presence_error($q$INSERT INTO public.invoice_line_items(invoice_id,kind,ffe_item_id,description,billing_stage,billing_stage_pct,unit_amount_cents,amount_cents)
+ VALUES(pg_temp.presence_id(320),'ffe',pg_temp.presence_id(15),'Conflicting studio deposit','deposit',50,50,50)$q$,
+ '23505','uniq_invoice_line_items_ffe_item','non-external native full versus deposit slot conflict unchanged');
+INSERT INTO public.invoice_line_items(id,invoice_id,kind,description,unit_amount_cents,amount_cents)
+VALUES(pg_temp.presence_id(322),pg_temp.presence_id(320),'adhoc','Unbound service',200,200);
+SELECT pg_temp.presence_assert((SELECT count(*)=2 FROM public.invoice_line_items WHERE invoice_id=pg_temp.presence_id(320)),
+ 'native non-external and unbound invoice lines remain writable');
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.presence_error($q$SELECT public.set_labor_line_price(pg_temp.presence_id(310),0)$q$,
+ '23514','external_presence_labor_price_refused','external labor price writer refuses even an unchanged zero price');
+SELECT pg_temp.presence_error($q$SELECT public.set_labor_line_price(pg_temp.presence_id(310),2500)$q$,
+ '23514','external_presence_labor_price_refused','external labor price writer refuses a positive price');
+SELECT pg_temp.presence_actor(5);
+SELECT pg_temp.presence_error($q$SELECT public.set_labor_line_price(pg_temp.presence_id(310),0)$q$,
+ '42501','project not found or access denied','external labor refusal preserves native project authority first');
+SELECT pg_temp.presence_actor(6);
+SELECT pg_temp.presence_assert((public.set_labor_line_price(pg_temp.presence_id(311),2500)->>'lineTotalCents')::integer=5000,
+ 'native non-external labor price still derives quantity times unit cents');
+RESET ROLE;
+SELECT pg_temp.presence_assert((SELECT unit_price_cents=0 AND line_total_cents=0 AND row_version=1
+ FROM public.project_ffe_items WHERE id=pg_temp.presence_id(310)),
+ 'refused labor writes preserve external zero price and item version');
+SELECT pg_temp.presence_assert(NOT has_function_privilege('anon','public.guard_invoice_line_ffe_stage()','EXECUTE')
+ AND NOT has_function_privilege('authenticated','public.guard_invoice_line_ffe_stage()','EXECUTE'),
+ 'native invoice guard retains its private execution ACL');
