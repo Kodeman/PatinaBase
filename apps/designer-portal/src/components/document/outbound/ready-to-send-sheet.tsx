@@ -54,6 +54,8 @@ const SEND_UNCONFIRMED =
 const CLIENT_REFS = new Set(['invoice', 'client_decision', 'project', 'client', 'field_batch', 'field_prompt']);
 
 function sendHold(draft: OutboundDraftRow, result?: OutboundSendResult): string | null {
+  // The existing send endpoint finalizes delivered rows without calling the provider.
+  if (draft.status === 'sending' && draft.delivered_at) return null;
   if (result || draft.last_send_outcome || draft.status === 'sending') return 'This draft is held. Check its recorded send outcome before sending again.';
   if (!['client', 'vendor', 'trade'].includes(draft.recipient_kind) || !draft.to_address?.trim()) {
     return 'An explicit recipient and address are required. No audience is chosen for you.';
@@ -136,12 +138,15 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
     else edits.current.delete(id);
   };
 
-  /** Saves the edits, reads the lead again, sends; throws when nothing went. */
+  const attemptKey = (id: string) =>
+    rows.some((d) => d.id === id && d.status === 'sending' && d.delivered_at) ? `${id}:finalize` : id;
+
+  /** Saves edits for unsent rows, rechecks authority, then sends or finishes delivery. */
   const sendIds = async (ids: string[]) => {
     if (inFlight.current || !ids.length) return;
     if (!canSend || ids.some((id) => {
       const row = rows.find((d) => d.id === id);
-      return !row || !OPEN_STATUSES.has(row.status) || sendHold(row, results.get(id)) || attempted.current.has(id);
+      return !row || !OPEN_STATUSES.has(row.status) || sendHold(row, results.get(id)) || attempted.current.has(attemptKey(id));
     })) throw new Error('Sending is held. Review the recipient, subject and recorded outcome.');
     inFlight.current = true;
     setBatchError(null);
@@ -149,7 +154,7 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
     try {
       for (const id of ids) {
         const text = edits.current.get(id);
-        if (!text) continue;
+        if (!text || rows.find((d) => d.id === id)?.delivered_at) continue;
         await update.mutateAsync({ id, subject: text.subject.trim(), body: text.body });
       }
       if (projectId && viewer.recheck && !(await viewer.recheck())) throw new Error(LEAD_CHANGED);
@@ -162,7 +167,7 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
       }
       let answer: Awaited<ReturnType<typeof sendDrafts.mutateAsync>>;
       try {
-        ids.forEach((id) => attempted.current.add(id));
+        ids.forEach((id) => attempted.current.add(attemptKey(id)));
         answer = await sendDrafts.mutateAsync(ids);
       } catch (e) {
         console.error('[ready-to-send] send failed', e);
@@ -248,7 +253,8 @@ export function ReadyToSendSheet({ projectId, studioId }: { projectId?: string; 
         {isOpen && (
           <div id={`outbound-review-${d.id}`} className="pl-[52px] max-sm:pl-0">
             <OutboundDraftReview
-              draft={{ ...d, ...edits.current.get(d.id) }}
+              draft={d}
+              initialText={edits.current.get(d.id)}
               sendHoldReason={hold}
               canSend={canSend}
               ready={ready}

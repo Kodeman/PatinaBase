@@ -115,7 +115,7 @@ test('native audience surface keeps private work out of client-visible records a
     expect(creates).toBe(0);
     expect(psqlScalar(`SELECT count(*) FROM client_decisions WHERE project_id='${JOB}';`)).toBe(before);
     await sharedChoice.check();
-    await expect(composer.getByText(/The client and project parties can see this, including saved drafts/)).toBeVisible();
+    await expect(composer.getByText(/Project parties can see shared drafts/)).toBeVisible();
     expect(creates).toBe(0);
     await page.screenshot({ path: info.outputPath('shared-audience.png') });
     await composer.getByRole('button', { name: 'Save as draft', exact: true }).click();

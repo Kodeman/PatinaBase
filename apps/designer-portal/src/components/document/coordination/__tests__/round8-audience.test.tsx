@@ -76,10 +76,13 @@ it('requires an explicit audience before either Save or Publish; Private writes 
   expect(mockPublish).not.toHaveBeenCalled(); expect(mockDelete).not.toHaveBeenCalled();
 });
 
-it('truthfully includes saved drafts in Shared and saves only on the explicit action', async () => {
+it('distinguishes party drafts from client publication and saves only on the explicit action', async () => {
   composer();
   fireEvent.click(screen.getByRole('radio', { name: 'Shared — client and project parties' }));
-  expect(screen.getByText(/The client and project parties can see this, including saved drafts/)).toBeVisible();
+  expect(screen.getByText(/Project parties can see shared drafts/)).toBeVisible();
+  expect(screen.getByText(/The addressed client sees the item once published, not saved drafts/)).toBeVisible();
+  expect(screen.getByText(/Publishing to the client asks them to respond and sends the usual first-notice email and push/)).toBeVisible();
+  expect(screen.queryByText(/does not send/)).not.toBeInTheDocument();
   expect(mockCreate).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Save as draft', exact: true }));
   await waitFor(() => expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ status: 'draft' })));

@@ -570,7 +570,7 @@ export function ItemComposer({
         ))}
         <p id="coordination-audience-help" role="status" className="text-[13px] text-[var(--text-muted)]">
           {audience === 'shared'
-            ? 'The client and project parties can see this, including saved drafts. Court assignment does not make it private. Publish changes the item to pending; it does not send an outbound message.'
+            ? 'Project parties can see shared drafts. The addressed client sees the item once published, not saved drafts. Court assignment does not make it private. Publishing to the client asks them to respond and sends the usual first-notice email and push.'
             : audience === 'private'
               ? 'Use the existing private note in the margin for studio-only words. This coordination sheet cannot save a private note; nothing here will be saved or published.'
               : 'Choose an audience before saving or publishing. Saved coordination drafts are not private notes.'}
