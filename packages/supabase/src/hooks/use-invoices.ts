@@ -852,6 +852,7 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
         queryClient.invalidateQueries({ queryKey: ['time'] });
         queryClient.invalidateQueries({ queryKey: ['desk-contents-unbilled-time'] });
         queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+        queryClient.invalidateQueries({ queryKey: ['document-hours-unbilled'] });
       }
       if (input.billingLines?.length) {
         queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'purchases', `project:${input.projectId}`] });
@@ -1770,6 +1771,8 @@ export function useVoidInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (invoice, { projectId, invoiceId }) => {
       invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id, invoiceId);
+      queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+      queryClient.invalidateQueries({ queryKey: ['document-hours-unbilled'] });
     },
   });
 }

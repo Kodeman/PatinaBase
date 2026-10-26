@@ -74,6 +74,8 @@ let invoicesOverride: Array<Record<string, unknown>> | null = null;
 let invoicesFail = false;
 let weekReadState: ReadState = 'ready';
 let unbilledReadFails = false;
+let authReadFails = false;
+let signedOut = false;
 
 /** Each money read's settle state — a figure must never precede an answer. */
 type ReadState = 'ready' | 'pending' | 'error';
@@ -176,7 +178,7 @@ let weekEntryOverride: Record<string, unknown> | null = null;
 /** A chainable PostgREST stub — the sheet's own week read and its note read. */
 function makeClient() {
   return {
-    auth: { getUser: async () => ({ data: { user: { id: 'me' } } }) },
+    auth: { getUser: async () => ({ data: { user: authReadFails || signedOut ? null : { id: 'me' } }, error: authReadFails ? { status: 503, message: 'auth read unavailable' } : null }) },
     from: (table: string) => {
       const rowsFor = () => {
         if (table === 'project_time_entries')
@@ -397,6 +399,8 @@ beforeEach(() => {
   invoicesFail = false;
   weekReadState = 'ready';
   unbilledReadFails = false;
+  authReadFails = false;
+  signedOut = false;
   mockBuildTimeExportCsv.mockClear();
   mockDownloadTimeExportCsv.mockClear();
 });
@@ -1280,5 +1284,30 @@ describe('the holder’s own Hours read truth', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Read your balance again' }));
     await waitFor(() => expect(screen.queryByText('Your unbilled balance could not be read.')).not.toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Log time', exact: true })).toBeInTheDocument();
+  });
+});
+
+ describe('Hours authentication read boundary', () => {
+  it('shows both native refusals after an auth read error, never an empty week or zero total, then retries', async () => {
+    authReadFails = true;
+    renderLedger();
+    expect(await screen.findByText('Your hours could not be read.')).toBeInTheDocument();
+    expect(await screen.findByText('Your unbilled balance could not be read.')).toBeInTheDocument();
+    expect(screen.queryByText('No time entries yet')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Today ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText('utilization')).not.toBeInTheDocument();
+    authReadFails = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Read your hours again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Read your balance again' }));
+    await waitFor(() => expect(screen.queryByText('Your hours could not be read.')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Your unbilled balance could not be read.')).not.toBeInTheDocument());
+    expect(await screen.findByText(/Today ·/)).toBeInTheDocument();
+  });
+  it('preserves the genuine no-user empty state when auth returns no error', async () => {
+    signedOut = true;
+    renderLedger();
+    expect(await screen.findByText('No time entries yet')).toBeInTheDocument();
+    expect(screen.queryByText('Your hours could not be read.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Your unbilled balance could not be read.')).not.toBeInTheDocument();
   });
 });

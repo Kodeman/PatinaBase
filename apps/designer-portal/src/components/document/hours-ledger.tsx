@@ -275,7 +275,8 @@ export function HoursLedger({
     queryKey: ["document-hours-week", weekOffset, lensProjectId],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
       if (!userData?.user?.id) return [];
       let query = supabase
         .from("project_time_entries")
@@ -424,7 +425,8 @@ export function HoursLedger({
     queryKey: ["document-hours-unbilled", lensProjectId],
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
       if (!userData?.user?.id) return [];
       let query = supabase
         .from("project_unbilled_time")

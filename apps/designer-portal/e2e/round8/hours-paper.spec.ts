@@ -98,7 +98,8 @@ test('manual capture uses server rate provenance; drafting claims once and void 
   await log.click();
   await expect.poll(() => psqlScalar(`SELECT count(*) FROM project_time_entries WHERE project_id='${JOB}' AND user_id='${DESIGNER}' AND duration_minutes=30 AND source='manual_entry';`)).toBe('1');
   expect(psqlScalar(`SELECT hourly_rate_cents || '|' || rate_source || '|' || rated_amount_cents || '|' || billable FROM project_time_entries WHERE project_id='${JOB}';`)).toBe('20000|studio_member|10000|true');
-  const row = hours.getByRole('listitem').filter({ hasText: TITLE });
+  const mountedHours = page.getByRole('dialog', { name: 'Timesheets', exact: true, includeHidden: true });
+  const row = mountedHours.getByRole('listitem', { includeHidden: true }).filter({ hasText: TITLE });
   await expect(row).toContainText('Studio rate · $200/hr · $100');
   await hours.getByRole('button', { name: 'Draft time invoice', exact: true }).click();
   const composer = page.getByRole('dialog', { name: 'Draw an invoice', exact: true });
@@ -109,11 +110,16 @@ test('manual capture uses server rate provenance; drafting claims once and void 
   expect(psqlScalar(`SELECT count(*) FROM invoices WHERE project_id='${JOB}';`)).toBe('1');
   const folio = page.getByRole('dialog', { name: 'Invoice folio', exact: true });
   await expect(folio).toBeVisible();
+  await expect(row.getByText('Billed', { exact: true })).toBeAttached();
+  await expect(mountedHours.getByText('unbilled · all time', { exact: true })).toHaveCount(0);
   await folio.getByRole('button', { name: 'Void', exact: true }).click();
   await folio.getByRole('textbox', { name: 'Void reason' }).fill('H01 fictional local lifecycle check');
   await folio.getByRole('button', { name: 'Void invoice', exact: true }).click();
   await expect.poll(() => psqlScalar(`SELECT status FROM invoices WHERE id='${invoiceId}';`)).toBe('void');
   expect(psqlScalar(`SELECT count(*) FROM project_time_entries WHERE project_id='${JOB}' AND invoice_id IS NULL AND rated_amount_cents=10000;`)).toBe('1');
+  await expect(row.getByText('Billed', { exact: true })).toHaveCount(0);
+  await expect(mountedHours.getByText('unbilled · all time', { exact: true })).toBeAttached();
+  await expect(mountedHours.getByText('$100 · 30 min', { exact: true })).toBeAttached();
   console.log('[H01 native readback]', { invoiceId, rate: 20000, amount: 10000, state: 'void', released: 1 });
   await page.screenshot({ path: info.outputPath('hours-void-release.png') });
 });
