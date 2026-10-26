@@ -3,8 +3,7 @@
 /** One delivery receipt, with a separate pending-inspection and follow-up path. */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { DocSheet } from '@/components/document/overlays/doc-sheet';
 import { X } from 'lucide-react';
 import {
   useCreateReceivingInspection,
@@ -210,6 +209,7 @@ export interface LogInspectionDrawerProps {
   studioPurchaseId?: string;
   arrivalMethod?: 'picked_up' | 'delivered';
   inspectionId?: string;
+  returnFocusTo?: HTMLElement | null;
   receiptItems?: Array<ReceivingInspectionItemInput & { name: string; unit?: string | null; project_id?: string; quantity: number; received_quantity?: number | null }>;
   buyerUserId?: string;
   /**
@@ -593,35 +593,12 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     }
   };
 
-  // Portal to document.body (as OrderAssistant does): rendered inline from the
-  // line unfold, /doc's stacking context capped the panel's z-50 beneath the
-  // fixed z-40 Studio drawer, which swallowed clicks on the footer.
-  if (typeof document === 'undefined') return null;
+  const close = () => { if (!busy) onOpenChange(false); };
 
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/20"
-            onClick={() => !createInspection.isPending && onOpenChange(false)}
-            aria-hidden="true"
-          />
-          <motion.div
-            onKeyDown={e => { if (e.key === 'Escape' && !busy) { e.stopPropagation(); onOpenChange(false); } }}
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Log inspection for ${poLabel}`}
-            className="fixed bottom-0 right-0 top-0 z-50 flex w-[440px] max-w-full flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)]"
-          >
+  return (
+    <DocSheet open={open} onClose={close} title={`Log inspection for ${poLabel}`}
+      headOwnedByChild returnFocusTo={props.returnFocusTo}>
+          <div className="min-w-0">
             {/* Header */}
             <div className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-5 py-4">
               <div className="min-w-0">
@@ -637,8 +614,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
               </div>
               <IconButton
                 label="Close"
-                onClick={() => !createInspection.isPending && onOpenChange(false)}
-                disabled={busy || !!saved}
+                onClick={close}
+                disabled={busy}
                 size="sm"
               >
                 <X size={18} />
@@ -992,8 +969,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onOpenChange(false)}
-                disabled={createInspection.isPending}
+                onClick={close}
+                disabled={busy}
               >
                 {saved ? 'Done' : 'Cancel'}
               </Button>
@@ -1007,11 +984,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 {props.inspectionId ? 'Complete inspection' : 'Save receipt'}
               </Button>
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>,
-    document.body,
+          </div>
+    </DocSheet>
   );
 }
 
