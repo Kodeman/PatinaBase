@@ -71,6 +71,7 @@ export function useExternalFulfilments(projectId: string | null | undefined) {
   const query = useQuery({
     queryKey: externalFulfilmentKeys.project(projectId),
     enabled: !!projectId,
+    retry: false,
     queryFn: async () => {
       if (!projectId) throw new Error('A project is required.');
       const { data, error } = await createBrowserClient().rpc('get_project_external_fulfilments', {
@@ -154,7 +155,8 @@ function validateReadingEvent(event: ExternalEvent, row: ExternalFulfilmentReadi
   if (event.event_kind === 'release_hold') {
     const hold = row.reading.events.find((item) => item.id === event.releases_event_id);
     requireReading(hold?.event_kind === 'hold' && hold.event_seq < event.event_seq &&
-      event.evidence.releasesEventId === hold.id && event.affected_units === null);
+      typeof event.evidence.releasesEventId === 'string' &&
+      event.evidence.releasesEventId.toLowerCase() === hold.id.toLowerCase() && event.affected_units === null);
   } else requireReading(event.releases_event_id === null);
   if (event.event_kind === 'hold') requireReading(event.affected_units !== null);
   if (event.event_kind === 'package_issued') {
@@ -235,11 +237,12 @@ function validatePackageReading(row: ExternalFulfilmentReading) {
   }
 }
 
-/** The same native snapshot, isolated from the header cache's data shape. */
+/** Separate validation/cache identity; both queries receive the same additive RPC rows. */
 export function useExternalFulfilmentReadings(projectId: string | null | undefined) {
   const query = useQuery({
     queryKey: [...externalFulfilmentKeys.project(projectId), 'readings'] as const,
     enabled: !!projectId,
+    retry: false,
     queryFn: async () => {
       if (!projectId) throw new Error('A project is required.');
       const { data, error } = await createBrowserClient().rpc('get_project_external_fulfilments', {

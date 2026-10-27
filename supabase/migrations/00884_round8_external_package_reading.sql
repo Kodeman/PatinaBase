@@ -35,12 +35,15 @@ BEGIN
    'bindings',COALESCE((SELECT jsonb_agg(to_jsonb(b)-ARRAY['client_request_id','request_hash'] ORDER BY b.decision_id,b.id)
     FROM bindings b WHERE b.fulfilment_id=f.id),'[]'::jsonb),
    'verifications',COALESCE((SELECT jsonb_agg(jsonb_build_object('event_id',v.event_id,
-    'fulfilment_id',v.fulfilment_id,'verified_by',v.verified_by) ORDER BY v.event_id)
-    FROM receipts v WHERE v.fulfilment_id=f.id),'[]'::jsonb),
+    'fulfilment_id',v.fulfilment_id,'verified_by',v.verified_by) ORDER BY e.verification_seq,v.event_id)
+    FROM receipts v JOIN events e ON e.id=v.event_id WHERE v.fulfilment_id=f.id),'[]'::jsonb),
    'manifests',COALESCE((SELECT jsonb_agg(
     (to_jsonb(m)-ARRAY['idempotency_key','request_hash'])||jsonb_build_object('typed_members',
-     COALESCE((SELECT jsonb_agg(to_jsonb(mm) ORDER BY mm.id) FROM public.evidence_manifest_members mm
-      WHERE mm.manifest_id=m.id),'[]'::jsonb)) ORDER BY m.id)
+     COALESCE((SELECT jsonb_agg(to_jsonb(mm) ORDER BY
+      (SELECT ord FROM jsonb_array_elements(m.members) WITH ORDINALITY frozen(member,ord)
+       WHERE to_jsonb(mm)->>((member->>'kind')||'_id')=member->>'id'),mm.id)
+      FROM public.evidence_manifest_members mm
+      WHERE mm.manifest_id=m.id),'[]'::jsonb)) ORDER BY m.created_at,m.id)
     FROM manifests m WHERE EXISTS(SELECT 1 FROM events e WHERE e.fulfilment_id=f.id AND e.manifest_id=m.id)),'[]'::jsonb)
   )) ORDER BY f.created_at,f.id) FROM fulfilments f),'[]'::jsonb),
   NOT EXISTS(
@@ -49,7 +52,10 @@ BEGIN
    LEFT JOIN public.plan_issues i ON i.id=e.plan_issue_id
    LEFT JOIN events h ON h.id=e.releases_event_id
    LEFT JOIN receipts v ON v.event_id=e.id
-   WHERE (e.manifest_id IS NOT NULL AND (m.id IS NULL OR m.project_id IS DISTINCT FROM f.project_id
+   LEFT JOIN public.project_party_authority a ON a.id=e.authority_id
+   LEFT JOIN public.project_parties seat ON seat.id=a.engagement_id
+   WHERE (e.authority_id IS NOT NULL AND (seat.id IS NULL OR seat.project_id IS DISTINCT FROM f.project_id))
+    OR (e.manifest_id IS NOT NULL AND (m.id IS NULL OR m.project_id IS DISTINCT FROM f.project_id
      OR m.package_id IS DISTINCT FROM f.reading_package_id OR f.reading_package_id IS NULL
      OR m.manifest_hash IS DISTINCT FROM e.manifest_hash OR m.purpose IS DISTINCT FROM 'fabrication_instruction'
      OR e.evidence->>'manifestId' IS DISTINCT FROM e.manifest_id::text))
@@ -67,17 +73,25 @@ BEGIN
   ) AND NOT EXISTS(
    SELECT 1 FROM events e CROSS JOIN LATERAL jsonb_array_elements(e.coverage) c
    WHERE e.event_kind='fabrication_instruction' AND (
-    NOT ((c->>'unit')=ANY(e.affected_units)) OR jsonb_array_length(c->'revisionIds')=0
-    OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c->'revisionIds') revision_id
-     WHERE NOT EXISTS(SELECT 1 FROM public.evidence_manifest_members mm
-      JOIN public.coordination_item_revisions r ON r.id=mm.coordination_item_revision_id
-      JOIN bindings b ON b.decision_id=r.decision_id AND b.fulfilment_id=e.fulfilment_id
-      WHERE mm.manifest_id=e.manifest_id AND r.id::text=revision_id AND (c->>'unit')=ANY(b.units)
-       AND (b.covers_plan_issue_id IS NULL OR EXISTS(SELECT 1 FROM public.evidence_manifest_members pinned
-        WHERE pinned.manifest_id=e.manifest_id AND pinned.plan_issue_id=b.covers_plan_issue_id))
-       AND (b.covers_configuration_snapshot_hash IS NULL OR EXISTS(SELECT 1 FROM manifests m,
-        jsonb_array_elements(m.members) pinned WHERE m.id=e.manifest_id
-         AND pinned->>'kind'='product_configuration' AND pinned->>'sha256'=b.covers_configuration_snapshot_hash))))
+    NOT ((c->>'unit')=ANY(e.affected_units))
+    OR CASE WHEN jsonb_typeof(c->'revisionIds') IS DISTINCT FROM 'array' THEN true
+     ELSE jsonb_array_length(c->'revisionIds')=0
+      OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c->'revisionIds') revision_id
+       WHERE NOT EXISTS(SELECT 1 FROM public.evidence_manifest_members mm
+        JOIN public.coordination_item_revisions r ON r.id=mm.coordination_item_revision_id
+        JOIN bindings b ON b.decision_id=r.decision_id AND b.fulfilment_id=e.fulfilment_id
+        JOIN fulfilments f ON f.id=e.fulfilment_id
+        JOIN manifests m ON m.id=e.manifest_id
+        WHERE mm.manifest_id=e.manifest_id AND r.id::text=revision_id AND (c->>'unit')=ANY(b.units)
+         AND b.covers_plan_issue_id IS NOT DISTINCT FROM
+          (SELECT issued.plan_issue_id FROM events issued
+           WHERE issued.fulfilment_id=e.fulfilment_id AND issued.event_kind='package_issued'
+            AND issued.event_seq<e.event_seq AND f.kind='gc_cabinetry'
+           ORDER BY issued.event_seq DESC LIMIT 1)
+         AND b.covers_configuration_snapshot_hash IS NOT DISTINCT FROM
+          (SELECT pinned->>'sha256' FROM jsonb_array_elements(m.members) pinned
+           WHERE pinned->>'kind'='product_configuration' AND pinned->>'id'=f.configuration_id::text)))
+     END
    )
   ) AND NOT EXISTS(
    SELECT 1 FROM bindings b JOIN fulfilments f ON f.id=b.fulfilment_id

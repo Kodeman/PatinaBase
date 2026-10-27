@@ -21,7 +21,7 @@ import {
 import type { ExternalFulfilment, ExternalFulfilmentReading } from '../use-external-fulfilments';
 import type { ExternalFulfilment as PublicExternalFulfilment, ExternalFulfilmentReading as PublicExternalFulfilmentReading } from '../index';
 
-type ReadConfig = { enabled: boolean; queryKey: readonly unknown[]; queryFn: () => Promise<unknown> };
+type ReadConfig = { retry: boolean; enabled: boolean; queryKey: readonly unknown[]; queryFn: () => Promise<unknown> };
 type ActConfig = {
   retry: boolean;
   mutationFn: (args: unknown) => Promise<unknown>;
@@ -150,6 +150,27 @@ describe('authoritative external package evidence', () => {
     expect(rpc).toHaveBeenCalledWith('get_project_external_fulfilments', { p_project_id: 'project-1' });
     await expect((useExternalFulfilments('project-1') as unknown as ReadConfig).queryFn()).resolves.toEqual([row]);
     expect(from).not.toHaveBeenCalled();
+  });
+
+  it('never retries either native reader after a refusal', () => {
+    for (const hook of [useExternalFulfilments, useExternalFulfilmentReadings]) {
+      expect((hook('project-1') as unknown as ReadConfig).retry).toBe(false);
+    }
+  });
+
+  it('accepts a native uppercase UUID in release evidence', async () => {
+    const row = packageReading();
+    const base = row.reading.events[0];
+    const id = 'abcdefab-abcd-4abc-8abc-abcdefabcdef';
+    row.reading.events.push(
+      { ...base, id, event_kind: 'hold', event_seq: 3, evidence_level: 'reported',
+        verified_by: null, verified_at: null, verification_seq: null, affected_units: ['k-1'] },
+      { ...base, id: 'release', event_kind: 'release_hold', event_seq: 4, evidence_level: 'reported',
+        verified_by: null, verified_at: null, verification_seq: null, releases_event_id: id,
+        evidence: { releasesEventId: id.toUpperCase() } },
+    );
+    rpc.mockResolvedValue({ data: [row], error: null });
+    await expect((useExternalFulfilmentReadings('project-1') as unknown as ReadConfig).queryFn()).resolves.toEqual([row]);
   });
 
   it('preserves recorder, actor and verifier as distinct native fields, not fallback identities', async () => {
