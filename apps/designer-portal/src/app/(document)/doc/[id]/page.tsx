@@ -49,6 +49,7 @@ import {
   useSetNeedState,
   useUnbilledTime,
   useProjectVisits,
+  useExternalFulfilmentReadings,
 } from '@patina/supabase';
 import type { DiscoveryRead } from '@patina/supabase';
 import {
@@ -992,6 +993,7 @@ function ladderFactsSignature(input: TicketInput): string {
 const Round8DocumentState = lazy(() => import('@/components/document/frame/round8-states').then((module) => ({ default: module.Round8DocumentState })));
 const Round8PaperFrame = lazy(() => import('@/components/document/frame/round8-paper-frame'));
 const DesignChapter = lazy(() => import('@/components/document/paper/chapters/design-chapter').then((module) => ({ default: module.DesignChapter })));
+const CabinetryChapter = lazy(() => import('@/components/document/paper/chapters/cabinetry-chapter').then((module) => ({ default: module.CabinetryChapter })));
 
 // R8-02 — two chapters carry pieces that print nothing on an empty read. The
 // chapter mounts on the SAME reads its piece makes (one query each, shared
@@ -1004,7 +1006,14 @@ function WhenVisits({ projectId, children }: { projectId: string; children: Reac
   return isError || (visits && visits.length > 0) ? children : null;
 }
 
-const ROUND8_GATES = { site: WhenVisits };
+// CP-01 — 03 Cabinetry mounts on the same native reading its chapter makes:
+// a GC-bought cabinet package, or a failed read (which the chapter reports).
+function WhenCabinetry({ projectId, children }: { projectId: string; children: ReactNode }) {
+  const { data, isError } = useExternalFulfilmentReadings(projectId);
+  return isError || data?.some((row) => row.kind === 'gc_cabinetry') ? children : null;
+}
+
+const ROUND8_GATES = { site: WhenVisits, cabinetry: WhenCabinetry };
 
 // R8-02 — the continuous paper prints no active-section wrapper, so a section
 // landing with no anchor lands on the chapter holding the control it was asked
@@ -4463,6 +4472,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               routeId={id}
               onWorkRoom={(room, opener) => workRoom(room, 'spec', opener)}
             />
+          </Suspense>
+        ),
+        cabinetry: (
+          <Suspense fallback={<p role="status">Reading cabinet packages…</p>}>
+            <CabinetryChapter projectId={row.project_id!} />
           </Suspense>
         ),
         roomFiles,
