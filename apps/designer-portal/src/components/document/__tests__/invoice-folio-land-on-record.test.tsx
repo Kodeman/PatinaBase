@@ -139,7 +139,7 @@ describe('InvoiceFolio · landOn record (F3-3)', () => {
     fireEvent.keyDown(recordAct, { key: 'Escape' });
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(opener).toHaveFocus();
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   it('opens at rest without landOn: no payment panel, nothing filled', async () => {

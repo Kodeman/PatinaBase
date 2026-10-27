@@ -97,6 +97,9 @@ beforeEach(() => {
 describe('the receiving photo line, rendered', () => {
   const realFetch = global.fetch;
   beforeEach(() => {
+    // Cleared inspections deliberately cover only the last 30 days.
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-21T12:00:00Z'));
     global.fetch = jest.fn(async (url: string) => ({
       ok: true,
       json: async () => ({
@@ -107,6 +110,7 @@ describe('the receiving photo line, rendered', () => {
   });
   afterEach(() => {
     global.fetch = realFetch;
+    jest.useRealTimers();
   });
 
   it('shows the count on an open claim whose inspection carries photos', () => {
