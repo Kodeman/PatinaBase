@@ -52,7 +52,7 @@ END $$;
 SELECT pg_temp.fa_assert(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f8780000-%'),'fixture namespace starts empty');
 SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
- SELECT pg_temp.fa_id(n),'fa-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(1,12)n;
+ SELECT pg_temp.fa_id(n),'fa-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(1,13)n;
 INSERT INTO public.profiles(id,email,full_name,is_designer)
  SELECT id,email,'Fictional fabrication fixture',true FROM auth.users WHERE id::text LIKE 'f8780000-%';
 INSERT INTO public.organizations(id,type,name,slug,status) VALUES
@@ -204,7 +204,11 @@ INSERT INTO public.project_party_authority(engagement_id,scope,prepares_only,gra
 INSERT INTO public.project_party_authority(engagement_id,scope,granted_by) VALUES(pg_temp.fa_id(311),'selections',pg_temp.fa_id(11));
 SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(310),0),'prepares-only cannot instruct');
 SELECT pg_temp.fa_error($q$DELETE FROM public.profiles WHERE id=pg_temp.fa_id(10)$q$,'23514','fabrication_authority_immutable','fabrication grantor profile retained');
-SELECT pg_temp.fa_error($q$DELETE FROM public.profiles WHERE id=pg_temp.fa_id(1)$q$,'23503',NULL,'fabrication revoker profile retained');
+-- SQ-2185: fa_id(1) is also org A's last owner and a grantor, so its delete raised whichever
+-- RI action sorted first by trigger OID. fa_id(13) is only an ended_by revoker: RESTRICT alone.
+INSERT INTO public.project_party_authority(engagement_id,scope,revoked_at,ended_by,end_reason,effective_to)
+ VALUES(pg_temp.fa_id(309),'fabrication',now(),pg_temp.fa_id(13),'revoked',current_date);
+SELECT pg_temp.fa_error($q$DELETE FROM public.profiles WHERE id=pg_temp.fa_id(13)$q$,'23503',NULL,'fabrication revoker profile retained');
 DELETE FROM public.profiles WHERE id=pg_temp.fa_id(11);
 SELECT pg_temp.fa_assert((SELECT granted_by IS NULL FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(311)),'legacy grantor SET NULL preserved');
 SELECT set_config('app.fabrication_authority_write',(SELECT id::text FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(310)),true);

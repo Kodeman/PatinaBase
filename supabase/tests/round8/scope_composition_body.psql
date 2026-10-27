@@ -25,7 +25,12 @@ DO $$ DECLARE f record; role_name text; BEGIN
  WHERE n.nspname='public' AND p.proname IN ('apply_service_arrangement','can_author_scope_proposal','can_compose_project_plan',
  '_assert_scope_composition_enabled','_normalize_scope_package_parts','_guard_scope_package_storage','_scope_arrangement_effect','_guard_scope_immutable') LOOP
   FOREACH role_name IN ARRAY ARRAY['anon','authenticated'] LOOP
-   PERFORM pg_temp.assert_true(NOT has_function_privilege(role_name,f.signature,'EXECUTE'), role_name||' shipped no execute '||f.signature);
+   -- C1 §3 (00871): authenticated keeps EXECUTE on the read predicate its RLS policies evaluate.
+   IF role_name = 'authenticated' AND f.signature = 'public.can_compose_project_plan(uuid)'::regprocedure THEN
+    PERFORM pg_temp.assert_true(has_function_privilege(role_name,f.signature,'EXECUTE'), role_name||' shipped C1 execute '||f.signature);
+   ELSE
+    PERFORM pg_temp.assert_true(NOT has_function_privilege(role_name,f.signature,'EXECUTE'), role_name||' shipped no execute '||f.signature);
+   END IF;
   END LOOP;
   PERFORM pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM pg_proc p,aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
     WHERE p.oid=f.signature::oid AND acl.grantee=0 AND acl.privilege_type='EXECUTE'), 'PUBLIC no execute '||f.signature);
@@ -195,17 +200,19 @@ SELECT pg_temp.assert_true((SELECT NOT prosecdef AND proconfig @> ARRAY['search_
  FROM pg_proc WHERE oid='public._guard_scope_package_storage()'::regprocedure), 'scope storage guard is invoker with pinned search path');
 DO $$ DECLARE signature regprocedure; BEGIN
  FOREACH signature IN ARRAY ARRAY['public.upsert_agreement_parts(uuid,jsonb,text)'::regprocedure,
-  'public.materialize_standard_parts(uuid)'::regprocedure,'public.discard_agreement_parts(uuid)'::regprocedure] LOOP
+  'public.materialize_standard_parts(uuid)'::regprocedure,'public.discard_agreement_parts(uuid)'::regprocedure,
+  'public.create_service_addendum(uuid,text)'::regprocedure] LOOP
   PERFORM pg_temp.assert_true((SELECT native.prosecdef AND native.proowner=guard.proowner
    FROM pg_proc native CROSS JOIN pg_proc guard WHERE native.oid=signature
    AND guard.oid='public._guard_scope_package_storage()'::regprocedure), 'native writer shares guard owner '||signature);
  END LOOP;
 END $$;
+-- 00869 (C2 §2.12 SQ-1862 U2: the addendum copies scope parts) adds create_service_addendum as the fourth writer.
 SELECT pg_temp.assert_true((SELECT array_agg(p.proname::text ORDER BY p.proname)=
- ARRAY['discard_agreement_parts','materialize_standard_parts','upsert_agreement_parts']
+ ARRAY['create_service_addendum','discard_agreement_parts','materialize_standard_parts','upsert_agreement_parts']
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
  WHERE n.nspname='public' AND p.prosrc ~ $re$set_config[[:space:]]*\([[:space:]]*'app\.scope_parts_writer'$re$),
- 'only three native public bodies set scope writer marker');
+ 'only four native public bodies set scope writer marker');
 -- Fixture-only direct mutations attest after locking/rechecking the draft.
 SELECT id FROM public.proposals WHERE id='f8683000-0000-4000-8000-000000000001' AND status='draft' FOR UPDATE;
 SELECT set_config('app.scope_parts_writer','f8683000-0000-4000-8000-000000000001',true);

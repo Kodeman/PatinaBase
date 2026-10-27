@@ -229,9 +229,10 @@ BEGIN
     q:=replace(q,quote_literal(pg_temp.id('PA')),quote_literal(pg_temp.id('PB')));
     ASSERT pg_temp.probe(pg_temp.id('D'),q,NULL) LIKE 'error 23514: subject_off_project%', 'C7 off-project: '||k;
   END LOOP;
-  FOREACH k IN ARRAY ARRAY['unknown','project_package'] LOOP
-    ASSERT pg_temp.probe(pg_temp.id('D'),pg_temp.sql_of(format('UPDATE public.margin_notes SET subject_kind=%L,subject_id={XA} WHERE id={N1}',k)),NULL) LIKE 'error 23514: subject_invalid%', 'C7 closed kind refusal: '||k;
-  END LOOP;
+  ASSERT pg_temp.probe(pg_temp.id('D'),pg_temp.sql_of('UPDATE public.margin_notes SET subject_kind=''unknown'',subject_id={XA} WHERE id={N1}'),NULL) LIKE 'error 23514: subject_invalid%', 'C7 closed kind refusal: unknown';
+  -- 00877 admits project_package into the closed vocabulary (C7 §2; deferred by 00874).
+  -- A non-package id under that kind is refused by owner resolution instead.
+  ASSERT pg_temp.probe(pg_temp.id('D'),pg_temp.sql_of('UPDATE public.margin_notes SET subject_kind=''project_package'',subject_id={XA} WHERE id={N1}'),NULL) LIKE 'error 23514: subject_off_project%', 'C7 project_package without a package row refused';
   ASSERT pg_temp.probe(pg_temp.id('D'),pg_temp.sql_of('UPDATE public.margin_notes SET subject_kind=''ffe_item'' WHERE id={N1}'),NULL) LIKE 'error 23514: subject_invalid%', 'C7 half pair kind refused';
   ASSERT pg_temp.probe(pg_temp.id('D'),pg_temp.sql_of('UPDATE public.margin_notes SET subject_id={XA} WHERE id={N1}'),NULL) LIKE 'error 23514: subject_invalid%', 'C7 half pair id refused';
   ASSERT pg_temp.probe(pg_temp.id('D'),pg_temp.sql_of('UPDATE public.margin_notes SET subject_kind=''ffe_item'',subject_id={DEC} WHERE id={N1}'),NULL) LIKE 'error 23514: subject_off_project%', 'C7 missing subject refused';
