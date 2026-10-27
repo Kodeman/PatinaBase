@@ -188,6 +188,7 @@ import {
   overviewHeadStages,
 } from '@/lib/document/pieces/overview-derivation';
 import { countsAsPiece, liveBuildRoomLines } from '@/lib/document/pieces/live-lines';
+import { partitionByResponsibility } from '@/lib/document/ffe-responsibility';
 import { AskMakerSheet, InstallReadingLine } from './overlays/ask-maker-sheet';
 import { CareClosedLine } from './quiet-sections';
 import {
@@ -382,10 +383,8 @@ export function partitionExternalLines(wireItems: FFERow[] | undefined): {
   externalItems: FFERow[];
 } {
   if (!wireItems) return { items: undefined, externalItems: [] };
-  return {
-    items: wireItems.filter((item) => item.external_fulfilment_id == null),
-    externalItems: wireItems.filter((item) => item.external_fulfilment_id != null),
-  };
+  const { studio, external } = partitionByResponsibility(wireItems);
+  return { items: studio, externalItems: external };
 }
 
 /** Wording matches the round-8 Purchase lens (SQ-1990). */

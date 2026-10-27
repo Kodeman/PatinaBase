@@ -526,6 +526,7 @@ function InvoiceComposerSheet({
         covered: partition.covered.filter((item) => !retainedFfeIds.has(item.id)),
         unpriced: partition.unpriced.filter((item) => !retainedFfeIds.has(item.id)),
         unfilled: partition.unfilled.filter((item) => !retainedFfeIds.has(item.id)),
+        external: partition.external.filter((item) => !retainedFfeIds.has(item.id)),
       };
     },
     [ffeItems, coverage, ffeSettled, stageRows, editDraft, retainedLines],
@@ -1991,6 +1992,30 @@ function InvoiceComposerSheet({
                       </div>
                     );
                   })}
+                {/* SQ-2213 — external work stays in view, never a checkbox:
+                    someone else buys and bills it (C5, K3). */}
+                {ffeSettled && ffePartition.external.length > 0 && (
+                  <div className="mt-2" data-testid="composer-external-lines">
+                    <p className={`${LABEL} mb-0.5`}>external responsibility</p>
+                    {ffePartition.external.map((it) => (
+                      <div
+                        key={it.id}
+                        data-composer-external-line={it.id}
+                        className={`${ROW} cursor-default`}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--text-muted)]">
+                          {it.name}
+                          {it.room?.name && (
+                            <span className="ml-1.5">{it.room.name}</span>
+                          )}
+                        </span>
+                        <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                          not billed here
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {/* C-31 — balances owed: a live deposit, no balance yet. */}
                 {balanceOwed.length > 0 && (
                   <div className="mt-2" data-testid="composer-balances">

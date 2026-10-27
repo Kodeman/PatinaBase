@@ -234,6 +234,7 @@ function ProjectPrints({
 }) {
   const plans = usePlanRoom(projectId);
   const composition = usePlanRoomComposition(projectId);
+  const grouping = composition.isError ? undefined : composition.data;
   return (
     <section
       aria-label="Project drawings"
@@ -245,27 +246,34 @@ function ProjectPrints({
       </p>
       <ReadNotice label="Project drawings" query={plans} />
       <ReadNotice label="Drawing rooms and packages" query={composition} />
-      {!plans.isError && plans.data && !composition.isError && composition.data && (
+      {/* SQ-2213 — the native drawings, issue history and the drawing-room
+          link stand on the native read alone; the room/package grouping is
+          additive and appears only once the composition read lands. */}
+      {!plans.isError && plans.data && (
         <>
           {plans.data.sheets.length === 0 ? (
             <p className="t-body-sm mt-3">No project drawings filed yet.</p>
           ) : (
             <div className="mt-3">
-              {[
-                ...rooms.map((room) => ({ id: room.id, name: room.name })),
-                { id: 'whole-job', name: 'Drawings for the whole job' },
-                { id: 'unavailable-room', name: 'Drawings with an unavailable room' },
-              ].map((group) => {
+              {(grouping
+                ? [
+                    ...rooms.map((room) => ({ id: room.id, name: room.name })),
+                    { id: 'whole-job', name: 'Drawings for the whole job' },
+                    { id: 'unavailable-room', name: 'Drawings with an unavailable room' },
+                  ]
+                : [{ id: 'all-drawings', name: null }]
+              ).map((group) => {
                 const sheets = plans.data.sheets.filter((sheet) => {
-                  const links = composition.data.sheetRooms.filter((link) => link.sheet_id === sheet.id);
+                  if (!grouping) return true;
+                  const links = grouping.sheetRooms.filter((link) => link.sheet_id === sheet.id);
                   if (group.id === 'whole-job') return links.length === 0;
                   if (group.id === 'unavailable-room') return links.some((link) => !rooms.some((room) => room.id === link.project_room_id));
                   return links.some((link) => link.project_room_id === group.id);
                 });
                 if (sheets.length === 0) return null;
                 return (
-                  <section key={group.id} aria-label={group.name}>
-                    <h4 className="font-heading text-lg">{group.name}</h4>
+                  <section key={group.id} aria-label={group.name ?? 'Drawings'}>
+                    {group.name && <h4 className="font-heading text-lg">{group.name}</h4>}
                     <ul className="divide-y divide-[var(--border-default)]">
                       {sheets.map((sheet) => {
                         const current = plans.data.prints.find((print) => print.id === sheet.current_print_id);
@@ -279,7 +287,9 @@ function ProjectPrints({
                               {sheet.state === "shared" ? " · Client-shared current" : " · Studio only"}
                             </span>
                             {current && <PlanPrintProvenance print={current} projectId={projectId} />}
-                            <PlanSheetComposition composition={composition.data} sheetId={sheet.id} rooms={rooms} />
+                            {grouping && (
+                              <PlanSheetComposition composition={grouping} sheetId={sheet.id} rooms={rooms} />
+                            )}
                           </li>
                         );
                       })}

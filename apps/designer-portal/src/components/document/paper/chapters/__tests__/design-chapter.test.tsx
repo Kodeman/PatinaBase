@@ -6,6 +6,7 @@ import {
   useScanContextCaptures,
   useRoomConceptRenderRecord,
   usePlanRoom,
+  usePlanRoomComposition,
   useRoomScanCovers,
 } from "@patina/supabase";
 import { DesignChapter } from "../design-chapter";
@@ -19,12 +20,7 @@ jest.mock("@patina/supabase", () => ({
   useScanContextCaptures: jest.fn(),
   useRoomConceptRenderRecord: jest.fn(),
   usePlanRoom: jest.fn(),
-  usePlanRoomComposition: () => ({
-    data: { sheetRooms: [], sheetPackages: [], packages: [] },
-    isPending: false,
-    isError: false,
-    refetch: jest.fn(),
-  }),
+  usePlanRoomComposition: jest.fn(),
   useRoomScanCovers: jest.fn(),
 }));
 jest.mock("@/components/feedback/inline-error-surface", () => ({
@@ -105,6 +101,7 @@ const mockCovers = jest.mocked(useRoomScanCovers);
 const mockCaptures = jest.mocked(useScanContextCaptures);
 const mockConcept = jest.mocked(useRoomConceptRenderRecord);
 const mockPlans = jest.mocked(usePlanRoom);
+const mockComposition = jest.mocked(usePlanRoomComposition);
 const mount = (onWorkRoom = jest.fn()) =>
   render(
     <DesignChapter
@@ -115,6 +112,9 @@ const mount = (onWorkRoom = jest.fn()) =>
   );
 
 beforeEach(() => {
+  mockComposition.mockReturnValue(
+    ok({ sheetRooms: [], sheetPackages: [], packages: [] }) as ReturnType<typeof usePlanRoomComposition>,
+  );
   mockRooms.mockReturnValue(
     ok([living, kitchen]) as ReturnType<typeof useProjectRooms>,
   );
@@ -395,3 +395,35 @@ test("image byte failure stays inline and retries without losing room actions", 
    expect(screen.getByRole('region', {name: 'Issued print history'})).toBeInTheDocument();
    expect(screen.getByText('No drawing issues recorded.')).toBeInTheDocument();
  });
+
+test("SQ-2213: a failed composition read keeps native drawings, issue history and the drawing-room link", () => {
+  const composition = failed();
+  mockComposition.mockReturnValue(
+    composition as ReturnType<typeof usePlanRoomComposition>,
+  );
+  mount();
+  const drawings = screen.getByRole("region", { name: "Project drawings" });
+  expect(within(drawings).getByText("A-201 · Room plan")).toBeInTheDocument();
+  expect(
+    within(drawings).getByText("Current print 2 · revision B · Oct 23, 2026 · Client-shared current"),
+  ).toBeInTheDocument();
+  expect(
+    within(drawings).getByRole("region", { name: "Issued print history" }),
+  ).toBeInTheDocument();
+  expect(
+    within(drawings).getByRole("link", { name: "Open project drawing sets" }),
+  ).toHaveAttribute("href", "/doc/document-id/plans");
+  // The room/package grouping is additive: it waits for the composition read.
+  expect(
+    within(drawings).queryByRole("region", { name: "Drawings for the whole job" }),
+  ).not.toBeInTheDocument();
+  expect(
+    within(drawings).getByText(
+      "Drawing rooms and packages could not be read. Your place is kept.",
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    within(drawings).getByRole("button", { name: "Retry drawing rooms and packages" }),
+  );
+  expect(composition.refetch).toHaveBeenCalledTimes(1);
+});
