@@ -83,6 +83,8 @@ export interface Round8Pieces {
   brief: BriefAgreementChapterProps | null;
   roomFiles: ReactNode;
   design?: (workRoom: WorkRoom) => ReactNode;
+  /** 03 Cabinetry (CP-01): the GC-bought cabinet packages, gated by the page. */
+  cabinetry?: ReactNode;
   scheduleSpine: ReactNode;
   visits: ReactNode;
   projectFfe: ReactNode;
@@ -122,8 +124,9 @@ export interface Round8PaperFrameProps {
 
 /*
  * Each chapter wraps existing pieces only. A chapter with nothing to carry is
- * not given a body, so it does not mount (03 Cabinetry has no backing content
- * yet). The stage pieces follow the spread the legacy paper would print.
+ * not given a body, so it does not mount (03 Cabinetry mounts behind the
+ * page's cabinetry gate). The stage pieces follow the spread the legacy paper
+ * would print.
  */
 function chapterBodies(
   slots: DocumentFrameSlots,
@@ -135,6 +138,7 @@ function chapterBodies(
   return {
     brief: pieces.brief ? <BriefAgreementChapter {...pieces.brief} /> : null,
     design: pieces.design ? pieces.design(workRoom) : pieces.roomFiles,
+    cabinetry: pieces.cabinetry,
     approvals: slots.approvals,
     schedule: (
       <>
