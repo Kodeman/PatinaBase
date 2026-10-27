@@ -1,9 +1,27 @@
 \set ON_ERROR_STOP on
+-- -v expected_port=<n> names another local stack's DB port; the host stays 127.0.0.1.
+\if :{?expected_port}
+\else
+\set expected_port 54322
+\endif
+SELECT :'HOST' = '127.0.0.1' AND :'PORT' = :'expected_port' AS local_stack \gset
+\if :local_stack
+\else
+\echo REFUSED: scope_consumer_projection needs 127.0.0.1 port :expected_port, got :HOST port :PORT
+DO $$ BEGIN RAISE EXCEPTION 'scope_consumer_projection refused: not the expected local stack'; END $$;
+\quit
+\endif
 BEGIN;
 SET LOCAL statement_timeout = '30s';
 SET LOCAL lock_timeout = '3s';
--- The shared runtime predates C2. Install only inside this rolled-back oracle.
+-- Keep the rolled-back oracle at the cumulative replay horizon (see README).
 \ir ../../migrations/00868_round8_scope_composition.sql
+\ir ../../migrations/00869_round8_scope_execution.sql
+\ir ../../migrations/00871_round8_plan_composition.sql
+\ir ../../migrations/00876_round8_external_presence_parity.sql
+\ir ../../migrations/00879_round8_fabrication_instruction.sql
+\ir ../../migrations/00883_round8_external_reader_parity.sql
+\ir ../../migrations/00885_round8_countersign_execution_time.sql
 
 CREATE FUNCTION pg_temp.assert_true(ok boolean, label text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN

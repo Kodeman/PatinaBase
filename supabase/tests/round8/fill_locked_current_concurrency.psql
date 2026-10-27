@@ -19,7 +19,9 @@
 SELECT :'HOST'='127.0.0.1' AND :'PORT'=:'expected_port' AS local_stack \gset
 \if :local_stack
 \else
-\quit 3
+\echo REFUSED: fill_locked_current_concurrency needs 127.0.0.1 port :expected_port, got :HOST port :PORT
+DO $$ BEGIN RAISE EXCEPTION 'fill_locked_current_concurrency refused: not the expected local stack'; END $$;
+\quit
 \endif
 SET check_function_bodies=on;
 SET statement_timeout='60s';

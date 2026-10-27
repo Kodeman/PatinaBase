@@ -22,7 +22,8 @@ SELECT :'scope_concurrency_rehearsal' = 'on' AS approved \gset
 \if :approved
 \else
 \echo 'REFUSED: requires explicit scope_concurrency_rehearsal=on in a coordinated window'
-\quit 3
+DO $$ BEGIN RAISE EXCEPTION 'scope_composition_concurrency refused: explicit rehearsal approval required'; END $$;
+\quit
 \endif
 
 \if :{?expected_port}
@@ -33,13 +34,15 @@ SELECT :'HOST' = '127.0.0.1' AND :'PORT' = :'expected_port' AS local_stack \gset
 \if :local_stack
 \else
 \echo 'REFUSED: requires host 127.0.0.1 port' :expected_port
-\quit 3
+DO $$ BEGIN RAISE EXCEPTION 'scope_composition_concurrency refused: not the expected local stack'; END $$;
+\quit
 \endif
 SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='dblink') AS dblink_installed \gset
 \if :dblink_installed
 \else
 \echo 'REFUSED: prerequisite dblink extension missing; install it on this local stack only, never in a migration or seed'
-\quit 3
+DO $$ BEGIN RAISE EXCEPTION 'scope_composition_concurrency refused: prerequisite dblink extension missing'; END $$;
+\quit
 \endif
 SET statement_timeout='90s';
 DO $oracle$
