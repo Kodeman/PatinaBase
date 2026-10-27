@@ -211,126 +211,154 @@ SELECT pg_temp.ep_actor(1);
 -- Corrupt only rollback-owned fixture references. Every case must refuse the
 -- read, not filter away the bad row and produce valid-looking empty evidence.
 SAVEPOINT bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_evidence_bindings SET decision_id=pg_temp.ep_id(603) WHERE id=pg_temp.ep_id(501);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','foreign binding refuses instead of disappearing');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_verifications SET verified_by=pg_temp.ep_id(1) WHERE event_id=pg_temp.ep_id(1005);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','mismatched verifier receipt refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 DELETE FROM public.project_external_fulfilment_verifications WHERE event_id=pg_temp.ep_id(1005);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing verification receipt refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET manifest_id=pg_temp.ep_manifest('manifest-new') WHERE id=pg_temp.ep_id(1001);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','recorded hash cannot be substituted with newer manifest');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:197–199 blocks this write path.
 SET LOCAL session_replication_role=replica;
 DELETE FROM public.evidence_manifest_members WHERE manifest_id=pg_temp.ep_manifest('manifest-old') AND coordination_item_revision_id IS NOT NULL;
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing immutable member refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:158–163 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.evidence_manifests SET project_id=pg_temp.ep_id(203),package_id=pg_temp.ep_id(803) WHERE id=pg_temp.ep_manifest('manifest-old');
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','manifest from another project refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:158–163 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.evidence_manifests SET package_id=pg_temp.ep_id(802) WHERE id=pg_temp.ep_manifest('manifest-old');
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','manifest from another package refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:158–163 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.evidence_manifests SET purpose='service_acceptance' WHERE id=pg_temp.ep_manifest('manifest-old');
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','wrong manifest purpose refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET evidence=jsonb_set(evidence,'{manifestId}',to_jsonb(pg_temp.ep_manifest('manifest-new')::text)) WHERE id=pg_temp.ep_id(1001);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','evidence manifest identity mismatch refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET affected_units=ARRAY['foreign'] WHERE id=pg_temp.ep_id(1004);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','event units outside fulfilment refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
-UPDATE public.project_external_fulfilment_events SET coverage='[]' WHERE id=pg_temp.ep_id(1001);
+-- Empty coverage is unreachable-by-constraint 00879_round8_fabrication_instruction.sql:28–35.
+-- Duplicate the existing nonempty entry: native CHECK accepts it, reader cardinality must refuse it.
+UPDATE public.project_external_fulfilment_events SET coverage=coverage||coverage WHERE id=pg_temp.ep_id(1001);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','coverage cardinality mismatch refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET coverage='[{"unit":"k-1"}]' WHERE id=pg_temp.ep_id(1001);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing coverage revisions refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET coverage='[{"unit":"k-1","revisionIds":{}}]' WHERE id=pg_temp.ep_id(1001);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','non-array coverage revisions refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET coverage='[{"unit":"k-1","revisionIds":[]}]' WHERE id=pg_temp.ep_id(1001);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','empty coverage revisions refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET plan_issue_id=pg_temp.ep_id(823) WHERE id=pg_temp.ep_id(1006);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','cross-project plan issue refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET fulfilment_id=pg_temp.ep_id(403) WHERE id=pg_temp.ep_id(1002);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','release across fulfilments refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET event_seq=7 WHERE id=pg_temp.ep_id(1004);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','release precedes hold refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_evidence_bindings SET units=ARRAY['foreign'] WHERE id=pg_temp.ep_id(501);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','binding units outside fulfilment refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_evidence_bindings SET covers_plan_issue_id=pg_temp.ep_id(823) WHERE id=pg_temp.ep_id(501);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','cross-project covered plan issue refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_verifications SET fulfilment_id=pg_temp.ep_id(402) WHERE event_id=pg_temp.ep_id(1005);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','receipt for another fulfilment refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:158–163 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.evidence_manifests SET members=jsonb_set(members,ARRAY[(SELECT (ord-1)::text FROM jsonb_array_elements(members) WITH ORDINALITY frozen(member,ord) WHERE member->>'kind'='plan_issue'),'id'],to_jsonb(pg_temp.ep_id(822)::text)) WHERE id=pg_temp.ep_manifest('manifest-old');
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','non-revision member disagrees with typed row refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_evidence_bindings SET covers_plan_issue_id=NULL WHERE id=pg_temp.ep_id(501);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing pinned issue binding refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_evidence_bindings SET covers_configuration_snapshot_hash=NULL WHERE id=pg_temp.ep_id(501);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing pinned configuration binding refuses');
 ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET authority_id=pg_temp.ep_id(853) WHERE id=pg_temp.ep_id(1001);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','authority seat on another project refuses');
 ROLLBACK TO bad_reference;
+-- Reported events with verified fields are unreachable-by-constraint 00875_round8_external_fulfilment.sql:64–65.
+-- This existing assertion checks native write rejection, not a reader refusal.
 SET LOCAL session_replication_role=replica;
 SELECT pg_temp.ep_error($q$UPDATE public.project_external_fulfilment_events SET verified_by=pg_temp.ep_id(2),verified_at=now(),verification_seq=3 WHERE id=pg_temp.ep_id(1001)$q$,'23514','native CHECK refuses verified fields on a reported event');
 SET LOCAL session_replication_role=origin;
