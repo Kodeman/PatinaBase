@@ -35,7 +35,14 @@ for (const [name, change] of [
   ['container PID', c => { c.HostConfig.PidMode = 'container:other'; }],
   ['missing security options', c => { delete c.HostConfig.SecurityOpt; }],
   ['disabled no-new-privileges', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:false']; }],
-  ['unconfined seccomp', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'seccomp=unconfined']; }],
+  ['unconfined seccomp equals', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'seccomp=unconfined']; }],
+  ['unconfined seccomp colon', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'seccomp:unconfined']; }],
+  ['unconfined apparmor equals', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'apparmor=unconfined']; }],
+  ['unconfined apparmor colon', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'apparmor:unconfined']; }],
+  ['disabled label equals', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'label=disable']; }],
+  ['disabled label colon', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'label:disable']; }],
+  ['contradicting no-new-privileges', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'no-new-privileges:false']; }],
+  ['bare no-new-privileges', c => { c.HostConfig.SecurityOpt = ['no-new-privileges']; }],
   ['privileged container', c => { c.HostConfig.Privileged = true; }],
   ['added capabilities', c => { c.HostConfig.CapAdd = ['SYS_ADMIN']; }],
   ['wrong image id', c => { c.Image = 'sha256:' + '0'.repeat(64); }],
@@ -47,8 +54,8 @@ test('accepts the Docker equals spelling for no-new-privileges', () => {
   value[0].HostConfig.SecurityOpt = ['no-new-privileges=true'];
   assert.doesNotThrow(() => assertOwnedContainer(value, owner, ticket));
 });
-for (const option of ['no-new-privileges:true-extra', 'apparmor=unconfined', 'label=disable']) {
-  test('refuses non-exact or unsafe security option ' + option, () => {
+for (const option of ['no-new-privileges:true-extra', 'no-new-privileges', 'no-new-privileges:yes']) {
+  test('refuses non-exact no-new-privileges option ' + option, () => {
     const value = owned();
     value[0].HostConfig.SecurityOpt = [option];
     assert.throws(() => assertOwnedContainer(value, owner, ticket));

@@ -43,12 +43,19 @@ export function assertOwnedContainer(inspect, owner, ticket) {
     throw new Error('isolated owned postgres container required');
   }
   const securityOpt = c?.HostConfig?.SecurityOpt ?? [];
+  const parsedSecurityOpt = Array.isArray(securityOpt)
+    ? securityOpt.map(option => {
+      const separator = option.search(/[:=]/);
+      return separator < 0 ? [option, undefined] : [option.slice(0, separator), option.slice(separator + 1)];
+    }) : [];
+  const noNewPrivileges = parsedSecurityOpt.filter(([key]) => key === 'no-new-privileges');
   if (inspect?.length !== 1 || c?.HostConfig?.NetworkMode !== 'none'
     || Object.keys(c.HostConfig.PortBindings ?? {}).length !== 0
     || Object.keys(c.NetworkSettings?.Ports ?? {}).length !== 0
     || !Array.isArray(securityOpt)
-    || !securityOpt.some(option => option === 'no-new-privileges:true' || option === 'no-new-privileges=true')
-    || securityOpt.some(option => ['seccomp=unconfined', 'apparmor=unconfined', 'label=disable'].includes(option))
+    || noNewPrivileges.length === 0 || noNewPrivileges.some(([, value]) => value !== 'true')
+    || parsedSecurityOpt.some(([key, value]) =>
+      (['seccomp', 'apparmor'].includes(key) && value === 'unconfined') || (key === 'label' && value === 'disable'))
     || c.HostConfig.Privileged !== false
     || (c.HostConfig.CapAdd !== null && c.HostConfig.CapAdd !== undefined
       && (!Array.isArray(c.HostConfig.CapAdd) || c.HostConfig.CapAdd.length !== 0))
