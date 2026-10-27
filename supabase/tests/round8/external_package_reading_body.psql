@@ -305,7 +305,8 @@ SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_tem
 ROLLBACK TO bad_reference;
 -- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
-UPDATE public.project_external_fulfilment_events SET fulfilment_id=pg_temp.ep_id(403) WHERE id=pg_temp.ep_id(1002);
+-- Keep the release inside project 201's reader scope; sibling 402 already owns event_seq 1..1002.
+UPDATE public.project_external_fulfilment_events SET fulfilment_id=pg_temp.ep_id(402),event_seq=1003 WHERE id=pg_temp.ep_id(1002);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','release across fulfilments refuses');
 ROLLBACK TO bad_reference;
