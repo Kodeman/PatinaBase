@@ -118,6 +118,7 @@ afterEach(() => {
 });
 
 import { FFESection } from '../ffe-section';
+import { openInvoiceComposer } from '../accounts/invoice-overlays';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 
 // US-21 Q14 — the project spread opens on room rows; with no rooms on the
@@ -211,6 +212,50 @@ describe('T-7a — the Pieces row prints Not priced, never $0', () => {
     expect(row).toHaveTextContent('$4,800');
     expect(row).not.toHaveTextContent('Not priced');
     expect(row).not.toHaveTextContent(/\$0(?![\d,])/);
+  });
+});
+
+// SQ-2201 F4 — 00876 zeroes an external fulfilment's prices; a product-backed
+// GC-cabinetry line must not read as $0 studio FF&E or join the Bill offer.
+describe('external fulfilment lines are visible but never studio-priced', () => {
+  beforeEach(() => {
+    (openInvoiceComposer as jest.Mock).mockClear();
+    mockItems = [
+      line({
+        id: 'priced',
+        name: 'Walnut bed',
+        product_id: 'p-1',
+        unit_price_cents: 1_230_000,
+        line_total_cents: 1_230_000,
+      }),
+      line({
+        id: 'external',
+        name: 'Kitchen cabinetry',
+        product_id: 'p-cab',
+        unit_price_cents: 0,
+        line_total_cents: 0,
+        external_fulfilment_id: 'ext-1',
+      }),
+    ];
+  });
+
+  it('keeps the external line out of the priced lines and in the external responsibility list', () => {
+    const { container } = renderSection();
+    expect(rowOf('Walnut bed')).toHaveTextContent('$12,300');
+    expect(screen.queryByRole('button', { name: /Kitchen cabinetry/ })).not.toBeInTheDocument();
+    const external = screen.getByRole('region', { name: 'External responsibility' });
+    expect(external).toHaveTextContent('Kitchen cabinetry');
+    expect(external).toHaveTextContent('Not priced by the studio');
+    expect(external).not.toHaveTextContent('$0');
+    expect(container.querySelector('[data-ffe-external-line="external"]')).not.toBeNull();
+  });
+
+  it('leaves the external line out of the Bill offer', () => {
+    renderSection('install');
+    fireEvent.click(screen.getByRole('button', { name: 'Bill 1 uninvoiced' }));
+    expect(openInvoiceComposer).toHaveBeenCalledWith(
+      expect.objectContaining({ initialFfeItemIds: ['priced'] }),
+    );
   });
 });
 
