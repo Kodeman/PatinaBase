@@ -6,10 +6,19 @@
 -- A begins first, B executes and commits, then A executes. A ended B's
 -- authority at A's transaction-start signed_at, earlier than B's effective_at,
 -- violating project_billing_authorities ended_at >= effective_at (00412:154).
--- One v_executed_at := clock_timestamp(), taken after the projects FOR UPDATE
--- lock, stamps project_commercial_documents.executed_at, the superseded
--- authority's ended_at and the new authority's effective_at. Signature
--- signed_at and proposals.signed_at/accepted_at are unchanged.
+-- Ruling (B), SQ-2171: one v_executed_at := GREATEST(studio signed_at, the
+-- active authority's effective_at read after the projects FOR UPDATE lock)
+-- stamps project_commercial_documents.executed_at, the superseded
+-- authority's ended_at and the new authority's effective_at. With no active
+-- authority it is signed_at. The old body succeeded only when signed_at >=
+-- that effective_at, so every previously successful countersign keeps
+-- executed_at = effective_at = ended_at = signed_at exactly; same-transaction
+-- hour binding (00797 window effective_at <= started_at < ended_at) is unchanged.
+-- Accepted consequence of the reverse-start race only: the successor that
+-- committed first is ended at its own effective_at x, a zero-length window
+-- [x, x) that 00412's CHECK admits; hours at or after x bind the authority
+-- executed last. Authorities stay ordered by execution (ties possible).
+-- Signature signed_at and proposals.signed_at/accepted_at are unchanged.
 -- Existing signature, SECURITY DEFINER, search_path, owner, comments and ACLs
 -- are retained by REPLACE. No grants, capabilities or activation change.
 
@@ -413,8 +422,15 @@ BEGIN
       FROM public.projects AS project
       WHERE project.id = v_project_id
       FOR UPDATE;
-      -- 00885: execution time follows the project lock, not transaction start.
-      v_executed_at := clock_timestamp();
+      -- 00885: never before the authority in force; GREATEST ignores NULL,
+      -- so with no active authority this is the studio signed_at.
+      v_executed_at := GREATEST(
+        v_studio_signature.signed_at,
+        (SELECT max(authority.effective_at)
+         FROM public.project_billing_authorities AS authority
+         WHERE authority.project_id = v_project_id
+           AND authority.status = 'active')
+      );
       INSERT INTO public.project_commercial_documents (
         project_id, proposal_id, document_kind, is_origin, executed_at, created_by
       ) VALUES (
@@ -496,8 +512,16 @@ BEGIN
       FOR UPDATE;
       -- 00885: a transaction that began earlier but locked later executes
       -- later; ending the predecessor at its own signed_at broke 00412's
-      -- ended_at >= effective_at CHECK (23514).
-      v_executed_at := clock_timestamp();
+      -- ended_at >= effective_at CHECK (23514). Read after the lock above,
+      -- so a successor that committed first is seen; NULL (none active)
+      -- leaves signed_at.
+      v_executed_at := GREATEST(
+        v_studio_signature.signed_at,
+        (SELECT max(authority.effective_at)
+         FROM public.project_billing_authorities AS authority
+         WHERE authority.project_id = v_project_id
+           AND authority.status = 'active')
+      );
       UPDATE public.project_commercial_documents
       SET executed_at = v_executed_at
       WHERE id = v_document_id;
