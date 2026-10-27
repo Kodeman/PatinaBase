@@ -11,7 +11,9 @@
 // Run: node --test --test-concurrency=1 supabase/tests/round8/scope_reconciliation_concurrency.test.mjs
 // Negative control: add SCOPE_RECONCILIATION_NEGATIVE_CONTROL=inverted. Only the
 // new retry schedule calls a session-local scratch function; public SQL is untouched.
-// It must assertion-fail with 40P01/55P03, never count a setup failure as the control.
+// It must assertion-fail with 40P01/55P03, never count a setup failure as the control:
+// a missing copy, a missing project-tuple wait, or any other contention error fails
+// with an INVALID-CONTROL message instead of the contention assertion.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -52,9 +54,10 @@ function invertedReconciliation(definition) {
     'negative-control source must start with canonical project→proposal locks');
   // Copy the installed native body, changing only its name and lock placement.
   // The receipt/snapshot checks remain; this schedule always uses a fresh request.
+  // pg_get_functiondef has no terminator; without one psql only buffers the CREATE.
   return definition.replace(name, 'CREATE OR REPLACE FUNCTION pg_temp.scope_reconciliation_inverted(')
     .replace(proposalLock, '')
-    .replace(projectLock, `${documentSet}\n ${proposalLock}\n ${projectLock}`);
+    .replace(projectLock, `${documentSet}\n ${proposalLock}\n ${projectLock}`) + ';';
 }
 
 // Each process owns one backend. ON_ERROR_STOP makes an expected SQL refusal
@@ -242,6 +245,8 @@ test('reconciliation follows execution locks and refuses moved sets with atomic 
     if (negativeControl === 'inverted') {
       const definition = await b.query("SELECT pg_get_functiondef('public.reconcile_scope_edition(uuid,uuid,uuid)'::regprocedure);");
       await b.query(invertedReconciliation(definition));
+      assert.equal(await b.query("SELECT to_regprocedure('pg_temp.scope_reconciliation_inverted(uuid,uuid,uuid)') IS NOT NULL;"), 't',
+        'INVALID-CONTROL (setup): session B must hold the installed pg_temp.scope_reconciliation_inverted copy');
       retryReconcile = retryReconcile.replace('public.reconcile_scope_edition(', 'pg_temp.scope_reconciliation_inverted(');
       console.info('negative control: session-local proposal→project reconciliation copy');
     }
@@ -255,11 +260,22 @@ test('reconciliation follows execution locks and refuses moved sets with atomic 
     't', 'native retry proposal is already executed and belongs to the reconciliation snapshot');
     await a.query(`BEGIN; SELECT 1 FROM public.projects WHERE id=${literal(job)} FOR UPDATE;`);
     const ordered = b.query('BEGIN; ' + retryReconcile + ' ROLLBACK;').then(value => ({ value }), error => ({ error }));
-    await waitForProjectLock();
+    try {
+      await waitForProjectLock();
+    } catch (error) {
+      // The inverted copy still takes the project lock, only later; no wait means it never ran.
+      if (negativeControl === 'inverted') throw new Error('INVALID-CONTROL (setup): inverted reconciliation never waited on the owned project tuple: ' + error.message);
+      throw error;
+    }
     const retried = await a.query(`SELECT public.countersign_design_services_agreement(${literal(proposals[2])},'Execution Designer'); COMMIT;`)
       .then(value => ({ value }), error => ({ error }));
     const orderedOutcome = await ordered;
-    assert.equal([retried.error?.message, orderedOutcome.error?.message].filter(Boolean).join('\n'), '',
+    const contention = [retried.error?.message, orderedOutcome.error?.message].filter(Boolean).join('\n');
+    // Under inversion only a deadlock or lock timeout is a detection; a timeout kill or other error is not.
+    if (negativeControl === 'inverted' && contention && !/\b(40P01|55P03)\b/.test(contention)) {
+      throw new Error('INVALID-CONTROL: inverted contention failed without 40P01/55P03: ' + contention);
+    }
+    assert.equal(contention, '',
       'project→proposal contention: native executed-proposal retry and reconciliation both complete without deadlock or lock timeout');
     const retriedResult = JSON.parse(retried.value);
     assert.equal(retriedResult.newlyExecuted, false, 'contending native countersign is an execution retry, not an appended execution');
