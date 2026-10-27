@@ -1,4 +1,11 @@
 -- Include-only fictional read fixture. No activation, public SQL stubs or financial rows.
+-- N2 redundant disjuncts in 00884_round8_external_package_reading.sql:
+-- :59 f.reading_package_id IS NULL is unreachable-by-constraint
+-- 00877_round8_evidence_manifests.sql:138 together with 00884:60 (fabrication
+-- purpose), the manifest FK (00879_round8_fabrication_instruction.sql:40–43)
+-- and the package identity comparison (00884:59).
+-- :68 v.fulfilment_id IS DISTINCT FROM f.id duplicates receipt validation :104;
+-- :69 v.verified_by IS DISTINCT FROM e.verified_by duplicates :105.
 CREATE FUNCTION pg_temp.ep_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
@@ -45,6 +52,14 @@ DO $$ DECLARE t text; signature text; BEGIN
   FROM pg_proc WHERE oid='public.get_project_external_fulfilments(uuid)'::regprocedure),'stable definer path retained');
 END $$;
 SELECT pg_temp.ep_assert(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f884%'),'fixture namespace starts empty');
+-- Replica-mode SETUP bypasses proposal scope/plan composition/authority INSERT
+-- guards (00869_round8_scope_execution.sql:2325;
+-- 00871_round8_plan_composition.sql:87; 00878_round8_fabrication_authority.sql:98)
+-- and the external INSERT guard (00875_round8_external_fulfilment.sql:174–189,
+-- trigger at :376) for the project_external_fulfilments rows below.
+-- It also suppresses FK triggers, not CHECKs: real agreement/proposal/product
+-- targets are inserted here and asserted below (configuration FK 00403:195,198,200;
+-- fulfilment FKs 00875:16,25,34). These are setup rows, not reader corruptions.
 SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
 SELECT pg_temp.ep_id(n),'package-reader-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(1,4)n;
@@ -87,7 +102,8 @@ VALUES(pg_temp.ep_id(601),pg_temp.ep_id(901),pg_temp.ep_id(1),pg_temp.ep_id(201)
 (pg_temp.ep_id(602),pg_temp.ep_id(901),pg_temp.ep_id(1),pg_temp.ep_id(201),'Unused binding evidence','pending','designer','submittal'),
 (pg_temp.ep_id(603),pg_temp.ep_id(901),pg_temp.ep_id(4),pg_temp.ep_id(203),'Foreign evidence','pending','designer','submittal');
 INSERT INTO public.coordination_item_revisions(id,decision_id,rev_number,status,reviewed_by,reviewed_at,note)
-VALUES(pg_temp.ep_id(701),pg_temp.ep_id(601),1,'approved',pg_temp.ep_id(2),now(),'PRIVATE_BODY_NOT_FOR_READER');
+VALUES(pg_temp.ep_id(701),pg_temp.ep_id(601),1,'approved',pg_temp.ep_id(2),now(),'PRIVATE_BODY_NOT_FOR_READER'),
+(pg_temp.ep_id(702),pg_temp.ep_id(601),2,'approved',pg_temp.ep_id(2),now(),'UNPINNED_PRIVATE_REVISION');
 INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by)
 SELECT pg_temp.ep_id(820+n),pg_temp.ep_id(201),n,'Pinned issue','issue-'||n,repeat('a',64),repeat(n::text,64),1,pg_temp.ep_id(1)
 FROM generate_series(1,2)n;
@@ -123,6 +139,11 @@ SELECT public.create_evidence_manifest(pg_temp.ep_id(201),pg_temp.ep_id(801),'fa
 CREATE FUNCTION pg_temp.ep_manifest(key text) RETURNS uuid LANGUAGE sql AS $$
  SELECT manifest_id FROM public.evidence_manifest_requests WHERE project_id=pg_temp.ep_id(201) AND idempotency_key=key;
 $$;
+-- Replica-mode SETUP bypasses external INSERT/UPDATE guards (00875:174–189,376)
+-- and member UPDATE immutability (00877:197–199). FK triggers are suppressed,
+-- but every external target exists (00875:40,45–46,51,54,56,80–85,96–100;
+-- instruction CHECK 00879:35 and authority/manifest FKs 00879:37–42).
+-- No CHECK is disabled.
 SET LOCAL session_replication_role=replica;
 INSERT INTO public.project_external_fulfilment_evidence_bindings(id,fulfilment_id,decision_id,units,covers_plan_issue_id,
  covers_configuration_snapshot_hash,bound_by,client_request_id,request_hash)
@@ -235,6 +256,50 @@ SELECT pg_temp.ep_actor(1);
 -- Corrupt only rollback-owned fixture references. Every case must refuse the
 -- read, not filter away the bad row and produce valid-looking empty evidence.
 SAVEPOINT bad_reference;
+-- (a) 00884:85 r.id::text=revision_id: real revision 702 shares decision 601,
+-- but no manifest contains it. Guard bypass: 00875:174–189, trigger at 376.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET coverage=jsonb_set(coverage,'{0,revisionIds}',jsonb_build_array(pg_temp.ep_id(702))) WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1a unpinned real revision alone refuses');
+ROLLBACK TO bad_reference;
+-- (b) 00884:85 unit=ANY(b.units): k-2 remains a valid subset of f.units.
+-- Guard bypass: 00875:174–189,376; real FKs unchanged (00875:80–85).
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_evidence_bindings SET units=ARRAY['k-2'] WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1b binding omits instruction unit alone refuses');
+ROLLBACK TO bad_reference;
+-- (c) 00884:85 mm.manifest_id=e.manifest_id: mint a consistent third manifest.
+SELECT public.create_evidence_manifest(pg_temp.ep_id(201),pg_temp.ep_id(801),'fabrication_instruction',
+ (SELECT jsonb_agg(member) FROM jsonb_array_elements(pg_temp.ep_members(821)) member
+  WHERE member->>'kind'<>'coordination_item_revision'),'manifest-no-revision');
+-- Guard bypass: 00875:174–189,376; manifest FK stays real (00879:40–43).
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events e SET manifest_id=m.id,manifest_hash=m.manifest_hash,
+ evidence=jsonb_set(e.evidence,'{manifestId}',to_jsonb(m.id::text))
+ FROM public.evidence_manifests m WHERE e.id=pg_temp.ep_id(1001) AND m.id=pg_temp.ep_manifest('manifest-no-revision');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1c revision in another manifest alone refuses');
+ROLLBACK TO bad_reference;
+-- (d) 00884:86–90: latest preceding issue is 822; binding still covers 821.
+-- Guard bypass: 00875:174–189,376; issue FK is real and same-project (00875:46).
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET event_seq=7 WHERE id=pg_temp.ep_id(1001);
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,plan_issue_id,recorded_by,event_seq,client_request_id,request_hash)
+VALUES(pg_temp.ep_id(1007),pg_temp.ep_id(401),'package_issued',jsonb_build_object('planIssueId',pg_temp.ep_id(822)),pg_temp.ep_id(822),pg_temp.ep_id(1),6,'issued-later','fixture');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1d latest preceding issue alone refuses');
+ROLLBACK TO bad_reference;
+-- (e) 00884:82 b.fulfilment_id=e.fulfilment_id: sibling 402 is in this reader
+-- scope and has the same project/units; decision, issue and snapshot still match.
+-- Guard bypass: 00875:174–189,376; real fulfilment FK (00875:80).
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_evidence_bindings SET fulfilment_id=pg_temp.ep_id(402) WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1e sibling binding alone refuses');
+ROLLBACK TO bad_reference;
+
 -- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_evidence_bindings SET decision_id=pg_temp.ep_id(603) WHERE id=pg_temp.ep_id(502);
@@ -463,10 +528,11 @@ SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','manifest hash mismatch alone refuses');
 ROLLBACK TO bad_reference;
 -- members only (00884:108): all frozen members still resolve; add one extra typed row.
-SET LOCAL session_replication_role=replica;
+-- Privileged INSERT uses the table-owner path (REVOKE 00877:196); it does NOT
+-- bypass immutable-member trigger 00877:197–199, which covers UPDATE/DELETE only.
+-- Real plan_issue FK: 00877:174. Replica is unnecessary for this INSERT.
 INSERT INTO public.evidence_manifest_members(manifest_id,plan_issue_id)
 VALUES(pg_temp.ep_manifest('manifest-old'),pg_temp.ep_id(822));
-SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','extra typed member count alone refuses');
 ROLLBACK TO bad_reference;
 RELEASE SAVEPOINT bad_reference;

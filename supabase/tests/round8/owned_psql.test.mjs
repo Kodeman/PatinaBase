@@ -2,14 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertOwnedContainer, verifySqlInputs, controlSql, main } from './owned_psql.mjs';
 
-const owner = 'sq2170-test-owner';
+const owner = 'sq2173-test-owner';
+const ticket = 'SQ-2173';
 const owned = () => [{ Name: '/round8-reader-test',
   Image: 'sha256:178f0976b54a39237096bfa310c1a352dbc82fb1b08dda45cdb8acb5d40c1426',
   Config: { Image: 'public.ecr.aws/supabase/postgres:17.6.1.063', Env: ['PGDATA=/var/lib/postgresql/data'],
-    Labels: { 'sidequest.ticket': 'SQ-2170', 'sidequest.owner': owner } },
+    Labels: { 'sidequest.ticket': ticket, 'sidequest.owner': owner } },
   Mounts: [{ Type: 'tmpfs', Destination: '/var/lib/postgresql/data' }, { Type: 'tmpfs', Destination: '/var/run/postgresql' }],
   HostConfig: { NetworkMode: 'none', PortBindings: {}, ReadonlyRootfs: true, IpcMode: 'private', PidMode: '' }, NetworkSettings: { Ports: {} } }];
-test('accepts an isolated native postgres fixture', () => assert.doesNotThrow(() => assertOwnedContainer(owned(), owner)));
+test('accepts an isolated native postgres fixture', () => assert.doesNotThrow(() => assertOwnedContainer(owned(), owner, ticket)));
 for (const [name, change] of [
   ['shared name', c => { c.Name = '/supabase_db_supabase'; }],
   ['network', c => { c.HostConfig.NetworkMode = 'bridge'; }],
@@ -24,14 +25,39 @@ for (const [name, change] of [
   ['inherited volumes', c => { c.HostConfig.VolumesFrom = ['other']; }],
   ['non-tmpfs PGDATA', c => { c.Mounts.shift(); }],
   ['non-tmpfs socket', c => { c.Mounts.pop(); }],
+  ['missing owner label', c => { delete c.Config.Labels['sidequest.owner']; }],
+  ['missing PGDATA', c => { c.Config.Env = []; }],
+  ['container IPC', c => { c.HostConfig.IpcMode = 'container:other'; }],
+  ['host PID', c => { c.HostConfig.PidMode = 'host'; }],
   ['host IPC', c => { c.HostConfig.IpcMode = 'host'; }],
   ['container PID', c => { c.HostConfig.PidMode = 'container:other'; }],
   ['wrong image id', c => { c.Image = 'sha256:' + '0'.repeat(64); }],
   ['wrong owner', c => { c.Config.Labels['sidequest.owner'] = 'other'; }],
   ['wrong ticket', c => { c.Config.Labels['sidequest.ticket'] = 'SQ-2110'; }],
-]) test('refuses ' + name, () => { const value = owned(); change(value[0]); assert.throws(() => assertOwnedContainer(value, owner)); });
+]) test('refuses ' + name, () => { const value = owned(); change(value[0]); assert.throws(() => assertOwnedContainer(value, owner, ticket)); });
+test('accepts the real Docker --tmpfs inspect shape', () => {
+  const value = owned();
+  value[0].Mounts = [];
+  value[0].HostConfig.Tmpfs = { '/var/lib/postgresql/data': 'rw', '/var/run/postgresql': 'rw' };
+  assert.doesNotThrow(() => assertOwnedContainer(value, owner, ticket));
+});
+for (const [name, missing] of [
+  ['PGDATA', '/var/lib/postgresql/data'],
+  ['socket directory', '/var/run/postgresql'],
+]) test('refuses real Docker --tmpfs shape missing ' + name, () => {
+  const value = owned();
+  value[0].Mounts = [];
+  value[0].HostConfig.Tmpfs = { '/var/lib/postgresql/data': 'rw', '/var/run/postgresql': 'rw' };
+  delete value[0].HostConfig.Tmpfs[missing];
+  assert.throws(() => assertOwnedContainer(value, owner, ticket), /isolated owned postgres container required/);
+});
+test('refuses unset ownership and ticket pins', () => {
+  assert.throws(() => assertOwnedContainer(owned(), undefined, ticket));
+  assert.throws(() => assertOwnedContainer(owned(), owner, undefined));
+  assert.throws(() => assertOwnedContainer(owned(), owner, 'SQ-2170'));
+});
 test('refuses missing and multiple inspect results', () => {
-  for (const value of [null, [], [...owned(), ...owned()]]) assert.throws(() => assertOwnedContainer(value, owner));
+  for (const value of [null, [], [...owned(), ...owned()]]) assert.throws(() => assertOwnedContainer(value, owner, ticket));
 });
 const files = {
   'supabase/tests/entry.sql': Buffer.from('\\ir child.psql\n'),
@@ -54,7 +80,7 @@ for (const file of Object.keys(files).slice(0, 3)) {
     local, name => { if (name === '/tmp/round8-input/' + file) throw Error('missing'); return remote(name); }), /missing/));
 }
 test('unapproved control and malformed transport never inspect or execute', () => {
-  const env = { ROUND8_PSQL_TRANSPORT: 'docker-exec', ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_CONTAINER: 'a'.repeat(64),
+  const env = { ROUND8_PSQL_TRANSPORT: 'docker-exec', ROUND8_OWNED_TICKET: ticket, ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_CONTAINER: 'a'.repeat(64),
     ROUND8_EXTERNAL_READING_CONTROL: '/tmp/round8-input/control/old-reader.sql' };
   const run = () => assert.fail('must not spawn');
   assert.throws(() => main(env, ['node', 'helper', 'supabase/tests/entry.sql'], run), /negative-control/);
@@ -103,7 +129,7 @@ test('executes a read-only verified snapshot of pinned committed bytes, not muta
     else assert.ok(args.includes('mkdir'));
     return ok();
   };
-  assert.equal(main({ ROUND8_PSQL_TRANSPORT: 'docker-exec', ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_CONTAINER: 'a'.repeat(64) },
+  assert.equal(main({ ROUND8_PSQL_TRANSPORT: 'docker-exec', ROUND8_OWNED_TICKET: ticket, ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_CONTAINER: 'a'.repeat(64) },
     ['node', 'helper', 'supabase/tests/entry.sql'], run), 0);
   assert.ok(executed);
 });
@@ -114,7 +140,7 @@ test('rejects changed bytes after copying, before psql', () => {
     assert.ok(!args.includes('psql'));
     return { status: 0, stdout: Buffer.from(args.at(-1).startsWith('/tmp/round8-input/') ? 'SELECT 1;' : 'changed copy') };
   };
-  assert.throws(() => main({ ROUND8_PSQL_TRANSPORT: 'docker-exec', ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_CONTAINER: 'a'.repeat(64) },
+  assert.throws(() => main({ ROUND8_PSQL_TRANSPORT: 'docker-exec', ROUND8_OWNED_TICKET: ticket, ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_CONTAINER: 'a'.repeat(64) },
     ['node', 'helper', 'supabase/tests/entry.sql'], run), /snapshot mismatch/);
 });
 test('deleted-block controls remove only their named native block', () => {
