@@ -1,13 +1,29 @@
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const inputRoot = '/tmp/round8-input/';
+const controls = ['old-reader.sql', 'deleted-bindings.sql', 'deleted-receipts.sql'];
+const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
-export function assertOwnedContainer(inspect) {
+export function assertOwnedContainer(inspect, owner) {
   const c = inspect?.[0];
+  const h = c?.HostConfig;
+  const tmpfs = target => c?.Mounts?.some(m => m.Type === 'tmpfs' && m.Destination === target)
+    || Object.hasOwn(h?.Tmpfs ?? {}, target);
+  const pgdata = c?.Config?.Env?.find(value => value.startsWith('PGDATA='))?.slice(7);
+  if (!owner || c?.Config?.Labels?.['sidequest.ticket'] !== 'SQ-2170'
+    || c?.Config?.Labels?.['sidequest.owner'] !== owner
+    || c?.Image !== 'sha256:178f0976b54a39237096bfa310c1a352dbc82fb1b08dda45cdb8acb5d40c1426'
+    || !Array.isArray(c?.Mounts) || c.Mounts.some(m => m.Type !== 'tmpfs')
+    || !Array.isArray(h?.Mounts ?? []) || (h?.Mounts ?? []).some(m => m.Type !== 'tmpfs')
+    || (h?.Binds ?? []).length || (h?.VolumesFrom ?? []).length
+    || !pgdata || !tmpfs(pgdata) || !tmpfs('/var/run/postgresql')
+    || /^(host|container:)/.test(h?.IpcMode ?? '') || /^(host|container:)/.test(h?.PidMode ?? '')) {
+    throw new Error('isolated owned postgres container required');
+  }
   if (inspect?.length !== 1 || c?.HostConfig?.NetworkMode !== 'none'
     || Object.keys(c.HostConfig.PortBindings ?? {}).length !== 0
     || Object.keys(c.NetworkSettings?.Ports ?? {}).length !== 0
@@ -24,22 +40,26 @@ function assertInput(input) {
     || path.posix.normalize(input) !== input) throw new Error('repo-relative supabase input required');
 }
 
-export function verifySqlInputs(input, control, readLocal, readContainer) {
+export function verifySqlInputs(input, control, readCommitted, readContainer) {
   assertInput(input);
   const checked = new Set();
-  const visit = (file) => {
+  const visit = file => {
     if (checked.has(file)) return;
-    const local = readLocal(file);
-    const remote = readContainer(inputRoot + file);
-    const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
-    if (hash(local) !== hash(remote)) throw new Error('owned SQL input mismatch: ' + file);
+    const committed = readCommitted(file);
+    if (hash(committed) !== hash(readContainer(inputRoot + file))) throw new Error('owned SQL input mismatch: ' + file);
     checked.add(file);
-    for (const match of local.toString('utf8').matchAll(/^\s*\\(ir|i)\s+([^\r\n]+)$/gm)) {
-      const target = match[2].trim();
-      if (target === ':external_reading_control') {
+    const sql = committed.toString('utf8');
+    for (const match of sql.matchAll(/\\(?:include_relative|include|ir|i)(?=[^A-Za-z_]|$)[^\r\n]*/g)) {
+      const lineStart = sql.lastIndexOf('\n', match.index - 1) + 1;
+      const include = /^\\(ir|i)[ \t]+([^\r\n]+)$/.exec(match[0]);
+      if (!/^[ \t]*$/.test(sql.slice(lineStart, match.index)) || !include) {
+        throw new Error('unsupported SQL include: ' + file);
+      }
+      const target = include[2].trim();
+      if (target === ':external_reading_control' && include[1] === 'i') {
         if (control) visit(control.slice(inputRoot.length));
       } else {
-        if (match[1] !== 'ir' || /[\s:'"\\]/.test(target) || path.posix.isAbsolute(target)) {
+        if (include[1] !== 'ir' || /[\s:'"\\]/.test(target) || path.posix.isAbsolute(target)) {
           throw new Error('unsupported SQL include: ' + file);
         }
         const relative = path.posix.normalize(path.posix.join(path.posix.dirname(file), target));
@@ -52,6 +72,24 @@ export function verifySqlInputs(input, control, readLocal, readContainer) {
   return [...checked];
 }
 
+export function controlSql(file, readCommitted) {
+  if (file === 'control/old-reader.sql') {
+    const old = readCommitted('supabase/migrations/00875_round8_external_fulfilment.sql').toString('utf8')
+      .match(/CREATE OR REPLACE FUNCTION public\.get_project_external_fulfilments\(p_project_id uuid\)[\s\S]*?END \$\$;/)?.[0];
+    if (!old) throw new Error('native old reader missing');
+    return Buffer.from(old);
+  }
+  const reader = readCommitted('supabase/migrations/00884_round8_external_package_reading.sql').toString('utf8');
+  const start = file === 'control/deleted-bindings.sql'
+    ? '   SELECT 1 FROM bindings b JOIN fulfilments f ON f.id=b.fulfilment_id'
+    : file === 'control/deleted-receipts.sql' ? '   SELECT 1 FROM receipts v LEFT JOIN events e ON e.id=v.event_id' : undefined;
+  if (!start) throw new Error('unsupported reader control');
+  const from = reader.indexOf(start);
+  const to = reader.indexOf('  ) AND NOT EXISTS(', from);
+  if (from < 0 || to < 0) throw new Error('native reader control block missing');
+  return Buffer.from(reader.slice(0, from) + '   SELECT 1 WHERE false\n' + reader.slice(to));
+}
+
 export function main(env = process.env, argv = process.argv, run = spawnSync) {
   const id = env.ROUND8_OWNED_CONTAINER;
   const input = argv[2];
@@ -62,33 +100,43 @@ export function main(env = process.env, argv = process.argv, run = spawnSync) {
   assertInput(input);
   if (argv.length !== 3) throw new Error('one SQL input required');
   if (control !== undefined && (env.ROUND8_NEGATIVE_CONTROL !== '1'
-    || control !== inputRoot + 'control/old-reader.sql')) {
+    || !controls.some(name => control === inputRoot + 'control/' + name))) {
     throw new Error('explicit negative-control mode and owned input control path required');
   }
-  const inspect = run('docker', ['inspect', id], { encoding: 'utf8', timeout: 10000 });
-  if (inspect.error || inspect.status !== 0) throw new Error('owned container inspection failed');
-  assertOwnedContainer(JSON.parse(inspect.stdout));
   const root = realpathSync(process.cwd());
-  verifySqlInputs(input, control, (file) => {
-    if (file === 'control/old-reader.sql') {
-      const old = readFileSync(path.join(root, 'supabase/migrations/00875_round8_external_fulfilment.sql'), 'utf8')
-        .match(/CREATE OR REPLACE FUNCTION public\.get_project_external_fulfilments\(p_project_id uuid\)[\s\S]*?END \$\$;/)?.[0];
-      if (!old) throw new Error('native old reader missing');
-      return Buffer.from(old);
-    }
-    const full = path.resolve(root, file);
-    if (!lstatSync(full).isFile() || realpathSync(full) !== full) throw new Error('regular SQL input required: ' + file);
-    return readFileSync(full);
-  }, (file) => {
-    const result = run('docker', ['exec', id, 'cat', file], { timeout: 10000, maxBuffer: 16 * 1024 * 1024 });
-    if (result.error || result.status !== 0) throw new Error('owned SQL input missing: ' + file);
+  const checkedRun = (binary, args, options = {}) => {
+    const result = run(binary, args, { timeout: 10000, maxBuffer: 16 * 1024 * 1024, ...options });
+    if (result.error || result.status !== 0) throw new Error('owned input command failed: ' + binary + ' ' + args[0]);
     return result.stdout;
-  });
+  };
+  assertOwnedContainer(JSON.parse(checkedRun('docker', ['inspect', '--type', 'container', id]).toString()), env.ROUND8_OWNED_OWNER);
+  const commit = checkedRun('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim();
+  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error('committed candidate required');
+  const bytes = new Map();
+  const readCommitted = file => {
+    if (!bytes.has(file)) bytes.set(file, file.startsWith('control/') ? controlSql(file, readCommitted)
+      : checkedRun('git', ['show', commit + ':' + file], { cwd: root }));
+    return bytes.get(file);
+  };
+  const files = verifySqlInputs(input, control, readCommitted,
+    file => checkedRun('docker', ['exec', id, 'cat', file]));
+  // Execute a fresh snapshot of the verified committed bytes, never the mutable input tree.
+  const snapshot = '/tmp/round8-verified-' + randomUUID() + '/';
+  checkedRun('docker', ['exec', id, 'mkdir', '-m', '0755', snapshot]);
+  for (const file of files) {
+    const destination = snapshot + file;
+    checkedRun('docker', ['exec', id, 'mkdir', '-p', path.posix.dirname(destination)]);
+    checkedRun('docker', ['exec', '-i', id, 'install', '-m', '0444', '/dev/stdin', destination], { input: bytes.get(file) });
+    if (hash(checkedRun('docker', ['exec', id, 'cat', destination])) !== hash(bytes.get(file))) {
+      throw new Error('owned SQL snapshot mismatch: ' + file);
+    }
+  }
+  checkedRun('docker', ['exec', id, 'chmod', '-R', 'a-w', snapshot]);
   const args = ['exec', '-i', '-u', 'postgres', '-e', 'PGPASSFILE=/tmp/round8-owned.pgpass',
     id, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', 'round8_clone',
     '-w', '-X', '-v', 'ON_ERROR_STOP=1'];
-  if (control !== undefined) args.push('-v', 'external_reading_control=' + control);
-  args.push('-f', inputRoot + input);
+  if (control !== undefined) args.push('-v', 'external_reading_control=' + snapshot + control.slice(inputRoot.length));
+  args.push('-f', snapshot + input);
   const result = run('docker', args, { stdio: 'inherit', timeout: 180000 });
   if (result.error?.code === 'ETIMEDOUT') {
     // Killing the local docker client does not terminate its in-container psql.
