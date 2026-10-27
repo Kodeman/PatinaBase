@@ -6,7 +6,10 @@
 -- and restore it after the rehearsal. This oracle NEVER toggles the capability.
 -- Fixtures are restored on success or caught failure. Outbound workers must
 -- remain stopped throughout the rehearsal; native send creates a LOCAL outbox.
+-- Prerequisite: the dblink extension. No migration or seed installs it; the
+-- window owner installs it on that stack only (supabase/tests/round8/README.md).
 -- psql -v ON_ERROR_STOP=1 -v scope_concurrency_rehearsal=on \
+--   [-v expected_port=<db port>, default 54322] \
 --   postgresql://postgres:postgres@127.0.0.1:54322/postgres \
 --   -f supabase/tests/round8/scope_composition_concurrency_test.sql
 -- It must NOT be run concurrently with an isolated migration wrapper.
@@ -22,17 +25,31 @@ SELECT :'scope_concurrency_rehearsal' = 'on' AS approved \gset
 \quit 3
 \endif
 
-SELECT :'HOST' = '127.0.0.1' AND :'PORT' = '54322' AS local_stack \gset
+\if :{?expected_port}
+\else
+\set expected_port 54322
+\endif
+SELECT :'HOST' = '127.0.0.1' AND :'PORT' = :'expected_port' AS local_stack \gset
 \if :local_stack
 \else
-\echo 'REFUSED: requires host 127.0.0.1 port 54322'
+\echo 'REFUSED: requires host 127.0.0.1 port' :expected_port
+\quit 3
+\endif
+SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='dblink') AS dblink_installed \gset
+\if :dblink_installed
+\else
+\echo 'REFUSED: prerequisite dblink extension missing; install it on this local stack only, never in a migration or seed'
 \quit 3
 \endif
 SET statement_timeout='90s';
 DO $oracle$
 DECLARE
-  -- dblink connects inside the Postgres container, not to the host's 54322.
-  conn text := format('host=127.0.0.1 port=%s dbname=%L user=postgres password=postgres connect_timeout=3',current_setting('port'),current_database());
+  -- dblink connects inside the Postgres container, not to the host's mapped port.
+  -- Non-superuser dblink must authenticate with its password, and the Supabase
+  -- image trusts 127.0.0.1, so dial the server's own network address, where
+  -- pg_hba requires scram-sha-256. A socket session (NULL address) would fall
+  -- back to a passwordless socket, which dblink refuses.
+  conn text := format('host=%s port=%s dbname=%L user=postgres password=postgres connect_timeout=3',host(inet_server_addr()),current_setting('port'),current_database());
   ext_schema text;
   a_pid integer; b_pid integer; deadline timestamptz;
   case_name text; payload_a jsonb; payload_b jsonb; base_payload jsonb;
@@ -70,6 +87,8 @@ DECLARE
     DELETE FROM public.proposal_phases WHERE proposal_id='f8693000-0000-4000-8000-000000000001';
     DELETE FROM public.proposals WHERE id='f8693000-0000-4000-8000-000000000001';
     DELETE FROM public.designer_clients WHERE id='f8692000-0000-4000-8000-000000000001';
+    -- Native send records an engagement event; replica-role deletes skip its FK check.
+    DELETE FROM public.engagement_events WHERE user_id='f8690000-0000-4000-8000-000000000001';
     DELETE FROM public.profiles WHERE id='f8690000-0000-4000-8000-000000000001';
     DELETE FROM auth.users WHERE id='f8690000-0000-4000-8000-000000000001';
     SET LOCAL session_replication_role=origin;

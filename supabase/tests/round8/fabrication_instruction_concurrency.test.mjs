@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { round8DbUrl, round8LocalApiUrl } from './owned_psql.mjs';
 
-const url = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+const url = round8DbUrl();
 const body = readFileSync(new URL('./fabrication_instruction_body.psql', import.meta.url), 'utf8').replaceAll('f879', 'f87f');
 const id = n => `f87f0000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function section(name) {
@@ -136,7 +137,7 @@ async function blocked(holder, pid) {
 test('both instruction routes serialize six mutations in both orders without 40P01', {
   timeout: 540000, skip: process.env.FABRICATION_INSTRUCTION_DB_WINDOW !== 'owned',
 }, async t => {
-  assert.equal(process.env.API_URL?.startsWith('http://127.0.0.1:54321'), true, 'local API only');
+  assert.equal(round8LocalApiUrl(process.env.API_URL), true, 'local API only');
   for (const route of ['direct', 'generic']) for (const scenario of scenarios) for (const instructionFirst of [true, false]) {
     await t.test(`${route}: ${scenario.name}, ${instructionFirst ? 'instruction' : 'mutation'} first`, async () => {
       const sessions = []; let owned = false;
