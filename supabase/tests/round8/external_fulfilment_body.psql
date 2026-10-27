@@ -113,7 +113,7 @@ SELECT pg_temp.c5_error($q$SELECT public.create_external_fulfilment(pg_temp.c5_i
 SELECT pg_temp.c5_actor(1);
 SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'package_issued','{}',NULL,'fake-issue')$q$,'42501','package_issue_owner_required','generic caller cannot manufacture package issue');
 SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('gc'),pg_temp.c5_id(601),ARRAY['k-1'],'no-issue')$q$,'23514','fabrication_evidence_issue_missing','gc binder fails closed until X04b native issue owner wiring');
-SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'fabrication_instruction','{}',ARRAY['k-1'],'fake-instruction')$q$,'55000','fabrication_instruction_not_active','no fabrication instruction before X04b');
+SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'fabrication_instruction','{}',ARRAY['k-1'],'fake-instruction')$q$,'42501','fabrication_instruction_binding','generic caller cannot record a fabrication instruction without a bound manifest and authorizing party');
 INSERT INTO c5_result VALUES('binding',public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(601),ARRAY['chair'],'bind'));
 SELECT pg_temp.c5_assert((public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(601),ARRAY['chair'],'bind')->>'replayed')::boolean,'binding receipt replays');
 SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(602),ARRAY['chair'],'bind')$q$,'40001','external_request_changed','changed binding receipt refused');

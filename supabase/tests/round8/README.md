@@ -47,7 +47,7 @@ psql postgresql://postgres:postgres@127.0.0.1:57322/postgres -X -v ON_ERROR_STOP
   -v expected_port=57322 -f supabase/tests/round8/scope_composition_concurrency_test.sql
 ```
 
-Note: `\quit 3` in these psql scripts ignores its argument, so a refusal prints `REFUSED` and still exits 0. Read the output, not only the exit code.
+Note: `\quit 3` in these psql scripts ignores its argument, so a refusal prints `REFUSED` and still exits 0. Read the output, not only the exit code. `fill_locked_current_isolated.psql` fails closed instead: an off-target run raises and psql exits 3.
 
 ## Owned container seeded from the isolated stack
 
