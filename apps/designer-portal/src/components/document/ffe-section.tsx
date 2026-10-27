@@ -174,7 +174,7 @@ import { useRoomLens } from './room-lens-context';
 import { InstallManifest } from './buying/install-manifest';
 import { JobDestinationsDoor } from './destinations/job-destinations-sheet';
 import { lineQueryState } from './pieces/line-query';
-import { LineQueryReading } from './pieces/build-room-shell';
+import { LineQueryReading } from './pieces/line-query-reading';
 import { PiecesOverview } from './pieces/pieces-overview';
 import { piecesRoomAnchorId } from '@/lib/document/pieces/build-room-url';
 import {

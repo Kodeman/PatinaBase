@@ -53,6 +53,7 @@ import {
   topActiveModalDialog,
   topDismissiblePopover,
 } from "@/components/document/overlays/active-dialog";
+import { LineQueryReading } from "./line-query-reading";
 
 /** How long a landing waits for its room's section to render. */
 const LANDING_WAIT_MS = 15_000;
@@ -61,6 +62,8 @@ export interface BuildRoomRoom {
   id: string;
   name: string;
 }
+
+export { LineQueryReading };
 
 type LineQueryState = ReturnType<typeof import("./line-query").lineQueryState>;
 
@@ -621,29 +624,6 @@ export function BuildRoomShell({
         </Body>
       </div>
     </div>
-  );
-}
-
-/** Completeness belongs to the canonical query, not the currently scoped room. */
-export function LineQueryReading({ state }: { state: LineQueryState }) {
-  const count = state.total === null
-    ? "Schedule total unknown"
-    : "Whole schedule · " + state.total + (state.total === 1 ? " line" : " lines") + " · " + state.pages + (state.pages === 1 ? " page" : " pages");
-  const reading = state.error
-    ? "The schedule could not be refreshed."
-    : state.loading
-      ? "Reading the schedule…"
-      : state.refreshing
-        ? "Refreshing the schedule…"
-        : state.stale
-          ? "Showing the last complete schedule; not yet refreshed."
-          : "Schedule up to date.";
-  return (
-    <p role={state.error ? "alert" : "status"} data-line-query=""
-      className="px-4 py-2 text-[12px] text-[var(--sheet-ink-muted)]">
-      {count}. {state.error && state.total === null ? "The schedule could not be read." : reading}
-      {state.error && state.total !== null ? " Showing the last complete schedule." : null}
-    </p>
   );
 }
 

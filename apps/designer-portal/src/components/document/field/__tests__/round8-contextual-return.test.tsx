@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NoteBody } from '../../margin-bodies';
+import { registerUnfoldOpener } from '../../paper/unfold-bridge';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 
 const mockEscalate = jest.fn();
@@ -7,8 +8,8 @@ const mockMedia = jest.fn();
 const mockCompose = jest.fn();
 const mockOpenUnfold = jest.fn();
 let mockRenderer = 'round8';
+let clearOpener: () => void = () => {};
 jest.mock('@/hooks/use-paper-renderer', () => ({ usePaperRenderer: () => ({ renderer: mockRenderer }) }));
-jest.mock('../../paper/unfold-instrument', () => ({ openUnfold: (...args: unknown[]) => mockOpenUnfold(...args) }));
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => ({ data: { id: 'project', name: 'Fictional house', proposal: null } }),
   useScopeChangeRequests: () => ({ data: [] }),
@@ -45,7 +46,19 @@ function value(label: string) {
   return term.nextElementSibling!;
 }
 beforeEach(() => { mockEscalate.mockClear(); mockMedia.mockClear(); mockCompose.mockClear(); mockOpenUnfold.mockClear(); mockRenderer = 'round8'; });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => { clearOpener(); clearOpener = () => {}; jest.restoreAllMocks(); });
+/** Click the room link; `followed` is true when its default (the href) was
+ *  left to run. jsdom's own navigation is then cancelled at the window. */
+function clickRoom(before?: () => void) {
+  render(<NoteBody row={note({ subject_kind: 'project_room', subject_id: 'room' })} projectId="project" onBeforeRoomOpen={before} />);
+  const link = screen.getByRole('link');
+  let followed = false;
+  const settle = (event: Event) => { followed = !event.defaultPrevented; event.preventDefault(); };
+  window.addEventListener('click', settle);
+  fireEvent.click(link);
+  window.removeEventListener('click', settle);
+  return { link, followed };
+}
 
 describe('contextual Field reading', () => {
   it.each([['plan_print', 'Print', 'print-exact'], ['plan_issue', 'Issue', 'issue-exact']] as const)(
@@ -90,20 +103,46 @@ describe('contextual Field reading', () => {
   });
 
   it('opens the native room owner with the actual clicked control', () => {
+    clearOpener = registerUnfoldOpener('project', mockOpenUnfold);
     const before = jest.fn();
-    render(<NoteBody row={note({ subject_kind: 'project_room', subject_id: 'room' })} projectId="project" onBeforeRoomOpen={before} />);
-    const link = screen.getByRole('link');
-    fireEvent.click(link);
+    const { link, followed } = clickRoom(before);
+    expect(followed).toBe(false);
     expect(before).toHaveBeenCalledTimes(1);
+    expect(mockOpenUnfold).toHaveBeenCalledTimes(1);
     expect(mockOpenUnfold).toHaveBeenCalledWith(
       { kind: 'pieces', lens: 'spec', room: 'room', line: null },
       { documentId: 'project', chapter: 'ffe', room: 'room', lens: 'spec' }, link);
   });
 
+  it('follows the room link when no round-8 frame has registered an opener', () => {
+    const before = jest.fn();
+    const { followed } = clickRoom(before);
+    expect(followed).toBe(true);
+    expect(before).toHaveBeenCalledTimes(1);
+    expect(mockOpenUnfold).not.toHaveBeenCalled();
+  });
+
+  it('follows the room link when the registered opener belongs to another document', () => {
+    clearOpener = registerUnfoldOpener('another-project', mockOpenUnfold);
+    const { followed } = clickRoom();
+    expect(followed).toBe(true);
+    expect(mockOpenUnfold).not.toHaveBeenCalled();
+  });
+
+  it('keeps a cleared registration from opening a later click', () => {
+    registerUnfoldOpener('project', mockOpenUnfold)();
+    expect(clickRoom().followed).toBe(true);
+    expect(mockOpenUnfold).not.toHaveBeenCalled();
+  });
+
   it('uses the existing pieces route under the legacy renderer', () => {
     mockRenderer = 'legacy';
-    show({ subject_kind: 'project_room', subject_id: 'room' });
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/doc/project/pieces?lens=spec&room=room');
+    clearOpener = registerUnfoldOpener('project', mockOpenUnfold);
+    const before = jest.fn();
+    const { link, followed } = clickRoom(before);
+    expect(link).toHaveAttribute('href', '/doc/project/pieces?lens=spec&room=room');
+    expect(followed).toBe(true);
+    expect(before).toHaveBeenCalledTimes(1);
     expect(mockOpenUnfold).not.toHaveBeenCalled();
   });
 
