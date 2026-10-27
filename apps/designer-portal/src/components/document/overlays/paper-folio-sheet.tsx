@@ -25,7 +25,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { topActiveModalDialog } from './active-dialog';
+import { isElementRendered, topActiveModalDialog } from './active-dialog';
 
 export function PaperFolioSheet({
   open,
@@ -33,6 +33,7 @@ export function PaperFolioSheet({
   title,
   wide = false,
   children,
+  returnFocusTo,
 }: {
   open: boolean;
   onClose: () => void;
@@ -40,9 +41,16 @@ export function PaperFolioSheet({
   /** The composer wants a little more column than the folio. */
   wide?: boolean;
   children: React.ReactNode;
+  /** Actual opening control; null/omitted keeps the programmatic focus fallback. */
+  returnFocusTo?: HTMLElement | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef(returnFocusTo);
+
+  useEffect(() => {
+    returnFocusRef.current = returnFocusTo;
+  }, [returnFocusTo]);
 
   // Focus capture/restore — keyed on `open` alone (the RoomSheet lesson: a new
   // onClose identity mid-open must not bounce focus out and back).
@@ -51,7 +59,14 @@ export function PaperFolioSheet({
     restoreRef.current = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     return () => {
-      restoreRef.current?.focus?.();
+      const targets = [returnFocusRef.current, restoreRef.current];
+      restoreRef.current = null;
+      window.requestAnimationFrame(() => {
+        const target = targets.find(
+          (element) => element?.isConnected && isElementRendered(element),
+        );
+        target?.focus({ preventScroll: true });
+      });
     };
   }, [open]);
 

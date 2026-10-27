@@ -857,3 +857,12 @@ describe('checkpoint refusal recovery', () => {
     expect(screen.queryByRole('link', { name: 'Open Working budget' })).not.toBeInTheDocument();
   });
 });
+
+
+it("round-8 release reading keeps the existing instrument", () => {
+  render(<ReleaseLens {...props} />);
+  const reading = screen.getByText("Purchasing authorization").closest("header");
+  expect(reading).toHaveAttribute("data-round8-lens", "release");
+  expect(reading).toHaveClass("hidden", "[[data-paper-renderer=round8]_&]:block");
+  expect(screen.getByText(/Preparing a draft does not send it/)).toBeInTheDocument();
+});

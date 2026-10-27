@@ -3,6 +3,7 @@
 import { use, type ReactNode } from 'react';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
+import { useJobVisit } from '@/lib/react-query';
 
 /**
  * The document's time hold (D11, ratified R19; moved here by US-21 D14).
@@ -26,6 +27,7 @@ export default function DocumentHoldLayout({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  useJobVisit(id);
   const { data: resolution } = useDocumentEngagement(id);
   const row = resolution?.kind === 'engagement' ? resolution.row : null;
   useHoldDocument(

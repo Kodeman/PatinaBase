@@ -24,18 +24,25 @@ function ChildKeyListener({ onEscape }: { onEscape: () => void }) {
 function ViewerHarness({
   onClose,
   onChildEscape,
+  explicitReturn = false,
 }: {
   onClose: () => void;
   onChildEscape: () => void;
+  explicitReturn?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [opener, setOpener] = useState<HTMLElement | null>(null);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>
+      <button type="button" onClick={(event) => {
+        setOpener(event.currentTarget);
+        setOpen(true);
+      }}>
         Open floor plan
       </button>
       {open ? (
         <FullScreenViewerShell
+          returnFocusTo={explicitReturn ? opener : undefined}
           title="Ground floor plan"
           meta="PDF · Jul 31"
           onClose={() => {
@@ -56,6 +63,43 @@ afterEach(() => {
 });
 
 describe('FullScreenViewerShell', () => {
+  it.each(['Back', 'Escape'])('restores the explicit pointer opener without prefocus after %s', async (closeWith) => {
+    const onClose = jest.fn();
+    render(<ViewerHarness explicitReturn onClose={onClose} onChildEscape={jest.fn()} />);
+    const opener = screen.getByRole('button', { name: 'Open floor plan' });
+    expect(document.body).toHaveFocus();
+    fireEvent.click(opener);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+
+    if (closeWith === 'Back') {
+      fireEvent.click(screen.getByRole('button', { name: 'Back to the document' }));
+    } else {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    }
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('closes by the Back to the document button and restores its opener', async () => {
+    const onClose = jest.fn();
+    render(<ViewerHarness onClose={onClose} onChildEscape={jest.fn()} />);
+
+    const opener = screen.getByRole('button', { name: 'Open floor plan' });
+    opener.focus();
+    fireEvent.click(opener);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the document' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(document.body.style.overflow).toBe('');
+  });
+
   it('labels and contains the viewer, closes once on Escape, unlocks scroll, and restores focus', async () => {
     const onClose = jest.fn();
     const onChildEscape = jest.fn();

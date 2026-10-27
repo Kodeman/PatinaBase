@@ -140,6 +140,7 @@ export function changeConfirmation(
 /** Exported for the Record a change router's `On a piece` destination (D5),
  *  which opens this sheet for the chosen line without its cell's act. */
 export function ChangeOrderSheet({
+  returnFocusTo,
   open,
   onClose,
   item,
@@ -149,6 +150,7 @@ export function ChangeOrderSheet({
   vendorName,
   poLabel,
 }: {
+  returnFocusTo?: HTMLElement | null;
   open: boolean;
   onClose: () => void;
   item: FFERow;
@@ -229,6 +231,7 @@ export function ChangeOrderSheet({
       title={`Change ${poLabel}`}
       icon={PencilLine}
       initialFocusRef={checkedKindRef}
+      returnFocusTo={returnFocusTo}
       kind="po-change"
     >
       <div data-testid="po-change-sheet" className="space-y-4">

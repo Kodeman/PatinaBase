@@ -1,0 +1,1440 @@
+{
+  "kind": "frozen-design-reference-manifest",
+  "created": "2026-10-23",
+  "source_baseline": "ee9c450a582bc677a635a7e451425db4e1e51b4a",
+  "approved_round8_commit": "e8f92b772b702303e560583bd57ab785a1974b73",
+  "round8_copy_commit": "4b911a3a6972d538ffb03817f2538a35f005e168",
+  "history_source": "room-proof-round7-review-2026-10-23.zip / original local review bundle",
+  "files": [
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/AGREED-DESIGN.md",
+      "sha256": "f3df41c0c716dcdcad02d1b3d40d33e02454e216a46b42ddd608ae822b548ce1",
+      "bytes": 4791
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/COLLABORATION.md",
+      "sha256": "f959122e1d07452a28a0595712457213c1ff766cc71a4c0fc3a34cd23cfe5ac8",
+      "bytes": 3494
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/DESIGN-PLAN.md",
+      "sha256": "01cfde153e8431c5071a1734a857d69d9ae141929ecf7eac377b866c80838a80",
+      "bytes": 2352
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/README.md",
+      "sha256": "2f28be8901530930a27c21c469cd87bcb417b765153696b9ff4e2a601d40f68b",
+      "bytes": 4191
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/SOURCE-MAP.md",
+      "sha256": "3a6e166c763e532037fe8d7767fe218fec2b89fa02a16a8c965b92a533a4b37b",
+      "bytes": 5363
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/VERIFICATION.md",
+      "sha256": "2d9965f75155d009c442d5f3ca3bf21b2013c1b939f2e621d86a450e4ecabbcb",
+      "bytes": 4387
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/app.js",
+      "sha256": "7daa1958e2bf20c399a58bf1d2be9f19efde7892f0dfc232508dda81f5f9b404",
+      "bytes": 11613
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/DMMono-Regular.woff2",
+      "sha256": "b12a768f4794d0c7c683b998c64bcc0c1da16857bcfb11c363a4a4dbc1ec18d7",
+      "bytes": 20680
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/FONT-LICENSES.txt",
+      "sha256": "37ece22c3b69615920cc097b9379136630c1e9c86653d801982f14f80aae02e0",
+      "bytes": 4685
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/Inter-Medium.woff2",
+      "sha256": "5141e19965fc392575d49938990b194017b7be1dbe47c6ffbbfd241b2d40d398",
+      "bytes": 111432
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/Inter-Regular.woff2",
+      "sha256": "af88f01d3866dd301c20fdd1e462c2f319e6ec6e714e7cd7140ef45c2e765b83",
+      "bytes": 108396
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/Inter-SemiBold.woff2",
+      "sha256": "5587c694dde079d959c4eef378cb924d9233e56f56bccc5c33ef054961df8968",
+      "bytes": 112172
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/PlayfairDisplay-Italic.woff2",
+      "sha256": "710b4e90d84cf2662ff15807a8ad7de56c60ed305a770c6f576b9f060e60bb4e",
+      "bytes": 41216
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/PlayfairDisplay-Medium.woff2",
+      "sha256": "599bf557d18af27d80d9f4275165fa9b2877de409a7d63a959f5f56c41b33298",
+      "bytes": 44956
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/PlayfairDisplay-Regular.woff2",
+      "sha256": "7f5ba76bc210c59a4bbf6f6b647af8bfe8efdee74ac956eac59a82a8a67638d1",
+      "bytes": 42488
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/chair-proof.png",
+      "sha256": "6b020e972277ebffc7df6c9e0c781e06aa2c03ee01504ba2c07ff3e008687d8b",
+      "bytes": 2364951
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/material-study.jpg",
+      "sha256": "0f9152a4183b28321ad82e417efe5cab7463f95929e7ee7c6c8a919d74fd87f7",
+      "bytes": 56805
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/room.png",
+      "sha256": "af459c677266f2108b55d82f6ba640521ddd32e4cc3904b2a0ada8e2f59ba944",
+      "bytes": 2706795
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/assets/studio-room.jpg",
+      "sha256": "e7fbce0a8ca55a2524e2e5bbed0cda29feb9c11d1cccbd2693a9f598e961def5",
+      "bytes": 366787
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/base.css",
+      "sha256": "21ac046b0e55501659fa690f044f4542b83fb451aa443ea5cf4d911e0edd1593",
+      "bytes": 15822
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/boot.js",
+      "sha256": "9bcb1bed325a1b5f70a592350d848a53e32f8aff3c7cefc80cc6ff68a5c99834",
+      "bytes": 19
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/core-evidence.md",
+      "sha256": "6083805a73ddb181e85370a60d06dcf34908ff2c5f5239358782e1f19348f661",
+      "bytes": 10274
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/core-views.js",
+      "sha256": "ce99c3bd81eac33bcd4db2e0fa4bae5e6497630ef1213dab5a301c1091c74698",
+      "bytes": 58721
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/core.css",
+      "sha256": "9755c8e3d4a7a74f1540ab835a745f2e67fa810ffe89c722c73f2ca35fa87714",
+      "bytes": 24024
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/index.html",
+      "sha256": "445305381792cecf765f902b4a1904cd116d4cbc586bd643ab8539af3695176c",
+      "bytes": 26834
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/mapping.js",
+      "sha256": "37e548c9594db2c579a902d729d94e14fc23e3014526723e11b64bb01977e0da",
+      "bytes": 8914
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/mockup.html",
+      "sha256": "a064fcc4c37d4e75191970efa9ef4c464c287c98ef83f0500445eaed61d2f379",
+      "bytes": 5217
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/presentation.css",
+      "sha256": "35093dd5fe71ecbfab4eefbac3a628b86de2f6bd8059df14a18b4c01edf89e82",
+      "bytes": 19953
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/presentation.js",
+      "sha256": "4d74cf1394aee2d48e450c9831641135ef15244c34ce2ff89ef304b3e9acbc5a",
+      "bytes": 9093
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/preview.jpg",
+      "sha256": "ed81c387a249e0f60415d08e1c811c5bbc950766675053a7ee119c6948c36bc9",
+      "bytes": 192997
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/review/CLAUDE-ADDENDUM.md",
+      "sha256": "7ac5cdcc1d0e7f3bc0c4a2c5ffb73132fba8ed93eb9fec681fed5ae1413b2122",
+      "bytes": 5209
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/review/CLAUDE-REVIEW.md",
+      "sha256": "e89a089ff75a225e103d3fadfb310dbaadeff24da77673d9c5ef0ea54ca3c2fc",
+      "bytes": 15934
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/review/CLAUDE-ROUND2-REVIEW.md",
+      "sha256": "0024db50f941ec3cb99575577563515149aea7dd31dee797cbff165d40c27f52",
+      "bytes": 8036
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/review/NEXT-DESIGN-ROUND.md",
+      "sha256": "0eb3c69726085f56625f52d3720065fb762b55a8246f5c2be4b332cd121987b3",
+      "bytes": 10431
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/review/README.md",
+      "sha256": "21d4a656cd2e38bc59d28fb2cf164bb27a8bfe564d93225974ba794590fde254",
+      "bytes": 677
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/round2.css",
+      "sha256": "150dea2883c02fcb8f950d40e179206116e5acbd117ec1de830f3ab17ef1336f",
+      "bytes": 30523
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/round2.js",
+      "sha256": "b7e7ae17cd3fdfee67e7a799a5d96ee9419f4850248b112be0e719c651e70855",
+      "bytes": 22053
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/serve.py",
+      "sha256": "d3583207217487083fbd003bf16f414f37066f2b0036978e4aaa040213c996ea",
+      "bytes": 740
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/sourcing-evidence.md",
+      "sha256": "1e18bd1a76062a3a56012a701d0b658cef910a8e5fef4c555ab1219a8d105e8e",
+      "bytes": 14312
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/sourcing-views.js",
+      "sha256": "89b3be9d316e24c8eba52527cdbc42c411fad1a617268a6470742018a2198c05",
+      "bytes": 42843
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/sourcing.css",
+      "sha256": "911e0f228c7726e5bc51fccd6bc2792cfc8a87a7d763ed963a281d01ed92f6ea",
+      "bytes": 19831
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/studio-evidence.md",
+      "sha256": "fd0727b904887f54698e1cf8fc8222247a88427a372f3e962965e1a2e53d38c2",
+      "bytes": 6247
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/studio-views.js",
+      "sha256": "c1a7de053dab21b7827dd682aa0cbc3d39fcc65817fe0fd9783b652344943d78",
+      "bytes": 38438
+    },
+    {
+      "path": "artifacts/room-proof-round2-2026-10-21/studio.css",
+      "sha256": "35c487cee0f9571437149647c53914d7b8a38b668cb22c0df0fb7e5aac867809",
+      "bytes": 18115
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/COLLABORATION.md",
+      "sha256": "505c3682a8092027146d6b1e8f4e6902f60549efbe3ad20ddc8680fe46063084",
+      "bytes": 3429
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/DESIGN-PLAN.md",
+      "sha256": "d036f66c3aeae03ddf3a3cfe10317906396775e793aada17ee72adc3d6fcbcd1",
+      "bytes": 2525
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/README.md",
+      "sha256": "b9a6de39f6fea5c2ab66e524091bda54d14242bfce2260e53757c5444f772806",
+      "bytes": 3239
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/SOURCE-MAP.md",
+      "sha256": "e440c6f95f2708ec6705923dfbb666ad5938476b96e7bac33c0447157cb1a5a9",
+      "bytes": 5792
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/VERIFICATION.md",
+      "sha256": "2c2a34fe726194c70fffa7f31ff405776e3ecf93963050e7e5bc65fd2487b2d0",
+      "bytes": 4311
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/actions.js",
+      "sha256": "2962571dd754a2ab27be029b5f94047feef7524b1b0ba578f8d1623f93748d03",
+      "bytes": 33125
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/FONT-LICENSES.txt",
+      "sha256": "37ece22c3b69615920cc097b9379136630c1e9c86653d801982f14f80aae02e0",
+      "bytes": 4685
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/Inter-Medium.woff2",
+      "sha256": "5141e19965fc392575d49938990b194017b7be1dbe47c6ffbbfd241b2d40d398",
+      "bytes": 111432
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/Inter-Regular.woff2",
+      "sha256": "af88f01d3866dd301c20fdd1e462c2f319e6ec6e714e7cd7140ef45c2e765b83",
+      "bytes": 108396
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/Inter-SemiBold.woff2",
+      "sha256": "5587c694dde079d959c4eef378cb924d9233e56f56bccc5c33ef054961df8968",
+      "bytes": 112172
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/PlayfairDisplay-Italic.woff2",
+      "sha256": "710b4e90d84cf2662ff15807a8ad7de56c60ed305a770c6f576b9f060e60bb4e",
+      "bytes": 41216
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/PlayfairDisplay-Regular.woff2",
+      "sha256": "7f5ba76bc210c59a4bbf6f6b647af8bfe8efdee74ac956eac59a82a8a67638d1",
+      "bytes": 42488
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/chair-proof.png",
+      "sha256": "6b020e972277ebffc7df6c9e0c781e06aa2c03ee01504ba2c07ff3e008687d8b",
+      "bytes": 2364951
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/room.png",
+      "sha256": "af459c677266f2108b55d82f6ba640521ddd32e4cc3904b2a0ada8e2f59ba944",
+      "bytes": 2706795
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/assets/studio-room.jpg",
+      "sha256": "e7fbce0a8ca55a2524e2e5bbed0cda29feb9c11d1cccbd2693a9f598e961def5",
+      "bytes": 366787
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/data.js",
+      "sha256": "4a64847fefec3802f1ec8f712f156d6122738b8a783a54fac60be4a537fe51e7",
+      "bytes": 6557
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/index.html",
+      "sha256": "ed560f7d7d4e9c74ada17d7024b717d876860499ddb6d2c9e7ea075593ed4746",
+      "bytes": 32632
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/job.css",
+      "sha256": "85f0f4b1383abce66f736dffbb2bccf569b79e42fc8fc19570ae73186e3fe601",
+      "bytes": 30773
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/job.html",
+      "sha256": "7059f1de222fa6f602f681561f7bd7c56b399efa39ff6520b798bffafb978094",
+      "bytes": 10889
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/job.js",
+      "sha256": "befff7d4e0e43f0884826455260c8d86ecd5729c78eef1ad6ce1cb4a8baf5c49",
+      "bytes": 14526
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/presentation.css",
+      "sha256": "5daf04d76557fb55189676a5f4bc77944d85fe5f1dea096d991163b001077b51",
+      "bytes": 20931
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/presentation.js",
+      "sha256": "ce39c6700761d5a75edd305264698554bfb5260fee59a6b1846ebc33816b66b8",
+      "bytes": 17549
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/preview.jpg",
+      "sha256": "07f79e6454ba9639c1468d8082b9dbe5c6724560895db375b9c44b677e5b9afe",
+      "bytes": 166378
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/review/CLAUDE-CORRECTIONS-REVIEW.md",
+      "sha256": "515e129d796e7782d29aa0a65bd26d51a94247a8dd653a6ce892ac1455b61322",
+      "bytes": 4123
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/review/CLAUDE-FINAL-REVIEW.md",
+      "sha256": "c253da546b1ddfdb5352b6a3a0325e1275ef879bdf600626dad33288fbb3e9d6",
+      "bytes": 8415
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/review/CLAUDE-SOURCE-REVIEW.md",
+      "sha256": "22de57124acafa4281c625146fb16319926211566ee6877ffe6c5a81381d5632",
+      "bytes": 10068
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/review/pricing-desktop.jpg",
+      "sha256": "4efdb207b147220b558fe739f5ef1bd76ba625da0258bbbd084f01dc55809769",
+      "bytes": 199159
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/serve.py",
+      "sha256": "d35526a3630ff28be1643eecf6d5e95a3a94c60b8d02dea801f15a4f61715ad9",
+      "bytes": 674
+    },
+    {
+      "path": "artifacts/room-proof-round3-2026-10-22/sheet.js",
+      "sha256": "c104af23521a539a5d29244c00bab4cb92ff5d2d4b4209211624c05f298e914f",
+      "bytes": 21578
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/COLLABORATION.md",
+      "sha256": "d3605fc38120ff10ea24c084d1d87256d9c6adaee876c281bdeae5939f2791de",
+      "bytes": 4627
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/DESIGN-PLAN.md",
+      "sha256": "4c2f57915e9cf6788b0347ccbdfdb794b93244fb30cb358395e7c1ebad8194be",
+      "bytes": 1374
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/README.md",
+      "sha256": "4413261e58832dc8b314912d00bf95a616187b95be730545cf003b343b8dd56e",
+      "bytes": 2647
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/SOURCE-MAP.md",
+      "sha256": "5805b80d4b4d1f3909d89e29f57fae5ebfbb6e65d3997921746b3d7f349cbba2",
+      "bytes": 4972
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/VERIFICATION.md",
+      "sha256": "34e7483a0ba1108ea303619ce033a4f3403e5f7f8c63cb3fb91e0873772b84a6",
+      "bytes": 3768
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/actions.js",
+      "sha256": "0604a96848552ddc888d103ffa6d5193448afe059843ddbb7d37e5cb0220fa84",
+      "bytes": 33322
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/FONT-LICENSES.txt",
+      "sha256": "37ece22c3b69615920cc097b9379136630c1e9c86653d801982f14f80aae02e0",
+      "bytes": 4685
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/Inter-Medium.woff2",
+      "sha256": "5141e19965fc392575d49938990b194017b7be1dbe47c6ffbbfd241b2d40d398",
+      "bytes": 111432
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/Inter-Regular.woff2",
+      "sha256": "af88f01d3866dd301c20fdd1e462c2f319e6ec6e714e7cd7140ef45c2e765b83",
+      "bytes": 108396
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/Inter-SemiBold.woff2",
+      "sha256": "5587c694dde079d959c4eef378cb924d9233e56f56bccc5c33ef054961df8968",
+      "bytes": 112172
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/PlayfairDisplay-Italic.woff2",
+      "sha256": "710b4e90d84cf2662ff15807a8ad7de56c60ed305a770c6f576b9f060e60bb4e",
+      "bytes": 41216
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/PlayfairDisplay-Regular.woff2",
+      "sha256": "7f5ba76bc210c59a4bbf6f6b647af8bfe8efdee74ac956eac59a82a8a67638d1",
+      "bytes": 42488
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/chair-proof.png",
+      "sha256": "6b020e972277ebffc7df6c9e0c781e06aa2c03ee01504ba2c07ff3e008687d8b",
+      "bytes": 2364951
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/room.png",
+      "sha256": "af459c677266f2108b55d82f6ba640521ddd32e4cc3904b2a0ada8e2f59ba944",
+      "bytes": 2706795
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/assets/studio-room.jpg",
+      "sha256": "e7fbce0a8ca55a2524e2e5bbed0cda29feb9c11d1cccbd2693a9f598e961def5",
+      "bytes": 366787
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/commerce.js",
+      "sha256": "92649daccb3826a86e7ec5ae4ac1b5bae4ff6d46c5de15abc15b6dc1ee0d5f3d",
+      "bytes": 36718
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/data.js",
+      "sha256": "4a64847fefec3802f1ec8f712f156d6122738b8a783a54fac60be4a537fe51e7",
+      "bytes": 6557
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/index.html",
+      "sha256": "869b2aca288f08de4bd6ef1dd1701cab0fa73220709f9572c89a7ecfa2868ad4",
+      "bytes": 17622
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/init.js",
+      "sha256": "cda01e4ab979b8d0471350a46adff560fd0a2285ec8052e63077142bc8c0cc14",
+      "bytes": 17
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/job.css",
+      "sha256": "85f0f4b1383abce66f736dffbb2bccf569b79e42fc8fc19570ae73186e3fe601",
+      "bytes": 30773
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/job.html",
+      "sha256": "4ec9049894598f04c0f6bc319aea9dcee6b65aa2d01ee89060d6a756452ae9fc",
+      "bytes": 11434
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/job.js",
+      "sha256": "d3a15ff59cd72db0ed18b4c73c516f381acf68027998ea90e7123e03b92e4927",
+      "bytes": 14964
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/notes.css",
+      "sha256": "8d3a9462f21d080ca335acfb761bd05d33486b16eab65742f9f281fa7aed32ca",
+      "bytes": 4217
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/notes.js",
+      "sha256": "2e278d6ea33dce5165f562efefd63a7f8e85594011af902dc1e5fbc44459f05c",
+      "bytes": 15118
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/presentation.css",
+      "sha256": "5daf04d76557fb55189676a5f4bc77944d85fe5f1dea096d991163b001077b51",
+      "bytes": 20931
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/presentation.js",
+      "sha256": "a58921c6b13b23170ca5e2b4893a1f67cb1910765070bb2b1715f8af9f36c87b",
+      "bytes": 17293
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/preview.jpg",
+      "sha256": "d801db06e5d794fe16cb70ae67d784e30446af54f553dd67c8709bf1daa83e62",
+      "bytes": 195690
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/review/CLAUDE-INDEPENDENT-REVIEW.md",
+      "sha256": "cd9cb03793d3fe55b5c447fb161618e9ab8071dbf9eeaedec411ba008899d397",
+      "bytes": 7486
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/review/CLAUDE-NOTES-CONTRIBUTION.md",
+      "sha256": "daa2f5cd69a773f1fd1aa61e3f855d8dabcf187f05f15dfdf30a6211f6c619b1",
+      "bytes": 2552
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/review/client-phone.jpg",
+      "sha256": "0fbe952b9e959260e2eeb2e571bb1f02fa4e4c732f1f442a4006098016be8ab6",
+      "bytes": 104264
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/review/order-desktop.jpg",
+      "sha256": "b9d195bfe26a06fbf9692683d58fc776fa211b9102374d71dcee900702f053a7",
+      "bytes": 129021
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/round4.css",
+      "sha256": "e9d9dd1052ca137c692ae3cd0459306b30c6ae949616f935af25db2dcb64c4b1",
+      "bytes": 933
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/serve.py",
+      "sha256": "a83c78a413ceb921932dce830c444ed35da4cb454fa91c490d24638ea421548c",
+      "bytes": 674
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/sheet.js",
+      "sha256": "72dab6f9645dfaa3d81fed97923ec97aa89702745764801dcd5f79c02725b1f5",
+      "bytes": 21831
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/workflow-data.js",
+      "sha256": "7e90aa57d0ea696337b67e7187520f0fe5bd2fee3ff535897190ab011549940e",
+      "bytes": 2570
+    },
+    {
+      "path": "artifacts/room-proof-round4-2026-10-22/workflow.css",
+      "sha256": "b94e593948789f22edd097e144626a1ed1d9014136de5ac6c2c7f20f116d69a9",
+      "bytes": 9633
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/COLLABORATION.md",
+      "sha256": "02b9d51e89b868872eca0697d36dd9dd30c0d039ca919b3b2f75d382b18654f9",
+      "bytes": 3912
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/DESIGN-PLAN.md",
+      "sha256": "1ee6722da4e7100b14c93de4552fb3d627cc17b8a1825d01167ef10a4a24b190",
+      "bytes": 2206
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/README.md",
+      "sha256": "36820f2440ec2e59ce80acd79b874fdb271b4c0471ab07dc48248c7dcab7ed60",
+      "bytes": 2608
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/SOURCE-MAP.md",
+      "sha256": "8d0e4ea89b64b8a3e01576e6c6774c14765d89eb22ed57c249c742f5b8949b2b",
+      "bytes": 7558
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/VERIFICATION.md",
+      "sha256": "3609ffebaa7f6ae425de46338603aa885438a24a71c48f152e1f96c1d44543b8",
+      "bytes": 4442
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/actions.js",
+      "sha256": "d864e14d29c2e7b9dbdd6ffb10191c9fabb407545da37a4e040d6e1580693248",
+      "bytes": 33759
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/FONT-LICENSES.txt",
+      "sha256": "37ece22c3b69615920cc097b9379136630c1e9c86653d801982f14f80aae02e0",
+      "bytes": 4685
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/Inter-Medium.woff2",
+      "sha256": "5141e19965fc392575d49938990b194017b7be1dbe47c6ffbbfd241b2d40d398",
+      "bytes": 111432
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/Inter-Regular.woff2",
+      "sha256": "af88f01d3866dd301c20fdd1e462c2f319e6ec6e714e7cd7140ef45c2e765b83",
+      "bytes": 108396
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/Inter-SemiBold.woff2",
+      "sha256": "5587c694dde079d959c4eef378cb924d9233e56f56bccc5c33ef054961df8968",
+      "bytes": 112172
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/PlayfairDisplay-Italic.woff2",
+      "sha256": "710b4e90d84cf2662ff15807a8ad7de56c60ed305a770c6f576b9f060e60bb4e",
+      "bytes": 41216
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/PlayfairDisplay-Regular.woff2",
+      "sha256": "7f5ba76bc210c59a4bbf6f6b647af8bfe8efdee74ac956eac59a82a8a67638d1",
+      "bytes": 42488
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/chair-proof.png",
+      "sha256": "6b020e972277ebffc7df6c9e0c781e06aa2c03ee01504ba2c07ff3e008687d8b",
+      "bytes": 2364951
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/furniture-plan.svg",
+      "sha256": "8a8cdf2029188f9da307760427de1c6ad0427ff73ca0601dc2ceac299da31541",
+      "bytes": 3528
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/north-elevation.svg",
+      "sha256": "8fe91cd62fb3a6215c235ec3609fb21c590d2f13af69171f2a384d34fb86d01a",
+      "bytes": 2869
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/room-survey.svg",
+      "sha256": "c2d194277fa64c62ad671b8fa736f70e5745578cc448a36fa79cf5aada630224",
+      "bytes": 2857
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/room.png",
+      "sha256": "af459c677266f2108b55d82f6ba640521ddd32e4cc3904b2a0ada8e2f59ba944",
+      "bytes": 2706795
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/site-observation.svg",
+      "sha256": "4ca5412c82ad4f7a21115a4e4405d46a12455b2a3b27d09adc51175153508380",
+      "bytes": 1973
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/assets/studio-room.jpg",
+      "sha256": "e7fbce0a8ca55a2524e2e5bbed0cda29feb9c11d1cccbd2693a9f598e961def5",
+      "bytes": 366787
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/commerce.js",
+      "sha256": "d8652a52e7ce2f22a90695776ed97d8675ea9e7d6e0755a915ccca4f7f0afe68",
+      "bytes": 37208
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/data.js",
+      "sha256": "4a64847fefec3802f1ec8f712f156d6122738b8a783a54fac60be4a537fe51e7",
+      "bytes": 6557
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/design-data.js",
+      "sha256": "f3c6218cd5fdf327536bd313c1b162aacda2a67c915ee4f477f9022f37ed0425",
+      "bytes": 1673
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/design.css",
+      "sha256": "b6033792f2aae91eaf47b07297f89baad382a53b197620a12f82939b4839813a",
+      "bytes": 19534
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/design.js",
+      "sha256": "d0b4a2f58e04abe18d0376af906c845549afb2b97cf141316ca401a0556d2a09",
+      "bytes": 36389
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/index.html",
+      "sha256": "4ca5954cbc074c8af6b231824d8aa941864949643e4f1f1d32d5d630ba9b6743",
+      "bytes": 15666
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/init.js",
+      "sha256": "c5602791b0848a70e3390871e9a6ece064d3d9ed28e0e64b279ffa269a25f63b",
+      "bytes": 32
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/job.css",
+      "sha256": "85f0f4b1383abce66f736dffbb2bccf569b79e42fc8fc19570ae73186e3fe601",
+      "bytes": 30773
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/job.html",
+      "sha256": "1d46b21b0a64fa97ab34cab91f02f7045953691ef93c6eefd4db0e0907f5f13f",
+      "bytes": 12740
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/job.js",
+      "sha256": "af0612f39c3813d50b35504e5d26ad534e02d69f7c5745c61ef97f2487edf955",
+      "bytes": 14964
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/notes.css",
+      "sha256": "8d3a9462f21d080ca335acfb761bd05d33486b16eab65742f9f281fa7aed32ca",
+      "bytes": 4217
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/notes.js",
+      "sha256": "f51a35c06c95ab80ea0af62f4a07eebc04fb4eac51bfbf547ae942de51ee3b52",
+      "bytes": 15122
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/presentation.css",
+      "sha256": "5daf04d76557fb55189676a5f4bc77944d85fe5f1dea096d991163b001077b51",
+      "bytes": 20931
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/presentation.js",
+      "sha256": "9bf309e8285aa81490174d99270136a97f90377d0f94c3e2c0d5b57a4cbf8378",
+      "bytes": 17897
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/preview.jpg",
+      "sha256": "99972935b145b552e14b1ecfdefbea731205cafc396b8be813df761eeb0a0f48",
+      "bytes": 191209
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/review/CLAUDE-FIELD-SOURCE-REVIEW.md",
+      "sha256": "60b187d1fd93a279cfca32fc12c6262f44c0d1605aaecd546d0b1ab4282b20e4",
+      "bytes": 12668
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/review/CLAUDE-FOLLOWUP-REVIEW.md",
+      "sha256": "418c973f8346c9546b8ff22c99589dcdf098a475687ad09eb6d9c5ab2d8c6e03",
+      "bytes": 3320
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/review/CLAUDE-INDEPENDENT-REVIEW.md",
+      "sha256": "a590f0854f96acbeb0724f0dd7220a66b199dce3b50e24bd71157402ed898107",
+      "bytes": 8448
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/review/drawing-desktop.jpg",
+      "sha256": "7cf088b1db2e3c693ed423181d1797d1f60d7e7959431a0296cbb371519e597c",
+      "bytes": 186093
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/review/field-phone.jpg",
+      "sha256": "e1839ab0e05f1eb93f6621b8f869db1a5e6ffb3dfda2c887ec56711553b945a4",
+      "bytes": 111133
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/review/room-spread.jpg",
+      "sha256": "c52f45df0552bc90e9445a5327ac6c90c2c451f87510f68a5ff09e7d9d6a995b",
+      "bytes": 225541
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/round5.css",
+      "sha256": "7040ab093c22a6d2f727687b170bddbb0b3164e128f9f353fd0a0bd19dd5b315",
+      "bytes": 2903
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/serve.py",
+      "sha256": "34f0061a714d135cf5ea4c448619895b40e269a4011267f506f95ad37d119497",
+      "bytes": 674
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/sheet.js",
+      "sha256": "72dab6f9645dfaa3d81fed97923ec97aa89702745764801dcd5f79c02725b1f5",
+      "bytes": 21831
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/workflow-data.js",
+      "sha256": "7e90aa57d0ea696337b67e7187520f0fe5bd2fee3ff535897190ab011549940e",
+      "bytes": 2570
+    },
+    {
+      "path": "artifacts/room-proof-round5-2026-10-22/workflow.css",
+      "sha256": "b94e593948789f22edd097e144626a1ed1d9014136de5ac6c2c7f20f116d69a9",
+      "bytes": 9633
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/COLLABORATION.md",
+      "sha256": "4ac43219a6ab79cff3fe5a86d11b91ade97588a8f2497b27f4779648e2305f37",
+      "bytes": 6945
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/DESIGN-PLAN.md",
+      "sha256": "1ee670d2a5a0ee7e495042ab06f3ac79099d689a4e58c513ca4053b6a3266115",
+      "bytes": 2419
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/README.md",
+      "sha256": "d7d5244204ad8a809ab0b990a8b41c13da21ecd4eb8c508ce1b9432f9f33b1c4",
+      "bytes": 1204
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/REVIEW-SYNTHESIS.md",
+      "sha256": "2a7ad3fbcce04f1bf9bc3514bfae4696f16373b3c146809cf16379264f7599a9",
+      "bytes": 7412
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/SOURCE-MAP.md",
+      "sha256": "080ae59fa4f807ee2c058165e02c0bdb83e3d51bb1bfa0e704ff3abe7c8e2125",
+      "bytes": 6601
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/VERIFICATION.md",
+      "sha256": "075af6456b65ea99984890422c7ffb8a57f4764fedf301e4dd6eab035f928a7c",
+      "bytes": 3280
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/FONT-LICENSES.txt",
+      "sha256": "37ece22c3b69615920cc097b9379136630c1e9c86653d801982f14f80aae02e0",
+      "bytes": 4685
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/Inter-Medium.woff2",
+      "sha256": "5141e19965fc392575d49938990b194017b7be1dbe47c6ffbbfd241b2d40d398",
+      "bytes": 111432
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/Inter-Regular.woff2",
+      "sha256": "af88f01d3866dd301c20fdd1e462c2f319e6ec6e714e7cd7140ef45c2e765b83",
+      "bytes": 108396
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/Inter-SemiBold.woff2",
+      "sha256": "5587c694dde079d959c4eef378cb924d9233e56f56bccc5c33ef054961df8968",
+      "bytes": 112172
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/PlayfairDisplay-Italic.woff2",
+      "sha256": "710b4e90d84cf2662ff15807a8ad7de56c60ed305a770c6f576b9f060e60bb4e",
+      "bytes": 41216
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/PlayfairDisplay-Regular.woff2",
+      "sha256": "7f5ba76bc210c59a4bbf6f6b647af8bfe8efdee74ac956eac59a82a8a67638d1",
+      "bytes": 42488
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/north-elevation.svg",
+      "sha256": "8fe91cd62fb3a6215c235ec3609fb21c590d2f13af69171f2a384d34fb86d01a",
+      "bytes": 2869
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/room-survey.svg",
+      "sha256": "c2d194277fa64c62ad671b8fa736f70e5745578cc448a36fa79cf5aada630224",
+      "bytes": 2857
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/assets/room.jpg",
+      "sha256": "8bf57ed362e93045dbaf29afb802a858e4f9387b4fc3f7e4cde087690de7d122",
+      "bytes": 591603
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/index.html",
+      "sha256": "db1292146c8381779aa4a9c119d4703e0c60f07c60e7df40b5a64be9a4d475dc",
+      "bytes": 31386
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/presentation.css",
+      "sha256": "fab84abbf1f7dd610a416f14925959a629d11a80ae74c92408f5023c00d34b7b",
+      "bytes": 22928
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/presentation.js",
+      "sha256": "2dc5f526288af68b2beae6245f276e94d01bd58f0b51d604420cb1f00d31b6d3",
+      "bytes": 9870
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/preview.jpg",
+      "sha256": "5f3e93ef96cef9b054b4001efa3e19db7c2bcbee9ba4ba832e266ff3216d3292",
+      "bytes": 268888
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/review/CLAUDE-FOLLOWUP-REVIEW.md",
+      "sha256": "37cf4980302b5276aaa80651cb7a759f11b6cc4e6d5a3bfb9c1d456d941a9692",
+      "bytes": 6540
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/review/CLAUDE-INDEPENDENT-REVIEW.md",
+      "sha256": "6027c27b1edc290a67158f8766a27a417b2cb9abd11454a5e9addae7845aeb29",
+      "bytes": 10277
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/review/journey-desktop.jpg",
+      "sha256": "f82479cffebdbbe48a3fd017ed25cec5fac0f97a6ff747eee05970a13158610b",
+      "bytes": 188804
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/review/mixed-desktop.jpg",
+      "sha256": "0a97a0d190890f1df57ce543adaaa4f66fcfed35d71ee8dbb32c9bb8cdacd4c8",
+      "bytes": 164099
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/review/paper-phone.jpg",
+      "sha256": "a6cd95d37ace0f653d5d7df29b3e30ae28a4e8da26de4ed26d2dd8a9ee387345",
+      "bytes": 65233
+    },
+    {
+      "path": "artifacts/room-proof-round6-2026-10-22/workflows.js",
+      "sha256": "f05ee13ffc7e55f0e22e3749d5483a257cb24cb86392f66be177c4579cac6666",
+      "bytes": 16562
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/COLLABORATION.md",
+      "sha256": "631c93a641eb0857788e779c330276a2fdd4947bf8f4b004db81c28ec7996452",
+      "bytes": 4898
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/DESIGN-PLAN.md",
+      "sha256": "f34bb1059fe895ca9ccd5751adae3b68b04ed2306efba70793f0c2a298cc258f",
+      "bytes": 2723
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/FOUNDER-REVIEW-INPUT.md",
+      "sha256": "75d51331704e5d1b1459da74debe039c358c6c906bb717d7116b49a659b747f4",
+      "bytes": 707
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/README.md",
+      "sha256": "39776a7b7cafc4475cc5bb0c38bf2b0b90edd54c5640d04a2d96bd663914df29",
+      "bytes": 2452
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/SOURCE-MAP.md",
+      "sha256": "566879c22459d5ce3fa2faf19095ceed2d872464f359de52bedcd5b3dfa8c972",
+      "bytes": 7065
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/VERIFICATION.md",
+      "sha256": "3524085b1642523200050bc165dba4c531107fe6d1432f9488209f6710cc6e82",
+      "bytes": 3793
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/assets/FONT-LICENSES.txt",
+      "sha256": "37ece22c3b69615920cc097b9379136630c1e9c86653d801982f14f80aae02e0",
+      "bytes": 4685
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/assets/Inter-Medium.woff2",
+      "sha256": "5141e19965fc392575d49938990b194017b7be1dbe47c6ffbbfd241b2d40d398",
+      "bytes": 111432
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/assets/Inter-Regular.woff2",
+      "sha256": "af88f01d3866dd301c20fdd1e462c2f319e6ec6e714e7cd7140ef45c2e765b83",
+      "bytes": 108396
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/assets/Inter-SemiBold.woff2",
+      "sha256": "5587c694dde079d959c4eef378cb924d9233e56f56bccc5c33ef054961df8968",
+      "bytes": 112172
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/assets/PlayfairDisplay-Italic.woff2",
+      "sha256": "710b4e90d84cf2662ff15807a8ad7de56c60ed305a770c6f576b9f060e60bb4e",
+      "bytes": 41216
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/assets/PlayfairDisplay-Regular.woff2",
+      "sha256": "7f5ba76bc210c59a4bbf6f6b647af8bfe8efdee74ac956eac59a82a8a67638d1",
+      "bytes": 42488
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/assets/cabinet-elevation.svg",
+      "sha256": "deab4e3029ddc85726f12c482e18835bb8824f46b6714c4ca1eae3e7368f7168",
+      "bytes": 3767
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/assets/room.jpg",
+      "sha256": "8bf57ed362e93045dbaf29afb802a858e4f9387b4fc3f7e4cde087690de7d122",
+      "bytes": 591603
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/index.html",
+      "sha256": "a216013dd663ce0ffd9ea451c264effa4adee27a17947340bccb553a4b87d175",
+      "bytes": 27459
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/presentation.css",
+      "sha256": "fab84abbf1f7dd610a416f14925959a629d11a80ae74c92408f5023c00d34b7b",
+      "bytes": 22928
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/preview.jpg",
+      "sha256": "c5e9d293612f931a27c007b9dd44d1df5fb791099b319cbdd91a56500ee200ae",
+      "bytes": 210228
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/review/claude-followup.md",
+      "sha256": "a4293daa292f032ddb435630d74c409ec6dbcefb422d374cfef8c446195f6c1a",
+      "bytes": 6044
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/review/claude-initial.md",
+      "sha256": "4856bca1f6532844e57f4ba22b99320405337077561811b649d1a3f0574edab8",
+      "bytes": 14714
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/review/mobile-configuration.jpg",
+      "sha256": "8783e7af5f93a798b3988fab29952005615f3a0894546bbf309d6b1d395a9336",
+      "bytes": 56505
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/review/package-desktop.jpg",
+      "sha256": "3c84f4ecfa8a5247a154a39a1d3f537c0c7d03ef302ae195c4d1a954761eace8",
+      "bytes": 236808
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/round7.css",
+      "sha256": "1b06f270c4c0e8448ed6735d779523467d10ed193b83941d3fa83e25893a4825",
+      "bytes": 15796
+    },
+    {
+      "path": "artifacts/room-proof-round7-2026-10-23/study.js",
+      "sha256": "69e5ad6133be732dbdc9882d4dc4a61c42e45619e5085db5dad08a1a11a90f14",
+      "bytes": 44308
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/ASSETS.md",
+      "sha256": "a9eff088fa8bef0d35e339aff9b50d6f04ccdf3e7fc1fd75c1efc0baa9a5ee99",
+      "bytes": 954
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/COLLABORATION.md",
+      "sha256": "90fb936293db6293b9c8e4b01d35037f19516782fcf699c45c432abf49796c76",
+      "bytes": 4291
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/DESIGN-PLAN.md",
+      "sha256": "7b1bfe4aff4eb253d423e788dc1fae92c383c82a8bf4a9233ee0f11a4d4f6ff1",
+      "bytes": 2888
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/README.md",
+      "sha256": "c041ca620b8e1a17909de029b42f5a958f9d8911cdc023fc7e34be24546ad552",
+      "bytes": 3953
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/SOURCE-MAP.md",
+      "sha256": "eb1f9f45efd43865a31e4cd09fa37de8b25e72198207965b53df024e2e1ccfa5",
+      "bytes": 7551
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/VERIFICATION.md",
+      "sha256": "cd305adc82b1c837cc7f768bd705b0e40c97bfa5fdd4c89fe24858ce17c2ae57",
+      "bytes": 3729
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/actions.js",
+      "sha256": "e191ba1bddeaeef1599dadebcd20242e23281c528f5cc37c028d286fc29c240d",
+      "bytes": 33760
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/FONT-LICENSES.txt",
+      "sha256": "37ece22c3b69615920cc097b9379136630c1e9c86653d801982f14f80aae02e0",
+      "bytes": 4685
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/Inter-Medium.woff2",
+      "sha256": "5141e19965fc392575d49938990b194017b7be1dbe47c6ffbbfd241b2d40d398",
+      "bytes": 111432
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/Inter-Regular.woff2",
+      "sha256": "af88f01d3866dd301c20fdd1e462c2f319e6ec6e714e7cd7140ef45c2e765b83",
+      "bytes": 108396
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/Inter-SemiBold.woff2",
+      "sha256": "5587c694dde079d959c4eef378cb924d9233e56f56bccc5c33ef054961df8968",
+      "bytes": 112172
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/PlayfairDisplay-Italic.woff2",
+      "sha256": "710b4e90d84cf2662ff15807a8ad7de56c60ed305a770c6f576b9f060e60bb4e",
+      "bytes": 41216
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/PlayfairDisplay-Regular.woff2",
+      "sha256": "7f5ba76bc210c59a4bbf6f6b647af8bfe8efdee74ac956eac59a82a8a67638d1",
+      "bytes": 42488
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/cabinet-elevation.svg",
+      "sha256": "fc275b9c4f289498d930f0c8bad050f1a4807810492b5bc6b3af9ced58f0f2af",
+      "bytes": 3767
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/chair-proof.png",
+      "sha256": "6b020e972277ebffc7df6c9e0c781e06aa2c03ee01504ba2c07ff3e008687d8b",
+      "bytes": 2364951
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/furniture-plan.svg",
+      "sha256": "8a8cdf2029188f9da307760427de1c6ad0427ff73ca0601dc2ceac299da31541",
+      "bytes": 3528
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/north-elevation.svg",
+      "sha256": "8fe91cd62fb3a6215c235ec3609fb21c590d2f13af69171f2a384d34fb86d01a",
+      "bytes": 2869
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/room-survey.svg",
+      "sha256": "c2d194277fa64c62ad671b8fa736f70e5745578cc448a36fa79cf5aada630224",
+      "bytes": 2857
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/room.png",
+      "sha256": "af459c677266f2108b55d82f6ba640521ddd32e4cc3904b2a0ada8e2f59ba944",
+      "bytes": 2706795
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/site-observation.svg",
+      "sha256": "4ca5412c82ad4f7a21115a4e4405d46a12455b2a3b27d09adc51175153508380",
+      "bytes": 1973
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/assets/studio-room.jpg",
+      "sha256": "e7fbce0a8ca55a2524e2e5bbed0cda29feb9c11d1cccbd2693a9f598e961def5",
+      "bytes": 366787
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/commerce.js",
+      "sha256": "24ee330390cb160cfeef6c4fa5df84b6b435de95492499a841d440ad9bd13a54",
+      "bytes": 37512
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/data.js",
+      "sha256": "90c977df52f84a41512ebfba7b3d2baf984a672dc03f9e5fbf208e292291c17b",
+      "bytes": 7237
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/design-data.js",
+      "sha256": "174e1ef36432c1953ddad628e516256d73074fd4daea1f34dd747e37669d3b84",
+      "bytes": 1673
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/design.css",
+      "sha256": "b6033792f2aae91eaf47b07297f89baad382a53b197620a12f82939b4839813a",
+      "bytes": 19534
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/design.js",
+      "sha256": "e83fa92b2a5be9d5680cb0afed1275c0b86da6f3d6105c03fb67213a283b9ad2",
+      "bytes": 36635
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/index.html",
+      "sha256": "73b3406c18516970baf7a54361b2a0e9ac9aee5fe067be210faee165482765a4",
+      "bytes": 9508
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/init.js",
+      "sha256": "c5602791b0848a70e3390871e9a6ece064d3d9ed28e0e64b279ffa269a25f63b",
+      "bytes": 32
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/job.css",
+      "sha256": "85f0f4b1383abce66f736dffbb2bccf569b79e42fc8fc19570ae73186e3fe601",
+      "bytes": 30773
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/job.html",
+      "sha256": "57021b0ac9d06725b62484f078103c33d553c43b1758a5594bb0b5d12ce99374",
+      "bytes": 13531
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/job.js",
+      "sha256": "69556272cb4490da7d99128766d91b315c140a2450ac28c8d4b28d7f4041e83c",
+      "bytes": 14793
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/notes.css",
+      "sha256": "8d3a9462f21d080ca335acfb761bd05d33486b16eab65742f9f281fa7aed32ca",
+      "bytes": 4217
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/notes.js",
+      "sha256": "ebfaa92c3faff1985866db3e0d03cb68e6411f8652ff5679e51192712575d2fa",
+      "bytes": 15868
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/review/claude-code-followup.md",
+      "sha256": "9ade406f14d7f95399924b9574a3c379429f6248ceef36ed08fc66fb8037f89a",
+      "bytes": 5822
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/review/claude-code-initial.md",
+      "sha256": "32967443ac0a101d37ac413f3ffb8b456f2bdecd31d9c06a97a51fef7e27982b",
+      "bytes": 10441
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/review.css",
+      "sha256": "c7f1cad25c8c2ac59f62b158d8f569fb5cda62773d3cfa60e428323db37c91f3",
+      "bytes": 4868
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/review.js",
+      "sha256": "f53bfb10d6791392c0947c22f6cc5edbb71cce87a5686f40900d478278f20d72",
+      "bytes": 2211
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/screenshots/cabinet-desktop.jpg",
+      "sha256": "dc8981c2ef152448048fa966fcdc41ff33bfc065a3c3b2cf27de1336b43b40f2",
+      "bytes": 176399
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/screenshots/presentation-desktop.jpg",
+      "sha256": "ca73d34f34ab961b56483b3a2303b8382a06f0b3d687c2567c4d1f6f7fa86744",
+      "bytes": 226996
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/screenshots/sheet-desktop.jpg",
+      "sha256": "bad3f7ff54ed0f68ce19b7657d8e826e1df3068a3f704d355c405f19e2487ad2",
+      "bytes": 159692
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/screenshots/sheet-phone.jpg",
+      "sha256": "cde132fcef196439b594a4260818120e4ecbbfd411db3ef7eeb70b0a61aaf326",
+      "bytes": 58550
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/screenshots/studio-desktop.jpg",
+      "sha256": "c959cd9e887a3fe1de3d0d167fd0b17fd5d69b63dca26fa69551b47c65166e60",
+      "bytes": 240012
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/screenshots/studio-phone.jpg",
+      "sha256": "e27a2972d85841c72ee5e4363c6022d7f35c91c1ba40681a80a2449f2f1086b9",
+      "bytes": 80561
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/sheet.js",
+      "sha256": "72dab6f9645dfaa3d81fed97923ec97aa89702745764801dcd5f79c02725b1f5",
+      "bytes": 21831
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/studio.css",
+      "sha256": "14cf3e48cb2ce93662829f345f5ec9827180c252944531a38f33d74ccb95a110",
+      "bytes": 24023
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/studio.html",
+      "sha256": "a678fe0d152b75b15f7544b9f99b2d32432b2b71142b1ae6bc36138e58919e98",
+      "bytes": 2480
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/studio.js",
+      "sha256": "1bf15017e5cec8e439fcc78bd43e5636ce169e261cd45cfba9d02f2b374f9bf6",
+      "bytes": 44066
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/whole-data.js",
+      "sha256": "520a75c7cbe9291a640834abf53c2ef7f838fe3b03c23033508abc0fbb23f8c0",
+      "bytes": 5365
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/whole.css",
+      "sha256": "1ced476ddef19cb21b95f2386d7d3961ddf2935940eacea93de9442d8a167338",
+      "bytes": 13681
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/whole.js",
+      "sha256": "a859cc7c7972ca52a6a351099fca90585ebfff519734eb70cf0b38af36d8cdfe",
+      "bytes": 36407
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/workflow-data.js",
+      "sha256": "7e90aa57d0ea696337b67e7187520f0fe5bd2fee3ff535897190ab011549940e",
+      "bytes": 2570
+    },
+    {
+      "path": "artifacts/room-proof-round8-2026-10-23/workflow.css",
+      "sha256": "b94e593948789f22edd097e144626a1ed1d9014136de5ac6c2c7f20f116d69a9",
+      "bytes": 9633
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/DESIGN-PLAN.md",
+      "sha256": "e9204f6a70c5318b080fbc18b5ce0f14358db4e0accfbaa13063a2e374775cec",
+      "bytes": 2266
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/README.md",
+      "sha256": "97a969072884965b9b262fa48eea282deb9a46d575f1bf044e8b1da7726ea697",
+      "bytes": 3054
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/SOURCE-MAP.md",
+      "sha256": "3a6e166c763e532037fe8d7767fe218fec2b89fa02a16a8c965b92a533a4b37b",
+      "bytes": 5363
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/VERIFICATION.md",
+      "sha256": "14d24ed5651814fe6bc111d14d34b2c16b18dbf1741b96836d1c3e0ae84a1b18",
+      "bytes": 4644
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/app.js",
+      "sha256": "5351a3caa46f8503e4aa57450c20342f099218297fb94491ebc028b7db539a4a",
+      "bytes": 11041
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/DMMono-Regular.woff2",
+      "sha256": "b12a768f4794d0c7c683b998c64bcc0c1da16857bcfb11c363a4a4dbc1ec18d7",
+      "bytes": 20680
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/FONT-LICENSES.txt",
+      "sha256": "37ece22c3b69615920cc097b9379136630c1e9c86653d801982f14f80aae02e0",
+      "bytes": 4685
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/Inter-Medium.woff2",
+      "sha256": "5141e19965fc392575d49938990b194017b7be1dbe47c6ffbbfd241b2d40d398",
+      "bytes": 111432
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/Inter-Regular.woff2",
+      "sha256": "af88f01d3866dd301c20fdd1e462c2f319e6ec6e714e7cd7140ef45c2e765b83",
+      "bytes": 108396
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/Inter-SemiBold.woff2",
+      "sha256": "5587c694dde079d959c4eef378cb924d9233e56f56bccc5c33ef054961df8968",
+      "bytes": 112172
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/PlayfairDisplay-Italic.woff2",
+      "sha256": "710b4e90d84cf2662ff15807a8ad7de56c60ed305a770c6f576b9f060e60bb4e",
+      "bytes": 41216
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/PlayfairDisplay-Medium.woff2",
+      "sha256": "599bf557d18af27d80d9f4275165fa9b2877de409a7d63a959f5f56c41b33298",
+      "bytes": 44956
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/PlayfairDisplay-Regular.woff2",
+      "sha256": "7f5ba76bc210c59a4bbf6f6b647af8bfe8efdee74ac956eac59a82a8a67638d1",
+      "bytes": 42488
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/chair-proof.png",
+      "sha256": "6b020e972277ebffc7df6c9e0c781e06aa2c03ee01504ba2c07ff3e008687d8b",
+      "bytes": 2364951
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/assets/room.png",
+      "sha256": "af459c677266f2108b55d82f6ba640521ddd32e4cc3904b2a0ada8e2f59ba944",
+      "bytes": 2706795
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/base.css",
+      "sha256": "21ac046b0e55501659fa690f044f4542b83fb451aa443ea5cf4d911e0edd1593",
+      "bytes": 15822
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/boot.js",
+      "sha256": "9bcb1bed325a1b5f70a592350d848a53e32f8aff3c7cefc80cc6ff68a5c99834",
+      "bytes": 19
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/core-evidence.md",
+      "sha256": "6083805a73ddb181e85370a60d06dcf34908ff2c5f5239358782e1f19348f661",
+      "bytes": 10274
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/core-views.js",
+      "sha256": "ce99c3bd81eac33bcd4db2e0fa4bae5e6497630ef1213dab5a301c1091c74698",
+      "bytes": 58721
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/core.css",
+      "sha256": "9755c8e3d4a7a74f1540ab835a745f2e67fa810ffe89c722c73f2ca35fa87714",
+      "bytes": 24024
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/index.html",
+      "sha256": "a59f3eab8f0c5950802114fb8d530b60feb321b3a3fa79ed3191814656262374",
+      "bytes": 12997
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/mapping.js",
+      "sha256": "37e548c9594db2c579a902d729d94e14fc23e3014526723e11b64bb01977e0da",
+      "bytes": 8914
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/mockup.html",
+      "sha256": "2e2383375aa7591de41829ca6714a2c3d261914d359c3dda7cdfccdbd4157093",
+      "bytes": 3429
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/presentation.css",
+      "sha256": "bde779e486824df61c6c28f533e211d7b8533c120b8dc5a493c6c714e6814a79",
+      "bytes": 13826
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/presentation.js",
+      "sha256": "9c7bc636f8685459f6fa834f9b2e008a36ed5423cd4c7a3df42c730def4f458b",
+      "bytes": 5391
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/preview.jpg",
+      "sha256": "fd11b489cec6a416dc920fc993e008dd28ff2e6f6a7686a3112c740293f129ee",
+      "bytes": 183594
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/sourcing-evidence.md",
+      "sha256": "1e18bd1a76062a3a56012a701d0b658cef910a8e5fef4c555ab1219a8d105e8e",
+      "bytes": 14312
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/sourcing-views.js",
+      "sha256": "d0bf054b78651ca69a05d3aa45b2505d02abd9859b4a5733e9ac53eea3fed396",
+      "bytes": 42676
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/sourcing.css",
+      "sha256": "911e0f228c7726e5bc51fccd6bc2792cfc8a87a7d763ed963a281d01ed92f6ea",
+      "bytes": 19831
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/studio-evidence.md",
+      "sha256": "fd0727b904887f54698e1cf8fc8222247a88427a372f3e962965e1a2e53d38c2",
+      "bytes": 6247
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/studio-views.js",
+      "sha256": "c1a7de053dab21b7827dd682aa0cbc3d39fcc65817fe0fd9783b652344943d78",
+      "bytes": 38438
+    },
+    {
+      "path": "artifacts/room-proof-workflows-2026-10-21/studio.css",
+      "sha256": "35c487cee0f9571437149647c53914d7b8a38b668cb22c0df0fb7e5aac867809",
+      "bytes": 18115
+    }
+  ]
+}

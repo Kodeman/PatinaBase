@@ -162,3 +162,29 @@ describe('PiecePlate captions', () => {
     expect(container.querySelector('.plate-note')).toBeNull();
   });
 });
+
+
+describe('frozen external responsibility', () => {
+  it('labels stored external work without any studio price or action', () => {
+    const { container } = renderPiece(asset, { ...item, responsibility: 'external', externalFulfilmentId: 'external-1' });
+    expect(container).toHaveTextContent('Bought by client/GC (not billed by studio)');
+    expect(container).not.toHaveTextContent(/\$0|free furniture|reported external amount/i);
+    expect(container.querySelector('button, a, form')).toBeNull();
+    expect(container).not.toHaveTextContent('Buying responsibility not recorded');
+  });
+  it('keeps missing historical responsibility honestly unavailable, not external or studio', () => {
+    const { container } = renderPiece();
+    expect(container).toHaveTextContent('Buying responsibility not recorded in this edition.');
+    expect(container).not.toHaveTextContent('Bought by client/GC');
+  });
+  it('does not infer external responsibility from an identifier alone', () => {
+    const { container } = renderPiece(asset, { ...item, externalFulfilmentId: 'old-id' });
+    expect(container).toHaveTextContent('Buying responsibility not recorded in this edition.');
+    expect(container).not.toHaveTextContent('Bought by client/GC');
+  });
+  it('preserves an explicitly stored studio item', () => {
+    const { container } = renderPiece(asset, { ...item, responsibility: 'studio' });
+    expect(container).not.toHaveTextContent(/Bought by client|Buying responsibility not recorded/);
+    expect(container.querySelector('.ed-piece__status')).toHaveTextContent('In production');
+  });
+});

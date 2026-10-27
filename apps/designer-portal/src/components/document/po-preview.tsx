@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { DocSheet } from './overlays/doc-sheet';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   usePurchaseOrderChanges,
@@ -50,6 +50,7 @@ import { DocumentAction, DocumentActionGroup } from './document-action';
 export interface PoPreviewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  returnFocusTo?: HTMLElement | null;
   purchaseOrderId: string;
   vendorName: string;
   /** Resolved client-side recipient hint (clientVendorEmailHint). */
@@ -254,6 +255,7 @@ function PoChangeHistory({ purchaseOrderId }: { purchaseOrderId: string }) {
 export function PoPreview({
   open,
   onOpenChange,
+  returnFocusTo,
   purchaseOrderId,
   vendorName,
   vendorEmailHint,
@@ -380,27 +382,22 @@ export function PoPreview({
   };
   const send = () => stamp('send');
 
-  return createPortal(
-    <div
-      role="dialog"
-      aria-label="Purchase order preview"
-      className="fixed inset-0 z-[60]"
+  return (
+    <DocSheet
+      open
+      onClose={() => !sending && !marking && onOpenChange(false)}
+      returnFocusTo={returnFocusTo}
+      title="Purchase order preview"
+      kind="purchase-order-preview"
+      wide
     >
-      {/* The desk shows through around the lifted paper — no scrim-as-dialog,
-          just the document receding behind its own artifact. */}
-      <button
-        type="button"
-        aria-label="Put the preview down"
-        onClick={() => onOpenChange(false)}
-        className="absolute inset-0 cursor-default bg-[rgba(44,41,38,0.45)]"
-      />
       {/* The lifted paper is the held acts' frame (K2): the desk already
           recedes behind it, so the spotlight darkens the paper alone. */}
       <div
         data-spotlight-frame
         // The portal cannot inherit the route shell's inset; both chrome
         // owners publish their measured height on html instead.
-        className="absolute inset-x-0 top-[4vh] bottom-[calc(4vh_+_max(var(--doc-drawer-height,0px),var(--doc-mobile-bar-height,0px),env(safe-area-inset-bottom,0px)))] mx-auto flex w-[min(720px,94vw)] flex-col overflow-y-auto rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]"
+        className="flex min-w-0 flex-col"
       >
         <div className="flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] px-5 py-3">
           <div>
@@ -545,7 +542,6 @@ export function PoPreview({
           </DocumentAction>
         </DocumentActionGroup>
       </div>
-    </div>,
-    document.body,
+    </DocSheet>
   );
 }

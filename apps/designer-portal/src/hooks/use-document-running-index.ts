@@ -31,6 +31,10 @@ import {
   UNFOLD_REGION_EVENT,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
+import type { Round8ChapterKey } from '@/lib/document/round8-paper-order';
+
+/** Legacy region stops, or the round-8 paper's chapters (R8-02). */
+type IndexKey = DocumentIndexKey | Round8ChapterKey;
 
 const READING_BAND = '-20% 0px -62% 0px';
 const JUMP_LOCK_MS = 700;
@@ -42,47 +46,45 @@ const PAPER_ROOT_SELECTOR = '[data-document-paper]';
  * column — so an unscoped `document.querySelector` returns the rail's own row
  * instead of the region it names, and the index would observe itself.
  */
-function regionRoot(key: DocumentIndexKey): Element | null {
+function regionRoot(key: IndexKey): Element | null {
   const paper = document.querySelector(PAPER_ROOT_SELECTOR);
-  return (paper ?? document).querySelector(regionAnchorSelector(key));
+  return (paper ?? document).querySelector(regionAnchorSelector(key as DocumentIndexKey));
 }
 
-export interface DocumentRunningIndex {
-  activeKey: DocumentIndexKey | null;
+export interface DocumentRunningIndex<K extends IndexKey = DocumentIndexKey> {
+  activeKey: K | null;
   /**
    * The keys whose `[data-index-region]` root is on the paper right now, in
    * paper order. A stop with no root is nowhere to jump to — no scroll, no
    * heading to land focus on — so the rail prints it rather than offering it
    * as a press (C-04).
    */
-  mountedKeys: readonly DocumentIndexKey[];
+  mountedKeys: readonly K[];
 }
 
-export function useDocumentRunningIndex(
-  keys: readonly DocumentIndexKey[],
+export function useDocumentRunningIndex<K extends IndexKey = DocumentIndexKey>(
+  keys: readonly K[],
   projectId: string,
-): DocumentRunningIndex {
-  const [activeKey, setActiveKey] = useState<DocumentIndexKey | null>(null);
-  const [mountedKeys, setMountedKeys] = useState<readonly DocumentIndexKey[]>(
-    [],
-  );
-  const lockRef = useRef<DocumentIndexKey | null>(null);
+): DocumentRunningIndex<K> {
+  const [activeKey, setActiveKey] = useState<K | null>(null);
+  const [mountedKeys, setMountedKeys] = useState<readonly K[]>([]);
+  const lockRef = useRef<K | null>(null);
   const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keyList = keys.join('|');
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
-    const ordered = keyList ? (keyList.split('|') as DocumentIndexKey[]) : [];
+    const ordered = keyList ? (keyList.split('|') as K[]) : [];
     if (ordered.length === 0) return;
 
-    const seen = new Map<DocumentIndexKey, boolean>();
+    const seen = new Map<K, boolean>();
     // Every branch below reads THIS set, not `ordered`: a spread states the
     // regions it means to mount, but only the ones the DOM actually answers for
     // may hold the reading line. Otherwise a key whose root never appeared
     // (unmounted for this spread, or still settling) wins the first-region and
     // foot-of-the-paper fallbacks and the index marks a row with nothing
     // behind it.
-    const attached = new Set<DocumentIndexKey>();
+    const attached = new Set<K>();
 
     const resolve = () => {
       if (lockRef.current && attached.has(lockRef.current)) {
@@ -123,7 +125,7 @@ export function useDocumentRunningIndex(
         for (const entry of entries) {
           const key = entry.target.getAttribute(
             'data-index-region',
-          ) as DocumentIndexKey | null;
+          ) as K | null;
           if (key) seen.set(key, entry.isIntersecting);
         }
         resolve();
@@ -135,7 +137,7 @@ export function useDocumentRunningIndex(
     // are already observed costs nothing and simply picks up the new ones. A
     // root that has LEFT the DOM is unobserved and drops out of `attached`, or
     // the line would go on marking a region the spread has since unmounted.
-    const observing = new Map<DocumentIndexKey, Element>();
+    const observing = new Map<K, Element>();
 
     // One rAF of debounce: a spread mounting several regions in one commit
     // produces one batch of records, and re-attaching per record would query
@@ -242,8 +244,7 @@ export function useDocumentRunningIndex(
   // lock, and it lives with the line it locks.
   useEffect(() => {
     const onUnfold = (event: Event) => {
-      const key = (event as CustomEvent<{ region?: DocumentIndexKey }>).detail
-        ?.region;
+      const key = (event as CustomEvent<{ region?: K }>).detail?.region;
       if (!key) return;
       setActiveKey(key);
       lockRef.current = key;
@@ -266,29 +267,72 @@ export function useDocumentRunningIndex(
 }
 
 /**
- * Land on a region: scroll its root into view and put focus on its heading,
+ * Land on a region: scroll its root into view and put focus on its heading
+ * (a round-8 chapter names its own heading — `round8ChapterHeadingId`),
  * after the paint that mounted a just-unfolded body. Exported because the job
  * ticket performs the same act from outside this hook — one copy, so the two
  * cannot drift.
  */
+export function scrollToRegion(key: DocumentIndexKey, projectId: string): void;
 export function scrollToRegion(
-  key: DocumentIndexKey,
+  key: Round8ChapterKey,
   projectId: string,
+  headingId: string,
+): void;
+export function scrollToRegion(
+  key: IndexKey,
+  projectId: string,
+  headingId?: string,
 ): void {
-  const reduceMotion = window.matchMedia?.(
+  const headingTarget =
+    headingId ?? regionHeadingId(key as DocumentIndexKey, projectId);
+  const behavior: ScrollBehavior = window.matchMedia?.(
     '(prefers-reduced-motion: reduce)',
-  ).matches;
+  ).matches
+    ? 'auto'
+    : 'smooth';
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const root = regionRoot(key);
-      root?.scrollIntoView({
-        block: 'start',
-        behavior: reduceMotion ? 'auto' : 'smooth',
-      });
-      const heading = document.getElementById(regionHeadingId(key, projectId));
+      root?.scrollIntoView({ block: 'start', behavior });
+      const heading = document.getElementById(headingTarget);
       (heading ?? (root as HTMLElement | null))?.focus?.({
         preventScroll: true,
       });
+      if (root) holdLanding(root, behavior);
     });
   });
+}
+
+const READER_SCROLL = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+
+/**
+ * Bodies above the target that finish loading after the press push it down
+ * mid-scroll, leaving focus on a heading below the fold. Follow the root
+ * until the reader acts for themselves, or for two seconds. The reader's input
+ * is heard in the CAPTURE phase: controls that consume their keys (a month
+ * grid's arrows, an instrument's Escape) stop propagation, and a bubble-phase
+ * listener would leave the follower pulling the page back under them.
+ */
+function holdLanding(root: Element, behavior: ScrollBehavior) {
+  if (typeof ResizeObserver === 'undefined') return;
+  const at = () => root.getBoundingClientRect().top + window.scrollY;
+  let landing = at();
+  const follow = new ResizeObserver(() => {
+    const now = at();
+    if (Math.abs(now - landing) < 1) return;
+    landing = now;
+    root.scrollIntoView({ block: 'start', behavior });
+  });
+  const release = () => {
+    follow.disconnect();
+    for (const type of READER_SCROLL) {
+      window.removeEventListener(type, release, { capture: true });
+    }
+  };
+  follow.observe(document.documentElement);
+  for (const type of READER_SCROLL) {
+    window.addEventListener(type, release, { capture: true, passive: true });
+  }
+  window.setTimeout(release, 2000);
 }

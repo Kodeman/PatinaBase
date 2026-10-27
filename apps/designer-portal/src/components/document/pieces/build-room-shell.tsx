@@ -23,6 +23,7 @@ import {
   type FormEvent,
   type MouseEvent,
   type ReactNode,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
   REMOVED_PLACE,
@@ -47,6 +48,12 @@ import type {
   RoomCounts,
 } from "@/lib/document/pieces/room-counts";
 
+import {
+  isElementRendered,
+  topActiveModalDialog,
+  topDismissiblePopover,
+} from "@/components/document/overlays/active-dialog";
+
 /** How long a landing waits for its room's section to render. */
 const LANDING_WAIT_MS = 15_000;
 
@@ -55,7 +62,20 @@ export interface BuildRoomRoom {
   name: string;
 }
 
+type LineQueryState = ReturnType<typeof import("./line-query").lineQueryState>;
+
 export interface BuildRoomShellProps {
+  lineQuery?: LineQueryState;
+  as?: "main" | "section";
+  embedded?: boolean;
+  /** Embedded hosts own the unfold history and restore its opening control. */
+  onRequestClose?: () => void;
+  /**
+   * Embedded: the host landing's reader-intent latch. Once the reader has
+   * moved focus or scrolled since the unfold opened, the sheet does not take
+   * focus to its title, however late it mounts (SQ-1896 F5).
+   */
+  readerHasMoved?: () => boolean;
   /** The `/doc/[id]` segment, as the reader arrived. */
   docId: string;
   jobName: string;
@@ -153,8 +173,11 @@ export function placeSummary(
   return `${name} · ${plural(place.lines, "line", "lines")} · ${figure}`;
 }
 
-/** Whether something on the sheet holds Esc, so leaving must wait. */
-function escapeIsHeld(event: KeyboardEvent): boolean {
+/**
+ * Whether something on the sheet holds Esc, so leaving must wait. Exported so
+ * the unfold instrument that hosts an embedded sheet uses the same guard.
+ */
+export function escapeIsHeld(event: KeyboardEvent, embedded = false): boolean {
   if (event.defaultPrevented) return true;
   const target = event.target;
   if (
@@ -173,7 +196,21 @@ function escapeIsHeld(event: KeyboardEvent): boolean {
   ) {
     return true;
   }
-  // The open-thing set the log strip reads (log-strip.tsx), plus an open menu.
+  return openThingHoldsEscape(embedded);
+}
+
+function openThingHoldsEscape(embedded: boolean): boolean {
+  if (embedded) {
+    return Boolean(
+      topActiveModalDialog() ||
+      topDismissiblePopover() ||
+      Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[role="dialog"], [role="alertdialog"], [aria-modal], [data-open-thing], [role="menu"], [data-holds-escape]',
+        ),
+      ).some(isElementRendered),
+    );
+  }
   return (
     document.querySelector(
       '[role="dialog"], [role="alertdialog"], [aria-modal], [data-dismissible-popover], [data-open-thing], [role="menu"]',
@@ -203,7 +240,62 @@ interface PlaceRow {
   count: number;
 }
 
+function sheetBody(as: "main" | "section", embedded: boolean) {
+  return embedded ? "section" : as;
+}
+
+function sheetHeight(embedded: boolean) {
+  return embedded ? "min-h-0 flex-1" : "h-[100dvh]";
+}
+
+function sectionLabel(body: "main" | "section", titleId: string) {
+  return body === "section" ? titleId : undefined;
+}
+
+function handleSheetKey(
+  event: ReactKeyboardEvent,
+  embedded: boolean,
+  close: () => void,
+  main: HTMLElement | null,
+) {
+  if (
+    embedded &&
+    event.key === "Escape" &&
+    !escapeIsHeld(event.nativeEvent, true)
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+    return;
+  }
+  focusFromLanding(event, main);
+}
+
+function focusFromLanding(event: ReactKeyboardEvent, main: HTMLElement | null) {
+  if (!isLandingKey(event)) return;
+  if (focusFirstCell(main, event.target)) event.preventDefault();
+}
+
+function isLandingKey(event: ReactKeyboardEvent) {
+  const command = event.metaKey || event.ctrlKey;
+  return (
+    event.key === "ArrowDown" && command && !event.altKey && !event.shiftKey
+  );
+}
+
+function sheetClose(
+  embedded: boolean,
+  onRequestClose: (() => void) | undefined,
+  onReturn: () => void,
+) {
+  return embedded ? (onRequestClose ?? onReturn) : onReturn;
+}
+
 export function BuildRoomShell({
+  as = "main",
+  embedded = false,
+  onRequestClose,
+  readerHasMoved,
   docId,
   jobName,
   rooms,
@@ -213,11 +305,15 @@ export function BuildRoomShell({
   room,
   canSeeMoney,
   surfaceCount = 0,
+  lineQuery,
   onNavigate,
   onReturn,
   onAddRoom,
   children,
 }: BuildRoomShellProps) {
+  const Body = sheetBody(as, embedded);
+  const close = sheetClose(embedded, onRequestClose, onReturn);
+  const titleId = useId();
   const lenses = availableLenses(canSeeMoney);
   const activeLens = lenses.includes(lens) ? lens : "rough";
   const returnHref = buildRoomReturnHref(docId, room);
@@ -239,12 +335,19 @@ export function BuildRoomShell({
   onReturnRef.current = onReturn;
   const titleRef = useRef<HTMLHeadingElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const readerHasMovedRef = useRef(readerHasMoved);
+  readerHasMovedRef.current = readerHasMoved;
 
   // Landing, and every lens or room change (T-60a F1, F2): focus goes to the
   // title, then to the room's heading once its section is on the sheet, and
   // that section's top is scrolled into view. A refetch never runs this.
+  // Embedded, the host owns landing: the title is not taken from a reader
+  // who has moved on while the sheet's reads were out.
   useEffect(() => {
-    titleRef.current?.focus({ preventScroll: true });
+    if (!embedded || !readerHasMovedRef.current?.()) {
+      titleRef.current?.focus({ preventScroll: true });
+    }
+    if (embedded) return;
     const main = mainRef.current;
     if (room == null || !main) return;
     const land = () => {
@@ -270,10 +373,11 @@ export function BuildRoomShell({
     }
     observer.observe(main, { childList: true, subtree: true });
     return stop;
-  }, [activeLens, room]);
+  }, [activeLens, room, embedded]);
 
-  // Esc leaves for the overview at this room.
+  // Route mode owns global Esc; an embedded sheet only handles its own subtree.
   useEffect(() => {
+    if (embedded) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || escapeIsHeld(event)) return;
       event.preventDefault();
@@ -281,12 +385,13 @@ export function BuildRoomShell({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [embedded]);
 
   // The browser back: when it steps out of the room onto the overview, the
   // entry it lands on is given the room's anchor. The history state is passed
   // through untouched, so the router restores the overview as it was.
   useEffect(() => {
+    if (embedded) return;
     const onPop = () => {
       if (!isDocumentOverviewPath(window.location.pathname, docId)) return;
       window.history.replaceState(
@@ -297,7 +402,7 @@ export function BuildRoomShell({
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [docId]);
+  }, [docId, embedded]);
 
   const places: PlaceRow[] = rooms.map((r) => ({
     place: r.id,
@@ -358,19 +463,12 @@ export function BuildRoomShell({
     <div
       data-drafting-stock=""
       data-testid="build-room"
-      className="flex h-[100dvh] flex-col bg-[var(--sheet)] pb-16 text-[var(--sheet-ink)] min-[1180px]:pb-[60px]"
+      data-build-room-embedded={embedded}
+      className={`flex ${sheetHeight(embedded)} flex-col bg-[var(--sheet)] pb-16 text-[var(--sheet-ink)] min-[1180px]:pb-[60px]`}
       // The Rough in key map's ⌘↓ (rough-in-keys.ts), read from the landing
       // target: the room's heading or the title goes down into the lines (T-60e, F12).
       onKeyDown={(event) => {
-        if (
-          event.key !== "ArrowDown" ||
-          !(event.metaKey || event.ctrlKey) ||
-          event.altKey ||
-          event.shiftKey
-        )
-          return;
-        if (focusFirstCell(mainRef.current, event.target))
-          event.preventDefault();
+        handleSheetKey(event, embedded, close, mainRef.current);
       }}
     >
       <header className="relative flex flex-wrap items-center gap-x-6 border-b border-[var(--sheet-rule-strong)] bg-[var(--sheet-head)] px-4 md:min-h-[var(--head)] md:flex-nowrap md:px-6">
@@ -380,7 +478,7 @@ export function BuildRoomShell({
           onClick={(event) => {
             if (!isPlainClick(event)) return;
             event.preventDefault();
-            onReturn();
+            close();
           }}
           className={`${ACT} shrink-0 text-[var(--sheet-ink)]`}
         >
@@ -389,6 +487,7 @@ export function BuildRoomShell({
           <span className="hidden md:inline">{jobName}</span>
         </a>
         <h1
+          id={titleId}
           ref={titleRef}
           tabIndex={-1}
           aria-keyshortcuts="Meta+ArrowDown Control+ArrowDown"
@@ -399,6 +498,7 @@ export function BuildRoomShell({
         </h1>
 
         <div
+          data-build-room-picker=""
           className="ml-auto md:hidden"
           data-holds-escape={pickerOpen ? "" : undefined}
         >
@@ -449,7 +549,7 @@ export function BuildRoomShell({
           data-testid="build-room-place"
           className="hidden shrink-0 font-mono text-[12px] tabular-nums text-[var(--sheet-ink)] md:block"
         >
-          {summary}
+          {lineQuery?.total === null ? "Schedule total unknown" : summary}
         </p>
 
         {pickerOpen ? (
@@ -466,7 +566,11 @@ export function BuildRoomShell({
           >
             <ul>
               {placeLink(
-                { place: null, label: "All project selections", count: counts.job.lines },
+                {
+                  place: null,
+                  label: "All project selections",
+                  count: counts.job.lines,
+                },
                 "picker",
               )}
               {places.map((row) => placeLink(row, "picker"))}
@@ -482,6 +586,7 @@ export function BuildRoomShell({
         {LENS_READING[activeLens]}
       </p>
 
+      {lineQuery && <LineQueryReading state={lineQuery} />}
       <div className="flex min-h-0 flex-1">
         <nav
           aria-label="Rooms"
@@ -507,14 +612,38 @@ export function BuildRoomShell({
           <AddRoom onAddRoom={onAddRoom} />
         </nav>
 
-        <main
+        <Body
+          aria-labelledby={sectionLabel(Body, titleId)}
           ref={mainRef}
           className="min-h-0 flex-1 overflow-y-auto px-4 md:px-6"
         >
           {children}
-        </main>
+        </Body>
       </div>
     </div>
+  );
+}
+
+/** Completeness belongs to the canonical query, not the currently scoped room. */
+export function LineQueryReading({ state }: { state: LineQueryState }) {
+  const count = state.total === null
+    ? "Schedule total unknown"
+    : "Whole schedule · " + state.total + (state.total === 1 ? " line" : " lines") + " · " + state.pages + (state.pages === 1 ? " page" : " pages");
+  const reading = state.error
+    ? "The schedule could not be refreshed."
+    : state.loading
+      ? "Reading the schedule…"
+      : state.refreshing
+        ? "Refreshing the schedule…"
+        : state.stale
+          ? "Showing the last complete schedule; not yet refreshed."
+          : "Schedule up to date.";
+  return (
+    <p role={state.error ? "alert" : "status"} data-line-query=""
+      className="px-4 py-2 text-[12px] text-[var(--sheet-ink-muted)]">
+      {count}. {state.error && state.total === null ? "The schedule could not be read." : reading}
+      {state.error && state.total !== null ? " Showing the last complete schedule." : null}
+    </p>
   );
 }
 

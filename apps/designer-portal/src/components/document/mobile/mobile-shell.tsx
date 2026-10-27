@@ -66,6 +66,16 @@ export interface MobileActiveDoc {
    *  no-op if a publisher ever forgot it — where the pre-D-B18 code at least
    *  scrolled. `page.tsx` is the only publisher and always supplies it. */
   onJumpRegion: (key: DocumentIndexKey) => void;
+  /** WP-01.5 · the round-8 continuous paper's contents (R8-02): the chapters
+   *  it mounted, in paper order, the one being read, and the page's chapter
+   *  jump (unfold → promote → land on the chapter heading). The sections sheet
+   *  prints these in place of the open spread's regions. Absent on the legacy
+   *  paper. */
+  chapters?: {
+    entries: readonly { key: string; label: string; subLabel?: string }[];
+    activeKey: string | null;
+    onJump: (key: string) => void;
+  } | null;
   /** D-B46 · the whole press, for a target INSIDE a region rather than a
    *  region: `requestRegionUnfold('ffe')` → `forceFullThrough('ffe')` → land
    *  on `#ffe-selection-<lineId>`. The sheet cannot do this itself — an FF&E
@@ -410,6 +420,11 @@ export function useMobileActiveDoc(doc: MobileActiveDoc | null) {
       .join('|'),
     doc?.clientCopy ? 'copy' : '',
     doc?.marginCount ?? '',
+    doc?.chapters
+      ? `${doc.chapters.activeKey ?? ''}:${doc.chapters.entries
+          .map((entry) => `${entry.key}=${entry.subLabel ?? ''}`)
+          .join('|')}`
+      : '',
   ].join('//');
   useEffect(() => {
     setActiveDoc(doc);

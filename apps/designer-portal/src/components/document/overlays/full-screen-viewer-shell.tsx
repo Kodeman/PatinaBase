@@ -14,6 +14,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
+import { isElementRendered } from './active-dialog';
 import { DocumentAction } from '../document-action';
 import { lockBodyScroll, trapTabWithin } from '@/lib/full-screen-boundary';
 
@@ -32,6 +33,7 @@ export function FullScreenViewerShell({
   showHeader = true,
   actionKey = 'close-full-screen-viewer',
   contentClassName,
+  returnFocusTo,
 }: {
   title: string;
   meta?: string;
@@ -41,15 +43,21 @@ export function FullScreenViewerShell({
   showHeader?: boolean;
   actionKey?: string;
   contentClassName?: string;
+  returnFocusTo?: HTMLElement | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef(onClose);
+  const returnFocusRef = useRef(returnFocusTo);
   const titleId = useId();
 
   useEffect(() => {
     closeRef.current = onClose;
   }, [onClose]);
+
+  useEffect(() => {
+    returnFocusRef.current = returnFocusTo;
+  }, [returnFocusTo]);
 
   useEffect(() => {
     const activeElement = document.activeElement;
@@ -80,11 +88,13 @@ export function FullScreenViewerShell({
       window.cancelAnimationFrame(focusFrame);
       document.removeEventListener('keydown', onKeyDown, true);
       unlockBodyScroll();
-      const focusTarget = restoreRef.current;
+      const targets = [returnFocusRef.current, restoreRef.current];
       restoreRef.current = null;
-      if (!focusTarget?.isConnected) return;
       window.requestAnimationFrame(() => {
-        focusTarget.focus({ preventScroll: true });
+        const target = targets.find(
+          (element) => element?.isConnected && isElementRendered(element),
+        );
+        target?.focus({ preventScroll: true });
       });
     };
   }, []);

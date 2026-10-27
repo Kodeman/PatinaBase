@@ -25,6 +25,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  isElementRendered,
   registerManagedModalDialog,
   topActiveModalDialog,
 } from '../overlays/active-dialog';
@@ -34,14 +35,23 @@ export function RoomSheet({
   onClose,
   title,
   children,
+  returnFocusTo,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  /** Actual opening control; null/omitted keeps the programmatic focus fallback. */
+  returnFocusTo?: HTMLElement | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef(returnFocusTo);
+
+  useEffect(() => {
+    returnFocusRef.current = returnFocusTo;
+  }, [returnFocusTo]);
+
   const [isTopModal, setIsTopModal] = useState(true);
 
   // Join the managed stack on open, leave it on close/unmount. The callback
@@ -61,7 +71,14 @@ export function RoomSheet({
     restoreRef.current = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     return () => {
-      restoreRef.current?.focus?.();
+      const targets = [returnFocusRef.current, restoreRef.current];
+      restoreRef.current = null;
+      window.requestAnimationFrame(() => {
+        const target = targets.find(
+          (element) => element?.isConnected && isElementRendered(element),
+        );
+        target?.focus({ preventScroll: true });
+      });
     };
   }, [open]);
 

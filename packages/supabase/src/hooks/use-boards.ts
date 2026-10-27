@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   BoardOwnerRef,
   EditableMoodBoardItem,
@@ -53,6 +53,23 @@ export const boardOwnerQueryKeys = {
       ? (['boards-with-items', owner.id] as const)
       : (['project-owned-boards-with-items', owner.id] as const),
 };
+
+/** Batched Studio imagery shares broad board invalidation, not native row shapes. */
+export const commissionPlateQueryKeys = {
+  all: ['boards', 'commission-plates'] as const,
+  list: (projectIds: readonly string[], proposalIds: readonly string[]) =>
+    ['boards', 'commission-plates', projectIds, proposalIds] as const,
+};
+
+export function invalidateCommissionPlates(queryClient: QueryClient, owner: BoardOwnerRef | null) {
+  return queryClient.invalidateQueries({
+    queryKey: commissionPlateQueryKeys.all,
+    predicate: (query) => {
+      const [, , projectIds, proposalIds] = query.queryKey as ReturnType<typeof commissionPlateQueryKeys.list>;
+      return !owner || (owner.kind === 'project' ? projectIds : proposalIds).includes(owner.id);
+    },
+  });
+}
 
 interface BoardOwnerMutationInput {
   owner?: BoardOwnerRef;
@@ -435,7 +452,7 @@ function projectWorkingPath(projectId: unknown, value: unknown): value is string
  * `<projectId>/…`. A key the working bucket cannot resolve is left as-is so the
  * shared proposal-bucket signer downstream still gets its chance at it.
  */
-async function signProjectWorkingBoardRow(
+export async function signProjectWorkingBoardRow(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -672,6 +689,7 @@ export function useUpsertBoard() {
         queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(owner) });
         queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
       }
+      invalidateCommissionPlates(queryClient, owner);
       if (owner?.kind === 'proposal') {
         await invalidateProposalClientQueries(queryClient, owner.id);
       }
@@ -716,6 +734,7 @@ export function useDuplicateBoard() {
     // is atomic; invalidating on failure still clears any optimistic/mounted
     // state without implying a partial database write exists.
     onSettled: async (_board, _error, variables) => {
+      invalidateCommissionPlates(queryClient, { kind: 'proposal', id: variables.proposalId });
       queryClient.invalidateQueries({ queryKey: ['boards', variables.proposalId] });
       queryClient.invalidateQueries({
         queryKey: ['boards-with-items', variables.proposalId],
@@ -754,6 +773,7 @@ export function useDeleteBoard() {
     },
     onSuccess: async (_data, variables) => {
       const owner = mutationOwner(variables);
+      invalidateCommissionPlates(queryClient, owner);
       if (owner) {
         queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(owner) });
         queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
@@ -963,6 +983,7 @@ export function useApplyBoardRoomState() {
       if (error) throw error;
     },
     onSettled: async (_data, _error, variables) => {
+      invalidateCommissionPlates(queryClient, variables.owner);
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId], refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(variables.owner) });
       queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(variables.owner) });
@@ -1144,6 +1165,7 @@ export function useContinueBoardInProject() {
       return data as string;
     },
     onSuccess: (_newBoardId, variables) => {
+      invalidateCommissionPlates(queryClient, { kind: 'project', id: variables.projectId });
       queryClient.invalidateQueries({ queryKey: ['project-owned-boards', variables.projectId] });
     },
   });

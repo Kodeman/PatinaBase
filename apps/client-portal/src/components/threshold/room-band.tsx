@@ -527,7 +527,7 @@ function PieceRecord({ piece, gallery }: { piece: ClientSelection; gallery: bool
       )}
       <p>
         {piece.name}
-        {piece.clientLineTotalCents > 0
+        {piece.clientLineTotalCents != null && piece.clientLineTotalCents > 0
           ? ` · ${formatCurrency(piece.clientLineTotalCents)}`
           : ''}
         {piece.quantity > 1 ? ` · ${countInWords(piece.quantity)} of them` : ''}
@@ -662,7 +662,7 @@ export function RoomBand({
                       name={piece.name}
                       imageUrl={piece.imageUrl}
                       priceCents={
-                        piece.clientLineTotalCents > 0 ? piece.clientLineTotalCents : null
+                        piece.clientLineTotalCents != null && piece.clientLineTotalCents > 0 ? piece.clientLineTotalCents : null
                       }
                       status={piece.logisticsStatus}
                       itemType={piece.itemType}

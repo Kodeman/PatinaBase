@@ -42,6 +42,10 @@ vi.mock('@tanstack/react-query', () => ({
 
 import {
   excludeProjectArtifactApprovals,
+  AUTHORITY_SCOPE_LABELS,
+  ALL_AUTHORITY_SCOPES,
+  useSetPartyAuthority,
+  type SetPartyAuthorityInput,
   useAddProjectParty,
   useCreateCoordinationItem,
   useDeleteCoordinationItem,
@@ -75,6 +79,49 @@ beforeEach(() => {
   channelSubscribe.mockReset();
   removeChannel.mockReset();
   effectCleanup = undefined;
+});
+
+function stubAuthorityInsert() {
+  const single = vi.fn().mockResolvedValue({ data: { id: 'grant-1' }, error: null });
+  const insert = vi.fn().mockReturnValue({ select: () => ({ single }) });
+  const read = { eq: vi.fn(), is: vi.fn(), maybeSingle: vi.fn() };
+  read.eq.mockReturnValue(read);
+  read.is.mockReturnValue(read);
+  read.maybeSingle.mockResolvedValue({ data: null, error: null });
+  from.mockReturnValue({ select: () => read, insert });
+  return insert;
+}
+
+describe('fabrication authority stays RPC-only', () => {
+  it('labels fabrication without widening the generic grant scopes', () => {
+    expect(AUTHORITY_SCOPE_LABELS.fabrication).toBe('Fabrication authority — admin-only, dedicated act');
+    expect(ALL_AUTHORITY_SCOPES).not.toContain('fabrication');
+    expectTypeOf<Extract<SetPartyAuthorityInput['scope'], 'fabrication'>>().toBeNever();
+  });
+
+  it('refuses an untyped fabrication write before any table or RPC I/O', async () => {
+    stubAuthorityInsert();
+    const config = useSetPartyAuthority() as unknown as {
+      mutationFn: (input: SetPartyAuthorityInput) => Promise<unknown>;
+    };
+    await expect(config.mutationFn({
+      projectId: 'proj-1', engagementId: 'seat-1', scope: 'fabrication',
+    } as unknown as SetPartyAuthorityInput)).rejects.toThrow('admin-only');
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('preserves the existing direct insert for a selection grant', async () => {
+    const insert = stubAuthorityInsert();
+    const config = useSetPartyAuthority() as unknown as {
+      mutationFn: (input: SetPartyAuthorityInput) => Promise<unknown>;
+    };
+    await expect(config.mutationFn({
+      projectId: 'proj-1', engagementId: 'seat-1', scope: 'selections',
+    })).resolves.toEqual({ id: 'grant-1' });
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ scope: 'selections' }));
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });
 
 describe('coordination authority routing', () => {

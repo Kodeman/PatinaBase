@@ -1,0 +1,35 @@
+{
+  "kind": "static-preparation-checks-not-runtime-evidence",
+  "date": "2026-10-23",
+  "baseline": "ee9c450a582bc677a635a7e451425db4e1e51b4a",
+  "checks": {
+    "frozen_reference_files": 286,
+    "round8_files_compared_to_original_commit": 52,
+    "historical_files_compared_to_source_archive": 234,
+    "source_anchors_verified_at_baseline": 100,
+    "local_markdown_and_instruction_links": 48,
+    "static_html_css_resource_links": 331,
+    "preparation_paths_checked": 317
+  },
+  "failures": [],
+  "scope": "Local target paths and exact content hashes; excludes runtime behavior, Markdown anchors, JavaScript-computed URLs, external URLs and deployment status.",
+  "inputs": {
+    "source_paths_and_baseline_hashes": "current-source-inventory.json",
+    "frozen_reference_paths_and_hashes": "reference-manifest.json",
+    "markdown_scope": "REDESIGN.md, program/**/*.md, and new instruction-pointer links",
+    "resource_scope": "HTML/CSS href/src/url targets within the frozen reference manifest"
+  },
+  "commit_gates": [
+    {
+      "command": "git diff --cached --check",
+      "scope": "new primer and instruction-pointer changes",
+      "exit_code": 0
+    },
+    {
+      "command": "node scripts/hooks/patina-hooks.mjs policy --staged --strict",
+      "exit_code": 0,
+      "output": "No hook findings."
+    }
+  ],
+  "archived_whitespace_exception": "One inherited whitespace-only line in artifacts/room-proof-round2-2026-10-21/round2.js:103 is retained to preserve the frozen bytes; it is in the earlier history commit, not a new primer defect."
+}

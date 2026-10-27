@@ -261,6 +261,25 @@ describe('<PiecesOverview>', () => {
     expect(document.querySelectorAll('[data-action-key="open-add-schedule-line"]')).toHaveLength(1);
   });
 
+  it('WP-01.6 — under round 8 a plain press on the room door opens the sheet in place', () => {
+    const onWorkRoom = jest.fn();
+    renderOverview({ onWorkRoom });
+    fireEvent.click(toggle('living', 'Living Room'));
+    const work = within(row('living')).getByRole('link', { name: /Edit room selections/ });
+    // The link still names the Build room route, for a new tab.
+    expect(work).toHaveAttribute('href', '/doc/doc-1/pieces?lens=rough&room=living');
+
+    // `false`: the press was cancelled, so the route does not navigate.
+    expect(fireEvent.click(work)).toBe(false);
+    expect(onWorkRoom).toHaveBeenCalledTimes(1);
+    expect(onWorkRoom).toHaveBeenCalledWith('living', 'rough', work);
+
+    // A press meant for a new tab or window keeps the route.
+    fireEvent.click(work, { metaKey: true });
+    fireEvent.click(work, { button: 1 });
+    expect(onWorkRoom).toHaveBeenCalledTimes(1);
+  });
+
   it('hands ADD A LINE its room', () => {
     const { onAddLine } = renderOverview();
     fireEvent.click(toggle('dining', 'Dining'));

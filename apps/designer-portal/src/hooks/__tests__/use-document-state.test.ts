@@ -82,6 +82,19 @@ describe('useDocumentEngagement — one document_open read over the six resoluti
     expect(fromMock).not.toHaveBeenCalled();
   });
 
+  it('returns the activated revision project for a stale root using only document_open', async () => {
+    const redirect = { kind: 'redirect', projectId: PROJECT_ID };
+    rpcMock.mockResolvedValue({ data: redirect, error: null });
+
+    const query = useOpen(CHAIN_ROOT_ID);
+    await expect(query.queryFn()).resolves.toEqual(redirect);
+
+    expect(query.queryKey).toEqual(['document-state', 'engagement', CHAIN_ROOT_ID]);
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(rpcMock).toHaveBeenCalledWith('document_open', { p_id: CHAIN_ROOT_ID });
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
   it('throws the read error instead of answering missing', async () => {
     const error = { message: 'permission denied for function document_open', code: '42501' };
     rpcMock.mockResolvedValue({ data: null, error });

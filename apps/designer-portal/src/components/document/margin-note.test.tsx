@@ -8,7 +8,10 @@
  * role (the primitive renders `<aside role="note">` only when it shows).
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { Round8MarginContext } from './paper/margin-layout';
 import {
+  ROUND8_FIRST_TOUCH_DESKTOP,
+  ROUND8_FIRST_TOUCH_COMPACT,
   MarginNote,
   hasMarginNoteBeenSeen,
   markMarginNoteSeen,
@@ -105,6 +108,21 @@ describe('MarginNote — suppressed prop', () => {
       </MarginNote>,
     );
     expect(screen.queryByRole('note')).toBeNull();
+  });
+});
+
+describe('round-8 first-use orientation', () => {
+  it('names the right contents and the actual compact doors without changing legacy children', () => {
+    const { rerender } = render(
+      <Round8MarginContext.Provider value={true}>
+        <MarginNote noteKey="doc-first-touch">The rail on the left</MarginNote>
+      </Round8MarginContext.Provider>,
+    );
+    expect(screen.getByText(ROUND8_FIRST_TOUCH_DESKTOP)).toHaveClass('min-[1180px]:inline');
+    expect(screen.getByText(ROUND8_FIRST_TOUCH_COMPACT)).toHaveClass('min-[1180px]:hidden');
+    expect(screen.queryByText(/rail on the left/)).toBeNull();
+    rerender(<MarginNote noteKey="doc-first-touch">The rail on the left</MarginNote>);
+    expect(screen.getByText('The rail on the left')).toBeInTheDocument();
   });
 });
 

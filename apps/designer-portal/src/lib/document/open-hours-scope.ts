@@ -37,6 +37,11 @@ export interface HoursMemberScopeDetail {
   name: string | null;
 }
 
+export function clearHoursMemberScope(): void {
+  hoursMemberScopePending.userId = null;
+  hoursMemberScopePending.name = null;
+}
+
 export function openHoursForMember(userId: string, name?: string | null): void {
   hoursMemberScopePending.userId = userId;
   hoursMemberScopePending.name = name ?? null;

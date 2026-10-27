@@ -17,7 +17,9 @@
  * charcoal language with no change to their data layer.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { SectionLoadingLine } from '../section-loading-line';
 import {
   useAvailability,
   useSetAvailability,
@@ -39,9 +41,12 @@ import { AccountNotificationsPage } from './account-notifications-page';
 import { AccountSecurityPage } from './account-security-page';
 import { AccountDevicesPage } from './account-devices-page';
 import { AccountExtensionPage } from './account-extension-page';
-import { AccountStudioPage } from './account-studio-page';
 import { DocumentAction } from '../document-action';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
+
+function createStudioPage() {
+  return lazy(() => import('./account-studio-page').then((module) => ({ default: module.AccountStudioPage })));
+}
 
 const STATUS_META: Record<
   AvailabilityStatus,
@@ -89,6 +94,8 @@ export { openAccountPage } from './open-account-page';
 
 export function AccountSheet() {
   const [open, setOpen] = useState(false);
+  const [StudioPage, setStudioPage] = useState(createStudioPage);
+  const studioBodyRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState<AccountPage>('profile');
   const [rateFor, setRateFor] = useState<string | null>(null);
   const [aboveFolio, setAboveFolio] = useState(false);
@@ -282,7 +289,24 @@ export function AccountSheet() {
         {page === 'devices' && <AccountDevicesPage />}
         {page === 'extension' && <AccountExtensionPage />}
         {page === 'studio' && studioEnabled && (
-          <AccountStudioPage focusRateFor={rateFor} />
+          <div ref={studioBodyRef} tabIndex={-1}>
+            <ErrorBoundary fallback={(_error, reset) => (
+              <ActFailLine
+                error={new Error('Studio settings could not be loaded.')}
+                retryKey="account-studio-load-retry"
+                onRetry={() => {
+                  studioBodyRef.current?.focus({ preventScroll: true });
+                  // React.lazy caches rejection; retry needs a fresh lazy identity.
+                  setStudioPage(createStudioPage);
+                  reset();
+                }}
+              />
+            )}>
+              <Suspense fallback={<SectionLoadingLine label="Loading studio settings" />}>
+                <StudioPage focusRateFor={rateFor} />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
         )}
 
         {/* Sign out */}

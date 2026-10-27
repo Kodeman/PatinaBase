@@ -71,12 +71,22 @@ function normalizePlacement(data: unknown): PlaceProductInProjectResult {
   };
 }
 
-function normalizeReadiness(data: unknown): ProjectFfeReadiness {
+function readinessIdentity(selectionId: string): string {
+  // PostgreSQL UUID input allows braces and optional hyphens after four digits.
+  const uuid = selectionId.replace(/^\{(.*)\}$/, '$1');
+  return /^(?:[0-9a-f]{4}-?){7}[0-9a-f]{4}$/i.test(uuid)
+    ? uuid.replace(/-/g, '').toLowerCase()
+    : selectionId;
+}
+
+function normalizeReadiness(data: unknown, selectionId: string): ProjectFfeReadiness {
   const row = (data ?? {}) as JsonRecord;
-  if (typeof row.selectionId !== 'string' || typeof row.ready !== 'boolean') {
+  if (typeof row.selectionId !== 'string' || typeof row.ready !== 'boolean'
+    || readinessIdentity(row.selectionId) !== readinessIdentity(selectionId)) {
     throw new Error('Authoritative FF&E readiness was not returned');
   }
   return {
+    ...row,
     selectionId: row.selectionId,
     ready: row.ready,
     missingFields: Array.isArray(row.missingFields)
@@ -85,32 +95,65 @@ function normalizeReadiness(data: unknown): ProjectFfeReadiness {
   };
 }
 
+function normalizeReadinessBatch(data: unknown, ids: readonly string[]): ProjectFfeReadiness[] {
+  if (!Array.isArray(data) || data.length !== ids.length) {
+    throw new Error('Authoritative FF&E readiness batch was not returned');
+  }
+  return data.map((entry: unknown, index) => {
+    const row = (entry ?? {}) as JsonRecord;
+    if (row.selectionId !== ids[index] || row.error === undefined) {
+      throw new Error('Authoritative FF&E readiness batch was not returned');
+    }
+    if (row.error !== null) throw row.error;
+    return normalizeReadiness(row.readiness, ids[index]);
+  });
+}
+
 export function useProjectFfeReadiness(selectionIds: readonly string[]) {
   const ids = [...new Set(selectionIds.filter(Boolean))].sort();
   return useQuery({
     queryKey: ['project-ffe-readiness', ids],
     enabled: ids.length > 0,
-    queryFn: async (): Promise<ProjectFfeReadiness[]> => {
+    queryFn: async ({ signal }: { signal?: AbortSignal } = {}): Promise<ProjectFfeReadiness[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = createBrowserClient() as any;
-      // One RPC per selection: a long schedule would otherwise open a
-      // connection per line at once, so the fan-out is capped.
-      const CONCURRENCY = 8;
-      const results: ProjectFfeReadiness[] = new Array(ids.length);
-      let cursor = 0;
+      const read = async (name: string, parameters: object) => {
+        signal?.throwIfAborted();
+        const request = supabase.rpc(name, parameters);
+        const response = await (signal ? request.abortSignal(signal) : request);
+        signal?.throwIfAborted();
+        return response;
+      };
+      const results: ProjectFfeReadiness[] = [];
+      for (let start = 0; start < ids.length; start += 100) {
+        const chunk = ids.slice(start, start + 100);
+        const { data, error } = await read('get_project_ffe_readiness_batch', {
+          p_ffe_item_ids: chunk,
+        });
+        if (error) {
+          // 00880 ships revoked; older servers may not expose it yet. Probe once
+          // per query, never memoize availability across users or projects.
+          if (!['42501', 'PGRST202', '42883'].includes(error.code)) throw error;
+          break;
+        }
+        results.push(...normalizeReadinessBatch(data, chunk));
+      }
+      // Only unavailable chunks fall back. Per-entry refusals and unexpected
+      // failures reject the query; they must never turn into ready results.
+      let cursor = results.length;
       const worker = async (): Promise<void> => {
         for (;;) {
           const index = cursor++;
           if (index >= ids.length) return;
-          const { data, error } = await supabase.rpc('get_project_ffe_readiness', {
+          const { data, error } = await read('get_project_ffe_readiness', {
             p_ffe_item_id: ids[index],
           });
           if (error) throw error;
-          results[index] = normalizeReadiness(data);
+          results[index] = normalizeReadiness(data, ids[index]);
         }
       };
       await Promise.all(
-        Array.from({ length: Math.min(CONCURRENCY, ids.length) }, () => worker()),
+        Array.from({ length: Math.min(8, ids.length - results.length) }, () => worker()),
       );
       return results;
     },

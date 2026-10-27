@@ -1244,7 +1244,7 @@ export function useFfePairLines(projectId: string | null | undefined) {
   return useQuery({
     queryKey: ['project-ffe-items', projectId ?? '', 'pair-lines'] as const,
     queryFn: async (): Promise<FfePairLine[]> => {
-      const { data, error } = await getSupabase()
+      const query = getSupabase()
         .from('project_ffe_items')
         .select(
           'id, name, project_room_id, assignment_scope, vendor_id, vendor_name, purchase_order_id, quantity, unit, spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(color_fabric, com_spec), parent_ffe_item_id, link_kind, purchase_order:purchase_orders!purchase_order_id(id, po_number, status, vendor_id, supplies_purchase_order_id)',
@@ -1254,8 +1254,14 @@ export function useFfePairLines(projectId: string | null | undefined) {
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true })
         .order('id', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as unknown as FfePairLine[];
+      const pageSize = 1000;
+      const items: FfePairLine[] = [];
+      for (let offset = 0; ; offset += pageSize) {
+        const { data, error } = await query.range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        items.push(...((data ?? []) as unknown as FfePairLine[]));
+        if ((data?.length ?? 0) < pageSize) return items;
+      }
     },
     enabled: !!projectId,
   });

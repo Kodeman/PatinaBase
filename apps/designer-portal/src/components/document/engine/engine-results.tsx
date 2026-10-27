@@ -31,7 +31,7 @@ import {
   type EngineAskMatchSource,
 } from '@patina/supabase';
 import { StrataSweep } from '@/components/ui/strata-sweep';
-import { usePlaceInDocument } from '@/hooks/use-place-in-document';
+import { buildDocumentPlacementRequest, usePlaceInDocument } from '@/hooks/use-place-in-document';
 import { DocumentAction } from '../document-action';
 
 export interface InDocument {
@@ -58,11 +58,13 @@ const RESULT_LIMIT = 6;
 export function EngineResults({
   query,
   inDocument,
+  placementContext,
   onPlaced,
 }: {
   query: string;
   /** The document in hand — when present, Place targets it directly. */
   inDocument?: InDocument | null;
+  placementContext?: Pick<URLSearchParams, 'get'>;
   onPlaced?: (pieceName: string, whereName: string) => void;
 }) {
   const ask = useEngineAsk({ ask: query, limit: RESULT_LIMIT });
@@ -125,7 +127,7 @@ export function EngineResults({
     if (!targetId) return;
     setPlaceError(null);
     try {
-      await place.mutateAsync({
+      await place.mutateAsync(buildDocumentPlacementRequest({
         projectId: targetId,
         piece: {
           id: piece.id,
@@ -133,14 +135,14 @@ export function EngineResults({
           price_trade: piece.price_trade,
           price_retail: piece.price_retail,
         },
-      });
+      }, placementContext));
       setPlacedIds((prev) => new Set(prev).add(piece.id));
       onPlaced?.(piece.name, targetName);
-    } catch {
+    } catch (error) {
       // RLS rejects placement into a project you don't lead, and any other
       // insert failure — surface it instead of leaking an unhandled rejection.
       setPlaceError(
-        'Could not place into that document — you may not be its lead designer.',
+        error instanceof Error ? error.message : 'Could not place into that document — you may not be its lead designer.',
       );
     }
   };

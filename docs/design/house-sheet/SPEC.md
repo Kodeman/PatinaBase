@@ -1279,3 +1279,116 @@ terracotta-ink marks only an overdue, blocked or do-not-contact word.
 *(amended §G-13)*
 
 Answers: US-27 BRIEF §4; V19.
+
+## §H · Round 8 renderer (Room Proof 08, amended 2026-10-23)
+
+Kody approved Room Proof 08 on 2026-10-23 ("This is it"; R8-01). The same day he ruled P02: inside the round-8
+renderer only, its filled navigation and save controls and its few shadows are allowed. Terminal commercial and
+signature actions keep their consequence language, and the legacy renderer stays at zero shadows.
+
+This section is an append-only, **scoped** amendment.
+- **Rulings above.** Nothing in §A–§G is rewritten. Each of their rulings still governs every surface outside
+  `[data-paper-renderer="round8"]`.
+- **Inside the scope.** Inside that selector this section wins wherever it differs from §A–§G.
+- **Exact mapping.** The value mapping is `docs/design/designer-portal-round8/evidence/token-mapping.md`
+  (WP-00.4, SQ-1811), with its contrast table.
+- **Implementation.** WP-01.3 implements it.
+- **Dark mode.** Dark mode remains deferred.
+
+**H-1. Survey blue (2026-10-23, Kody approval of the round-8 palette).** One new pigment pair enters the
+palette. It follows the F56 split and the same rules as every other pigment and `-ink` pair.
+
+| Token | Value | Status | Use |
+|---|---|---|---|
+| `--color-survey-blue` | `#58717B` | pigment, **non-text only** | survey and drawing provenance marks: scan or measured-plate edge, draft-issue tick, uncertain-measurement mark. 4.84:1 on paper, 4.38:1 on green-record, 4.05:1 on rail: a mark, never a word |
+| `--color-survey-blue-ink` | `#4E6770` | text grade | "survey, not installed" captions, measured figures, the drawing-issue word. 5.76 doc-paper · 5.62 off-white · 6.00 white · 5.46 red-letter band · 5.33 note band · 5.09 green-record · 4.70 rail |
+
+Where they may and may not be used:
+- **Never as state.** Survey blue never marks approval, hold or recipient. Those stay ink words (§G).
+- **Never as focus.** The focus ring stays `--focus-ring`.
+- **Not on charcoal.** It is never placed on charcoal (2.80:1).
+- **Dark companion.** None is recorded until a dark paper set is commissioned.
+- **Placement.** Both tokens are declared at `:root` beside `--color-dusty-blue-ink`, so `contrast.test.ts`
+  measures the `-ink`.
+
+**H-2. Round-8 display and type (2026-10-23, Kody approval of the round-8 type).** These rules apply inside
+`[data-paper-renderer="round8"]` only.
+
+| Class | Family | Size / line | Weight | Tracking | Use |
+|---|---|---|---|---|---|
+| `.r8-d0` | display | `clamp(36px, 4.8vw, 68px)` / 1.15; ≤599px 40px / 1.12 | 400 | −0.035em | the job title on the continuous paper; decorative numerals at this size are italic and `aria-hidden` |
+| `.r8-d1` | display | `clamp(38px, 4vw, 58px)` / 1.15 | 400 | −0.024em | the studio title |
+| `.r8-small` | body (Inter) | 12px / 1.5 | 400 (500 for an emphasised value) | 0 | secondary metadata, sentence case; the 12px floor that the reference's 10–11.5px text rises to |
+
+Further rules inside the scope:
+- **Playfair weight.** §A3's display steps `.t-d1` / `.t-d2` / `.t-d3` keep their sizes and set Playfair at
+  **400**, the reference weight.
+- **Tracking.** §A3's "Playfair tracking stays 0, never negative below 40px" is lifted for `.r8-d0` and
+  `.r8-d1` only. Their em tracking equals the reference at its design widths: −2.4px at 68px, −1.4px at 58px.
+  Every other step keeps 0.
+- **Size floors.** Primary row text sits at the `.t-body-sm` 14px floor and secondary text at the 12px floor.
+- **Units.** Sizes are computed px at the 18px root: 14px = 0.7778rem, 12px = 0.6667rem. Reference rem (16px
+  root) and Tailwind `text-sm` / `text-xs` (15.75 / 13.5px) are never substituted.
+- **Studio measure.** §F-Q's 1200px studio band is lifted for the round-8 studio, which runs to 1540px. The
+  job paper runs to 1640px with a 200px contents margin at ≥1440px and 176px at 1180–1439px. Prose still caps
+  at 65ch, and §A4's 1100px client measure is unchanged.
+- **Breakpoints.** They stay 600 / 1180 / 1440.
+
+**H-3. P02 scoped exception (2026-10-23, Kody ruling P02).** These rules apply inside
+`[data-paper-renderer="round8"]` only.
+
+1. **Filled controls are the existing plate.**
+   - The round-8 filled navigation and save controls are the US-46 R203 plate, unchanged: charcoal
+     `--ink`, `--ink-paper` words, hover `#1F1D1A`, one leader per region, 44px target. No new tier exists.
+   - Round 8 paints the plate's whole 44px target (`::after` `inset: 0`), and its focus ring takes
+     `outline-offset: 2px`.
+   - Plates appear only at the sites enumerated in token-mapping §6.1: navigate with origin, unfold, save a
+     draft, prepare an unsent draft, preview, print.
+   - Each plate's label names its place or its draft.
+   - The reference's moss studio fill is painted charcoal, because a forest-family fill means "commits"
+     (R139). Moss is a one-line ratification if Kody prefers it.
+2. **Terminal acts are untouched.**
+   - These keep the §A5 terminal tier (forest fill, money or consequence in the label) or `danger`, and the
+     §A6 consequence sentence. V22 draft-first applies:
+     - sending, issuing or recording a payment;
+     - ordering from or authorising a vendor;
+     - recording a client's decision;
+     - signing or accepting;
+     - voiding.
+   - A plate never performs one of these.
+3. **Shadows.** Two tokens are declared once on `[data-paper-renderer="round8"]`:
+   - `--r8-shadow-float: 0 4px 20px rgba(44, 41, 38, 0.13)`: the floating return-to-origin bar and, if
+     built, a round-8 transient status layer. Failed saves never toast.
+   - `--r8-stack-edge: 0 3px 0 var(--doc-sheet-2), 0 4px 0 var(--hairline-strong)`: zero blur, a flat
+     stacked edge on the client-review paper, the issued-set preview and the Field work-order copy.
+   - These five sites are the whole inventory.
+   - Everything else stays at zero: every other surface, every stylesheet other than `globals.css`, every
+     drop-shadow or shadow filter, and the legacy renderer.
+4. **The gates narrow; they never disable.**
+   - `shadow-gate.test.ts` allowlists exactly those (selector, token) pairs under the scope and pins both
+     token values.
+   - `document-action-hierarchy-contract.test.ts` holds the round-8 plate overrides in their own block after
+     the scored-ink slice, so every existing plate and terminal assertion reads the legacy rule unchanged. It
+     freezes the plate sites and refuses a plate whose action key sends, issues, pays, signs, accepts,
+     authorises, dispatches, voids or approves.
+   - ESLint's D4 TSX rules are unchanged.
+   - Design: token-mapping §7.2.
+
+Answers: Kody 2026-10-23 (R8-01, P01, P02); `docs/design/designer-portal-round8/DECISIONS.md`; US-52 WP-00.4.
+
+**H-4. Correction: where the round-8 rules live (2026-10-23, WP-01.3, SQ-1821).** This corrects §H-3 by
+appending; the text above is left as written.
+- **One lazy sheet.** Every rule under `[data-paper-renderer="round8"]` lives in
+  `apps/designer-portal/src/components/document/paper/round8.css`, imported only by the `next/dynamic`
+  Round8PaperFrame and the round-8 studio body. The legacy renderer never loads it.
+- **globals.css gains only the §H-1 pair.** `--color-survey-blue` and `--color-survey-blue-ink` sit at
+  `:root`, because `contrast.test.ts` parses only that file.
+- **§H-3.3 reads "every stylesheet other than `round8.css`"** where it says "other than `globals.css`".
+  `globals.css` stays at zero shadows with every other stylesheet.
+- **§H-3.4's gates read that sheet.** `shadow-gate.test.ts` allowlists the five (selector, token) pairs in
+  `round8.css` only. The P02 describe in `document-action-hierarchy-contract.test.ts` reads `round8.css`, and
+  asserts `globals.css` carries no `data-paper-renderer` rule.
+- **Terminal binding.** A round-8 terminal names its §A6 sentence through `aria-describedby`, and the same file
+  renders the element with that id. This is how the gate proves the consequence sentence is present.
+
+Answers: US-52 story decision #5 (SQ-1811 addendum); WP-01.3.

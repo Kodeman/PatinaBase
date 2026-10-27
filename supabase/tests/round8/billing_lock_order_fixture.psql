@@ -1,0 +1,57 @@
+-- Fictional f882 fixture. Include only in the caller's owned transaction.
+DO $$ BEGIN
+  ASSERT NOT EXISTS (SELECT 1 FROM auth.users WHERE id::text LIKE 'f8820000-%'), 'billing fixture starts absent';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.projects WHERE id::text LIKE 'f8824000-%'), 'billing project starts absent';
+END $$;
+SET LOCAL session_replication_role = replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT ('f8820000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+  'billing-lock-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated'
+FROM generate_series(1,3)n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT id,email,'Billing lock fixture',true FROM auth.users WHERE id::text LIKE 'f8820000-%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+('f8821000-0000-4000-8000-000000000001','design_studio','Billing lock studio','billing-lock-fixture','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+('f8820000-0000-4000-8000-000000000001','f8821000-0000-4000-8000-000000000001','owner','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT 'f8820000-0000-4000-8000-000000000001',id,'f8820000-0000-4000-8000-000000000001'
+FROM public.roles WHERE name='studio_owner';
+INSERT INTO public.designer_clients(id,designer_id,client_id,client_name,status,source) VALUES
+('f8822000-0000-4000-8000-000000000001','f8820000-0000-4000-8000-000000000001',
+ 'f8820000-0000-4000-8000-000000000002','Billing fixture client','active','direct');
+INSERT INTO public.proposals(id,designer_id,designer_client_id,client_id,studio_id,title,total_amount,status,document_kind,commercial_state)
+SELECT ('f8823000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'f8820000-0000-4000-8000-000000000001','f8822000-0000-4000-8000-000000000001',
+ 'f8820000-0000-4000-8000-000000000002','f8821000-0000-4000-8000-000000000001',
+ 'Billing fixture',0,'accepted',CASE WHEN n=3 THEN 'design_services' ELSE 'design_build' END,
+ CASE WHEN n=1 THEN 'client_signed' ELSE 'executed' END
+FROM generate_series(1,3)n;
+INSERT INTO public.projects(id,created_by,designer_id,client_id,studio_id,proposal_id,name,status) VALUES
+('f8824000-0000-4000-8000-000000000001','f8820000-0000-4000-8000-000000000001','f8820000-0000-4000-8000-000000000001',
+ 'f8820000-0000-4000-8000-000000000002','f8821000-0000-4000-8000-000000000001',
+ 'f8823000-0000-4000-8000-000000000002','Billing fixture project','active');
+UPDATE public.proposals SET project_id='f8824000-0000-4000-8000-000000000001'
+WHERE id IN ('f8823000-0000-4000-8000-000000000002','f8823000-0000-4000-8000-000000000003');
+INSERT INTO public.project_commercial_documents(id,project_id,proposal_id,document_kind,created_by,is_origin)
+SELECT ('f8825000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ 'f8824000-0000-4000-8000-000000000001',('f8823000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
+ CASE WHEN n=3 THEN 'design_services' ELSE 'design_build' END,
+ 'f8820000-0000-4000-8000-000000000001',n=2
+FROM generate_series(2,3)n;
+INSERT INTO public.project_billing_authorities(project_id,commercial_document_id,source_proposal_id,retainer_activation_policy,billing_cadence)
+VALUES('f8824000-0000-4000-8000-000000000001','f8825000-0000-4000-8000-000000000002',
+ 'f8823000-0000-4000-8000-000000000002','immediate','per_draw');
+INSERT INTO public.agreement_draw_invoices(proposal_id,draw_key,sort_order,label,gross_cents,retainage_cents,net_cents)
+SELECT ('f8823000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'deposit',1,'Fixture deposit',10000,0,10000
+FROM generate_series(1,2)n;
+INSERT INTO public.agreement_draw_invoices(proposal_id,draw_key,sort_order,label,gross_cents,retainage_cents,net_cents)
+VALUES('f8823000-0000-4000-8000-000000000002','rough_in',2,'Fixture rough-in',20000,1000,19000);
+INSERT INTO public.invoices(id,project_id,designer_id,client_id,studio_id,title,status,tax_rate)
+VALUES('f8826000-0000-4000-8000-000000000001','f8824000-0000-4000-8000-000000000001',
+ 'f8820000-0000-4000-8000-000000000001','f8820000-0000-4000-8000-000000000002',
+ 'f8821000-0000-4000-8000-000000000001','Service retainer fixture','draft',0);
+INSERT INTO public.invoice_line_items(invoice_id,kind,description,quantity,unit_amount_cents,amount_cents,metadata)
+VALUES('f8826000-0000-4000-8000-000000000001','adhoc','Service retainer',1,2500,2500,
+ '{"kind":"design_services_retainer","commercialDocumentId":"f8825000-0000-4000-8000-000000000003"}');
+SET LOCAL session_replication_role = origin;

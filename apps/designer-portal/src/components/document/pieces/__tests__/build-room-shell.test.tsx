@@ -64,7 +64,9 @@ function renderShell(overrides: Partial<BuildRoomShellProps> = {}) {
 }
 
 const lensButtons = () =>
-  within(screen.getByRole("group", { name: "Schedule view" })).getAllByRole("button");
+  within(screen.getByRole("group", { name: "Schedule view" })).getAllByRole(
+    "button",
+  );
 
 describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
   it("prints ← job, BUILD THE PIECES, the four lens words as pressed buttons, and the room counts", () => {
@@ -113,7 +115,10 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
       "rough",
       "Create preliminary selections by item, quantity and room. Complete specifications and pricing in the next tabs.",
     ],
-    ["spec", "Complete each selection’s specifications and product reference. Use Pricing for costs."],
+    [
+      "spec",
+      "Complete each selection’s specifications and product reference. Use Pricing for costs.",
+    ],
     [
       "price",
       "Set trade costs, markups and client prices. A ~ indicates an estimate.",
@@ -149,10 +154,9 @@ describe("BuildRoomShell — the head (SPEC §6 shell)", () => {
 
   it("counts the room's surfaces in the Finishes lens (a11)", () => {
     renderShell({ lens: "finishes", room: "bedroom", surfaceCount: 3 });
-    expect(screen.getByRole("button", { name: "Finish schedule" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "Finish schedule" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("build-room-place")).toHaveTextContent(
       "Bedroom · 3 surfaces",
     );
@@ -194,10 +198,9 @@ describe("BuildRoomShell — Price for a seat without money (R1, Q7)", () => {
       room: "living",
     });
     renderShell({ canSeeMoney: false, lens: "price" });
-    expect(screen.getByRole("button", { name: "Preliminary selections" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "Preliminary selections" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });
 
@@ -473,9 +476,9 @@ describe("BuildRoomShell — at 390 (a13)", () => {
     expect(within(list).getAllByRole("link")[0]).toHaveTextContent(
       "All project selections25",
     );
-    expect(within(list).getByRole("link", { name: /Living Room/ })).toHaveTextContent(
-      picker.textContent?.replace(" ▾", "") ?? "Living Room",
-    );
+    expect(
+      within(list).getByRole("link", { name: /Living Room/ }),
+    ).toHaveTextContent(picker.textContent?.replace(" ▾", "") ?? "Living Room");
     fireEvent.click(within(list).getByRole("link", { name: /Kitchen/ }));
     expect(props.onNavigate).toHaveBeenCalledWith({
       lens: "rough",
@@ -522,9 +525,7 @@ describe("BuildRoomShell — at 390 (a13)", () => {
       target: { value: "Mudroom" },
     });
     await act(async () => {
-      fireEvent.click(
-        within(list).getByRole("button", { name: "Add room" }),
-      );
+      fireEvent.click(within(list).getByRole("button", { name: "Add room" }));
     });
     expect(onAddRoom).toHaveBeenCalledWith("Mudroom");
   });
@@ -550,5 +551,112 @@ describe("BuildRoomShell — at 390 (a13)", () => {
     expect(phoneClasses).not.toContain("grid");
     expect(group.style.gridTemplateColumns).toBe("");
     expect(group.getAttribute("style") ?? "").not.toMatch(/repeat\(/);
+  });
+});
+
+describe("BuildRoomShell — embedded paper instrument", () => {
+  it.each([false, true])("opts into container layout only when embedded=%s", (embedded) => {
+    renderShell({ embedded });
+    expect(screen.getByTestId("build-room")).toHaveAttribute(
+      "data-build-room-embedded",
+      String(embedded),
+    );
+    expect(screen.getByRole("button", { name: "Living Room ▾" }).parentElement)
+      .toHaveAttribute("data-build-room-picker");
+  });
+
+  it("renders as a named section instead of a nested main", () => {
+    renderShell({ as: "section" });
+    expect(screen.getByRole("region", { name: "FF&E schedule" }).tagName).toBe(
+      "SECTION",
+    );
+    expect(screen.queryByRole("main")).not.toBeInTheDocument();
+  });
+
+  it("embedded mode forces a section and focuses the sheet title, not the room", () => {
+    render(
+      <BuildRoomShell
+        docId="doc-1"
+        jobName="Job"
+        rooms={ROOMS}
+        counts={COUNTS}
+        removedCount={0}
+        lens="spec"
+        room="living"
+        canSeeMoney
+        embedded
+        onNavigate={jest.fn()}
+        onReturn={jest.fn()}
+      >
+        <section>
+          <h2 tabIndex={-1} data-room-heading="living">
+            Living Room
+          </h2>
+        </section>
+      </BuildRoomShell>,
+    );
+    expect(
+      screen.getByRole("region", { name: "FF&E schedule" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("main")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "FF&E schedule" }),
+    ).toHaveFocus();
+  });
+
+  it("only closes for Esc inside the embedded sheet and delegates navigation and leave", () => {
+    const onRequestClose = jest.fn();
+    const { props } = renderShell({ embedded: true, onRequestClose });
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onRequestClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole("heading", { name: "FF&E schedule" }), {
+      key: "Escape",
+    });
+    expect(onRequestClose).toHaveBeenCalledTimes(1);
+    expect(props.onReturn).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Specifications" }));
+    expect(props.onNavigate).toHaveBeenCalledWith({
+      lens: "spec",
+      room: "living",
+    });
+    fireEvent.click(
+      screen.getByRole("link", { name: "Back to Whole Home Renovation" }),
+    );
+    expect(onRequestClose).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['role="dialog" aria-modal="true"'],
+    ['data-modal-layer=""'],
+    ['data-dismissible-popover=""'],
+  ])("embedded Esc yields to a rendered overlay: %s", (attributes) => {
+    const onRequestClose = jest.fn();
+    renderShell({ embedded: true, onRequestClose });
+    const overlayHost = document.createElement("div");
+    overlayHost.innerHTML = "<div " + attributes + ">Open overlay</div>";
+    document.body.appendChild(overlayHost);
+    const title = screen.getByRole("heading", { name: "FF&E schedule" });
+    try {
+      fireEvent.keyDown(title, { key: "Escape" });
+      expect(onRequestClose).not.toHaveBeenCalled();
+      overlayHost.firstElementChild?.setAttribute("hidden", "");
+      fireEvent.keyDown(title, { key: "Escape" });
+      expect(onRequestClose).toHaveBeenCalledTimes(1);
+    } finally {
+      overlayHost.remove();
+    }
+  });
+
+  it("leaves unfold history untouched on an embedded popstate", () => {
+    window.history.replaceState(
+      { paper: true },
+      "",
+      "/doc/doc-1?unfold=pieces&room=living",
+    );
+    renderShell({ embedded: true });
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    expect(window.location.search).toBe("?unfold=pieces&room=living");
+    expect(window.location.hash).toBe("");
+    expect(window.history.state).toEqual({ paper: true });
   });
 });

@@ -30,7 +30,7 @@
  * one-leader guard query: one named group per head, leader inside it.
  */
 
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useId } from 'react';
 import {
   DocumentAction,
@@ -42,7 +42,8 @@ export interface RegionLedgerEntry {
   /** DocumentAction actionKey — stable telemetry identity. */
   key: string;
   label: ReactNode;
-  onClick?: () => void;
+  /** On a link-form entry it runs before the route; `preventDefault` stays here. */
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
   actionRef?: React.Ref<HTMLButtonElement>;
   /** Link-form entries render as an anchor rather than a button. */
   href?: string;
@@ -213,7 +214,7 @@ export function RegionHead({
       'aria-controls': entry['aria-controls'],
     };
     return entry.href ? (
-      <DocumentAction key={entry.key} {...shared} href={entry.href}>
+      <DocumentAction key={entry.key} {...shared} href={entry.href} onClick={entry.onClick}>
         {entry.label}
       </DocumentAction>
     ) : (

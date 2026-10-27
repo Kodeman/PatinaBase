@@ -10,7 +10,40 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePlaceProductInProjectV2 } from '@patina/supabase';
-import type { FfeAssignmentScope, FfeDuplicateMode } from '@patina/types';
+import type { FfeAssignmentScope, FfeDuplicateMode, PlaceProductInProjectRequest } from '@patina/types';
+
+export type FillPlacementIntent = Pick<PlaceProductInProjectRequest,
+  'placeholderSelectionId' | 'assignmentScope' | 'roomId' | 'quantity' |
+  'itemType' | 'budgetMinCents' | 'budgetMaxCents' | 'disposition'>;
+
+/** URL context is only intent; native V2 still validates the line and its authority. */
+export function readFillPlacementIntent(value: string | null): FillPlacementIntent | undefined {
+  if (value === null) return undefined;
+  try {
+    const fill = JSON.parse(value);
+    if (!fill || typeof fill.placeholderSelectionId !== 'string' || !fill.placeholderSelectionId ||
+        !['room', 'throughout', 'unassigned'].includes(fill.assignmentScope) ||
+        !(fill.roomId === null || typeof fill.roomId === 'string') ||
+        (fill.assignmentScope === 'room' && !fill.roomId) ||
+        !Number.isFinite(fill.quantity) || fill.quantity <= 0 ||
+        !['fixed', 'allowance'].includes(fill.itemType) ||
+        (fill.disposition !== undefined && !['candidate', 'selected', 'alternate'].includes(fill.disposition)) ||
+        ![fill.budgetMinCents, fill.budgetMaxCents].every(n => n == null || (Number.isFinite(n) && n >= 0))) {
+      throw new Error('Invalid Fill context');
+    }
+    return {
+      placeholderSelectionId: fill.placeholderSelectionId,
+      assignmentScope: fill.assignmentScope,
+      roomId: fill.roomId,
+      quantity: fill.quantity,
+      itemType: fill.itemType,
+      ...(fill.itemType === 'allowance' ? { budgetMinCents: fill.budgetMinCents ?? null, budgetMaxCents: fill.budgetMaxCents ?? null } : {}),
+      ...(fill.disposition ? { disposition: fill.disposition } : {}),
+    };
+  } catch {
+    throw new Error('The Fill context could not be read. Return to Pieces and choose Fill again.');
+  }
+}
 
 export interface PlaceablePiece {
   /** product id */
@@ -21,6 +54,28 @@ export interface PlaceablePiece {
   /** client unit price in cents — feeds unit_price_cents, the budget source of
    *  truth (00185). */
   price_retail?: number | null;
+}
+
+export function buildDocumentPlacementRequest(
+  request: {
+    projectId: string;
+    piece: PlaceablePiece;
+    configurationId?: string | null;
+    duplicateMode?: FfeDuplicateMode;
+  },
+  context?: Pick<URLSearchParams, 'get'>,
+) {
+  const isOrigin = context?.get('projectId') === request.projectId;
+  const roomId = isOrigin ? context!.get('roomId') : null;
+  const fill = isOrigin ? readFillPlacementIntent(context!.get('fill')) : undefined;
+  return {
+    ...request,
+    assignmentScope: (roomId ? 'room'
+      : isOrigin && context!.get('assignmentScope') === 'throughout' ? 'throughout' : 'unassigned') as FfeAssignmentScope,
+    roomId,
+    boardId: isOrigin ? context!.get('boardId') : null,
+    ...(fill && (!request.duplicateMode || request.duplicateMode === 'reuse') ? { fill } : {}),
+  };
 }
 
 export function usePlaceInDocument() {
@@ -40,6 +95,7 @@ export function usePlaceInDocument() {
       boardId = null,
       duplicateMode = 'reuse',
       idempotencyKey,
+      fill,
     }: {
       projectId: string;
       piece: PlaceablePiece;
@@ -49,17 +105,20 @@ export function usePlaceInDocument() {
       boardId?: string | null;
       duplicateMode?: FfeDuplicateMode;
       idempotencyKey?: string;
+      fill?: FillPlacementIntent;
     }) => {
+      const activeFill = duplicateMode === 'reuse' ? fill : undefined;
       const result = await place.mutateAsync({
         projectId,
         productId: piece.id,
-        name: piece.name,
+        ...(activeFill ? {} : { name: piece.name }),
         itemType: 'fixed',
         assignmentScope,
         roomId,
         boardId,
         disposition: 'candidate',
         duplicateMode,
+        ...activeFill,
         configurationId,
         roleConfigurationIdentity: 'default',
         source: 'engine',

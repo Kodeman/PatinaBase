@@ -15,10 +15,12 @@ describe('open document hydration render contract', () => {
   it('gates a warm cached engagement behind useHydrated before early returns', () => {
     expect(page).toContain("import { useHydrated } from '@/hooks/use-hydrated';");
     expect(page).toMatch(/const hydrated = useHydrated\(\);/);
-    expect(page).toMatch(/if \(!hydrated \|\| resolutionState === 'loading'\)/);
+    // WP-01.5 added `|| paperRenderer.renderer === 'pending'` to the same gate.
+    const loadingGate = /if \(\s*!hydrated \|\|\s*resolutionState === 'loading'/;
+    expect(page).toMatch(loadingGate);
 
     const hook = page.indexOf('const hydrated = useHydrated()');
-    const loadingReturn = page.indexOf("if (!hydrated || resolutionState === 'loading')");
+    const loadingReturn = page.search(loadingGate);
     const missingReturn = page.indexOf("if (resolutionState === 'missing' || !row)");
     expect(hook).toBeGreaterThan(-1);
     expect(loadingReturn).toBeGreaterThan(hook);

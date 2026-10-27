@@ -1886,6 +1886,7 @@ export type {
 // ═══════════════════════════════════════════════════════════════════════════
 export {
   useBoards,
+  signProjectWorkingBoardRow,
   useBoard,
   useBoardsWithItems,
   useUpsertBoard,
@@ -1904,6 +1905,7 @@ export {
   summarizeBoard,
   normalizeBoardOwner,
   boardOwnerQueryKeys,
+  commissionPlateQueryKeys,
 } from "./use-boards";
 export type {
   BoardOwnerInput,
@@ -2672,3 +2674,24 @@ export {
   type OptimisticContext,
   type UseOptimisticMutationOptions,
 } from "./optimistic";
+
+export { useScopeEditions, readScopeEditions, scopeEditionKeys, scopeEditionCapability } from "./use-scope-editions";
+export { useServiceArrangements, selectServiceArrangements } from "./use-service-arrangements";
+export { readScopePackagePayload } from "./use-agreement-parts";
+
+export {
+  externalFulfilmentCapability,
+  externalFulfilmentKeys,
+  useExternalFulfilments,
+  useExternalFulfilmentReadings,
+  useCreateExternalFulfilment,
+  useRecordExternalFulfilmentEvent,
+  useVerifyExternalFulfilmentEvent,
+  useBindFulfilmentEvidence,
+  useAssignFfeItemsToScopePackage,
+  useSetFfeItemExternalFulfilment,
+  useGrantFabricationAuthority,
+  useRevokeFabricationAuthority,
+  useRecordFabricationInstruction,
+} from './use-external-fulfilments';
+export type { ExternalFulfilment, ExternalFulfilmentReading } from './use-external-fulfilments';

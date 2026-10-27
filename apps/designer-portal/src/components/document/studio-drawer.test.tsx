@@ -1,4 +1,6 @@
+import React from 'react';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -6,6 +8,12 @@ import {
   within,
 } from '@testing-library/react';
 import { StudioDrawer } from './studio-drawer';
+import {
+  hoursMemberScopePending,
+  openHoursForMember,
+} from '@/lib/document/open-hours-scope';
+
+let mockNativeHours = false;
 
 const mockPush = jest.fn();
 const mockPrefetch = jest.fn();
@@ -42,6 +50,43 @@ jest.mock('@patina/supabase', () => ({
   useUnreadInboxCount: () => ({ data: 0 }),
   useProcurementUnreadCount: () => ({ data: 0 }),
   useUnseenShipped: () => ({ data: mockUnseenFeedback }),
+  useClients: () => ({ data: [] }),
+  useCreateTimeEntry: () => ({ mutateAsync: jest.fn() }),
+  useUpdateTimeEntry: () => ({ mutateAsync: jest.fn() }),
+  useTimeEntryLedger: () => ({ data: [] }),
+  useProjectPricingStudio: () => ({ isSuccess: true, data: 'studio-1' }),
+  useStampProjectPricingStudio: () => ({ mutateAsync: jest.fn() }),
+  useStudioHoursRollup: () => ({ data: [] }),
+  filterProjectUnbilledEntries: () => [],
+  isInvoiceEligibleTimeEntry: () => false,
+}));
+
+jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
+  useQuery: () => ({ data: [], refetch: jest.fn() }),
+}));
+
+jest.mock('@/hooks/use-viewer-studio', () => ({
+  useViewerStudio: () => ({
+    organizations: [],
+    studio: { id: 'studio-1', name: 'Studio' },
+    candidates: [],
+    selectStudio: jest.fn(),
+    isOwnerOrAdmin: true,
+    isSettled: true,
+  }),
+  useInternalTimeStudio: () => ({ studio: null }),
+}));
+
+jest.mock('./time-capture', () => ({
+  ...jest.requireActual('./time-capture'),
+  useBillableIntent: () => ({ isSettled: false }),
+  RateRoleChip: () => null,
+  BillablePill: () => null,
+}));
+
+jest.mock('./commercial/project-authority-band', () => ({
+  ProjectAuthorityBandForProject: () => null,
 }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
@@ -69,6 +114,9 @@ jest.mock('@/lib/document/room-origin', () => ({
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
+    actionShown: jest.fn(),
+    actionInvoked: jest.fn(),
+    time: { scopeViewed: jest.fn() },
     wayfinding: {
       roomEntered: jest.fn(),
       doorOpened: jest.fn(),
@@ -94,7 +142,11 @@ jest.mock('./accounts/accounts-book', () => ({
 }));
 
 jest.mock('./hours-ledger', () => ({
-  HoursLedger: () => <div>Hours ledger</div>,
+  HoursLedger: (props: Record<string, unknown>) => {
+    if (!mockNativeHours) return <div>Hours ledger</div>;
+    const { HoursLedger } = jest.requireActual('./hours-ledger');
+    return <HoursLedger {...props} />;
+  },
 }));
 
 jest.mock('./account/account-nameplate', () => ({
@@ -397,5 +449,132 @@ describe('StudioDrawer — zero shadows (US-28 S1, V20 U-Q12)', () => {
     const bar = screen.getByRole('navigation', { name: 'Studio drawer' });
     expect(bar).not.toHaveClass('doc-elevated');
     expect(bar.className).not.toMatch(/(^|[\s:])(drop-)?shadow(-|\s|$)/);
+  });
+});
+
+
+describe('Hours lazy body', () => {
+  const nativeLazy = React.lazy;
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mockNativeHours = false;
+    hoursMemberScopePending.userId = null;
+    hoursMemberScopePending.name = null;
+  });
+
+  it.each(['project', 'ordinary', 'other book', 'unmount'])(
+    'discards an abandoned lazy member handoff before the next %s open',
+    async (nextOpen) => {
+      mockNativeHours = true;
+      let resolve!: () => void;
+      const gate = new Promise<void>((done) => { resolve = done; });
+      jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => gate.then(load)));
+      const view = render(<StudioDrawer />);
+
+      act(() => openHoursForMember('member-A', 'Teammate A'));
+      expect(screen.getByRole('status')).toHaveTextContent('Loading hours');
+      expect(hoursMemberScopePending.userId).toBe('member-A');
+      if (nextOpen === 'other book') {
+        act(() => window.dispatchEvent(new CustomEvent('document:open-ledger', {
+          detail: 'orders',
+        })));
+        expect(screen.getByText('Orders ledger')).toBeInTheDocument();
+      } else if (nextOpen === 'unmount') {
+        view.unmount();
+        render(<StudioDrawer />);
+      } else {
+        fireEvent.keyDown(screen.getByRole('dialog', { name: 'Timesheets' }), { key: 'Escape' });
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      }
+
+      act(() => window.dispatchEvent(new CustomEvent('document:open-ledger', {
+        detail: nextOpen === 'ordinary' ? 'hours' : {
+          name: 'hours', context: { projectId: 'project-B' },
+        },
+      })));
+      await act(async () => resolve());
+      const lens = await screen.findByRole('group', { name: 'Time ledger scope' });
+      // Native HoursLedger's memberScope is null, and its landingScope comes
+      // from this open, not from the abandoned person's module handoff.
+      expect(within(lens).queryByRole('button', { name: 'Teammate A' })).not.toBeInTheDocument();
+      expect(within(lens).getByRole('button', {
+        name: nextOpen === 'ordinary' ? 'My time' : 'This project',
+      })).toHaveAttribute('aria-current', 'true');
+    },
+  );
+
+  it('keeps a delayed member landing and switches the mounted sheet to the next member', async () => {
+    mockNativeHours = true;
+    let resolve!: () => void;
+    const gate = new Promise<void>((done) => { resolve = done; });
+    jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => gate.then(load)));
+    render(<StudioDrawer />);
+    act(() => openHoursForMember('member-A', 'Teammate A'));
+    const panel = screen.getByRole('dialog', { name: 'Timesheets' });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading hours');
+    await act(async () => resolve());
+    const lens = await screen.findByRole('group', { name: 'Time ledger scope' });
+    expect(within(lens).getByRole('button', { name: 'Teammate A' })).toHaveAttribute('aria-current', 'true');
+    act(() => openHoursForMember('member-B', 'Teammate B'));
+    expect(screen.getByRole('dialog', { name: 'Timesheets' })).toBe(panel);
+    expect(within(lens).queryByRole('button', { name: 'Teammate A' })).not.toBeInTheDocument();
+    expect(within(lens).getByRole('button', { name: 'Teammate B' })).toHaveAttribute('aria-current', 'true');
+    expect(hoursMemberScopePending).toEqual({ userId: null, name: null });
+  });
+
+  it('keeps the shell and opening focus through loading to loaded, then returns to its opener', async () => {
+    let resolve!: () => void;
+    const gate = new Promise<void>((done) => { resolve = done; });
+    const loads = jest.fn();
+    jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => {
+      loads();
+      return gate.then(load);
+    }));
+    render(<StudioDrawer />);
+    expect(loads).not.toHaveBeenCalled();
+    const opener = screen.getByRole('button', { name: 'Ledgers' });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole('button', { name: /^Timesheets/ }));
+    const panel = screen.getByRole('dialog', { name: 'Timesheets' });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading hours');
+    await waitFor(() => expect(panel).toHaveFocus());
+    await act(async () => resolve());
+    expect(panel).toContainElement(await screen.findByText('Hours ledger'));
+    expect(panel).toHaveFocus();
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('contains a rejected chunk in the same shell and retries with a fresh loader', async () => {
+    let reject!: (error: Error) => void;
+    let resolveRetry!: () => void;
+    const first = new Promise<void>((_resolve, fail) => { reject = fail; });
+    const retry = new Promise<void>((done) => { resolveRetry = done; });
+    let attempt = 0;
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    jest.spyOn(React, 'lazy').mockImplementation((load) => nativeLazy(() => {
+      const gate = attempt++ === 0 ? first : retry;
+      return gate.then(load);
+    }));
+    render(<StudioDrawer />);
+    const opener = screen.getByRole('button', { name: 'Ledgers' });
+    opener.focus();
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole('button', { name: /^Timesheets/ }));
+    const panel = screen.getByRole('dialog', { name: 'Timesheets' });
+    await act(async () => reject(new Error('ChunkLoadError')));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hours could not be loaded.');
+    expect(screen.getByRole('dialog', { name: 'Timesheets' })).toBe(panel);
+    const retryButton = screen.getByRole('button', { name: 'Try again' });
+    retryButton.focus();
+    fireEvent.click(retryButton);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading hours');
+    expect(panel).toContainElement(document.activeElement as HTMLElement);
+    await act(async () => resolveRetry());
+    expect(panel).toContainElement(await screen.findByText('Hours ledger'));
+    expect(attempt).toBe(2);
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });

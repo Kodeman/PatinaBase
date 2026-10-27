@@ -1,0 +1,60 @@
+import { test, expect } from '../fixtures/auth';
+import { psqlScalar } from '../helpers/psql';
+
+const JOB = 'f0180000-0000-4000-8000-000000000010';
+const ROOM = 'f0180000-0000-4000-8000-000000000011';
+
+test('Studio return holds the failed unfold save, then restores its opener after retry', async ({ authenticatedPage: page }) => {
+  test.setTimeout(180_000);
+  const line = psqlScalar(`SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND name='F01 Living Room selection 01' AND removed_at IS NULL;`);
+  expect(line).toMatch(/^[0-9a-f-]{36}$/);
+  if (new URL(page.url()).pathname !== '/desk') await page.goto('/desk');
+  const studio = page.locator('[data-studio="round8"]');
+  await expect(studio).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
+  await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/, { timeout: 30_000 });
+  const opener = page.locator('[data-studio-attention-item]').filter({ hasText: 'F01 Fictional Full-Service House' }).first().getByRole('link').first();
+  const openerId = await opener.getAttribute('id');
+  expect(openerId).toMatch(/^studio-attention-/);
+  await opener.click();
+  await expect(page).toHaveURL(new RegExp(`/doc/${JOB}(?:\\?|$)`), { timeout: 60_000 });
+  await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+  await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/, { timeout: 30_000 });
+  const chapter = page.locator('[data-paper-chapter="ffe"]');
+  await chapter.scrollIntoViewIfNeeded();
+  await expect(chapter).toHaveAttribute('data-density', 'full');
+  const room = chapter.locator(`[data-pieces-room="${ROOM}"]`);
+  const toggle = room.getByRole('button', { name: /Living Room/ });
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+  await room.getByRole('link', { name: /Edit room selections/ }).click();
+  const sheet = chapter.locator('[data-unfold-instrument="pieces"]');
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Specifications' }).click();
+  await sheet.getByTestId('spec-lens').locator(`[data-line-id="${line}"] > button`).click();
+  const pane = sheet.getByTestId('spec-fields-pane');
+  const finish = pane.getByRole('textbox', { name: 'Finish' });
+  const value = `Held Studio finish ${Date.now()}`;
+  const specWrite = (url: URL) => url.pathname.endsWith('/rest/v1/project_ffe_specs');
+  await page.route(specWrite, (route) => route.request().method() === 'PATCH'
+    ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 'XX000', message: 'Forced Studio return failure' }) })
+    : route.continue());
+  await finish.fill(value);
+  await finish.press('Enter');
+  await expect(pane.getByRole('alert')).toContainText(/Forced Studio return failure|not saved/);
+  const studioReturn = page.locator('[data-job-head-return]');
+  await studioReturn.click();
+  await expect(page).toHaveURL(new RegExp(`/doc/${JOB}\\?`));
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole('alert').last()).toContainText(/not saved/);
+  await expect(pane.getByRole('alert')).toBeVisible();
+  await expect(finish).toHaveValue(value);
+  await expect(finish).toBeFocused();
+  await expect(page.locator('[data-radix-toast-viewport] [data-state="open"]')).toHaveCount(0);
+  await page.unroute(specWrite);
+  await finish.press('Enter');
+  await expect.poll(() => psqlScalar(`SELECT finish FROM public.project_ffe_specs WHERE ffe_item_id='${line}';`)).toBe(value);
+  await expect(pane.getByRole('alert')).toHaveCount(0);
+  await studioReturn.click();
+  await expect(page).toHaveURL(/\/desk(?:\?|$)/, { timeout: 60_000 });
+  await expect(studio).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator(`[id="${openerId}"]`)).toBeFocused({ timeout: 30_000 });
+});

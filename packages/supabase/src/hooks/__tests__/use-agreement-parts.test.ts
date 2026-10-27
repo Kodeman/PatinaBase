@@ -72,6 +72,29 @@ const row = (over: Partial<AgreementPartRow> = {}): AgreementPartRow => ({
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('mapAgreementPart', () => {
+  const scopePayload = {
+    packageKey: 'pkg.kitchen', label: 'Kitchen', inclusion: 'conditional', conditionText: 'After survey',
+    responsibilities: { design: 'studio', purchasing: 'gc', payer: 'client', fabrication_contract: 'gc', installation: 'studio' },
+    serviceBindings: { design: ['phase-1'], installation: ['phase-2'] },
+    provenance: { arrangementKey: 'full-service', arrangementVersion: 1 },
+  };
+  it('preserves a scope package and signer policy beside legacy parts', () => {
+    expect(mapAgreementPart(row({ kind: 'scope_package', payload: scopePayload })).payload).toEqual(scopePayload);
+    expect(mapAgreementPart(row({ kind: 'acceptance_signer_policy', payload: { signers: [] } })).kind).toBe('acceptance_signer_policy');
+  });
+  it('refuses an unknown kind instead of casting it into the old-reader vocabulary', () => {
+    expect(() => mapAgreementPart(row({ kind: 'future-kind' }))).toThrow('Unsupported agreement part kind');
+  });
+  it('refuses an unknown schedule variant instead of inventing billing semantics', () => {
+    expect(() => mapAgreementPart(row({ kind: 'schedule', variant: 'future-variant' }))).toThrow('Unsupported agreement schedule variant');
+  });
+  it('refuses malformed scope and scalar payloads without losing valid legacy null payloads', () => {
+    expect(mapAgreementPart(row({ payload: null })).payload).toEqual({});
+    for (const payload of [[], 'text', { ...scopePayload, conditionText: '' }, { ...scopePayload, responsibilities: {} }, { ...scopePayload, packageKey: 'bad' }, { ...scopePayload, serviceBindings: { buyer: [] } }]) {
+      expect(() => mapAgreementPart(row({ kind: 'scope_package', payload: payload as any }))).toThrow();
+    }
+    expect(() => mapAgreementPart(row({ payload: [] as any }))).toThrow();
+  });
   it('maps the snake_case row onto the camelCase @patina/types shape', () => {
     expect(mapAgreementPart(row())).toEqual({
       id: 'part-1',

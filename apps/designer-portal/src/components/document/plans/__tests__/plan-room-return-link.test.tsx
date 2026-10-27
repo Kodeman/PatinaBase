@@ -10,6 +10,7 @@ import { render, screen } from '@testing-library/react';
 let mockResolution: unknown;
 
 jest.mock('@patina/supabase', () => ({
+  useProjectRooms: () => ({ data: [] }),
   usePlanRoom: () => ({
     data: { sheets: [], issues: [], prints: [], proposals: [] },
     isLoading: false,

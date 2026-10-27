@@ -1,0 +1,86 @@
+-- Include-only populated links / native projections / current eligibility oracle.
+SELECT pg_temp.fill_actor(1);
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+ l uuid; child uuid; labor uuid; board uuid; living_board uuid; dining_board uuid;
+ foreign_board uuid; foreign_line uuid; req jsonb; reply jsonb;
+ children jsonb; placements jsonb; group_id uuid; child_group uuid;
+BEGIN
+ board:=(public.create_project_board(jsonb_build_object('projectId',pg_temp.fill_id(10),'name','Fill board'))->>'boardId')::uuid;
+ living_board:=(public.create_project_board(jsonb_build_object('projectId',pg_temp.fill_id(10),'roomId',pg_temp.fill_id(20),'name','Living board'))->>'boardId')::uuid;
+ dining_board:=(public.create_project_board(jsonb_build_object('projectId',pg_temp.fill_id(10),'roomId',pg_temp.fill_id(21),'name','Dining board'))->>'boardId')::uuid;
+ l:=pg_temp.fill_new('linked');
+ req:=pg_temp.fill_request(l,'linked-fill');
+ child:=pg_temp.fill_new('linked-COM','tbd');
+ PERFORM public.link_ffe_pair(child,l,'com');
+ labor:=(public.add_labor_line(l,'{"name":"Fit the upholstery","quantity":2,"unit":"hour","roughCents":12000}')->>'selectionId')::uuid;
+ group_id:=(public.set_line_group(ARRAY[l,child,labor],jsonb_build_object('name','Upholstery','roomId',pg_temp.fill_id(20)))->>'groupId')::uuid;
+ -- A note placement already exists before sourcing; Fill must not replace it.
+ PERFORM public.place_product_in_project_v2((pg_temp.fill_request(l,'linked-board')
+   - ARRAY['placeholderSelectionId','productId'])||jsonb_build_object('name','Requirement linked','selectionReferenceId',l,'boardId',board));
+ PERFORM pg_temp.fill_actor(3); -- admin is a native permitted editor, too.
+ PERFORM public.set_line_placements(l,jsonb_build_array(
+   jsonb_build_object('roomId',pg_temp.fill_id(21),'quantity',3),
+   jsonb_build_object('roomId',pg_temp.fill_id(20),'quantity',1)));
+ PERFORM public.set_project_ffe_line_build_fields(l,'{"quantity":6}');
+ PERFORM public.make_ffe_line_allowance(l,80000);
+ PERFORM public.set_line_group(ARRAY[l],jsonb_build_object('name','Dining upholstery','roomId',pg_temp.fill_id(21)));
+ SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) INTO placements FROM public.project_ffe_placements p WHERE ffe_item_id=l;
+ SELECT jsonb_agg(to_jsonb(i) ORDER BY id) INTO children FROM public.project_ffe_items i WHERE parent_ffe_item_id=l;
+ SELECT line_group_id INTO group_id FROM public.project_ffe_items WHERE id=l;
+ PERFORM pg_temp.fill_actor(1);
+ -- The stale Living board cannot authorize a Fill now assigned to Dining.
+ PERFORM pg_temp.fill_refused(req||jsonb_build_object('boardId',living_board),'23000');
+ reply:=public.place_product_in_project_v2(req||jsonb_build_object('boardId',dining_board));
+ ASSERT reply->>'selectionId'=l::text AND reply->>'roomId'=pg_temp.fill_id(21)::text
+   AND reply->>'outcome'='filled','fill_board_response_uses_locked_room';
+ ASSERT (SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM public.project_ffe_items i WHERE parent_ffe_item_id=l)=children
+   AND group_id IS NOT NULL AND (SELECT line_group_id FROM public.project_ffe_items WHERE id=l)=group_id,
+   'fill_retains_COM_labor_children_and_group';
+ ASSERT (SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM public.project_ffe_placements p WHERE ffe_item_id=l)=placements,
+   'fill_retains_current_room_placements';
+ ASSERT (SELECT count(*)=2 FROM public.proposal_board_items WHERE project_ffe_item_id=l)
+   AND EXISTS (SELECT 1 FROM public.proposal_board_items WHERE id=(reply->>'placementId')::uuid
+     AND board_id=dining_board AND project_ffe_item_id=l AND product_id=pg_temp.fill_id(30)),
+   'fill_board_projections_keep_one_selection';
+ -- Native room reads use the selection/placement foreign keys, not old request routing.
+ ASSERT EXISTS (SELECT 1 FROM public.project_ffe_items i JOIN public.project_rooms r ON r.id=i.project_room_id
+   WHERE i.id=l AND i.product_id=pg_temp.fill_id(30) AND r.id=pg_temp.fill_id(21)
+     AND i.assignment_scope='room' AND i.line_group_id=group_id AND i.budget_max_cents=80000)
+   AND (SELECT sum(quantity)=4 FROM public.project_ffe_placements WHERE ffe_item_id=l),
+   'fill_room_usage_reads_locked_current_requirement';
+ -- A COM requirement itself can be filled without losing its parent or group.
+ SELECT line_group_id INTO child_group FROM public.project_ffe_items WHERE id=child;
+ reply:=public.place_product_in_project_v2(pg_temp.fill_request(child,'COM-fill','fixed'));
+ ASSERT EXISTS (SELECT 1 FROM public.project_ffe_items WHERE id=child AND parent_ffe_item_id=l
+   AND link_kind='com' AND line_group_id=child_group AND product_id=pg_temp.fill_id(30)),
+   'fill_of_COM_child_keeps_native_parent';
+ PERFORM pg_temp.fill_refused(pg_temp.fill_request(labor,'labor-fill','fixed'),'23514');
+
+ -- Foreign target/board and mismatched reference failures leave all effects atomic.
+ PERFORM pg_temp.fill_actor(6);
+ foreign_line:=(public.place_product_in_project_v2(jsonb_build_object('projectId',pg_temp.fill_id(11),
+   'name','Foreign need','itemType','tbd','idempotencyKey','foreign-need'))->>'selectionId')::uuid;
+ foreign_board:=(public.create_project_board(jsonb_build_object('projectId',pg_temp.fill_id(11),'name','Foreign board'))->>'boardId')::uuid;
+ PERFORM pg_temp.fill_actor(1);
+ PERFORM pg_temp.fill_refused(pg_temp.fill_request(foreign_line,'foreign-target','fixed'),'23000');
+ l:=pg_temp.fill_new('foreign-boards'); req:=pg_temp.fill_request(l,'foreign-board');
+ PERFORM pg_temp.fill_refused(req||jsonb_build_object('boardId',foreign_board),'23000');
+ PERFORM pg_temp.fill_refused(req||jsonb_build_object('selectionReferenceId',child),'23000');
+ PERFORM public.archive_project_selection(l,'No longer required');
+ PERFORM pg_temp.fill_refused(req,'23514');
+
+ -- Unauthenticated calls really hit the SQL EXECUTE boundary, not just a catalog check.
+ RAISE NOTICE 'PASS: retained COM/labor/group/placements, native room/board reads, admin edit, foreign/reference/removed atomic refusals';
+END; $$;
+RESET ROLE;
+SET LOCAL ROLE anon;
+DO $$ DECLARE denied boolean:=false; BEGIN
+ BEGIN
+  PERFORM public.place_product_in_project_v2('{}');
+ EXCEPTION WHEN insufficient_privilege THEN denied:=true;
+ END;
+ ASSERT denied,'anonymous_fill_call_is_denied';
+END; $$;
+RESET ROLE;

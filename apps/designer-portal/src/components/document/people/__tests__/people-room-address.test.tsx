@@ -9,9 +9,12 @@
  * And the head COUNTS CARDS: `people-room.tsx:383` counted rows, which v4's
  * one-row-per-identity rebuild is what makes honest.
  */
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PeopleRoom } from "../people-room";
+let mockRenderer = "legacy";
+jest.mock("@/hooks/use-paper-renderer", () => ({ usePaperRenderer: () => ({ renderer: mockRenderer }) }));
 
+let mockRouterSearch: string | null = null;
 const mockReplace = jest.fn();
 /** CR9-1 — the seat the stubbed person card hands back to the Room. */
 const seatToOpen: { current: Record<string, unknown> } = { current: {} };
@@ -20,7 +23,15 @@ const mockPush = jest.fn();
 const mergedSurvivor: { current: string | null } = { current: null };
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
-  useSearchParams: () => new URLSearchParams(window.location.search),
+  useSearchParams: () => {
+    const React = jest.requireActual('react');
+    const [, refresh] = React.useReducer((n: number) => n + 1, 0);
+    React.useEffect(() => {
+      window.addEventListener('test:router-restore', refresh);
+      return () => window.removeEventListener('test:router-restore', refresh);
+    }, []);
+    return new URLSearchParams(mockRouterSearch ?? window.location.search);
+  },
 }));
 jest.mock("../../command-bar", () => ({ openCommandBar: jest.fn() }));
 
@@ -146,6 +157,8 @@ function goTo(search: string) {
 }
 
 beforeEach(() => {
+  mockRenderer = "legacy";
+  mockRouterSearch = null;
   mockReplace.mockClear();
   mockPush.mockClear();
   seatToOpen.current = {};
@@ -182,9 +195,7 @@ describe("the address", () => {
       "crew",
     );
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/people?role=crew", {
-        scroll: false,
-      }),
+      expect(window.location.search).toBe("?role=crew"),
     );
   });
 
@@ -394,4 +405,38 @@ describe("the seat line's destination", () => {
       "card-dana",
     );
   });
+});
+
+
+it('synchronizes Reviews → View Directory → More Reviews through the native Next replaceState branch', async () => {
+  mockRenderer = 'round8';
+  goTo('?view=reviews');
+  mockRouterSearch = '?view=reviews';
+  const nativeReplace = window.history.replaceState.bind(window.history);
+  nativeReplace({ __NA: true }, '', window.location.href);
+  // Installed Next app-router.js: data.__NA/_N bypasses ACTION_RESTORE;
+  // public writes copy the internal state and notify useSearchParams.
+  const replace = jest.spyOn(window.history, 'replaceState').mockImplementation((data, unused, url) => {
+    nativeReplace({ ...data, __NA: true }, unused, url);
+    if (data?.__NA || data?._N) return;
+    mockRouterSearch = window.location.search;
+    window.dispatchEvent(new Event('test:router-restore'));
+  });
+  try {
+    render(<PeopleRoom />);
+    fireEvent.click(screen.getByRole('button', { name: 'Directory' }));
+    await waitFor(() => expect(screen.getByTestId('directory-view')).toBeInTheDocument());
+    // More's router push to Reviews only changes its snapshot when the
+    // preceding local Directory write actually synchronized the router.
+    act(() => {
+      nativeReplace({ __NA: true }, '', '/people?view=reviews');
+      if (mockRouterSearch !== '?view=reviews') {
+        mockRouterSearch = '?view=reviews';
+        window.dispatchEvent(new Event('test:router-restore'));
+      }
+    });
+    await waitFor(() => expect(screen.queryByTestId('directory-view')).not.toBeInTheDocument());
+  } finally {
+    replace.mockRestore();
+  }
 });

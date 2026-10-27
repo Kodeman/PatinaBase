@@ -1,4 +1,6 @@
 import { getSessionUserId } from '../auth/session-user';
+import { boundedIn } from '../lib/bounded-in';
+import type { Database } from '../database.types';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { peopleKeys } from './use-people';
@@ -150,21 +152,25 @@ export function useClients(filters?: ClientFilters) {
       const clientIds = [...new Set(rows.flatMap((row) => row.client_id ? [row.client_id] : []))];
       if (clientIds.length === 0) return rows;
 
-      const { data: projects, error: projectsError } = await supabase
-        .from('projects')
-        .select('client_id, name, updated_at')
-        .in('client_id', clientIds)
-        .order('updated_at', { ascending: false });
-      if (projectsError) throw projectsError;
-      const latestProjectByClient = new Map<string, string>();
-      for (const project of projects ?? []) {
-        if (project.client_id && project.name && !latestProjectByClient.has(project.client_id)) {
-          latestProjectByClient.set(project.client_id, project.name);
+      const projects = await boundedIn<Pick<Database['public']['Tables']['projects']['Row'], 'client_id' | 'name' | 'updated_at'>>(
+        clientIds,
+        (chunk) => supabase
+          .from('projects')
+          .select('client_id, name, updated_at')
+          .in('client_id', chunk)
+          .order('updated_at', { ascending: false }),
+      );
+      const latestProjectByClient = new Map<string, (typeof projects)[number]>();
+      for (const project of projects) {
+        if (!project.client_id || !project.name) continue;
+        const latest = latestProjectByClient.get(project.client_id);
+        if (!latest || (project.updated_at && (!latest.updated_at || Date.parse(project.updated_at) > Date.parse(latest.updated_at)))) {
+          latestProjectByClient.set(project.client_id, project);
         }
       }
       return rows.map((row) => ({
         ...row,
-        last_project_name: row.client_id ? latestProjectByClient.get(row.client_id) ?? null : null,
+        last_project_name: row.client_id ? latestProjectByClient.get(row.client_id)?.name ?? null : null,
       }));
     },
   });

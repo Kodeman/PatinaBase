@@ -5,7 +5,7 @@
  * useSendOutboundDrafts, opened or not, and each row says how its send went.
  * A seat that may not send (Q11) sees and edits, never sends.
  */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReadyToSendSheet } from '../ready-to-send-sheet';
 
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
@@ -36,6 +36,9 @@ const row = (over: Record<string, unknown>) => ({
   created_at: '2026-10-13T08:00:00Z',
   updated_at: '2026-10-13T08:00:00Z',
   claimed_at: null,
+  ref_type: 'invoice',
+  ref_id: 'invoice-1001',
+  last_send_outcome: null,
   ...over,
 });
 
@@ -86,7 +89,7 @@ beforeEach(() => {
   mockOutbound = OUTBOUND;
   mockRefetchMembers.mockResolvedValue({ data: [], isError: false });
   mockRecheck.mockResolvedValue(true);
-  mockSend.mockResolvedValue({ results: [] });
+  mockSend.mockReset().mockResolvedValue({ results: [] });
   mockUpdate.mockResolvedValue({});
 });
 
@@ -159,7 +162,7 @@ describe('ReadyToSendSheet', () => {
     expect(mockRefetchMembers).toHaveBeenCalled();
   });
 
-  it('offers Retry for a stalled sending draft after reload', () => {
+  it('holds a stalled sending draft without a recorded outcome after reload', () => {
     mockOutbound = [
       row({
         id: 'stalled-outbound',
@@ -170,7 +173,9 @@ describe('ReadyToSendSheet', () => {
     ];
     render(<ReadyToSendSheet projectId="p1" />);
     fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
-    expect(screen.getByRole('button', { name: 'Send again' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send again' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Check its recorded send outcome/)).toBeVisible();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('sends the checked rows, opened or not, and says how each went', async () => {
@@ -194,12 +199,82 @@ describe('ReadyToSendSheet', () => {
     const sent = document.querySelector('[data-outbound-row="out-client"]') as HTMLElement;
     await waitFor(() => expect(within(sent).getByText('Sent')).toBeInTheDocument());
     const refused = document.querySelector('[data-outbound-row="out-text-1"]') as HTMLElement;
-    expect(within(refused).getByText("Couldn't send")).toBeInTheDocument();
+    expect(within(refused).getByText('Held — check outcome')).toBeInTheDocument();
     expect(within(refused).getByRole('alert')).toHaveTextContent(
-      "Couldn't send: The number has opted out.",
+      'Check its recorded send outcome before sending again.',
     );
-    // The sent row leaves the count; the refused one stays checked.
-    expect(batchButton()).toHaveTextContent('Send the 1 checked');
+    fireEvent.click(within(refused).getByRole('button', { name: /Day-of text/ }));
+    expect(within(refused).getByText('Send held: The number has opted out.')).toBeVisible();
+    expect(within(refused).getByRole('checkbox')).toBeDisabled();
+    expect(batchButton()).toHaveTextContent('Send the 0 checked');
+  });
+
+  it.each(['finalize_in_progress', 'finalize_failed', 'throw'])(
+    'confirmed delivery remains recoverable after a failed finalization (%s)',
+    async (failure) => {
+      mockOutbound = [row({ id: 'delivered', status: 'sending', delivered_at: '2026-10-26T01:00:00Z' })];
+      const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+      if (failure === 'throw') mockSend.mockRejectedValueOnce(new Error('Network unavailable'));
+      else mockSend.mockResolvedValueOnce({ results: [{ id: 'delivered', ok: false, error: failure }] });
+      mockSend.mockResolvedValueOnce({ results: [{ id: 'delivered', ok: true }] });
+      try {
+        render(<ReadyToSendSheet projectId="p1" />);
+        fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Finish recording delivery' }));
+        await waitFor(() => expect(screen.getByText('Held — check outcome')).toBeVisible());
+        expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes(
+          failure === 'throw' ? 'The send could not be confirmed' : failure,
+        ))).toBe(true);
+        const retry = screen.getByRole('button', { name: 'Finish recording delivery' });
+        expect(retry).not.toHaveAttribute('aria-disabled', 'true');
+        fireEvent.click(retry);
+        await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(2));
+        expect(mockSend.mock.calls).toEqual([[['delivered']], [['delivered']]]);
+        await waitFor(() => expect(screen.getByText('Sent')).toBeVisible());
+        expect(mockUpdate).not.toHaveBeenCalled();
+      } finally {
+        log.mockRestore();
+      }
+    },
+  );
+
+  it('keeps concurrent finalization double-clicks to one call while in flight', async () => {
+    mockOutbound = [row({ id: 'delivered', status: 'sending', delivered_at: '2026-10-26T01:00:00Z' })];
+    let finish!: (value: { results: Array<{ id: string; ok: boolean }> }) => void;
+    mockSend.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    render(<ReadyToSendSheet projectId="p1" />);
+    fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
+    const finalize = screen.getByRole('button', { name: 'Finish recording delivery' });
+    act(() => {
+      fireEvent.click(finalize);
+      fireEvent.click(finalize);
+    });
+    await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Recording' })).toBeDisabled();
+    await act(async () => { finish({ results: [{ id: 'delivered', ok: true }] }); });
+    expect(screen.getByText('Sent')).toBeVisible();
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('offers no recovery for an unknown outcome without confirmed delivery', async () => {
+    mockOutbound = [row({ id: 'unknown', delivered_at: null })];
+    mockSend.mockResolvedValueOnce({ results: [{ id: 'unknown', ok: false, error: 'send_outcome_unknown' }] });
+    const view = render(<ReadyToSendSheet projectId="p1" />);
+    fireEvent.click(within(group('client')).getByRole('button', { name: /Invoice reminder/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send', exact: true }));
+    await waitFor(() => expect(screen.getByText('Held — check outcome')).toBeVisible());
+    expect(screen.queryByRole('button', { name: /Finish recording delivery|Send again/ })).not.toBeInTheDocument();
+    const heldSend = screen.getByRole('button', { name: 'Send', exact: true });
+    expect(heldSend).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(heldSend);
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    mockOutbound = [row({ id: 'unknown', status: 'sending', delivered_at: null, last_send_outcome: 'unknown' })];
+    view.rerender(<ReadyToSendSheet projectId="p1" />);
+    expect(screen.queryByRole('button', { name: /Finish recording delivery|Send again|^Send$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /^Send the \d+ checked$/ })).not.toBeInTheDocument();
+    expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
   it('checks every text with the group control', () => {

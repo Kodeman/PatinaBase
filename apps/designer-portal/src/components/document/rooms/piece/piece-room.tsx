@@ -20,6 +20,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { bindLibraryReturnSource, libraryHref, prepareLibraryReturn } from "@/lib/document/library-return";
 import { useSearchParams } from "next/navigation";
 import {
   useProduct,
@@ -215,6 +216,7 @@ function firstIncompletePieceFacet(
 }
 
 export function PieceRoom({ productId }: { productId: string }) {
+  useEffect(() => { bindLibraryReturnSource(); }, [productId]);
   const searchParams = useSearchParams();
   const hydrated = useHydrated();
   const { data, isLoading, error, refetch } = useProduct(productId);
@@ -516,7 +518,7 @@ export function PieceRoom({ productId }: { productId: string }) {
   // ── Loading / not found ───────────────────────────────────────────────────
   if (!hydrated || isLoading) {
     return (
-      <RoomShell title="Product record" backTo="/library" backLabel="Resource library">
+      <RoomShell title="Product record" backTo={libraryHref(new URLSearchParams(searchParams.toString()))} backLabel="Resource library" onBeforeReturn={prepareLibraryReturn}>
         <div className="flex min-h-[40vh] items-center justify-center">
           <StrataSweep size="sm" label="Loading product record" />
         </div>
@@ -525,7 +527,7 @@ export function PieceRoom({ productId }: { productId: string }) {
   }
   if (error || !p || !loadedSections) {
     return (
-      <RoomShell title="Product record" backTo="/library" backLabel="Resource library">
+      <RoomShell title="Product record" backTo={libraryHref(new URLSearchParams(searchParams.toString()))} backLabel="Resource library" onBeforeReturn={prepareLibraryReturn}>
         <div
           role="alert"
           className="mx-auto max-w-[520px] px-6 pt-16 text-center"
@@ -619,8 +621,8 @@ export function PieceRoom({ productId }: { productId: string }) {
       heading={null}
       measure="mx-auto max-w-[1080px] px-6 sm:px-9"
       count={`${LAYER_LABEL[layer]} · ${state}`}
-      backTo="/library"
-      backLabel="Resource library"
+      backTo={libraryHref(new URLSearchParams(searchParams.toString()))}
+      backLabel="Resource library" onBeforeReturn={prepareLibraryReturn}
     >
       <div className="mx-auto max-w-[1080px] px-6 pb-12 sm:px-9">
         {/* ── Letterhead hero ── */}

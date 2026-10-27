@@ -47,6 +47,7 @@ jest.mock('@patina/supabase', () => ({
 }));
 
 jest.mock('@/hooks/use-place-in-document', () => ({
+  ...jest.requireActual('@/hooks/use-place-in-document'),
   usePlaceInDocument: () => ({ mutateAsync, isPending: false }),
 }));
 
@@ -165,6 +166,7 @@ describe('EngineResults', () => {
     );
     expect(mutateAsync).toHaveBeenCalledWith({
       projectId: 'proj-1',
+      assignmentScope: 'unassigned', roomId: null, boardId: null,
       piece: {
         id: 'a',
         name: 'Piece a',
@@ -194,4 +196,34 @@ describe('EngineResults', () => {
     expect(screen.getByLabelText('Reading your shelves')).toBeInTheDocument();
     expect(container.innerHTML).not.toMatch(/Engine/);
   });
+});
+
+const fillIntent = {
+  placeholderSelectionId: 'allowance-1', assignmentScope: 'throughout', roomId: null,
+  quantity: 4, itemType: 'allowance', budgetMinCents: 20000, budgetMaxCents: 60000, disposition: 'selected',
+};
+it.each([true, false])('sourcing Place scopes the handoff to its origin project (origin=%s)', async (origin) => {
+  askState = { data: { items: [item('a', ['fts'])] } };
+  const placementContext = new URLSearchParams({ projectId: 'proj-1', assignmentScope: 'throughout', fill: JSON.stringify(fillIntent) });
+  render(<EngineResults query="chair" placementContext={placementContext} inDocument={{ projectId: origin ? 'proj-1' : 'other', projectName: 'Target' }} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Place' }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+  expect(mutateAsync.mock.calls[0][0]).toMatchObject({ assignmentScope: origin ? 'throughout' : 'unassigned', roomId: null });
+  if (origin) expect(mutateAsync.mock.calls[0][0].fill).toEqual(fillIntent);
+  else expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty('fill');
+});
+it('sourcing Place carries the originating named room and board', async () => {
+  askState = { data: { items: [item('a', ['fts'])] } };
+  render(<EngineResults query="chair" placementContext={new URLSearchParams({ projectId: 'proj-1', roomId: 'room-1', boardId: 'board-1' })} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Aspen House' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Place' }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ assignmentScope: 'room', roomId: 'room-1', boardId: 'board-1' })));
+});
+it('sourcing Place refuses empty Fill with the reader-facing refusal', async () => {
+  askState = { data: { items: [item('a', ['fts'])] } };
+  render(<EngineResults query="chair" placementContext={new URLSearchParams({ projectId: 'proj-1', fill: '' })} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Aspen House' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Place' }));
+  await screen.findByText(/Fill context could not be read/);
+  expect(mutateAsync).not.toHaveBeenCalled();
 });

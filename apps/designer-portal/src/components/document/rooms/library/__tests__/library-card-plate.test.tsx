@@ -97,3 +97,16 @@ describe('LibraryCard — plate and caption', () => {
     expect(word.className).not.toMatch(/rounded|border/);
   });
 });
+
+
+describe('Round-8 reference captions', () => {
+  it('adds a named reference entrance only for round8 and retains native teaching and shelf moves', () => {
+    const { rerender } = render(<LibraryCard item={arden} needsTeaching onDeep={jest.fn()} onNominate={jest.fn()} />);
+    expect(screen.queryByRole('link', { name: 'View reference: Arden lounge chair' })).not.toBeInTheDocument();
+    rerender(<LibraryCard item={arden} round8 needsTeaching onDeep={jest.fn()} onNominate={jest.fn()} />);
+    expect(screen.getByRole('link', { name: 'View reference: Arden lounge chair' })).toHaveAttribute('href', '/library/p-arden');
+    expect(screen.getByRole('button', { name: 'Add style attribution' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Recommend maker' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Arden lounge chair' }).querySelector('img')).toHaveAttribute('src', arden.images[0]);
+  });
+});

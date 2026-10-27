@@ -10,6 +10,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { usePaperRenderer } from '@/hooks/use-paper-renderer';
+import { openUnfold } from './paper/unfold-instrument';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
@@ -825,33 +827,84 @@ export function PulseBody({
 
 // ── note (R14 — the margin's private layer) ─────────────────────────────────
 
+export function NoteContext({ row, projectId, onBeforeRoomOpen }: {
+  row: MarginItemRow; projectId: string | null; onBeforeRoomOpen?: () => void;
+}) {
+  const { renderer } = usePaperRenderer();
+  const p = row.payload;
+  const recorded = (value: unknown) => typeof value === 'string' && value ? value : null;
+  const kind = recorded(p.subject_kind);
+  const id = recorded(p.subject_id);
+  const subject = kind && id ? `${kind.replaceAll('_', ' ')} · ${id}` : 'Not recorded';
+  const capture = recorded(p.field_capture_id);
+  // A capture's room is usable only when the joined capture was visible.
+  const room = p.capture_visible === true ? recorded(p.project_room_id) : null;
+  const roomId = kind === 'project_room' ? id : room;
+  return (
+    <dl aria-label="Note context" className="mb-2 text-[12px] text-[var(--text-muted)]">
+      {p.context_unavailable === true && <><dt>Context</dt><dd role="status">Note context is unavailable. The note is still here.</dd></>}
+      <dt>Source</dt><dd>{capture ? `Field capture · ${capture}` : `Studio note · ${row.item_id}`}</dd>
+      <dt>Subject</dt><dd>{subject}</dd>
+      <dt>Room</dt><dd>{roomId && projectId ? (
+        <Link
+          href={renderer === 'round8'
+            ? `/doc/${projectId}?unfold=pieces&lens=spec&room=${encodeURIComponent(roomId)}`
+            : `/doc/${projectId}/pieces?lens=spec&room=${encodeURIComponent(roomId)}`}
+          onClick={(event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const opener = event.currentTarget;
+            if (renderer === 'round8') event.preventDefault();
+            onBeforeRoomOpen?.();
+            if (renderer !== 'round8') return;
+            openUnfold(
+              { kind: 'pieces', lens: 'spec', room: roomId, line: null },
+              { documentId: projectId, chapter: 'ffe', room: roomId, lens: 'spec' },
+              opener,
+            );
+          }}
+        >
+          Return to room · {roomId}
+        </Link>
+      ) : 'Not recorded'}</dd>
+      <dt>Print</dt><dd>{kind === 'plan_print' ? id : 'Not recorded'}</dd>
+      <dt>Issue</dt><dd>{kind === 'plan_issue' ? id : 'Not recorded'}</dd>
+      <dt>Scope</dt><dd>Not recorded</dd>
+      <dt>Author</dt><dd>{recorded(p.author_name) ?? 'Not recorded'}</dd>
+      <dt>Next owner</dt><dd>Not recorded</dd>
+    </dl>
+  );
+}
+
 export function NoteBody({
   row,
   projectId,
   clientName,
+  onBeforeRoomOpen,
 }: {
   row: MarginItemRow;
   projectId: string | null;
   clientName?: string;
+  onBeforeRoomOpen?: () => void;
 }) {
   const toDecision = useEscalateNoteToDecision();
-  // R81: the scope-change escalation now opens the Amendment sheet seeded with
-  // the note's words — the compose act itself records what the note became
-  // (margin_notes.escalated_to_scope_change_id, via useComposeAmendment).
+  // Amendment drafts are readable by project parties: keep private note text out.
+  // The note records what it became through useComposeAmendment.
   const [amending, setAmending] = useState(false);
+  const amendmentTrigger = useRef<HTMLElement | null>(null);
   const busy = toDecision.isPending;
 
   if (row.state === 'escalated') {
     const became = row.payload.escalated_to_decision_id
       ? 'a client decision'
       : 'an amendment';
-    return <Quiet>Escalated — now {became}. The note rests here.</Quiet>;
+    return <><NoteContext row={row} projectId={projectId} onBeforeRoomOpen={onBeforeRoomOpen} /><Quiet>Escalated — now {became}. The note rests here.</Quiet></>;
   }
 
   const field = readFieldNotePayload(row);
 
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
+      <NoteContext row={row} projectId={projectId} onBeforeRoomOpen={onBeforeRoomOpen} />
       {field.fieldCaptureId ? (
         <p className="mb-2 whitespace-pre-wrap text-[11.5px] leading-[1.55] text-[var(--color-charcoal)]">
           {field.body}
@@ -873,13 +926,9 @@ export function NoteBody({
           co-member reads the note and not the capture. Say so, rather than
           showing her a note with a missing play button and no explanation. */}
       {field.fieldCaptureId && !field.captureVisible ? (
-        <Quiet>The recording is the author&rsquo;s.</Quiet>
+        <Quiet>The capture is unavailable to you.</Quiet>
       ) : null}
-      {row.payload.author_name ? (
-        <p className="mb-2 text-[11px] text-[var(--text-muted)]">
-          {String(row.payload.author_name)}
-        </p>
-      ) : null}
+      {projectId && <Quiet>Atomic escalation is unavailable.</Quiet>}
       {projectId && (
         <DocumentActionGroup
           surfaceKey="open-document"
@@ -904,7 +953,10 @@ export function NoteBody({
             actionKey="escalate-note-to-amendment"
             variant="secondary"
             disabled={busy}
-            onClick={() => setAmending(true)}
+            onClick={(event) => {
+              amendmentTrigger.current = event.currentTarget;
+              setAmending(true);
+            }}
           >
             → Amendment
           </DocumentAction>
@@ -921,10 +973,9 @@ export function NoteBody({
           clientName={clientName ?? ''}
           open={amending}
           onClose={() => setAmending(false)}
+          returnFocusTo={amendmentTrigger.current}
           seed={{
-            title:
-              field.body.length > 70 ? `${field.body.slice(0, 67)}…` : field.body,
-            description: field.body,
+            title: 'Amendment from a studio note',
             noteId: row.item_id,
           }}
         />
@@ -1054,11 +1105,13 @@ export function MarginItemBody({
   projectId,
   clientName,
   decisionRows = [],
+  onBeforeRoomOpen,
 }: {
   row: MarginItemRow;
   projectId: string | null;
   clientName: string;
   decisionRows?: MarginItemRow[];
+  onBeforeRoomOpen?: () => void;
 }) {
   switch (row.kind) {
     case 'decision':
@@ -1083,7 +1136,7 @@ export function MarginItemBody({
       return null;
     case 'note':
       return (
-        <NoteBody row={row} projectId={projectId} clientName={clientName} />
+        <NoteBody row={row} projectId={projectId} clientName={clientName} onBeforeRoomOpen={onBeforeRoomOpen} />
       );
     case 'field_sms':
       return <FieldSmsBody row={row} />;

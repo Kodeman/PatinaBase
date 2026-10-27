@@ -217,6 +217,7 @@ export function DocSheet({
   helpKey,
   headOwnedByChild = false,
   fallbackFocusRef,
+  returnFocusTo,
   initialFocusRef,
   labelledBy,
   kind,
@@ -247,6 +248,8 @@ export function DocSheet({
    *  sheet is open (e.g. a disclosure row), focus restores here instead of
    *  silently dropping to `<body>`. */
   fallbackFocusRef?: React.RefObject<HTMLElement | null>;
+  /** Actual opening control; null/omitted keeps the programmatic focus fallback. */
+  returnFocusTo?: HTMLElement | null;
   /** P-2 — the control the sheet opens on (its first field, or the checked
    *  option of a radio group). Without one, or while it is not mounted, the
    *  panel itself takes focus. */
@@ -263,6 +266,12 @@ export function DocSheet({
   aboveFolio?: boolean;
 }) {
   const restoreRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef(returnFocusTo);
+
+  useEffect(() => {
+    returnFocusRef.current = returnFocusTo;
+  }, [returnFocusTo]);
+
   const panelRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const origin = useContext(DocSheetOriginContext);
@@ -313,14 +322,12 @@ export function DocSheet({
       // The lint rule below advises the snapshot this deliberately rejects.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       const fallback = fallbackFocusRef?.current ?? null;
-      const focusTarget = originalTrigger?.isConnected
-        ? originalTrigger
-        : fallback;
-      if (!focusTarget?.isConnected) return;
+      const targets = [returnFocusRef.current, originalTrigger, fallback];
       window.requestAnimationFrame(() => {
-        if (focusTarget.isConnected && isElementRendered(focusTarget)) {
-          focusTarget.focus({ preventScroll: true });
-        }
+        const target = targets.find(
+          (element) => element?.isConnected && isElementRendered(element),
+        );
+        target?.focus({ preventScroll: true });
       });
     };
   }, [open, origin, fallbackFocusRef, initialFocusRef]);

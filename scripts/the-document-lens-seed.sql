@@ -195,7 +195,8 @@ BEGIN
 
   SELECT array_agg(id ORDER BY id), count(*)
     INTO v_product_ids, v_product_count
-    FROM public.products;
+    FROM public.products
+   WHERE id::TEXT LIKE 'a0000000-0000-0000-0000-%';
 
   IF v_product_count IS NULL OR v_product_count = 0 THEN
     RAISE NOTICE 'the-document-lens-seed.sql: no products found - run products.sql first (product linkage will be skipped)';

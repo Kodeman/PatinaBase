@@ -57,6 +57,7 @@ import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FfeAssignmentScope, FFEStageKey } from '@patina/types';
 import {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -172,11 +173,15 @@ import {
 import { useRoomLens } from './room-lens-context';
 import { InstallManifest } from './buying/install-manifest';
 import { JobDestinationsDoor } from './destinations/job-destinations-sheet';
+import { lineQueryState } from './pieces/line-query';
+import { LineQueryReading } from './pieces/build-room-shell';
 import { PiecesOverview } from './pieces/pieces-overview';
+import { piecesRoomAnchorId } from '@/lib/document/pieces/build-room-url';
 import {
-  buildRoomHref,
-  piecesRoomAnchorId,
-} from '@/lib/document/pieces/build-room-url';
+  buildRoomDoor,
+  FfeWorkRoomContext,
+  type WorkRoom,
+} from './paper/chapters/ffe-work-room';
 import {
   deriveOverviewJob,
   overviewHeadStages,
@@ -455,6 +460,7 @@ function ffeReleaseStanding(release: {
 /** What the head's elected lead may open; every one is a destination that already exists. */
 interface FfeLeadActs {
   docId: string;
+  workRoom?: WorkRoom;
   release: RegionLedgerEntry;
   addItems: RegionLedgerEntry;
   land: (detail: FfeActLandingDetail) => boolean;
@@ -486,7 +492,7 @@ const FFE_LEAD_ENTRIES: Record<
   price: (count, acts) => ({
     key: 'ffe-lead-price',
     label: count === 1 ? 'Add the missing price' : 'Add the missing prices',
-    href: buildRoomHref(acts.docId, { lens: 'price', room: null }),
+    ...buildRoomDoor(acts.docId, { lens: 'price', room: null }, acts.workRoom),
     trailing: '→',
   }),
   bill: (count, acts) => ({ key: 'bill-project-ffe', label: `Bill ${count} uninvoiced`, onClick: acts.bill }),
@@ -605,7 +611,7 @@ function RecordChangeLineAct({ itemId }: { itemId: string }) {
       regionKey="ffe-line-record-change"
       variant="secondary"
       className="mt-1"
-      onClick={() => openRecordAChange({ origin: 'line', itemId })}
+      onClick={(event) => openRecordAChange({ origin: 'line', itemId, returnFocusTo: event.currentTarget })}
     >
       {NAMED_ACTS.recordChange}
     </DocumentAction>
@@ -1266,6 +1272,9 @@ interface FFESectionProps {
   /** US-19 FR3 F3-10 — the project's status. US-43 R4: a held (`on_hold`) or
    *  closed (`completed`) job elects no lead but a claim or an unanswered PO. */
   projectStatus?: string | null;
+  /** WP-01.6 — round 8 only: the Build room doors open the sheet in place.
+   *  Falls back to the hosting FF&E chapter's opener; absent both, they route. */
+  onWorkRoom?: WorkRoom;
 }
 
 // ── A need's act lands on its line (US-19 F3-2, P-2) ─────────────────────────
@@ -1368,8 +1377,11 @@ function FFESectionBody({
   needs = [],
   onReleaseOffered,
   projectStatus = null,
+  onWorkRoom: onWorkRoomProp,
   instruments,
 }: FFESectionProps & { instruments: NonNullable<ReturnType<typeof useProjectInstruments>["data"]> }) {
+  const chapterWorkRoom = useContext(FfeWorkRoomContext);
+  const onWorkRoom = onWorkRoomProp ?? chapterWorkRoom ?? undefined;
   const { heldRoomId, toggleRoom } = useRoomLens();
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   // US-43 R4 — the head's More disclosure and its toggle, where focus returns.
@@ -1399,6 +1411,7 @@ function FFESectionBody({
   );
   const [choosingPiece, setChoosingPiece] = useState(false);
   const [changeOrderLineId, setChangeOrderLineId] = useState<string | null>(null);
+  const changeOrderReturnRef = useRef<HTMLElement | null>(null);
   const choosePieceRef = useRef<HTMLParagraphElement | null>(null);
   const ffeBodyRef = useRef<HTMLDivElement | null>(null);
   const [addLineRoom, setAddLineRoom] = useState<{
@@ -1407,14 +1420,9 @@ function FFESectionBody({
     scope: FfeAssignmentScope;
   } | null>(null);
   // The shared FF&E query includes the lifecycle evidence used by the trail.
-  const { data: items, isLoading, isError, refetch } = useProjectFFEItems(
-    projectId,
-  ) as {
-    data: FFERow[] | undefined;
-    isLoading: boolean;
-    isError: boolean;
-    refetch: () => Promise<unknown>;
-  };
+  const linesQuery = useProjectFFEItems(projectId);
+  const { data: items, isLoading, isError, refetch } = linesQuery;
+  const lineState = lineQueryState(linesQuery);
   const selectionIds = useMemo(
     () => (items ?? []).map((item) => String(item.id)),
     [items],
@@ -1799,7 +1807,11 @@ function FFESectionBody({
   // unguarded effect would re-open the line under a reader who had folded it.
   const honouredRequestRef = useRef<string | null>(null);
   useEffect(() => {
-    if (mode !== 'project' || !requestedLineId) return;
+    if (!requestedLineId) {
+      honouredRequestRef.current = null;
+      return;
+    }
+    if (mode !== 'project') return;
     if (honouredRequestRef.current === requestedLineId) return;
     const requestedLineExists = (items ?? []).some(
       (item) => String(item.id) === requestedLineId,
@@ -1880,13 +1892,16 @@ function FFESectionBody({
   // line's change order (the Order cell's own sheet) at project, install and
   // care alike (R33); without one, the line unfolds with today's controls.
   const recordChangeOnLine = useCallback(
-    (itemId: string) => {
+    (itemId: string, returnFocusTo?: HTMLElement | null) => {
       const item = (items ?? []).find((candidate) => String(candidate.id) === itemId);
       if (!item) return;
       setChoosingPiece(false);
       openFfeRegion();
       setOpenLineId(item.id);
-      if (livePurchaseOrder(item)) setChangeOrderLineId(String(item.id));
+      if (livePurchaseOrder(item)) {
+        changeOrderReturnRef.current = returnFocusTo ?? null;
+        setChangeOrderLineId(String(item.id));
+      }
     },
     [items, openFfeRegion],
   );
@@ -1904,10 +1919,9 @@ function FFESectionBody({
     // (CONTRACT §3.8 rule 2), so its `On a piece` always lands here.
     if (!recordChangeAtHead && mode !== 'project') return;
     const onPiece = (event: Event) => {
-      const itemId = (event as CustomEvent<RecordAChangeOnPieceDetail | undefined>)
-        .detail?.itemId;
-      if (itemId) {
-        recordChangeOnLine(itemId);
+      const detail = (event as CustomEvent<RecordAChangeOnPieceDetail | undefined>).detail;
+      if (detail?.itemId) {
+        recordChangeOnLine(detail.itemId, detail.returnFocusTo);
         return;
       }
       const active = document.activeElement;
@@ -2111,7 +2125,9 @@ function FFESectionBody({
   );
   const overviewJob = useMemo(() => deriveOverviewJob(overviewLines), [overviewLines]);
   const ffeSeamSummary =
-    total === 0
+    lineState.total === null
+      ? 'Schedule total unknown'
+      : total === 0
       ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet`
       : ffeAwaiting
         ? `${ffeCounts} · ${ffeAwaiting}`
@@ -2349,6 +2365,7 @@ function FFESectionBody({
       : null;
   const ffeLeadEntry = ffeLeadEntryFor(ffeLeader, {
     docId,
+    workRoom: onWorkRoom,
     release: ffeReleaseEntry,
     addItems: ffeAddToProjectEntry,
     land: landFfeAct,
@@ -2365,7 +2382,7 @@ function FFESectionBody({
     editSelections: {
       key: 'work-the-pieces',
       label: 'Edit pieces & purchasing',
-      href: buildRoomHref(docId, { lens: 'rough', room: null }),
+      ...buildRoomDoor(docId, { lens: 'rough', room: null }, onWorkRoom),
       trailing: '→',
       variant: 'secondary',
     },
@@ -2457,6 +2474,7 @@ function FFESectionBody({
       }
       className="mt-[var(--doc-region-gap)] scroll-mt-16"
     >
+      <LineQueryReading state={lineState} />
       {mode === 'install' || selecting ? (
         <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
           {/* This branch and the RegionHead below are mutually exclusive, so
@@ -2601,7 +2619,7 @@ function FFESectionBody({
                 // its exit moves no box. Both hold at either density.
                 status={
                   <>
-                    {ffeQuiet ? ffeQuietStatus : ffeStateLine}
+                    {lineState.total === null ? 'Schedule total unknown' : ffeQuiet ? ffeQuietStatus : ffeStateLine}
                     {!readinessQuery.isError && readinessQuery.isLoading && (
                       <SectionLoadingLine variant="inline" label="Checking readiness" />
                     )}
@@ -2641,9 +2659,9 @@ function FFESectionBody({
                         regionKey="ffe-more"
                         variant="tertiary"
                         onClick={() => {
-                          // The router hands focus back to its opener: More.
+                          const returnFocusTo = ffeMoreRef.current;
                           closeFfeMore();
-                          openRecordAChange({ origin: 'pieces-head' });
+                          openRecordAChange({ origin: 'pieces-head', returnFocusTo });
                         }}
                       >
                         Record a selection change
@@ -2682,7 +2700,7 @@ function FFESectionBody({
               regionKey="install-head-record-change"
               variant="secondary"
               className="mb-2"
-              onClick={() => openRecordAChange({ origin: 'pieces-head' })}
+              onClick={(event) => openRecordAChange({ origin: 'pieces-head', returnFocusTo: event.currentTarget })}
             >
               {NAMED_ACTS.recordChange}
             </DocumentAction>
@@ -2697,7 +2715,7 @@ function FFESectionBody({
       {!ffeFolded && ffeQuiet && (
         <div id={ffeBodyId}>
           <p className="sr-only">
-            {quietStateSentence(ffeQuietStatus, 'Pieces & purchasing')}
+            {lineState.total === null ? 'Schedule total unknown' : quietStateSentence(ffeQuietStatus, 'Pieces & purchasing')}
           </p>
         </div>
       )}
@@ -2852,7 +2870,7 @@ function FFESectionBody({
           </span>
         </div>
       ))}
-      {overview ? (
+      {lineState.total === null ? null : overview ? (
         // US-21 Q14 (a1): the room overview. A room row unfolds to its lines;
         // a line unfolds as it always has (a released one to the buyer's
         // instrument).
@@ -2866,6 +2884,7 @@ function FFESectionBody({
           allOpen={choosingPiece || installSelecting}
           returnedRoomId={returnedRoomId}
           heldRoomId={heldRoomId}
+          onWorkRoom={onWorkRoom}
           onRoomFolded={(lineIds) => {
             if (openLineId != null && lineIds.includes(String(openLineId))) {
               setOpenLineId(null);
@@ -3064,6 +3083,7 @@ function FFESectionBody({
       <FlagProbe flag="one-voice" onValue={setOneVoice} />
       {changeOrderLine?.item.purchase_order && (
         <ChangeOrderSheet
+          returnFocusTo={changeOrderReturnRef.current}
           open
           onClose={() => setChangeOrderLineId(null)}
           item={changeOrderLine.item}

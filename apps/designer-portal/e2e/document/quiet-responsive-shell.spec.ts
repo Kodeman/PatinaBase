@@ -2,6 +2,7 @@ import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
 import { adminDb } from "../helpers/supabase-admin";
 import { quiet, scrollTo, settle } from "../helpers/lens";
 import { psqlRun, psqlScalar } from "../helpers/psql";
+import { warmAuthenticatedRoutes } from "../helpers/warm-authenticated-routes";
 
 const SENT_PROPOSAL_ID = "b0000000-0000-0000-0000-000000000002";
 /**
@@ -16,12 +17,22 @@ const DRAFT_PROPOSAL_ID = "d0c10000-0000-0000-0000-0000000000b2";
 
 test.describe.configure({ mode: "serial" });
 
+test.beforeAll(async ({}, testInfo) => {
+  // Compile before a browser connects to HMR, so a cold document cannot reload its Desk mid-navigation.
+  await warmAuthenticatedRoutes(testInfo.config, [
+    "/desk",
+    `/doc/${SENT_PROPOSAL_ID}`,
+  ]);
+});
+
 async function openDocument(page: AuthenticatedPage, width: number) {
   await page.setViewportSize({ width, height: 900 });
   await page.goto(`/doc/${SENT_PROPOSAL_ID}`, {
     waitUntil: "domcontentloaded",
   });
-  await expect(page.locator("[data-document-shell]")).toBeVisible();
+  await expect(page.locator("[data-document-shell]")).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 /** A project-kind spread — the only documents whose spine ever carried the two
@@ -494,9 +505,24 @@ test.describe("Quiet Work responsive document shell", () => {
       "the approvals region (mounted first, scrolled well past) never gains data-passed",
     ).not.toBeNull();
 
-    // The needle lives once, in the approvals region's full body
-    // (`project-approval-document.tsx`), on every project-kind document.
-    const NEEDLE = "published budget checkpoint";
+    // The needle lives once on the page, inside the approvals region
+    // (`project-approval-document.tsx`). The old "Bind each request…
+    // published budget checkpoint" paragraph was removed as machinery copy
+    // (aced0f222, SQ-492). This seeded project has a client and no decision
+    // lead, and `one-voice` is not pinned for this suite (no override in
+    // playwright.config.ts; PostHog decides), so the needle is the phrase
+    // every no-lead branch prints in the region: one-voice off "0 decided ·
+    // no decision lead", one-voice on "No decision lead named yet.", folded
+    // "No decision lead". `window.find` is case-insensitive by default. Pin
+    // that the needle is in the passed region first, so fixture or copy
+    // drift reads as drift rather than as an OD-4 find-in-page failure.
+    const NEEDLE = "no decision lead";
+    await expect(
+      page
+        .locator('[data-document-paper] [data-index-region="approvals"]')
+        .first(),
+      "the approvals region no longer prints the find-in-page needle",
+    ).toContainText(/no decision lead/i);
     const found = await page.evaluate((needle) => window.find(needle), NEEDLE);
     expect(
       found,

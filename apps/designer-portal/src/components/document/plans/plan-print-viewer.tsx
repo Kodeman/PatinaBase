@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 import { Stamp } from '../stamp';
+import { DocumentAction, DocumentActionRow } from '../document-action';
 import {
   FullScreenViewerShell,
   FullScreenViewerState,
@@ -30,6 +31,7 @@ export interface PlanPrintViewerProps {
   /** The revision that superseded this one, when it isn't current. */
   supersededBy: string | null;
   onClose: () => void;
+  returnFocusTo?: HTMLElement | null;
 }
 
 export function PlanPrintViewer({
@@ -41,9 +43,11 @@ export function PlanPrintViewer({
   isCurrent,
   supersededBy,
   onClose,
+  returnFocusTo,
 }: PlanPrintViewerProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [settled, setSettled] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -96,7 +100,7 @@ export function PlanPrintViewer({
     return () => {
       live = false;
     };
-  }, [projectDocumentId]);
+  }, [projectDocumentId, attempt]);
 
   const title = `${sheetNumber} · Rev ${revLetter}`;
 
@@ -105,6 +109,7 @@ export function PlanPrintViewer({
       title={title}
       meta={`${sheetTitle} · filed ${fmtDay(filedAt)}`}
       onClose={onClose}
+      returnFocusTo={returnFocusTo}
       actionKey="close-plan-print-viewer"
     >
       {!isCurrent && supersededBy && (
@@ -120,9 +125,12 @@ export function PlanPrintViewer({
         {!settled ? (
           <FullScreenViewerState>Opening the print…</FullScreenViewerState>
         ) : !url ? (
-          <FullScreenViewerState error>
-            This print could not be opened. File it again and try once more.
-          </FullScreenViewerState>
+          <div>
+            <FullScreenViewerState error>This print could not be opened. Its filed bytes have not changed.</FullScreenViewerState>
+            <DocumentActionRow surfaceKey="plan-room" regionKey="print-read-retry">
+              <DocumentAction actionKey="retry-plan-print" variant="secondary" onClick={() => setAttempt((value) => value + 1)}>Retry opening print</DocumentAction>
+            </DocumentActionRow>
+          </div>
         ) : (
           <iframe
             title={title}

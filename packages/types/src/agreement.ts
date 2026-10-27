@@ -12,6 +12,7 @@
 
 export const AGREEMENT_PART_KINDS = [
   'clause', 'list', 'phases', 'schedule', 'attachment', 'attestation',
+  'scope_package', 'acceptance_signer_policy',
 ] as const;
 export type AgreementPartKind = (typeof AGREEMENT_PART_KINDS)[number];
 
@@ -651,3 +652,73 @@ export interface TradeAgreement {
   /** The sub's receipt, once they have signed on the token link. */
   subSignature: { signedName: string; signedAt: string } | null;
 }
+
+// Round-8 C2 — immutable scope readings, not appointments or buying authority.
+export type ScopePartyKind = 'studio' | 'client' | 'gc' | 'other' | 'none';
+export type ScopeServiceSlot = 'design' | 'installation';
+export interface ScopePackagePayload {
+  packageKey?: string;
+  label: string;
+  roomIds?: string[];
+  inclusion: 'included' | 'excluded' | 'conditional';
+  conditionText?: string | null;
+  responsibilities: Record<'design' | 'purchasing' | 'payer' | 'fabrication_contract' | 'installation', ScopePartyKind>;
+  serviceBindings?: Partial<Record<ScopeServiceSlot, string[]>>;
+  overrideOf?: string | null;
+  provenance?: unknown;
+}
+export interface ScopeEditionPackage extends ScopePackagePayload {
+  packageKey: string;
+  designOwedSince: number | null;
+  installationOwedSince: number | null;
+}
+export interface ScopeEditionPhase {
+  sourceProposalPhaseId: string;
+  projectPhaseId: string | null;
+  packageKey: string | null;
+  serviceSlot: ScopeServiceSlot | null;
+  boundInEdition: number | null;
+}
+export interface ScopeEditionSigner {
+  slot: string;
+  required: boolean;
+  profileId: string | null;
+  householdPersonId: string | null;
+  policyRevision: number;
+}
+export interface ScopeEdition {
+  id: string;
+  projectId: string;
+  editionNumber: number;
+  kind: 'baseline' | 'amendment';
+  status: 'active' | 'stale' | 'superseded';
+  commercialDocumentId: string;
+  sourceProposalId: string;
+  predecessorEditionId: string | null;
+  agreementFingerprint: string;
+  effectiveAt: string;
+  content: Record<string, unknown>;
+  contentHash: string;
+  staleReason: string | null;
+  packages: ScopeEditionPackage[];
+  phases: ScopeEditionPhase[];
+  signers: ScopeEditionSigner[];
+}
+export type ScopeEditionState =
+  | { status: 'idle' | 'loading' | 'absent' }
+  | { status: 'error'; error: unknown }
+  | { status: 'recorded'; editions: ScopeEdition[] };
+export interface RecordedServiceArrangement {
+  editionId: string;
+  editionNumber: number;
+  editionStatus: ScopeEdition['status'];
+  packageKey: string;
+  arrangementKey: string | null;
+  arrangementVersion: number | null;
+  bindings: ScopeEditionPhase[];
+}
+export type ServiceArrangementState =
+  | { status: 'idle' | 'loading' | 'empty' }
+  | { status: 'error'; error: unknown }
+  | { status: 'unavailable'; reason: 'service_bindings_not_recorded' }
+  | { status: 'recorded'; arrangements: RecordedServiceArrangement[] };

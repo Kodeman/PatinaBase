@@ -26,7 +26,7 @@ import {
   useProjectRoomPlacements,
   type ProjectFfeSpec,
 } from "@patina/supabase";
-import type { FfeRoomPlacement } from "@patina/types";
+import type { BoardOwnerRef, FfeRoomPlacement } from "@patina/types";
 import { useDocumentRooms } from "@/hooks/use-document-rooms";
 import {
   REMOVED_PLACE,
@@ -46,6 +46,7 @@ import {
 } from "@/lib/document/stamp-derivation";
 import { pieceLineStage } from "@/lib/document/pieces/line-stage";
 import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
+import { boundedInTransport } from "@/lib/document/pieces/bounded-in-transport";
 import { AlsoInLine } from "./placement-chips";
 import {
   GROUP_MEMBER_MARK,
@@ -65,7 +66,20 @@ export interface SpecLensProps {
   projectId: string;
   room: BuildRoomPlace;
   canSeeMoney: boolean;
+  /** WP-01.6 — the line the address names (`?line=`): it opens first. */
+  line?: string | null;
+  /** WP-01.6 — the unfold host's owner, so its close waits for spec saves. */
+  autosaveOwner?: BoardOwnerRef | null;
+  /**
+   * WP-01.6 — the reader chose a line: the unfold's address follows it, so a
+   * reload or a shared link opens what is shown. Absent on the `/pieces`
+   * route, where choosing a line changes no address.
+   */
+  onChooseLine?: (lineId: string) => void;
 }
+
+/** WP-01.6 — said when the address names a line this room no longer has. */
+export const SPEC_LINE_MISSING_SENTENCE = "That line is no longer in this room.";
 
 interface SpecFieldRows {
   specs: Record<string, SpecLensSpec>;
@@ -78,7 +92,12 @@ const SPEC_COLUMNS =
 /** Below `md` the panes stack, so the fields pane sits above the line list. */
 const STACKED_QUERY = "(max-width: 767.98px)";
 
-function stacked(): boolean {
+function stacked(list: HTMLElement | null): boolean {
+  // The embedded sheet stacks by container width, not the viewport.
+  if (list) {
+    const order = window.getComputedStyle(list).order;
+    if (order) return order === "3";
+  }
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
@@ -105,56 +124,77 @@ function useSpecFieldRows(projectId: string, lines: readonly SpecLensLine[]) {
     enabled: lineIds.length > 0,
     queryFn: async (): Promise<SpecFieldRows> => {
       const supabase = createBrowserClient() as any;
-      const [specs, threads] = await Promise.all([
-        supabase
-          .from("project_ffe_specs")
-          .select(SPEC_COLUMNS)
-          .in("ffe_item_id", lineIds),
-        threadIds.length > 0
-          ? supabase
+      const result: SpecFieldRows = { specs: {}, needLabels: {} };
+      await boundedInTransport([
+        {
+          ids: lineIds,
+          read: async (ids) => {
+            const { data, error } = await supabase
+              .from("project_ffe_specs")
+              .select(SPEC_COLUMNS)
+              .in("ffe_item_id", ids);
+            if (error) throw error;
+            for (const spec of (data ?? []) as SpecLensSpec[])
+              result.specs[spec.ffe_item_id] = spec;
+          },
+        },
+        {
+          ids: threadIds,
+          read: async (ids) => {
+            const { data, error } = await supabase
               .from("project_ffe_selection_threads")
               .select("id, need_label")
-              .in("id", threadIds)
-          : Promise.resolve({ data: [], error: null }),
+              .in("id", ids);
+            if (error) throw error;
+            for (const thread of (data ?? []) as { id: string; need_label: string | null }[])
+              if (thread.need_label?.trim()) result.needLabels[thread.id] = thread.need_label;
+          },
+        },
       ]);
-      if (specs.error) throw specs.error;
-      if (threads.error) throw threads.error;
-      const result: SpecFieldRows = { specs: {}, needLabels: {} };
-      for (const spec of (specs.data ?? []) as SpecLensSpec[]) {
-        result.specs[spec.ffe_item_id] = spec;
-      }
-      for (const thread of (threads.data ?? []) as {
-        id: string;
-        need_label: string | null;
-      }[]) {
-        if (thread.need_label?.trim())
-          result.needLabels[thread.id] = thread.need_label;
-      }
       return result;
     },
   });
 }
 
-export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
+export function SpecLens({
+  projectId,
+  room,
+  canSeeMoney,
+  line: addressedLine = null,
+  autosaveOwner = null,
+  onChooseLine,
+}: SpecLensProps) {
   const queryClient = useQueryClient();
   const { data: rawLines } = useProjectFFEItems(projectId);
   const { data: placements } = useProjectRoomPlacements(projectId);
   const { data: roomRows } = useDocumentRooms(projectId);
   const { data: groupData } = useProjectLineGroups(projectId);
-  const [chosenId, setChosenId] = useState<string | null>(null);
+  // The addressed line opens first; a later address (Back, Forward) opens its
+  // own. With none, the lens picks the first unfinished line as it always has.
+  const [chosenId, setChosenId] = useState<string | null>(addressedLine);
+  const [heldLine, setHeldLine] = useState(addressedLine);
+  if (heldLine !== addressedLine) {
+    setHeldLine(addressedLine);
+    if (addressedLine) setChosenId(addressedLine);
+  }
   const [announcement, setAnnouncement] = useState("");
   const [focusRequest, setFocusRequest] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Runs after the chosen line's pane mounts, so the heading is its own.
   useEffect(() => {
     if (focusRequest > 0) headingRef.current?.focus();
   }, [focusRequest]);
 
-  /** Shows a line; at 390 its pane sits above the list, so it takes focus. */
-  const choose = (id: string) => {
+  /** Pointer/phone selection reveals the pane; wide-screen keyboard selection keeps its line. */
+  const choose = (id: string, focusPane = true) => {
     setChosenId(id);
-    if (stacked()) setFocusRequest((n) => n + 1);
+    onChooseLine?.(id);
+    if (
+      (focusPane || window.matchMedia?.(STACKED_QUERY).matches) &&
+      stacked(listRef.current)
+    ) setFocusRequest((n) => n + 1);
   };
 
   const allLines = useMemo(
@@ -215,13 +255,27 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
       ? chosenId
       : (firstUnfinished ?? orderedIds[0] ?? null);
   const active = lines.find((l) => l.id === activeId) ?? null;
+  // The address still names a line the room's answered reads do not hold:
+  // the lens shows its own first unfinished line, and says so (WP-01.6 F4).
+  const lineMissing =
+    addressedLine != null &&
+    chosenId === addressedLine &&
+    rawLines !== undefined &&
+    placements !== undefined &&
+    roomRows !== undefined &&
+    !orderedIds.includes(addressedLine);
   const nextId = nextUnfinishedId(orderedIds, activeId, progressOf);
 
   const onSpecSaved = (saved: ProjectFfeSpec) => {
     queryClient.setQueryData<SpecFieldRows>(
       specFieldRowsKey(projectId, [...orderedIds].sort()),
       (current) =>
-        current
+        // Never back to an older version than the cache already holds.
+        current &&
+        !(
+          (current.specs[saved.ffe_item_id]?.row_version ?? -1) >
+          saved.row_version
+        )
           ? {
               ...current,
               specs: {
@@ -245,8 +299,10 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
   }
   if (rawLines && lines.length === 0) {
     return (
-      <p className="max-w-[56ch] py-6 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
-        No lines here yet. Add them in Rough in, then spec them here.
+      <p role="status" className="max-w-[56ch] py-6 font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
+        {lineMissing
+          ? `${SPEC_LINE_MISSING_SENTENCE} No lines here yet. Add them in Rough in, then spec them here.`
+          : "No lines here yet. Add them in Rough in, then spec them here."}
       </p>
     );
   }
@@ -291,12 +347,12 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
         const labor = isLaborLine(line);
         const current = line.id === activeId;
         return (
-          <li key={line.id}>
+          <li key={line.id} data-line-id={line.id}>
             <button
               type="button"
               aria-current={current ? "true" : undefined}
-              onClick={() => choose(line.id)}
-              className={`grid min-h-[var(--row,40px)] w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--sheet-rule)] py-2 text-left hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clay-ink)] ${
+              onClick={(event) => choose(line.id, event.detail > 0)}
+              className={`grid min-h-[44px] w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-[var(--sheet-rule)] py-2 text-left hover:bg-[var(--sheet-row-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clay-ink)] ${
                 memberInset(member, labor) || "pl-2"
               } pr-2 ${current ? "outline outline-1 -outline-offset-1 outline-[var(--sheet-rule-strong)]" : ""}`}
             >
@@ -331,7 +387,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
                   {lineStampLabel(stage)}
                 </span>
               </span>
-              <span className="font-mono text-[11px] tabular-nums text-[var(--sheet-ink-faint)]">
+              <span className="font-mono text-[12px] tabular-nums text-[var(--sheet-ink-faint)]">
                 {specProgressLabel(specProgress(line, specs[line.id]))}
               </span>
             </button>
@@ -347,19 +403,27 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
   return (
     <div
       data-testid="spec-lens"
-      className="grid grid-cols-1 gap-6 py-6 md:grid-cols-[520px_minmax(0,1fr)] md:gap-x-12"
+      className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 py-6 [overflow-wrap:anywhere] md:grid-cols-[520px_minmax(0,1fr)] md:gap-x-12"
     >
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <div className="order-3 md:order-none md:col-start-1 md:row-start-1">
+      <div ref={listRef} className="order-3 min-w-0 md:order-none md:col-start-1 md:row-start-1">
         {list}
       </div>
       <div className="order-2 md:order-none md:col-start-1 md:row-start-2">
         {next}
       </div>
       {active && (
-        <div className="order-1 min-w-0 md:order-none md:col-start-2 md:row-span-2 md:row-start-1">
+        <div className="order-1 flex min-w-0 flex-col gap-4 md:order-none md:col-start-2 md:row-span-2 md:row-start-1">
+          <p
+            role="status"
+            aria-live="polite"
+            data-spec-line-missing=""
+            className="font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)] empty:hidden"
+          >
+            {lineMissing ? SPEC_LINE_MISSING_SENTENCE : ""}
+          </p>
           <SpecFieldsPane
             key={active.id}
             projectId={projectId}
@@ -374,6 +438,7 @@ export function SpecLens({ projectId, room, canSeeMoney }: SpecLensProps) {
             placements={placementsOf(active.id)}
             rooms={rooms}
             onSpecSaved={onSpecSaved}
+            autosaveOwner={autosaveOwner}
             headingRef={headingRef}
             onAnnounce={setAnnouncement}
             onFilled={(message) => {

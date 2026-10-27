@@ -15,6 +15,7 @@ import { DocumentAction } from "../../document-action";
 import { RoomSheet } from "../room-sheet";
 import {
   usePlaceInDocument,
+  buildDocumentPlacementRequest,
   type PlaceablePiece,
 } from "@/hooks/use-place-in-document";
 import { productEvents } from "@/lib/analytics/events";
@@ -41,8 +42,6 @@ export function AddToProjectSheet({
   const [duplicateMode, setDuplicateMode] = useState<FfeDuplicateMode>("reuse");
   const requestKey = useRef<{ fingerprint: string; key: string } | null>(null);
   const contextualProjectId = searchParams.get("projectId");
-  const contextualRoomId = searchParams.get("roomId");
-  const contextualBoardId = searchParams.get("boardId");
   const returnTo = searchParams.get("returnTo");
 
   useEffect(() => {
@@ -69,15 +68,12 @@ export function AddToProjectSheet({
     setBusy(projectId);
     setErr(null);
     try {
-      const request = {
+      const request = buildDocumentPlacementRequest({
         projectId,
         piece,
         configurationId,
-        assignmentScope: contextualProjectId === projectId && contextualRoomId ? "room" as const : "unassigned" as const,
-        roomId: contextualProjectId === projectId ? contextualRoomId : null,
-        boardId: contextualProjectId === projectId ? contextualBoardId : null,
         duplicateMode,
-      };
+      }, searchParams);
       const fingerprint = JSON.stringify(request);
       if (requestKey.current?.fingerprint !== fingerprint) {
         requestKey.current = {
@@ -98,7 +94,25 @@ export function AddToProjectSheet({
       }[result.outcome];
       onAdded(projectName, outcome);
       onClose();
-      if (returnTo) router.push(returnTo);
+      if (returnTo) {
+        const destination = new URL(returnTo, window.location.origin);
+        if (contextualProjectId === projectId && result.selectionId) {
+          destination.searchParams.delete("land");
+          if (destination.searchParams.get("unfold") === "pieces") {
+            destination.searchParams.delete("ffeItemId");
+            // Only Spec consumes the sheet's line address; Rough-in has no line prop.
+            destination.searchParams.set("lens", "spec");
+            destination.searchParams.set("line", result.selectionId);
+          } else {
+            if (destination.pathname === `/doc/${projectId}/pieces`) {
+              destination.searchParams.set("lens", "spec");
+              destination.searchParams.delete("line");
+            }
+            destination.searchParams.set("ffeItemId", result.selectionId);
+          }
+        }
+        router.push(`${destination.pathname}${destination.search}${destination.hash}`);
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not add to that project.");
     } finally {
