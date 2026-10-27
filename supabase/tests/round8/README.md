@@ -1,5 +1,7 @@
 Use `*_test.sql` on a reset database (CI); use `*_isolated.psql` via host psql on an un-reset shared database to apply the migration and run its assertions inside a rolled-back transaction.
 
+Replay horizon: a runner that re-applies migration M must then re-apply, in numeric order, every later migration up to the head that redefines anything M (re)creates — a function body, a function or table grant, a policy, a trigger, or a CHECK/vocabulary constraint — and apply the same rule to each migration that adds. Otherwise the transaction ends at M's older horizon while the bodies assert the cumulative chain (re-applying 00868 alone revokes the authenticated EXECUTE that 00871 grants). Find redefiners with a grep over `CREATE OR REPLACE FUNCTION`, `CREATE POLICY`/`DROP POLICY`, `GRANT`/`REVOKE` and constraint names; a new migration that redefines an earlier round-8 object must be added to every runner that replays the earlier one. Replayed migrations still need their own prerequisites, so runners assume a database at or near the head.
+
 ## Concurrency suites on a second local stack
 
 Every guard defaults to the shared stack (`127.0.0.1:54322`). Pointing a suite elsewhere is a parameter, never a relaxed guard:
