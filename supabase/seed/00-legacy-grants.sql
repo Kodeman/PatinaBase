@@ -25074,6 +25074,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00887_round8_external_reading_grant_binding.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_external_fulfilments(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00887_round8_external_reading_grant_binding.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_external_fulfilments(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

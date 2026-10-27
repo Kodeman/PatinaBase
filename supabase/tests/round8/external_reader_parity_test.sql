@@ -12,5 +12,6 @@ SET LOCAL statement_timeout='30s';
 \ir ../../migrations/00882_round8_billing_lock_order.sql
 \ir ../../migrations/00883_round8_external_reader_parity.sql
 \ir ../../migrations/00884_round8_external_package_reading.sql
+\ir ../../migrations/00887_round8_external_reading_grant_binding.sql
 \ir external_reader_parity_body.psql
 ROLLBACK;

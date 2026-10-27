@@ -1,4 +1,7 @@
 -- Include-only fictional read fixture. No activation, public SQL stubs or financial rows.
+-- The current reader is 00887, a verbatim copy of the 00884 body except the
+-- authority conjunct (00887:74–75). Citations of 00884 line numbers name the
+-- unchanged original bytes.
 -- N2 redundant disjuncts in 00884_round8_external_package_reading.sql:
 -- :59 f.reading_package_id IS NULL is subsumed by the package identity comparison
 -- (00884:59): a missing package is reachable, but cannot decide refusal alone.
@@ -198,7 +201,8 @@ INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,r
 INSERT INTO public.project_parties(id,project_id,profile_id,party_kind,stage,display_name,created_by)
  VALUES(pg_temp.ep_id(813),pg_temp.ep_id(203),pg_temp.ep_id(3),'gc','active','Foreign GC',pg_temp.ep_id(4));
 INSERT INTO public.project_party_authority(id,engagement_id,scope,effective_from,granted_by,threshold_cents,idempotency_key,fabrication_grant_request)
- VALUES(pg_temp.ep_id(853),pg_temp.ep_id(813),'fabrication',current_date,pg_temp.ep_id(4),250000,'foreign-grant','{}');
+ VALUES(pg_temp.ep_id(853),pg_temp.ep_id(813),'fabrication',current_date,pg_temp.ep_id(4),250000,'foreign-grant',
+  jsonb_build_object('project_id',pg_temp.ep_id(203),'profile_id',pg_temp.ep_id(3)));
 -- Replica-mode SETUP bypasses immutable-member trigger, 00877_round8_evidence_manifests.sql:197–199.
 UPDATE public.evidence_manifest_members mm SET id=pg_temp.ep_id(6000-frozen.ord::integer)
  FROM public.evidence_manifests m,jsonb_array_elements(m.members) WITH ORDINALITY frozen(member,ord)
@@ -522,12 +526,57 @@ UPDATE public.project_external_fulfilment_events SET authority_id=pg_temp.ep_id(
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','authority seat on another project refuses');
 ROLLBACK TO bad_reference;
+-- SQ-2201 F1 (00887:74–75): a retained instruction is validated against its
+-- grant-time project, not the seat's current location. Native paths only: the
+-- 00878 seat guard holds while grant 850 is live; revoke_fabrication_authority
+-- ends it; the ordinary seat UPDATE is then allowed (00878:249–264).
+SELECT pg_temp.ep_error($q$UPDATE public.project_parties SET project_id=pg_temp.ep_id(202) WHERE id=pg_temp.ep_id(811)$q$,
+ '23514','fabrication_seat_identity_locked','F1 precondition: a live grant locks its seat');
+SELECT public.revoke_fabrication_authority(pg_temp.ep_id(850),'revoked');
+UPDATE public.project_parties SET project_id=pg_temp.ep_id(202) WHERE id=pg_temp.ep_id(811);
+SELECT pg_temp.ep_assert((SELECT a.revoked_at IS NOT NULL AND p.project_id=pg_temp.ep_id(202)
+  AND a.fabrication_grant_request->>'project_id'=pg_temp.ep_id(201)::text
+  FROM public.project_party_authority a JOIN public.project_parties p ON p.id=a.engagement_id
+  WHERE a.id=pg_temp.ep_id(850)),'F1 setup: ended grant keeps its grant-time project while its seat moves');
+SELECT pg_temp.ep_success($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,
+ 'F1 ended grant then moved seat keeps the old project readable');
+SELECT pg_temp.ep_assert(public.get_project_external_fulfilments(pg_temp.ep_id(201))=(SELECT value FROM ep_first_read),
+ 'F1 old project reading is unchanged after the seat moves');
+SELECT pg_temp.ep_assert(public.get_project_external_fulfilments(pg_temp.ep_id(202))='[]'::jsonb,
+ 'F1 moved seat brings no instruction to its new project');
+ROLLBACK TO bad_reference;
+-- Forged (F1): a grant made for project 202 is presented on 201 after its seat
+-- legitimately moved to 201, so the seat's current location matches the
+-- fulfilment. Grant, revoke and move use the native paths (00878:143–232,249–264).
+-- Only the instruction reference is forged: replica mode bypasses _external_guard
+-- (00875:174–189,376); the authority FK stays real (00879:37–40).
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.project_parties(id,project_id,profile_id,party_kind,stage,display_name,created_by)
+ VALUES(pg_temp.ep_id(814),pg_temp.ep_id(202),pg_temp.ep_id(3),'gc','active','GC granted on 202',pg_temp.ep_id(1));
+SET LOCAL session_replication_role=origin;
+SELECT public.grant_fabrication_authority(pg_temp.ep_id(814),current_date,'grant-on-202',NULL,250000);
+SELECT public.revoke_fabrication_authority((SELECT id FROM public.project_party_authority
+ WHERE engagement_id=pg_temp.ep_id(814) AND idempotency_key='grant-on-202'),'revoked');
+UPDATE public.project_parties SET project_id=pg_temp.ep_id(201) WHERE id=pg_temp.ep_id(814);
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET authority_id=(SELECT id FROM public.project_party_authority
+ WHERE engagement_id=pg_temp.ep_id(814) AND idempotency_key='grant-on-202') WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_assert((SELECT a.fabrication_grant_request->>'project_id'=pg_temp.ep_id(202)::text
+  AND p.project_id=pg_temp.ep_id(201) AND e.authority_id=a.id
+  FROM public.project_party_authority a JOIN public.project_parties p ON p.id=a.engagement_id
+  JOIN public.project_external_fulfilment_events e ON e.id=pg_temp.ep_id(1001)
+  WHERE a.engagement_id=pg_temp.ep_id(814) AND a.idempotency_key='grant-on-202'),
+ 'F1 forged setup: grant bound to 202 while its seat now sits on 201');
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid',
+ 'F1 grant made for another project refuses even when its seat now sits here');
+ROLLBACK TO bad_reference;
 -- Constraint-only missing-reference predicates (not executable reader cases):
 -- 00884:58 m.id IS NULL: 00879_round8_fabrication_instruction.sql:41–43 manifest FK.
 -- 00884:65 i.id IS NULL: 00875_round8_external_fulfilment.sql:46 plan-issue FK.
 -- 00884:100 d.id IS NULL: 00875_round8_external_fulfilment.sql:81 decision FK.
 -- 00884:101 i.id IS NULL: 00875_round8_external_fulfilment.sql:83 covered-issue FK.
--- 00884:57 seat.id IS NULL: 00879_round8_fabrication_instruction.sql:37–40 authority FK,
+-- 00887:74 seat.id IS NULL: 00879_round8_fabrication_instruction.sql:37–40 authority FK,
 -- then 00624_project_party_window_and_authority.sql:827 engagement FK.
 -- 00884:69–70 NULL verified tuple: 00875_round8_external_fulfilment.sql:64–65 CHECK.
 -- 00884:107 non-array members: 00877_round8_evidence_manifests.sql:130 CHECK.

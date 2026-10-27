@@ -153,7 +153,8 @@ export function controlSql(file, readCommitted) {
     if (!old) throw new Error('native old reader missing');
     return Buffer.from(old);
   }
-  const reader = readCommitted('supabase/migrations/00884_round8_external_package_reading.sql').toString('utf8');
+  // 00887 is the current reader (00884 body plus the grant-time authority binding).
+  const reader = readCommitted('supabase/migrations/00887_round8_external_reading_grant_binding.sql').toString('utf8');
   const needle = file.startsWith('control/') && coverageControls[file.slice('control/'.length)];
   if (needle) {
     if (reader.split(needle).length !== 2) throw new Error('native reader control conjunct missing or ambiguous');
