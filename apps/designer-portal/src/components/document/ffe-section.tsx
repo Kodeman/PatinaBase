@@ -59,6 +59,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -370,6 +371,60 @@ const UNDERWAY = new Set([
 const COMMITTED = UNDERWAY;
 
 type FFERow = any; // row from useProjectFFEItems (untyped hook, view-shaped)
+
+/**
+ * SQ-2201 F4 — a line carrying an external fulfilment (C5) is someone else's
+ * to buy and pay for. It stays visible, apart from the studio's schedule, and
+ * is never a priced studio line or part of the Bill offer.
+ */
+export function partitionExternalLines(wireItems: FFERow[] | undefined): {
+  items: FFERow[] | undefined;
+  externalItems: FFERow[];
+} {
+  if (!wireItems) return { items: undefined, externalItems: [] };
+  return {
+    items: wireItems.filter((item) => item.external_fulfilment_id == null),
+    externalItems: wireItems.filter((item) => item.external_fulfilment_id != null),
+  };
+}
+
+/** Wording matches the round-8 Purchase lens (SQ-1990). */
+function ExternalResponsibilityLines({ lines }: { lines: FFERow[] }) {
+  const headingId = useId();
+  return (
+    <section
+      aria-labelledby={headingId}
+      data-ffe-external
+      className="mt-4 border-t border-[var(--color-pearl)] pt-3"
+    >
+      <h3 id={headingId} className="font-heading text-[13.5px] text-[var(--color-charcoal)]">
+        External responsibility
+      </h3>
+      <p className="text-[11.5px] text-[var(--text-muted)]">
+        Bought outside the studio. These pieces are not billed here.
+      </p>
+      <ul>
+        {lines.map((line) => (
+          <li
+            key={line.id}
+            data-ffe-external-line={line.id}
+            className="flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] py-2 text-[12.5px] text-[var(--color-charcoal)]"
+          >
+            <span className="min-w-0 break-words">
+              {line.name}
+              <span className="block text-[11px] text-[var(--text-muted)]">
+                {line.room?.name ?? 'Throughout'}
+              </span>
+            </span>
+            <span className="shrink-0 text-[11px] text-[var(--text-muted)]">
+              Not priced by the studio
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 /** D5 / R35 — the order a change order can be raised against: any PO but a
  *  cancelled one. A line without one has no change order to open. */
@@ -1421,8 +1476,12 @@ function FFESectionBody({
   } | null>(null);
   // The shared FF&E query includes the lifecycle evidence used by the trail.
   const linesQuery = useProjectFFEItems(projectId);
-  const { data: items, isLoading, isError, refetch } = linesQuery;
-  const lineState = lineQueryState(linesQuery);
+  const { data: wireItems, isLoading, isError, refetch } = linesQuery;
+  const { items, externalItems } = useMemo(
+    () => partitionExternalLines(wireItems),
+    [wireItems],
+  );
+  const lineState = lineQueryState({ ...linesQuery, data: items });
   const selectionIds = useMemo(
     () => (items ?? []).map((item) => String(item.id)),
     [items],
@@ -3013,6 +3072,9 @@ function FFESectionBody({
         </>
       )}
         </>
+      )}
+      {mode === 'project' && externalItems.length > 0 && (
+        <ExternalResponsibilityLines lines={externalItems} />
       )}
       {installSelecting && (
         <InstallSelectionBar

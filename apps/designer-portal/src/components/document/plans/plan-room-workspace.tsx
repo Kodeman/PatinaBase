@@ -16,8 +16,14 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePlanRoom, useProjectRooms, type FilePlanPrintsResult } from '@patina/supabase';
+import {
+  usePlanRoom,
+  usePlanRoomComposition,
+  useProjectRooms,
+  type FilePlanPrintsResult,
+} from '@patina/supabase';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
+import { usePaperRenderer } from '@/hooks/use-paper-renderer';
 import { fmtDay } from '@/lib/document/format';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
@@ -68,6 +74,9 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
   const room = usePlanRoom(projectId ?? '');
   const rooms = useProjectRooms(projectId ?? '');
   const bundle = room.data;
+  // Composition links are round-8 presentation; the legacy room never reads them.
+  const round8 = usePaperRenderer().renderer === 'round8';
+  const composition = usePlanRoomComposition(projectId ?? '', { enabled: round8 });
 
   useEffect(() => {
     if (!projectId || !bundle || openedFor.current === projectId) return;
@@ -273,11 +282,23 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
         </div>
       )}
 
+      {round8 && composition.isError && (
+        <div
+          role="alert"
+          className="mx-4 mt-4 border-l-2 border-[var(--color-terracotta)] bg-[var(--color-off-white)] px-3 py-2.5 md:mx-8"
+        >
+          <p className="text-[0.82rem] text-[var(--color-charcoal)]">
+            Drawing rooms and packages could not be read. The drawings themselves are unaffected.
+          </p>
+        </div>
+      )}
+
       {bundle && view === 'set' && (
         <PlanRoomSet
           projectId={projectId}
           bundle={bundle}
           rooms={rooms.data}
+          composition={round8 ? composition.data : undefined}
           onOpenSheet={(sheetId) => {
             planRoomEvents.sheetOpened({ project_id: projectId, sheet_id: sheetId });
             setSelectedSheetId(sheetId);
@@ -339,6 +360,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
           bundle={bundle}
           sheetId={selectedSheetId}
           rooms={rooms.data}
+          composition={round8 ? composition.data : undefined}
           onBack={() => setView('set')}
           onIssue={() => setView('issue')}
         />

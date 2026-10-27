@@ -66,6 +66,11 @@ jest.mock("@patina/supabase", () => ({
   useAgreementPartEvents: () => ({ data: [], isLoading: false }),
 }));
 let mockFlags = { library: { value: false, isLoading: false }, designBuild: { value: false, isLoading: false } };
+// SQ-2201 F2: round-8 arrangements are gated on the renderer; this suite reads legacy.
+jest.mock("@/hooks/use-paper-renderer", () => ({
+  usePaperRenderer: () => ({ renderer: "legacy" }),
+}));
+
 jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: (name: string) => name === "agreement-library" ? mockFlags.library
     : name === "design-build" ? mockFlags.designBuild : { value: false, isLoading: false },

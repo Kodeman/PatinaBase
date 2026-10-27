@@ -53,6 +53,7 @@ vi.mock('@tanstack/react-query', () => ({
 import {
   planRoomKeys,
   usePlanRoom,
+  usePlanRoomComposition,
   usePlanRoomHoldings,
   usePlanIssuePreview,
   useFilePlanPrints,
@@ -132,9 +133,6 @@ describe('planRoomKeys', () => {
 describe('usePlanRoom', () => {
   const config = () =>
     usePlanRoom('p1') as unknown as QueryConfig<{
-      sheetRooms: unknown[];
-      sheetPackages: unknown[];
-      packages: unknown[];
       sheets: unknown[];
       prints: unknown[];
       batches: unknown[];
@@ -144,7 +142,7 @@ describe('usePlanRoom', () => {
       tokens: unknown[];
     }>;
 
-  it('is keyed, gated and assembles the bundle from the ten reads', async () => {
+  it('is keyed, gated and assembles the bundle from the seven native reads', async () => {
     builders['plan_sheets'] = queryBuilder({
       data: [{ id: 'sheet-1', project_id: 'p1', sheet_number: 'A-101' }],
       error: null,
@@ -184,9 +182,6 @@ describe('usePlanRoom', () => {
 
     const bundle = await query.queryFn();
     expect(bundle).toEqual({
-      sheetRooms: [],
-      sheetPackages: [],
-      packages: [],
       sheets: [{ id: 'sheet-1', project_id: 'p1', sheet_number: 'A-101' }],
       prints: [{ id: 'print-1', sheet_id: 'sheet-1' }],
       batches: [{ id: 'batch-1', project_id: 'p1' }],
@@ -216,10 +211,6 @@ describe('usePlanRoom', () => {
       ZERO_UUID,
     ]);
     expect(builders['plan_issue_prints'].in).toHaveBeenCalledWith('issue_id', [ZERO_UUID]);
-    expect(builders['plan_sheet_rooms']).toBeDefined();
-    expect(builders['plan_sheet_packages']).toBeDefined();
-    expect(builders['plan_sheet_rooms']?.in).toHaveBeenCalledWith('sheet_id', [ZERO_UUID]);
-    expect(builders['plan_sheet_packages']?.in).toHaveBeenCalledWith('sheet_id', [ZERO_UUID]);
   });
 
   it('propagates the first error from the parallel reads', async () => {
@@ -230,27 +221,86 @@ describe('usePlanRoom', () => {
     await expect(config().queryFn()).rejects.toThrow('rls denied');
   });
 
-  it('returns exact composition without transmittals and keeps issue prints separate from current prints', async () => {
+  it('keeps issue prints separate from current prints', async () => {
     builders.plan_sheets = queryBuilder({data:[{id:'sheet-1',current_print_id:'new-print'}],error:null});
-    builders.plan_sheet_rooms = queryBuilder({data:[{sheet_id:'sheet-1',project_room_id:'room-1'}],error:null});
-    builders.plan_sheet_packages = queryBuilder({data:[{sheet_id:'sheet-1',package_id:'package-uuid'}],error:null});
-    builders.project_packages = queryBuilder({data:[{id:'package-uuid',package_key:'pkg.kitchen-cabinetry',archived_at:'2026-01-01'}],error:null});
     builders.plan_issues = queryBuilder({data:[{id:'issue-1'}],error:null});
     builders.plan_issue_prints = queryBuilder({data:[{issue_id:'issue-1',sheet_id:'sheet-1',print_id:'old-print',sheet_title:'Issued title'}],error:null});
     const bundle = await config().queryFn();
     expect(bundle.transmittals).toEqual([]);
-    expect(bundle.sheetRooms).toEqual([{sheet_id:'sheet-1',project_room_id:'room-1'}]);
-    expect(bundle.sheetPackages).toEqual([{sheet_id:'sheet-1',package_id:'package-uuid'}]);
-    expect(bundle.packages).toEqual([{id:'package-uuid',package_key:'pkg.kitchen-cabinetry',archived_at:'2026-01-01'}]);
     expect(bundle.issuePrints).toEqual([{issue_id:'issue-1',sheet_id:'sheet-1',print_id:'old-print',sheet_title:'Issued title'}]);
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+    expect(supabaseClient.from).toHaveBeenCalledTimes(7);
+  });
+
+  // SQ-2201 F3: the legacy /doc native read never touches round-8 composition.
+  it('resolves without reading composition tables, even when each would fail', async () => {
+    for (const table of ['plan_sheet_rooms', 'plan_sheet_packages', 'project_packages']) {
+      builders[table] = queryBuilder({ data: null, error: new Error('composition down') });
+    }
+    builders.plan_sheets = queryBuilder({ data: [{ id: 'sheet-1' }], error: null });
+    await expect(config().queryFn()).resolves.toMatchObject({ sheets: [{ id: 'sheet-1' }] });
+    const bundle = await config().queryFn();
+    expect(bundle).not.toHaveProperty('sheetRooms');
+    expect(bundle).not.toHaveProperty('sheetPackages');
+    expect(bundle).not.toHaveProperty('packages');
+    const tables = supabaseClient.from.mock.calls.map(([table]) => table);
+    expect(tables).not.toContain('plan_sheet_rooms');
+    expect(tables).not.toContain('plan_sheet_packages');
+    expect(tables).not.toContain('project_packages');
+  });
+
+  it('propagates a sheets read error', async () => {
+    builders['plan_sheets'] = queryBuilder({
+      data: null,
+      error: new Error('sheets down'),
+    });
+    await expect(config().queryFn()).rejects.toThrow('sheets down');
+  });
+});
+
+describe('usePlanRoomComposition', () => {
+  const config = (enabled?: boolean) =>
+    usePlanRoomComposition('p1', enabled === undefined ? undefined : { enabled }) as unknown as QueryConfig<{
+      sheetRooms: unknown[];
+      sheetPackages: unknown[];
+      packages: unknown[];
+    }>;
+
+  it('is keyed under the room key and enabled only by its consumer', () => {
+    expect(config().queryKey).toEqual(['plan-room', 'room', 'p1', 'composition']);
+    expect(config().queryKey.slice(0, 3)).toEqual(planRoomKeys.room('p1'));
+    expect(config().enabled).toBe(true);
+    expect(config(false).enabled).toBe(false);
+    expect((usePlanRoomComposition('') as unknown as QueryConfig<unknown>).enabled).toBe(false);
+  });
+
+  it('returns exact composition scoped through the project sheets', async () => {
+    builders.plan_sheets = queryBuilder({data:[{id:'sheet-1'}],error:null});
+    builders.plan_sheet_rooms = queryBuilder({data:[{sheet_id:'sheet-1',project_room_id:'room-1'}],error:null});
+    builders.plan_sheet_packages = queryBuilder({data:[{sheet_id:'sheet-1',package_id:'package-uuid'}],error:null});
+    builders.project_packages = queryBuilder({data:[{id:'package-uuid',package_key:'pkg.kitchen-cabinetry',archived_at:'2026-01-01'}],error:null});
+    const composition = await config().queryFn();
+    expect(composition).toEqual({
+      sheetRooms: [{sheet_id:'sheet-1',project_room_id:'room-1'}],
+      sheetPackages: [{sheet_id:'sheet-1',package_id:'package-uuid'}],
+      packages: [{id:'package-uuid',package_key:'pkg.kitchen-cabinetry',archived_at:'2026-01-01'}],
+    });
+    expect(builders.plan_sheets.select).toHaveBeenCalledWith('id');
+    expect(builders.plan_sheets.eq).toHaveBeenCalledWith('project_id','p1');
     expect(builders.plan_sheet_rooms.in).toHaveBeenCalledWith('sheet_id',['sheet-1']);
     expect(builders.plan_sheet_packages.in).toHaveBeenCalledWith('sheet_id',['sheet-1']);
     expect(builders.project_packages.eq).toHaveBeenCalledWith('project_id','p1');
-    expect(supabaseClient.rpc).not.toHaveBeenCalled();
-    expect(supabaseClient.from).toHaveBeenCalledTimes(10);
+    expect(supabaseClient.from).toHaveBeenCalledTimes(4);
   });
 
-  it.each(['plan_sheet_rooms','plan_sheet_packages','project_packages'])('propagates %s composition failures instead of false empty', async (table) => {
+  it('guards an empty sheet IN list with the zero-uuid sentinel', async () => {
+    builders.plan_sheets = queryBuilder({ data: [], error: null });
+    await config().queryFn();
+    expect(builders.plan_sheet_rooms.in).toHaveBeenCalledWith('sheet_id', [ZERO_UUID]);
+    expect(builders.plan_sheet_packages.in).toHaveBeenCalledWith('sheet_id', [ZERO_UUID]);
+  });
+
+  it.each(['plan_sheets','plan_sheet_rooms','plan_sheet_packages','project_packages'])('propagates %s failures instead of false empty', async (table) => {
     builders[table]=queryBuilder({data:null,error:new Error('composition down')});
     await expect(config().queryFn()).rejects.toThrow('composition down');
   });
@@ -272,8 +322,8 @@ describe('usePlanRoom', () => {
     );
     builders[table] = builder;
 
-    const bundle = await config().queryFn();
-    expect(bundle[field]).toEqual(rows);
+    const composition = await config().queryFn();
+    expect(composition[field]).toEqual(rows);
     expect(builder.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
     expect(builder.order.mock.calls).toEqual(keys.map((key) => [key, { ascending: true }]));
   });
@@ -284,14 +334,6 @@ describe('usePlanRoom', () => {
     builders[table] = builder;
     await expect(config().queryFn()).rejects.toThrow('second page down');
     expect(builder.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
-  });
-
-  it('propagates a sheets read error', async () => {
-    builders['plan_sheets'] = queryBuilder({
-      data: null,
-      error: new Error('sheets down'),
-    });
-    await expect(config().queryFn()).rejects.toThrow('sheets down');
   });
 });
 
