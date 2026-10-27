@@ -303,6 +303,35 @@ describe("partitionFfeBillable", () => {
     expect(unpriced).toEqual([]);
     expect(unfilledAllowanceText(rug)).toBe("Up to $4,500 · bills once it's filled");
   });
+
+  it("SQ-2213: never offers a line under external responsibility, priced or not", () => {
+    // The SQ-2211 probe shape: product-backed, $0, external fulfilment set.
+    const gcZero: ComposerFfeItem = {
+      ...FFE_SOFA,
+      id: "gc-zero",
+      unit_price_cents: 0,
+      product_id: "p-gc",
+      external_fulfilment_id: "ext-1",
+    };
+    const gcPriced: ComposerFfeItem = {
+      ...FFE_SOFA,
+      id: "gc-priced",
+      external_fulfilment_id: "ext-2",
+    };
+    const gcNull: ComposerFfeItem = {
+      ...FFE_SOFA,
+      id: "gc-null",
+      unit_price_cents: null,
+      external_fulfilment_id: "ext-3",
+    };
+    const { billable, covered, unpriced, unfilled, external } =
+      partitionFfeBillable([FFE_SOFA, gcZero, gcPriced, gcNull], {});
+    expect(billable.map((i) => i.id)).toEqual(["f1"]);
+    expect(unpriced).toEqual([]);
+    expect(unfilled).toEqual([]);
+    expect(covered).toEqual([]);
+    expect(external.map((i) => i.id)).toEqual(["gc-zero", "gc-priced", "gc-null"]);
+  });
 });
 
 describe("unbilledMilestones", () => {

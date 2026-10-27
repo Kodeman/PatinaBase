@@ -86,6 +86,7 @@ import {
   type BuildRoomPlace,
 } from "@/lib/document/pieces/build-room-url";
 import { liveBuildRoomLines } from "@/lib/document/pieces/live-lines";
+import { partitionByResponsibility } from "@/lib/document/ffe-responsibility";
 import {
   deriveOverviewJob,
   deriveOverviewRows,
@@ -285,6 +286,8 @@ interface PriceLine extends OverviewLine {
   currency?: string | null;
   /** The item label (00808). */
   doc_code?: string | null;
+  /** Set when the line is under external responsibility (C5). */
+  external_fulfilment_id?: string | null;
 }
 
 type Tool =
@@ -447,10 +450,14 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
     () => (roomRows ?? []).map((r) => ({ id: r.id, name: r.name })),
     [roomRows],
   );
-  const servedLines = useMemo(
+  // SQ-2213 — a line under external responsibility is never a studio-priced
+  // line: no price, no edit, no stamp. It stays in view, apart (C5, K3).
+  const { studio: servedLines, external: externalLines } = useMemo(
     () =>
-      liveBuildRoomLines(lineData as unknown as PriceLine[] | undefined).filter(
-        (line) => !hidden.has(line.id),
+      partitionByResponsibility(
+        liveBuildRoomLines(lineData as unknown as PriceLine[] | undefined).filter(
+          (line) => !hidden.has(line.id),
+        ),
       ),
     [lineData, hidden],
   );
@@ -661,6 +668,15 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
       ? places.filter((place) => place.lineIds.length > 0)
       : places.filter(
           (place) => place.key === room && place.lineIds.length > 0,
+        );
+  const roomKnown = rooms.some((r) => r.id === room);
+  const shownExternal =
+    room == null
+      ? externalLines
+      : externalLines.filter((line) =>
+          roomKnown
+            ? line.project_room_id === room
+            : !rooms.some((r) => r.id === line.project_room_id),
         );
 
   function rowFor(line: PriceLine, placeKey: string): PriceRow {
@@ -1121,7 +1137,7 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
         resetting={resetAll.isPending}
       />
 
-      {lineData && shown.length === 0 ? (
+      {lineData && shown.length === 0 && shownExternal.length === 0 ? (
         <p className="max-w-[56ch] font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink)]">
           No selections yet. Add them in Preliminary selections, then price them here.
         </p>
@@ -1198,6 +1214,10 @@ function PriceSheet({ docId, projectId, room }: PriceLensProps) {
           );
         })}
       </div>
+
+      {shownExternal.length > 0 ? (
+        <ExternalResponsibility lines={shownExternal} />
+      ) : null}
 
       {approval ? (
         <RemovedSinceApproval
@@ -1504,5 +1524,36 @@ function AllowanceForm({
         </p>
       ) : null}
     </ToolFrame>
+  );
+}
+
+/** SQ-2213 — lines someone else buys and pays for (C5). Listed, never priced;
+ *  wording matches the schedule and the Purchase lens. */
+function ExternalResponsibility({ lines }: { lines: PriceLine[] }) {
+  return (
+    <section
+      aria-label="External responsibility"
+      data-price-external=""
+      className="mb-6 mt-4"
+    >
+      <h4 className={cn(LABEL, "mb-1")}>External responsibility</h4>
+      <p className="t-body-sm text-[var(--sheet-ink-muted)]">
+        Bought outside the studio. These pieces are not priced here.
+      </p>
+      <ul className="mt-1 flex flex-col">
+        {lines.map((line) => (
+          <li
+            key={line.id}
+            data-price-external-line={line.id}
+            className="flex flex-wrap items-center justify-between gap-x-3 border-b border-[var(--sheet-rule)] py-2 font-sans text-[14px] leading-[1.4] text-[var(--sheet-ink)]"
+          >
+            <span>{lineName(line)}</span>
+            <span className="text-[var(--sheet-ink-muted)]">
+              Not priced by the studio
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

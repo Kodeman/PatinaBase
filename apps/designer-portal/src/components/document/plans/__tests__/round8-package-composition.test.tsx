@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
-import type { PlanRoomBundle } from '@patina/supabase';
+import type { PlanRoomBundle, PlanRoomComposition } from '@patina/supabase';
 import { PlanRoomSet, PlanIssueHistory, PlanPrintProvenance, PlanSheetComposition } from '../plan-room-set';
 import { PlanSheetDetail } from '../plan-sheet-detail';
 import { DesignChapter } from '../../paper/chapters/design-chapter';
@@ -11,6 +11,7 @@ jest.mock('@patina/supabase', () => ({
     { profile_id: 'new-lead', display_name: 'Leah Designer' },
   ] }),
   usePlanRoom: () => ({ data: mockBundle, isPending: false, isError: false }),
+  usePlanRoomComposition: () => ({ data: mockBundle, isPending: false, isError: false }),
   useProjectRooms: () => ({ data: mockRooms, isPending: false, isError: false }),
   useProjectRoomScans: () => ({ data: [], isPending: false, isError: false }),
   useGeneratedRoomFilesByScan: () => ({ data: new Map(), isPending: false, isError: false }),
@@ -33,7 +34,8 @@ const mockRooms = [
   { id: 'room-a', name: 'Kitchen' },
   { id: 'room-b', name: 'Kitchen' },
 ];
-const fixture = (): PlanRoomBundle => ({
+// One fixture carries both reads; each consumer receives only the read it is given.
+const fixture = (): PlanRoomBundle & PlanRoomComposition => ({
   sheets: [
     { id: 'sheet-a', sheet_number: 'K-201', title: 'New live title', current_print_id: 'print-b', state: 'draft', created_by: 'new-lead' },
     { id: 'sheet-b', sheet_number: 'K-202', title: 'Kitchen', current_print_id: null, state: 'draft' },
@@ -51,12 +53,12 @@ const fixture = (): PlanRoomBundle => ({
   issues: [{ id: 'issue', issue_number: 1, name: 'Issued original', issued_at: '2026-10-01T12:00:00Z', set_checksum: 'frozen-checksum' }],
   issuePrints: [{ id: 'snapshot', issue_id: 'issue', sheet_id: 'sheet-a', print_id: 'print-a', sheet_number: 'OLD-201', sheet_title: 'Frozen maker title', rev_letter: 'A', sha256: 'hash-a' }],
   batches: [], transmittals: [], tokens: [],
-} as unknown as PlanRoomBundle);
+} as unknown as PlanRoomBundle & PlanRoomComposition);
 let mockBundle = fixture();
 beforeEach(() => { mockBundle = fixture(); });
 
 it('uses exact package IDs despite duplicate names and package home rooms; retains archived identity', () => {
-  render(<PlanRoomSet projectId="job" rooms={mockRooms} bundle={mockBundle} onOpenSheet={jest.fn()} onIssue={jest.fn()} onChooseFile={jest.fn()} />);
+  render(<PlanRoomSet projectId="job" rooms={mockRooms} bundle={mockBundle} composition={mockBundle} onOpenSheet={jest.fn()} onIssue={jest.fn()} onChooseFile={jest.fn()} />);
   const sheet = screen.getByRole('button', { name: /New live title/ });
   expect(sheet).toHaveTextContent('pkg.original');
   expect(sheet).toHaveTextContent('Archived');
@@ -77,7 +79,7 @@ it('does not infer room membership from matching titles or a package home room',
 
 it('distinguishes unkeyed composition and unavailable package metadata without erasing links', () => {
   mockBundle.sheetPackages.push({ sheet_id: 'sheet-a', package_id: 'pkg-b', added_by: null, added_at: '' }, { sheet_id: 'sheet-a', package_id: 'hidden-package', added_by: null, added_at: '' });
-  render(<PlanSheetDetail projectId="job" sheetId="sheet-a" rooms={mockRooms} bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
+  render(<PlanSheetDetail projectId="job" sheetId="sheet-a" rooms={mockRooms} bundle={mockBundle} composition={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
   expect(screen.getByText(/Composition only · no agreed-scope key/)).toBeInTheDocument();
   expect(screen.getByText('Linked package unavailable')).toBeInTheDocument();
   expect(screen.getByText(/not an issued package or authority to fabricate/)).toBeInTheDocument();
@@ -104,7 +106,7 @@ it('keeps issued title and original print provenance after the live sheet and fi
 it('returns each current and historical viewer to its actual trigger and uses the issued title', async () => {
   mockBundle.issues.unshift({ ...mockBundle.issues[0], id: 'later-issue', issue_number: 2 });
   mockBundle.issuePrints.unshift({ ...mockBundle.issuePrints[0], id: 'later-snapshot', issue_id: 'later-issue', sheet_title: 'Later reissue title' });
-  render(<PlanSheetDetail projectId="job" sheetId="sheet-a" rooms={mockRooms} bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
+  render(<PlanSheetDetail projectId="job" sheetId="sheet-a" rooms={mockRooms} bundle={mockBundle} composition={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
   const current = screen.getByRole('button', { name: 'Open drawing revision' });
   // Another focused control must not become the inferred opener.
   screen.getByRole('button', { name: 'Issue current set' }).focus();
@@ -124,9 +126,9 @@ it('returns each current and historical viewer to its actual trigger and uses th
 
 it.each(['set', 'detail', 'chapter'])('shows exact linked room and named filer in %s without visible IDs', (surface) => {
   const { container } = render(surface === 'set'
-    ? <PlanRoomSet projectId="job" rooms={mockRooms} bundle={mockBundle} onOpenSheet={jest.fn()} onIssue={jest.fn()} onChooseFile={jest.fn()} />
+    ? <PlanRoomSet projectId="job" rooms={mockRooms} bundle={mockBundle} composition={mockBundle} onOpenSheet={jest.fn()} onIssue={jest.fn()} onChooseFile={jest.fn()} />
     : surface === 'detail'
-      ? <PlanSheetDetail projectId="job" rooms={mockRooms} sheetId="sheet-a" bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />
+      ? <PlanSheetDetail projectId="job" rooms={mockRooms} sheetId="sheet-a" bundle={mockBundle} composition={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />
       : <DesignChapter projectId="job" routeId="job" onWorkRoom={jest.fn()} />);
   expect(container).toHaveTextContent('Kitchen');
   expect(container).not.toHaveTextContent('room-a');
@@ -137,8 +139,18 @@ it.each(['set', 'detail', 'chapter'])('shows exact linked room and named filer i
   }
 });
 
+// SQ-2201 F3 — legacy passes no composition and sees the pre-round-8 set.
+it.each(['set', 'detail'])('shows no composition in %s when none is given', (surface) => {
+  const { container } = render(surface === 'set'
+    ? <PlanRoomSet projectId="job" rooms={mockRooms} bundle={mockBundle} onOpenSheet={jest.fn()} onIssue={jest.fn()} onChooseFile={jest.fn()} />
+    : <PlanSheetDetail projectId="job" rooms={mockRooms} sheetId="sheet-a" bundle={mockBundle} onBack={jest.fn()} onIssue={jest.fn()} />);
+  expect(container.querySelector('[data-sheet-composition]')).toBeNull();
+  expect(container).not.toHaveTextContent('No room link');
+  expect(container).not.toHaveTextContent('not an issued package');
+});
+
 it('uses neutral unavailable-room copy while retaining the exact link', () => {
-  const { container } = render(<PlanSheetComposition bundle={mockBundle} sheetId="sheet-a" rooms={[]} />);
+  const { container } = render(<PlanSheetComposition composition={mockBundle} sheetId="sheet-a" rooms={[]} />);
   expect(container).toHaveTextContent('Room no longer on this job');
   expect(container).not.toHaveTextContent('room-a');
   expect(container.querySelector('[data-room-id="room-a"]')).not.toBeNull();

@@ -116,6 +116,11 @@ jest.mock("@/hooks/use-clients", () => ({
 /** All three gates, resolved. `designBuildOn` flips per-test through this.
  *  `one-voice` stays off: this room's send words are the pre-US-19 names. */
 let designBuildOn = true;
+// SQ-2201 F2: round-8 arrangements are gated on the renderer; this suite reads legacy.
+jest.mock("@/hooks/use-paper-renderer", () => ({
+  usePaperRenderer: () => ({ renderer: "legacy" }),
+}));
+
 jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: (flag: string) => ({
     value: flag === "design-build" ? designBuildOn : flag !== "one-voice",

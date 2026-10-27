@@ -40,6 +40,7 @@ import {
 } from "@/lib/time-billing";
 import { money } from "./project-commerce";
 import { priceWord } from "./stamp-derivation";
+import { isExternalResponsibility } from "./ffe-responsibility";
 
 /** Discriminates a time line's JSON `metadata.attribution` from the plain
  *  vendor-name strings furnishings lines already store there (00588). */
@@ -83,6 +84,8 @@ export interface ComposerFfeItem {
   room?: { name: string | null } | null;
   /** `labor` lines take their client price in the composer (K7). */
   line_kind?: string | null;
+  /** Set when the line is under external responsibility (C5). */
+  external_fulfilment_id?: string | null;
 }
 
 export interface ComposerAdhocRow {
@@ -222,6 +225,9 @@ export interface FfePartition<T extends ComposerFfeItem> {
   unpriced: T[];
   /** An allowance with no price yet (F21): listed, never selectable. */
   unfilled: T[];
+  /** Under external responsibility (C5, SQ-2213): someone else bills it, so
+   *  it is listed as external work, never offered. */
+  external: T[];
 }
 
 /** An allowance bills once it's filled; until then its price is unset (the
@@ -252,9 +258,11 @@ export function partitionFfeBillable<T extends ComposerFfeItem>(
   const covered: T[] = [];
   const unpriced: T[] = [];
   const unfilled: T[] = [];
+  const external: T[] = [];
   for (const item of items) {
     const cov = coverage?.[item.id];
     if (cov && cov.coverage !== "uninvoiced") covered.push(item);
+    else if (isExternalResponsibility(item)) external.push(item);
     else if (isUnfilledAllowance(item)) unfilled.push(item);
     else if (
       item.unit_price_cents === null ||
@@ -268,7 +276,7 @@ export function partitionFfeBillable<T extends ComposerFfeItem>(
       unpriced.push(item);
     else billable.push(item);
   }
-  return { billable, covered, unpriced, unfilled };
+  return { billable, covered, unpriced, unfilled, external };
 }
 
 // ── Purchases: the unbilled set (C-25, 00703) ───────────────────────────────

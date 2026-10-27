@@ -7,6 +7,7 @@ import {
   type Database,
   type ExternalFulfilmentReading,
   type PlanRoomBundle,
+  type PlanRoomComposition,
   type ProjectRosterRow,
   useProductConfiguration,
 } from "@patina/supabase";
@@ -21,7 +22,8 @@ export type EvidenceState = "current" | "earlier" | "unknown" | "none";
 
 /** One read each; `data` is undefined while pending or after a failed read. */
 export interface PackageJoins {
-  plans: { data?: PlanRoomBundle; isError: boolean };
+  /** The native bundle joined with its round-8 package composition. */
+  plans: { data?: PlanRoomBundle & Pick<PlanRoomComposition, "packages">; isError: boolean };
   roster: { data?: ProjectRosterRow[]; isError: boolean };
   decisions: { data?: CoordinationItem[]; isError: boolean };
   rooms: { data?: ProjectRoom[]; isError: boolean };
@@ -154,7 +156,7 @@ function unitEvidenceWords(unit: UnitReading, terminal: boolean): string {
 
 function siteWords(
   row: ExternalFulfilmentReading,
-  pkg: PlanRoomBundle["packages"][number] | undefined,
+  pkg: PlanRoomComposition["packages"][number] | undefined,
   joins: PackageJoins,
 ): string {
   if (!row.reading.package_id) return "No package record for this key";

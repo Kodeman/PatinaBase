@@ -2453,6 +2453,7 @@ export type {
 export {
   planRoomKeys,
   usePlanRoom,
+  usePlanRoomComposition,
   usePlanRoomHoldings,
   usePlanIssuePreview,
   useFilePlanPrints,
@@ -2473,6 +2474,7 @@ export type {
   PlanTransmittal,
   PlanTransmittalTokenSafe,
   PlanRoomBundle,
+  PlanRoomComposition,
   FilePlanPrintsResult,
   PlanIssuePreview,
   CreatePlanIssueResult,

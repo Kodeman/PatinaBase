@@ -121,6 +121,11 @@ jest.mock("@/hooks/use-clients", () => ({
  * `agreement-library` rollout has already reached is in on the day Wave 3
  * ships, and the state the whole world is in until Kody widens the new flag.
  */
+// SQ-2201 F2: round-8 arrangements are gated on the renderer; this suite reads legacy.
+jest.mock("@/hooks/use-paper-renderer", () => ({
+  usePaperRenderer: () => ({ renderer: "legacy" }),
+}));
+
 jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: (flag: string) => ({
     value: flag !== "design-build",

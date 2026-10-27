@@ -663,3 +663,53 @@ it("round-8 price reading keeps the existing instrument", () => {
   expect(reading).toHaveClass("hidden", "[[data-paper-renderer=round8]_&]:block");
   expect(screen.getByText(/Released client values stay fixed/)).toBeInTheDocument();
 });
+
+describe("PriceLens: external responsibility (SQ-2213)", () => {
+  // The Living Room cabinet is a GC's to buy: product-backed, priced, external.
+  const externalCabinet = () =>
+    fixture({ l1: { external_fulfilment_id: "ext-1" } });
+
+  it("gives an external row no studio price, no edit and no stamp, and keeps it in view", () => {
+    mockItems.data = externalCabinet();
+    renderLens(null);
+    // Its $27,925 leaves the studio's priced total; the rest is unchanged.
+    expect(
+      screen.getByText("Job · $2,835 priced · ~$36,368 roughed"),
+    ).toBeInTheDocument();
+    expect(document.querySelector('tr[data-line-id="l1"]')).toBeNull();
+    expect(
+      screen.queryByLabelText("Unit client price, Custom cabinet"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Unit cost, Custom cabinet"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Acts for Custom cabinet" }),
+    ).not.toBeInTheDocument();
+
+    const external = screen.getByRole("region", {
+      name: "External responsibility",
+    });
+    const row = external.querySelector(
+      '[data-price-external-line="l1"]',
+    ) as HTMLElement;
+    expect(row).toHaveTextContent("Custom cabinet");
+    expect(row).toHaveTextContent("Not priced by the studio");
+    expect(within(row).queryByRole("textbox")).toBeNull();
+    expect(within(row).queryByRole("button")).toBeNull();
+    expect(row).not.toHaveTextContent("$");
+  });
+
+  it("lists an external row in its own room only", () => {
+    mockItems.data = externalCabinet();
+    const living = renderLens("living");
+    expect(
+      screen.getByRole("region", { name: "External responsibility" }),
+    ).toHaveTextContent("Custom cabinet");
+    living.unmount();
+    renderLens("bedroom");
+    expect(
+      screen.queryByRole("region", { name: "External responsibility" }),
+    ).not.toBeInTheDocument();
+  });
+});

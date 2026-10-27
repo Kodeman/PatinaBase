@@ -16,6 +16,7 @@ import {
   useCoordinationItems,
   useExternalFulfilmentReadings,
   usePlanRoom,
+  usePlanRoomComposition,
   useProductConfiguration,
   useProjectRooms,
   useProjectRoster,
@@ -32,6 +33,7 @@ jest.mock("@patina/supabase/client", () => ({
 jest.mock("@patina/supabase", () => ({
   ...jest.requireActual("@patina/supabase"),
   usePlanRoom: jest.fn(),
+  usePlanRoomComposition: jest.fn(),
   useProjectRoster: jest.fn(),
   useCoordinationItems: jest.fn(),
   useProjectRooms: jest.fn(),
@@ -278,6 +280,7 @@ interface MountOptions {
 async function mount(rows: ExternalFulfilmentReading[], options: MountOptions = {}) {
   serve(rows);
   (usePlanRoom as jest.Mock).mockReturnValue(options.plans ?? ok(plans));
+  (usePlanRoomComposition as jest.Mock).mockReturnValue(options.plans ?? ok(plans));
   (useProjectRoster as jest.Mock).mockReturnValue(options.roster ?? ok(roster));
   (useCoordinationItems as jest.Mock).mockReturnValue(ok(decisions));
   (useProjectRooms as jest.Mock).mockReturnValue(options.rooms ?? ok([{ id: ROOM, name: "Kitchen" }]));

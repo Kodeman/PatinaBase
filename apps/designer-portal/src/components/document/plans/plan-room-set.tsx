@@ -25,6 +25,7 @@ import {
   useReissuePlanTransmittalLink,
   useRevokePlanTransmittalLink,
   type PlanRoomBundle,
+  type PlanRoomComposition,
   type PlanPrint,
   type Database,
 } from '@patina/supabase';
@@ -85,16 +86,16 @@ export function PlanPrintProvenance({ print, projectId }: { print: PlanPrint; pr
 
 /** Present composition by IDs; these live links are not an issued manifest. */
 export function PlanSheetComposition({
-  bundle,
+  composition,
   sheetId,
   rooms = [],
 }: {
-  bundle: PlanRoomBundle;
+  composition: PlanRoomComposition;
   sheetId: string;
   rooms?: Pick<Database['public']['Tables']['project_rooms']['Row'], 'id' | 'name'>[];
 }) {
-  const roomLinks = (bundle.sheetRooms ?? []).filter((row) => row.sheet_id === sheetId);
-  const packageLinks = (bundle.sheetPackages ?? []).filter((row) => row.sheet_id === sheetId);
+  const roomLinks = composition.sheetRooms.filter((row) => row.sheet_id === sheetId);
+  const packageLinks = composition.sheetPackages.filter((row) => row.sheet_id === sheetId);
   return (
     <span className="t-meta block break-words" data-sheet-composition={sheetId}>
       <span className="block">
@@ -108,7 +109,7 @@ export function PlanSheetComposition({
       </span>
       {packageLinks.length === 0 && <span className="block">No package link</span>}
       {packageLinks.map((link) => {
-        const pack = bundle.packages?.find((row) => row.id === link.package_id);
+        const pack = composition.packages.find((row) => row.id === link.package_id);
         return (
           <span className="block" key={link.package_id} data-package-id={link.package_id}>
             {pack
@@ -126,6 +127,8 @@ export interface PlanRoomSetProps {
   projectId: string;
   bundle: PlanRoomBundle;
   rooms?: Pick<Database['public']['Tables']['project_rooms']['Row'], 'id' | 'name'>[];
+  /** Round-8 only; absent under the legacy renderer, which shows no composition. */
+  composition?: PlanRoomComposition;
   onOpenSheet: (sheetId: string) => void;
   onIssue: () => void;
   onChooseFile: () => void;
@@ -135,6 +138,7 @@ export function PlanRoomSet({
   projectId,
   bundle,
   rooms,
+  composition,
   onOpenSheet,
   onIssue,
   onChooseFile,
@@ -297,7 +301,9 @@ export function PlanRoomSet({
               <span className="line-clamp-2 text-[0.82rem] text-[var(--color-charcoal)]">
                 {row.title}
               </span>
-              <PlanSheetComposition bundle={bundle} sheetId={row.sheetId} rooms={rooms} />
+              {composition && (
+                <PlanSheetComposition composition={composition} sheetId={row.sheetId} rooms={rooms} />
+              )}
               {held.length > 0 && (
                 <span className="mt-0.5 flex flex-col gap-0.5">
                   {held.map(({ holder, sheet }) => (
