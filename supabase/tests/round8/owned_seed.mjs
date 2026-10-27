@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { assertOwnedContainer, round8CloneDb } from './owned_psql.mjs';
+import { assertLocalDocker, assertOwnedContainer, round8CloneDb } from './owned_psql.mjs';
 
 export const image = { tag: 'public.ecr.aws/supabase/postgres:17.6.1.063',
   id: 'sha256:178f0976b54a39237096bfa310c1a352dbc82fb1b08dda45cdb8acb5d40c1426' };
@@ -49,7 +49,9 @@ export function idempotentRoles(sql) {
 
 export function assertOutsideRepo(dir, repoRoot) {
   const relative = path.relative(realpathSync(repoRoot), realpathSync(dir));
-  if (!relative.startsWith('..') && !path.isAbsolute(relative)) throw new Error('dump directory must be outside the repository');
+  if (path.isAbsolute(relative) || (relative !== '..' && !relative.startsWith('..' + path.sep))) {
+    throw new Error('dump directory must be outside the repository');
+  }
 }
 
 export function treeHashes(root) {
@@ -105,11 +107,14 @@ export function create(env = process.env, run = spawnSync, wait = ms => Atomics.
   const { owner, ticket } = owned(env);
   const cloneDb = round8CloneDb(env);
   const docker = checked(run);
+  assertLocalDocker(env, docker);
   const labels = ['--label', 'sidequest.ticket=' + ticket, '--label', 'sidequest.owner=' + owner];
   const work = mkdtempSync(path.join(tmpdir(), 'round8-native-'));
+  let id;
+  let succeeded = false;
   try {
     const native = extractNativeTree(docker, labels, work);
-    const id = docker('docker', ['create', '--network', 'none', '--read-only',
+    id = docker('docker', ['create', '--network', 'none', '--read-only',
       '--tmpfs', '/var/run/postgresql:rw,nosuid,nodev,size=16m', '--tmpfs', '/var/lib/postgresql/data:rw,nosuid,nodev,size=1536m',
       '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m', '--tmpfs', '/etc/postgresql-custom:rw,nosuid,nodev,size=16m',
       '--memory', '2g', '--memory-swap', '2g', '--cpus', '2', '--pids-limit', '256',
@@ -135,8 +140,13 @@ export function create(env = process.env, run = spawnSync, wait = ms => Atomics.
     const password = JSON.parse(docker('docker', ['inspect', id]))[0].Config.Env.find(e => e.startsWith('POSTGRES_PASSWORD=')).slice(18);
     docker('docker', ['exec', '-i', '-u', 'postgres', id, 'install', '-m', '0600', '/dev/stdin', pgpass],
       { input: `*:*:*:supabase_admin:${password}\n` });
+    succeeded = true;
     return { container: id, cloneDb, nativeTarSha256: hash(native.tar), nativeFiles: native.files };
-  } finally { rmSync(work, { recursive: true, force: true }); }
+  } finally {
+    try {
+      if (id && !succeeded) docker('docker', ['rm', '-f', '--', id]);
+    } finally { rmSync(work, { recursive: true, force: true }); }
+  }
 }
 
 // pg_dump emits event triggers last, so CREATE EXTENSION pg_graphql cannot fire the native trigger that
@@ -188,6 +198,7 @@ export function seed(env = process.env, run = spawnSync, repoRoot = process.cwd(
   const { owner, ticket } = owned(env);
   const cloneDb = round8CloneDb(env);
   const docker = checked(run);
+  assertLocalDocker(env, docker);
   const source = 'supabase_db_' + project;
   assertSourceStack(JSON.parse(docker('docker', ['inspect', '--type', 'container', source])), project);
   const target = JSON.parse(docker('docker', ['inspect', '--type', 'container', id]));

@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { assertOwnedContainer, verifySqlInputs, controlSql, main, defaultDbUrl, round8DbUrl, round8OwnerTicket, round8CloneDb,
   round8LocalApiUrl } from './owned_psql.mjs';
 import { assertOutsideRepo, assertSourceStack, create, idempotentRoles, image as seedImage, seed, sourceProject, startCommand,
@@ -342,6 +344,15 @@ test('dump directory must sit outside the repository', () => {
   const repo = new URL('../../..', import.meta.url).pathname;
   assert.throws(() => assertOutsideRepo(new URL('.', import.meta.url).pathname, repo), /outside the repository/);
   assert.doesNotThrow(() => assertOutsideRepo(tmpdir(), repo));
+  const fixture = mkdtempSync(path.join(tmpdir(), 'round8-path-test-'));
+  try {
+    const root = path.join(fixture, 'repo');
+    const inside = path.join(root, '..cache');
+    mkdirSync(inside, { recursive: true });
+    assert.throws(() => assertOutsideRepo(root, root), /outside the repository/);
+    assert.throws(() => assertOutsideRepo(inside, root), /outside the repository/);
+    assert.doesNotThrow(() => assertOutsideRepo(fixture, root));
+  } finally { rmSync(fixture, { recursive: true, force: true }); }
 });
 test('only the trigger-made graphql ACL failure is tolerated during restore', () => {
   const stderr = 'psql:<stdin>:7: ERROR:  function graphql_public.graphql(text, text, jsonb, jsonb) does not exist\n'
@@ -363,4 +374,120 @@ test('seed and create refuse before any docker call without their owned inputs',
   }
   assert.throws(() => seed({ ...base, ROUND8_CLONE_DB: 'host=evil' }, never), /ROUND8_CLONE_DB/);
   assert.throws(() => create({ ROUND8_OWNED_OWNER: owner }, never), /ROUND8_OWNED_TICKET/);
+});
+
+// Load only the real scope predicate, without registering its live concurrency suite.
+const scopeSource = readFileSync(new URL('./scope_reconciliation_concurrency.test.mjs', import.meta.url), 'utf8');
+const scopePredicate = new Function('assertOwnedContainer', 'pinnedImage', 'socketDir',
+  scopeSource.slice(scopeSource.indexOf('function ownershipFailures('), scopeSource.indexOf('// Fail closed before any child'))
+    + '\nreturn ownershipFailures;')(assertOwnedContainer, seedImage, '/var/run/postgresql');
+const scopeOwned = () => {
+  const inspected = owned();
+  inspected[0].Id = 'a'.repeat(64);
+  inspected[0].HostConfig.Tmpfs = { '/var/lib/postgresql/data': 'rw', '/var/run/postgresql': 'rw' };
+  return inspected;
+};
+const scopePins = { id: 'a'.repeat(64), owner, ticket };
+test('scope predicate accepts the hardened owned fixture', () => {
+  assert.deepEqual(scopePredicate(scopeOwned(), scopePins), []);
+});
+for (const [name, change] of [
+  ['privileged', c => { c.HostConfig.Privileged = true; }],
+  ['added capability', c => { c.HostConfig.CapAdd = ['SYS_ADMIN']; }],
+  ['unconfined seccomp', c => { c.HostConfig.SecurityOpt.push('seccomp=unconfined'); }],
+  ['missing no-new-privileges', c => { c.HostConfig.SecurityOpt = []; }],
+  ['false no-new-privileges', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:false']; }],
+]) test('scope predicate refuses ' + name, () => {
+  const inspected = scopeOwned();
+  change(inspected[0]);
+  assert.notDeepEqual(scopePredicate(inspected, scopePins), []);
+});
+
+const seedEnv = { ROUND8_SEED_SOURCE_PROJECT: 'patina-r8-harness', ROUND8_OWNED_CONTAINER: 'a'.repeat(64),
+  ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_TICKET: ticket };
+for (const [mode, invoke] of [['create', create], ['seed', seed]]) {
+  for (const [name, extra] of [
+    ['DOCKER_HOST', { DOCKER_HOST: 'ssh://remote.invalid' }],
+    ['DOCKER_CONTEXT', { DOCKER_CONTEXT: 'remote' }],
+  ]) test(mode + ' refuses ' + name + ' before any docker invocation', () => {
+    const calls = [];
+    assert.throws(() => invoke({ ...seedEnv, ...extra }, (...args) => {
+      calls.push(args); return { status: 0, stdout: '"unix:///local.sock"' };
+    }), new RegExp(name));
+    assert.equal(calls.length, 0);
+  });
+  test(mode + ' refuses a remote effective Docker context before container access', () => {
+    const calls = [];
+    assert.throws(() => invoke(seedEnv, (binary, args) => {
+      calls.push([binary, args]);
+      return { status: 0, stdout: '"tcp://remote.invalid:2376"' };
+    }), /local unix socket/);
+    assert.deepEqual(calls, [['docker', ['context', 'inspect', '--format', '{{json .Endpoints.docker.Host}}']]]);
+  });
+}
+
+function fakeCreate(failure) {
+  const calls = [];
+  let work;
+  const target = 'a'.repeat(64);
+  const extraction = 'b'.repeat(64);
+  const run = (binary, args, options = {}) => {
+    calls.push([binary, args]);
+    const ok = stdout => ({ status: 0, stdout: stdout ?? '', stderr: '' });
+    const fail = () => ({ status: 1, stdout: '', stderr: 'injected ' + failure });
+    if (binary === 'mkdir') {
+      work = path.dirname(args[0]);
+      mkdirSync(args[0]);
+      return ok();
+    }
+    if (binary === 'tar') {
+      const native = path.join(work, 'tree', 'postgresql-custom');
+      mkdirSync(native);
+      writeFileSync(path.join(native, 'supautils.conf'), 'native config');
+      return ok();
+    }
+    assert.equal(binary, 'docker');
+    if (args[0] === 'context') return ok('"unix:///local.sock"');
+    if (args[0] === 'create') return ok(args.includes('--read-only') ? target : extraction);
+    if (args[0] === 'inspect') {
+      if (args.at(-1) === extraction) return ok(JSON.stringify([{ State: { Status: 'created' } }]));
+      if (failure === 'inspect') return fail();
+      const inspected = owned();
+      inspected[0].Config.Env.push('POSTGRES_PASSWORD=fake-password');
+      return ok(JSON.stringify(inspected));
+    }
+    if (args[0] === 'cp') return ok('native tar bytes');
+    if (args[0] === 'rm') return ok();
+    if (args[0] === 'start') return failure === 'start' ? fail() : ok();
+    if (args[0] === 'logs') return ok(failure === 'readiness' ? '' : 'init process complete');
+    if (args.includes('pg_isready')) return ok();
+    if (args.includes('sha256sum')) {
+      const digest = createHash('sha256').update('native config').digest('hex');
+      return ok((failure === 'hash' ? 'wrong' : digest) + '  /etc/postgresql-custom/supautils.conf\n');
+    }
+    if (args.includes('install')) {
+      assert.match(options.input, /supabase_admin:fake-password/);
+      return failure === 'pgpass' ? fail() : ok();
+    }
+    assert.fail('unexpected fake command: ' + args.join(' '));
+  };
+  return { run, calls, work: () => work, target, extraction };
+}
+for (const failure of ['inspect', 'start', 'readiness', 'hash', 'pgpass']) {
+  test('create removes its target after ' + failure + ' failure', () => {
+    const fake = fakeCreate(failure);
+    assert.throws(() => create(seedEnv, fake.run, () => {}),
+      failure === 'readiness' ? /did not become ready/ : failure === 'hash' ? /hash mismatch/ : /injected/);
+    assert.equal(fake.calls.filter(([binary, args]) => binary === 'docker'
+      && args[0] === 'rm' && args.includes('-f') && args.at(-1) === fake.target).length, 1);
+    assert.equal(existsSync(fake.work()), false);
+  });
+}
+test('create retains its target only on success and removes extraction and temporary files', () => {
+  const fake = fakeCreate();
+  const report = create(seedEnv, fake.run, () => {});
+  assert.equal(report.container, fake.target);
+  assert.ok(fake.calls.some(([, args]) => args[0] === 'rm' && args.at(-1) === fake.extraction));
+  assert.ok(!fake.calls.some(([, args]) => args[0] === 'rm' && args.at(-1) === fake.target));
+  assert.equal(existsSync(fake.work()), false);
 });

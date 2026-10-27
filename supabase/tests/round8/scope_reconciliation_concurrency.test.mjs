@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { round8CloneDb, round8OwnerTicket } from './owned_psql.mjs';
+import { assertLocalDocker, assertOwnedContainer, round8CloneDb, round8OwnerTicket } from './owned_psql.mjs';
 
 const container = process.env.ROUND8_OWNED_CONTAINER ?? '';
 const pinnedImage = { tag: 'public.ecr.aws/supabase/postgres:17.6.1.063',
@@ -56,7 +56,11 @@ function ownershipFailures(inspected, { id, owner, ticket }) {
     ticketLabel: !!ticket && owned?.Config?.Labels?.['sidequest.ticket'] === ticket,
     ownerLabel: !!owner && owned?.Config?.Labels?.['sidequest.owner'] === owner,
   };
-  return Object.keys(checks).filter(check => !checks[check]);
+  const failures = Object.keys(checks).filter(check => !checks[check]);
+  if (failures.length) return failures;
+  try { assertOwnedContainer(inspected, owner, ticket); }
+  catch { return ['ownedContainer']; }
+  return [];
 }
 // Fail closed before any child is spawned: local daemon only, then the isolated owned container.
 function verifyOwnedTransport() {
@@ -65,11 +69,8 @@ function verifyOwnedTransport() {
   assert.ok(process.env.ROUND8_OWNED_OWNER, 'ROUND8_OWNED_OWNER must name the claim holder that provisioned the container');
   const ticket = round8OwnerTicket();
   round8CloneDb();
-  assert.ok(!process.env.DOCKER_HOST, 'DOCKER_HOST must be unset: the owned container is on the local daemon');
-  assert.ok([undefined, '', 'default'].includes(process.env.DOCKER_CONTEXT), 'DOCKER_CONTEXT must be unset or default');
   const docker = args => execFileSync('docker', args, { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
-  assert.match(JSON.parse(docker(['context', 'inspect', '--format', '{{json .Endpoints.docker.Host}}'])), /^unix:\/\//,
-    'the active docker context must be a local unix socket');
+  assertLocalDocker(process.env, (_binary, args) => docker(args));
   assert.deepEqual(ownershipFailures(JSON.parse(docker(['inspect', '--type', 'container', container])),
     { id: container, owner: process.env.ROUND8_OWNED_OWNER, ticket }), [], 'isolated owned postgres container required');
 }
@@ -516,6 +517,7 @@ const ownedInspect = () => [{
   Config: { Image: pinnedImage.tag, Env: ['PGDATA=/var/lib/postgresql/data'], Volumes: null,
     Labels: { 'sidequest.ticket': 'SQ-2110', 'sidequest.owner': 'owner-fixture' } },
   HostConfig: { NetworkMode: 'none', PortBindings: {}, ReadonlyRootfs: true, Binds: null, VolumesFrom: null, IpcMode: 'private',
+    Privileged: false, CapAdd: null, SecurityOpt: ['no-new-privileges:true'],
     PidMode: '', Tmpfs: { '/tmp': 'rw', '/var/run/postgresql': 'rw', '/var/lib/postgresql/data': 'rw' } },
 }];
 

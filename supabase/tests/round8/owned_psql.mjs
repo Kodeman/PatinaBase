@@ -59,6 +59,15 @@ export function round8LocalApiUrl(value) {
     && url.pathname === '/' && !url.search && !url.hash;
 }
 
+export function assertLocalDocker(env, docker) {
+  if (env.DOCKER_HOST) throw new Error('DOCKER_HOST must be unset: the owned container is on the local daemon');
+  if (![undefined, '', 'default'].includes(env.DOCKER_CONTEXT)) throw new Error('DOCKER_CONTEXT must be unset or default');
+  const endpoint = JSON.parse(docker('docker', ['context', 'inspect', '--format', '{{json .Endpoints.docker.Host}}']));
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('unix://')) {
+    throw new Error('the active docker context must be a local unix socket');
+  }
+}
+
 export function assertOwnedContainer(inspect, owner, ticket) {
   const c = inspect?.[0];
   const h = c?.HostConfig;
