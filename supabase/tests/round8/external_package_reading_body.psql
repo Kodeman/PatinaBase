@@ -1,4 +1,11 @@
 -- Include-only fictional read fixture. No activation, public SQL stubs or financial rows.
+-- N2 redundant disjuncts in 00884_round8_external_package_reading.sql:
+-- :59 f.reading_package_id IS NULL is unreachable-by-constraint
+-- 00877_round8_evidence_manifests.sql:138 together with 00884:60 (fabrication
+-- purpose), the manifest FK (00879_round8_fabrication_instruction.sql:40–43)
+-- and the package identity comparison (00884:59).
+-- :68 v.fulfilment_id IS DISTINCT FROM f.id duplicates receipt validation :104;
+-- :69 v.verified_by IS DISTINCT FROM e.verified_by duplicates :105.
 CREATE FUNCTION pg_temp.ep_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
@@ -47,7 +54,9 @@ END $$;
 SELECT pg_temp.ep_assert(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f884%'),'fixture namespace starts empty');
 -- Replica-mode SETUP bypasses proposal scope/plan composition/authority INSERT
 -- guards (00869_round8_scope_execution.sql:2325;
--- 00871_round8_plan_composition.sql:87; 00878_round8_fabrication_authority.sql:98).
+-- 00871_round8_plan_composition.sql:87; 00878_round8_fabrication_authority.sql:98)
+-- and the external INSERT guard (00875_round8_external_fulfilment.sql:174–189,
+-- trigger at :376) for the project_external_fulfilments rows below.
 -- It also suppresses FK triggers, not CHECKs: real agreement/proposal/product
 -- targets are inserted here and asserted below (configuration FK 00403:195,198,200;
 -- fulfilment FKs 00875:16,25,34). These are setup rows, not reader corruptions.
@@ -133,7 +142,8 @@ $$;
 -- Replica-mode SETUP bypasses external INSERT/UPDATE guards (00875:174–189,376)
 -- and member UPDATE immutability (00877:197–199). FK triggers are suppressed,
 -- but every external target exists (00875:40,45–46,51,54,56,80–85,96–100;
--- instruction authority/manifest FKs 00879:35–43). No CHECK is disabled.
+-- instruction CHECK 00879:35 and authority/manifest FKs 00879:37–42).
+-- No CHECK is disabled.
 SET LOCAL session_replication_role=replica;
 INSERT INTO public.project_external_fulfilment_evidence_bindings(id,fulfilment_id,decision_id,units,covers_plan_issue_id,
  covers_configuration_snapshot_hash,bound_by,client_request_id,request_hash)
@@ -273,7 +283,7 @@ SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1c revision in another manifest alone refuses');
 ROLLBACK TO bad_reference;
 -- (d) 00884:86–90: latest preceding issue is 822; binding still covers 821.
--- Guard bypass: 00875:174–189,376; issue FK is real and same-project (46).
+-- Guard bypass: 00875:174–189,376; issue FK is real and same-project (00875:46).
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events SET event_seq=7 WHERE id=pg_temp.ep_id(1001);
 INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,plan_issue_id,recorded_by,event_seq,client_request_id,request_hash)

@@ -41,6 +41,16 @@ test('accepts the real Docker --tmpfs inspect shape', () => {
   value[0].HostConfig.Tmpfs = { '/var/lib/postgresql/data': 'rw', '/var/run/postgresql': 'rw' };
   assert.doesNotThrow(() => assertOwnedContainer(value, owner, ticket));
 });
+for (const [name, missing] of [
+  ['PGDATA', '/var/lib/postgresql/data'],
+  ['socket directory', '/var/run/postgresql'],
+]) test('refuses real Docker --tmpfs shape missing ' + name, () => {
+  const value = owned();
+  value[0].Mounts = [];
+  value[0].HostConfig.Tmpfs = { '/var/lib/postgresql/data': 'rw', '/var/run/postgresql': 'rw' };
+  delete value[0].HostConfig.Tmpfs[missing];
+  assert.throws(() => assertOwnedContainer(value, owner, ticket), /isolated owned postgres container required/);
+});
 test('refuses unset ownership and ticket pins', () => {
   assert.throws(() => assertOwnedContainer(owned(), undefined, ticket));
   assert.throws(() => assertOwnedContainer(owned(), owner, undefined));
