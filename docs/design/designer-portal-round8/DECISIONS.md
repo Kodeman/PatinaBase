@@ -11,6 +11,12 @@ Append dated decisions during implementation; do not rewrite the historical Docu
 | 2026-10-23 / R8-02 applied | Kody | Approved round-eight continuous job paper supersedes current page's one-active-section behavior for this renderer | Round-8 project jobs mount all chapters with content as one continuous paper. Lead and proposal documents retain current pre-work regions; this does not alter their renderer behavior. | Applying the project-job composition to lead/proposal pre-work | Round-8 project-paper composition and index consumers only; no data/permission or migration change | WP-01.5; continuous-paper acceptance; integration review |
 | 2026-10-23 / Scope | Kody | Commissioned program boundary | Deliver the whole program through release candidate; pause dependent work for K3–K5 and stop before production deploy. | Treating preparation or implementation as deploy/migration authorization | All program work; production remains separately authorized | WP-11; K3–K5 gates and ship authorization |
 
+## Decisions recorded 27 October 2026
+
+| Date / ID | Owner | Request / evidence | Chosen behavior | Alternatives rejected | Affected data, permissions, consumers, compatibility | Acceptance / review |
+|---|---|---|---|---|---|---|
+| 2026-10-27 / G5-doc | Kody | `/doc/[id]` first-load was 3,073 summed-gzip bytes over its 1,687,684 tripwire. Main was already 958 over at dab3e61b9. SQ-2180 took round-8's excess from 11,606 to 2,115 by moving the unfold instrument off the legacy path with a synchronous `unfold-bridge` and extracting `LineQueryReading`. A `@patina/supabase` subpath bypass and a lazy cabinetry gate each moved nothing, because `page.tsx` `WhenCabinetry` pins `use-external-fulfilments` eagerly. | Raise the `(document)/doc/[id]` budget to 1,690,757 (+3,073, 0.18%), the measured value of candidate 1ad537a91. Record the residual as debt: a follow-up trims the shared-chunk duplication (registry, doc-sheet, folio-*) and the eager cabinetry hook. `/desk` stays at 1,346,026 (measured 1,291,371). | Keeping the red tripwire; an unmeasured larger allowance; editing `page.tsx` for an estimated gain short of the gap | Bundle tripwire only; no data, permission or migration change; legacy and round-8 renderers unchanged | G5 (VERIFICATION.md); SQ-2180 / SQ-2184 cross-provider review |
+
 ## Settled by the approved direction / preparation
 
 | ID | Decision | Basis |
