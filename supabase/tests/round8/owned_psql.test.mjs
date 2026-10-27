@@ -11,7 +11,7 @@ const owned = () => [{ Name: '/round8-reader-test',
     Labels: { 'sidequest.ticket': ticket, 'sidequest.owner': owner } },
   Mounts: [{ Type: 'tmpfs', Destination: '/var/lib/postgresql/data' }, { Type: 'tmpfs', Destination: '/var/run/postgresql' }],
   HostConfig: { NetworkMode: 'none', PortBindings: {}, ReadonlyRootfs: true, IpcMode: 'private', PidMode: '',
-    SecurityOpt: ['no-new-privileges:true'] }, NetworkSettings: { Ports: {} } }];
+    Privileged: false, CapAdd: null, SecurityOpt: ['no-new-privileges:true'] }, NetworkSettings: { Ports: {} } }];
 test('accepts an isolated native postgres fixture', () => assert.doesNotThrow(() => assertOwnedContainer(owned(), owner, ticket)));
 for (const [name, change] of [
   ['shared name', c => { c.Name = '/supabase_db_supabase'; }],
@@ -33,10 +33,34 @@ for (const [name, change] of [
   ['host PID', c => { c.HostConfig.PidMode = 'host'; }],
   ['host IPC', c => { c.HostConfig.IpcMode = 'host'; }],
   ['container PID', c => { c.HostConfig.PidMode = 'container:other'; }],
+  ['missing security options', c => { delete c.HostConfig.SecurityOpt; }],
+  ['disabled no-new-privileges', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:false']; }],
+  ['unconfined seccomp equals', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'seccomp=unconfined']; }],
+  ['unconfined seccomp colon', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'seccomp:unconfined']; }],
+  ['unconfined apparmor equals', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'apparmor=unconfined']; }],
+  ['unconfined apparmor colon', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'apparmor:unconfined']; }],
+  ['disabled label equals', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'label=disable']; }],
+  ['disabled label colon', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'label:disable']; }],
+  ['contradicting no-new-privileges', c => { c.HostConfig.SecurityOpt = ['no-new-privileges:true', 'no-new-privileges:false']; }],
+  ['bare no-new-privileges', c => { c.HostConfig.SecurityOpt = ['no-new-privileges']; }],
+  ['privileged container', c => { c.HostConfig.Privileged = true; }],
+  ['added capabilities', c => { c.HostConfig.CapAdd = ['SYS_ADMIN']; }],
   ['wrong image id', c => { c.Image = 'sha256:' + '0'.repeat(64); }],
   ['wrong owner', c => { c.Config.Labels['sidequest.owner'] = 'other'; }],
   ['wrong ticket', c => { c.Config.Labels['sidequest.ticket'] = 'SQ-2110'; }],
 ]) test('refuses ' + name, () => { const value = owned(); change(value[0]); assert.throws(() => assertOwnedContainer(value, owner, ticket)); });
+test('accepts the Docker equals spelling for no-new-privileges', () => {
+  const value = owned();
+  value[0].HostConfig.SecurityOpt = ['no-new-privileges=true'];
+  assert.doesNotThrow(() => assertOwnedContainer(value, owner, ticket));
+});
+for (const option of ['no-new-privileges:true-extra', 'no-new-privileges', 'no-new-privileges:yes']) {
+  test('refuses non-exact no-new-privileges option ' + option, () => {
+    const value = owned();
+    value[0].HostConfig.SecurityOpt = [option];
+    assert.throws(() => assertOwnedContainer(value, owner, ticket));
+  });
+}
 test('accepts the real Docker --tmpfs inspect shape', () => {
   const value = owned();
   value[0].Mounts = [];

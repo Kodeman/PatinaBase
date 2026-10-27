@@ -42,9 +42,23 @@ export function assertOwnedContainer(inspect, owner, ticket) {
     || /^(host|container:)/.test(h?.IpcMode ?? '') || /^(host|container:)/.test(h?.PidMode ?? '')) {
     throw new Error('isolated owned postgres container required');
   }
+  const securityOpt = c?.HostConfig?.SecurityOpt ?? [];
+  const parsedSecurityOpt = Array.isArray(securityOpt)
+    ? securityOpt.map(option => {
+      const separator = option.search(/[:=]/);
+      return separator < 0 ? [option, undefined] : [option.slice(0, separator), option.slice(separator + 1)];
+    }) : [];
+  const noNewPrivileges = parsedSecurityOpt.filter(([key]) => key === 'no-new-privileges');
   if (inspect?.length !== 1 || c?.HostConfig?.NetworkMode !== 'none'
     || Object.keys(c.HostConfig.PortBindings ?? {}).length !== 0
     || Object.keys(c.NetworkSettings?.Ports ?? {}).length !== 0
+    || !Array.isArray(securityOpt)
+    || noNewPrivileges.length === 0 || noNewPrivileges.some(([, value]) => value !== 'true')
+    || parsedSecurityOpt.some(([key, value]) =>
+      (['seccomp', 'apparmor'].includes(key) && value === 'unconfined') || (key === 'label' && value === 'disable'))
+    || c.HostConfig.Privileged !== false
+    || (c.HostConfig.CapAdd !== null && c.HostConfig.CapAdd !== undefined
+      && (!Array.isArray(c.HostConfig.CapAdd) || c.HostConfig.CapAdd.length !== 0))
     || c.HostConfig.ReadonlyRootfs !== true || typeof c.Name !== 'string'
     || c.Name.replace(/^\//, '').startsWith('supabase_')
     || c.Config?.Image !== 'public.ecr.aws/supabase/postgres:17.6.1.063') {
