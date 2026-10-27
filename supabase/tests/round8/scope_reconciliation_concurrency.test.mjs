@@ -3,6 +3,10 @@
 // scope_editions=true, outbound workers stopped. No migration/grant is installed.
 // Paused executions flip the setting only within their transaction, restoring
 // true before COMMIT; no committed capability setting is changed.
+// Transport (shared with SQ-2170): ROUND8_PSQL_TRANSPORT=docker-exec and
+// ROUND8_OWNED_CONTAINER=<64-hex id> are required; there is no fallback to the
+// shared local Supabase stack. Each session is one `docker exec -i` psql child that
+// reads a private 0600 pgpass file at /tmp/round8-owned.pgpass inside the container.
 // Run: node --test --test-concurrency=1 supabase/tests/round8/scope_reconciliation_concurrency.test.mjs
 // Negative control: add SCOPE_RECONCILIATION_NEGATIVE_CONTROL=inverted. Only the
 // new retry schedule calls a session-local scratch function; public SQL is untouched.
@@ -13,7 +17,14 @@ import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
-const url = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+// Fail closed before any child is spawned.
+assert.equal(process.env.ROUND8_PSQL_TRANSPORT, 'docker-exec', 'ROUND8_PSQL_TRANSPORT=docker-exec is required');
+assert.match(process.env.ROUND8_OWNED_CONTAINER ?? '', /^[0-9a-f]{64}$/, 'ROUND8_OWNED_CONTAINER must be an exact 64-hex container id');
+// The docker CLI does not forward host env, so the session timeouts travel with -e.
+const psqlArgv = ['exec', '-i', '-u', 'postgres', '-e', 'PGPASSFILE=/tmp/round8-owned.pgpass',
+  '-e', 'PGCONNECT_TIMEOUT=3', '-e', 'PGOPTIONS=-c statement_timeout=15000 -c lock_timeout=10000',
+  process.env.ROUND8_OWNED_CONTAINER, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', 'postgres',
+  '-XAtq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'];
 const actor = 'f87b0000-0000-4000-8000-000000000001';
 const literal = value => "'" + String(value).replaceAll("'", "''") + "'";
 const body = readFileSync(new URL('./scope_reconciliation_body.psql', import.meta.url), 'utf8').replaceAll('f870', 'f87b');
@@ -52,10 +63,7 @@ class Session {
     this.buffer = '';
     this.errors = '';
     this.pending = null;
-    this.child = spawn('psql', [url, '-XAtq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'], {
-      stdio: ['pipe', 'pipe', 'pipe'], detached: true,
-      env: { ...process.env, PGCONNECT_TIMEOUT: '3', PGOPTIONS: '-c statement_timeout=15000 -c lock_timeout=10000' },
-    });
+    this.child = spawn('docker', psqlArgv, { stdio: ['pipe', 'pipe', 'pipe'], detached: true });
     this.exited = new Promise(resolve => {
       this.child.once('error', error => { this.pending?.reject(error); resolve(); });
       this.child.once('exit', (code, signal) => {
