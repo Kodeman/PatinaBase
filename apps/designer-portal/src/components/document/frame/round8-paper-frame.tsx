@@ -34,6 +34,7 @@ import {
   type ContentsEntry,
 } from '@/components/document/paper/contents-margin';
 import { openUnfold } from '@/components/document/paper/unfold-instrument';
+import { registerUnfoldOpener } from '@/components/document/paper/unfold-bridge';
 import type { WorkRoom } from '@/components/document/paper/chapters/ffe-work-room';
 import { BriefAgreementChapter, type BriefAgreementChapterProps } from '@/components/document/paper/chapters/brief-agreement-chapter';
 import { FfeChapter } from '@/components/document/paper/chapters/ffe-chapter';
@@ -193,6 +194,8 @@ export default function Round8PaperFrame({
   useEffect(() => {
     onCommitted(true);
   }, [onCommitted]);
+  // Shared legacy-path code (the margin) unfolds this paper through the bridge.
+  useEffect(() => registerUnfoldOpener(docId, openUnfold), [docId]);
   const workRoom: WorkRoom = (room, lens = 'spec', opener = document.activeElement) => {
     openUnfold(
       { kind: 'pieces', lens, room, line: null },

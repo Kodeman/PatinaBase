@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePaperRenderer } from '@/hooks/use-paper-renderer';
-import { openUnfold } from './paper/unfold-instrument';
+import { unfoldOpenerFor } from './paper/unfold-bridge';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
@@ -853,10 +853,13 @@ export function NoteContext({ row, projectId, onBeforeRoomOpen }: {
           onClick={(event) => {
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             const opener = event.currentTarget;
-            if (renderer === 'round8') event.preventDefault();
+            // Unfold only over this document's mounted round-8 frame; with
+            // none registered (legacy, a frame not yet committed, another
+            // document) the link follows its href.
+            const open = renderer === 'round8' ? unfoldOpenerFor(projectId) : null;
+            if (open) event.preventDefault();
             onBeforeRoomOpen?.();
-            if (renderer !== 'round8') return;
-            openUnfold(
+            open?.(
               { kind: 'pieces', lens: 'spec', room: roomId, line: null },
               { documentId: projectId, chapter: 'ffe', room: roomId, lens: 'spec' },
               opener,
