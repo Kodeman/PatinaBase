@@ -10,7 +10,7 @@ Every guard defaults to the shared stack (`127.0.0.1:54322`). Pointing a suite e
 | --- | --- | --- | --- |
 | `ROUND8_DB_URL` | the seven `*_concurrency.test.mjs` host-psql suites | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` | any host other than `127.0.0.1`/`localhost`, query or fragment (`?host=`, `?hostaddr=`, `?service=`), comma host lists, socket form, a non-plain database path |
 | `API_URL` | `fabrication_instruction` | none | anything but `http://127.0.0.1:<port>/` |
-| `-v expected_port=<n>` | `fill_locked_current_concurrency.psql`, `fill_locked_current_isolated.psql`, `scope_composition_concurrency_test.sql` | `54322` | `HOST` must still equal `127.0.0.1` |
+| `-v expected_port=<n>` | `fill_locked_current_concurrency.psql`, `fill_locked_current_isolated.psql`, `scope_composition_concurrency_test.sql`, `scope_consumer_projection_test.sql` | `54322` | `HOST` must still equal `127.0.0.1` |
 | `ROUND8_OWNER_TICKET` | `scope_reconciliation_concurrency.test.mjs` | none: unset refuses | any value not exactly equal to the owned container's `sidequest.ticket` label |
 | `ROUND8_CLONE_DB` | `owned_psql.mjs`, `owned_seed.mjs`, `scope_reconciliation` | `round8_clone` | anything but a plain lowercase identifier |
 
@@ -47,7 +47,7 @@ psql postgresql://postgres:postgres@127.0.0.1:57322/postgres -X -v ON_ERROR_STOP
   -v expected_port=57322 -f supabase/tests/round8/scope_composition_concurrency_test.sql
 ```
 
-Note: `\quit 3` in these psql scripts ignores its argument, so a refusal prints `REFUSED` and still exits 0. Read the output, not only the exit code. `fill_locked_current_isolated.psql` fails closed instead: an off-target run raises and psql exits 3.
+The guarded psql entry points above fail closed: an off-target connection raises under `ON_ERROR_STOP` before migration replay or fixture work, so psql exits 3 with zero assertions. `scope_composition_concurrency_test.sql` also raises when rehearsal approval or dblink is missing. Do not use `\quit 3` for refusal: psql ignores its argument and exits 0.
 
 ## Owned container seeded from the isolated stack
 
