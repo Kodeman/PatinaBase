@@ -8,8 +8,9 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { round8DbUrl } from './owned_psql.mjs';
 
-const url = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+const url = round8DbUrl();
 const body = readFileSync(new URL('./external_fulfilment_body.psql', import.meta.url), 'utf8').replaceAll('f875', 'f87c');
 const id = n => `f87c0000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;

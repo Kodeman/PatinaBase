@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { assertOwnedContainer, verifySqlInputs, controlSql, main } from './owned_psql.mjs';
+import { tmpdir } from 'node:os';
+import { assertOwnedContainer, verifySqlInputs, controlSql, main, defaultDbUrl, round8DbUrl, round8OwnerTicket, round8CloneDb,
+  round8LocalApiUrl } from './owned_psql.mjs';
+import { assertOutsideRepo, assertSourceStack, create, idempotentRoles, image as seedImage, seed, sourceProject, startCommand,
+  untoleratedErrors } from './owned_seed.mjs';
 
 const owner = 'sq2173-test-owner';
 const ticket = 'SQ-2173';
@@ -253,3 +257,110 @@ for (const [name, needle] of coverageDeletions) {
     assert.ok(executed);
   });
 }
+
+// SQ-2186 transport parameters: each env var is proved unset, wrong and right.
+test('ROUND8_DB_URL: unset keeps the exact shared-stack default', () => {
+  assert.equal(round8DbUrl({}), 'postgresql://postgres:postgres@127.0.0.1:54322/postgres');
+  assert.equal(round8DbUrl({}), defaultDbUrl);
+});
+for (const value of ['postgresql://postgres:postgres@127.0.0.1:57322/postgres', 'postgres://postgres:postgres@localhost:57322/postgres',
+  'postgresql://postgres:postgres@127.0.0.1/postgres']) {
+  test('ROUND8_DB_URL accepts loopback ' + value, () => assert.equal(round8DbUrl({ ROUND8_DB_URL: value }), value));
+}
+for (const value of ['', 'host=127.0.0.1 port=57322', 'http://127.0.0.1:57322/postgres',
+  'postgresql://postgres:postgres@db.bkvcixdmuyejfzcijpdg.supabase.co:5432/postgres', 'postgresql://postgres@10.0.0.5:5432/postgres',
+  'postgresql://postgres@[::1]:57322/postgres', 'postgresql://127.0.0.1:54322@evil.example/postgres',
+  'postgresql://postgres@127.0.0.1:57322/postgres?host=evil.example', 'postgresql://postgres@127.0.0.1:57322/postgres?hostaddr=10.0.0.5',
+  'postgresql://postgres@127.0.0.1:57322/postgres?service=remote', 'postgresql://postgres@127.0.0.1:57322,evil.example:5432/postgres',
+  'postgresql://postgres@evil.example,127.0.0.1:57322/postgres', 'postgresql:///postgres', 'postgresql://postgres@127.0.0.1:57322/a%3Dhost',
+  'postgresql://postgres@127.0.0.1:57322/postgres#x']) {
+  test('ROUND8_DB_URL refuses ' + JSON.stringify(value), () => assert.throws(() => round8DbUrl({ ROUND8_DB_URL: value }), /127\.0\.0\.1 or localhost/));
+}
+test('ROUND8_OWNER_TICKET: unset and malformed refuse, an exact ticket passes', () => {
+  for (const value of [undefined, '', 'sq-2110', 'SQ-2110 ', 'SQ-0', 'SQ-2110\n']) {
+    assert.throws(() => round8OwnerTicket({ ROUND8_OWNER_TICKET: value }), /ROUND8_OWNER_TICKET/);
+  }
+  assert.equal(round8OwnerTicket({ ROUND8_OWNER_TICKET: 'SQ-2186' }), 'SQ-2186');
+});
+test('ROUND8_CLONE_DB: unset defaults, connection strings and odd names refuse', () => {
+  assert.equal(round8CloneDb({}), 'round8_clone');
+  assert.equal(round8CloneDb({ ROUND8_CLONE_DB: 'round8_clone_sq2186' }), 'round8_clone_sq2186');
+  for (const value of ['', 'host=evil dbname=x', 'postgresql://evil/x', 'Round8', 'round8 clone', '1db', 'a'.repeat(64)]) {
+    assert.throws(() => round8CloneDb({ ROUND8_CLONE_DB: value }), /ROUND8_CLONE_DB/);
+  }
+});
+test('API_URL local check accepts only an http 127.0.0.1 origin', () => {
+  for (const value of ['http://127.0.0.1:54321', 'http://127.0.0.1:57321/']) assert.equal(round8LocalApiUrl(value), true, value);
+  for (const value of [undefined, '', 'http://127.0.0.1:54321@evil.example', 'https://bkvcixdmuyejfzcijpdg.supabase.co',
+    'http://localhost:54321', 'http://127.0.0.1', 'https://127.0.0.1:54321', 'http://127.0.0.1:54321/rest/v1', 'http://127.0.0.1:54321?x=1']) {
+    assert.equal(round8LocalApiUrl(value), false, String(value));
+  }
+});
+const cloneRun = calls => (binary, args) => {
+  calls.push(args);
+  const ok = stdout => ({ status: 0, stdout: Buffer.from(stdout ?? '') });
+  if (binary === 'git') return ok(args[0] === 'rev-parse' ? 'b'.repeat(40) : 'SELECT 1;\n');
+  if (args[0] === 'inspect') return ok(JSON.stringify(owned()));
+  return ok(args.includes('cat') ? 'SELECT 1;\n' : '');
+};
+test('ROUND8_CLONE_DB selects the owned psql database; a wrong value never spawns', () => {
+  const env = { ROUND8_PSQL_TRANSPORT: 'docker-exec', ROUND8_OWNED_TICKET: ticket, ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_CONTAINER: 'a'.repeat(64) };
+  for (const [clone, expected] of [[undefined, 'round8_clone'], ['round8_clone_sq2186', 'round8_clone_sq2186']]) {
+    const calls = [];
+    assert.equal(main({ ...env, ROUND8_CLONE_DB: clone }, ['node', 'helper', 'supabase/tests/entry.sql'], cloneRun(calls)), 0);
+    const psql = calls.find(args => args.includes('psql'));
+    assert.equal(psql[psql.indexOf('-d') + 1], expected);
+  }
+  assert.throws(() => main({ ...env, ROUND8_CLONE_DB: 'host=evil' }, ['node', 'helper', 'supabase/tests/entry.sql'],
+    () => assert.fail('must not spawn')), /ROUND8_CLONE_DB/);
+});
+
+// owned_seed.mjs: pure guards (no docker).
+test('seed source project refuses unset and the shared stack', () => {
+  for (const value of [undefined, '', 'supabase', '../x', 'Patina']) assert.throws(() => sourceProject({ ROUND8_SEED_SOURCE_PROJECT: value }));
+  assert.equal(sourceProject({ ROUND8_SEED_SOURCE_PROJECT: 'patina-r8-harness' }), 'patina-r8-harness');
+});
+const sourceInspect = () => [{ Name: '/supabase_db_patina-r8-harness', Image: seedImage.id, State: { Running: true },
+  Config: { Image: seedImage.tag, Labels: { 'com.supabase.cli.project': 'patina-r8-harness' } } }];
+test('seed source must be the named running CLI database on the pinned image', () => {
+  assert.doesNotThrow(() => assertSourceStack(sourceInspect(), 'patina-r8-harness'));
+  for (const change of [c => { c.Name = '/supabase_db_supabase'; }, c => { c.Config.Labels['com.supabase.cli.project'] = 'supabase'; },
+    c => { c.Config.Image = 'postgres:17'; }, c => { c.Image = 'sha256:' + '0'.repeat(64); }, c => { c.State.Running = false; }]) {
+    const value = sourceInspect(); change(value[0]);
+    assert.throws(() => assertSourceStack(value, 'patina-r8-harness'), /isolated CLI source stack/);
+  }
+  assert.throws(() => assertSourceStack([...sourceInspect(), ...sourceInspect()], 'patina-r8-harness'));
+});
+test('roles dump becomes idempotent only for plain CREATE ROLE lines', () => {
+  const out = idempotentRoles('CREATE ROLE anon;\nALTER ROLE anon WITH NOLOGIN;\nGRANT anon TO postgres;\n');
+  assert.match(out, /^DO \$role\$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END \$role\$;$/m);
+  assert.match(out, /^ALTER ROLE anon WITH NOLOGIN;$/m);
+  assert.throws(() => idempotentRoles('CREATE ROLE "Odd";\n'), /unsupported roles dump/);
+  assert.throws(() => idempotentRoles('ALTER ROLE anon WITH NOLOGIN;\n'), /unsupported roles dump/);
+});
+test('dump directory must sit outside the repository', () => {
+  const repo = new URL('../../..', import.meta.url).pathname;
+  assert.throws(() => assertOutsideRepo(new URL('.', import.meta.url).pathname, repo), /outside the repository/);
+  assert.doesNotThrow(() => assertOutsideRepo(tmpdir(), repo));
+});
+test('only the trigger-made graphql ACL failure is tolerated during restore', () => {
+  const stderr = 'psql:<stdin>:7: ERROR:  function graphql_public.graphql(text, text, jsonb, jsonb) does not exist\n'
+    + 'psql:<stdin>:9: ERROR:  relation "public.projects" does not exist\n';
+  assert.deepEqual(untoleratedErrors(stderr).untolerated, ['relation "public.projects" does not exist']);
+  assert.deepEqual(untoleratedErrors(stderr.split('\n')[0]).untolerated, []);
+});
+test('owned start command restores the native tree before postgres and pins cron to the clone', () => {
+  const command = startCommand('QUJD', 'round8_clone');
+  assert.ok(command.indexOf('tar -xzf - --strip-components=1 -C /etc/postgresql-custom') < command.indexOf('exec docker-entrypoint.sh'));
+  assert.match(command, / -c cron\.launch_active_jobs=off -c cron\.database_name=round8_clone /);
+});
+test('seed and create refuse before any docker call without their owned inputs', () => {
+  const base = { ROUND8_SEED_SOURCE_PROJECT: 'patina-r8-harness', ROUND8_OWNED_CONTAINER: 'a'.repeat(64),
+    ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_TICKET: ticket };
+  const never = () => assert.fail('must not spawn');
+  for (const drop of ['ROUND8_SEED_SOURCE_PROJECT', 'ROUND8_OWNED_CONTAINER', 'ROUND8_OWNED_OWNER', 'ROUND8_OWNED_TICKET']) {
+    assert.throws(() => seed({ ...base, [drop]: undefined }, never), /ROUND8_/);
+  }
+  assert.throws(() => seed({ ...base, ROUND8_CLONE_DB: 'host=evil' }, never), /ROUND8_CLONE_DB/);
+  assert.throws(() => create({ ROUND8_OWNED_OWNER: owner }, never), /ROUND8_OWNED_TICKET/);
+});

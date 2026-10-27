@@ -26,6 +26,39 @@ const coverageControls = {
 const controls = ['old-reader.sql', 'deleted-bindings.sql', 'deleted-receipts.sql', ...Object.keys(coverageControls)];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
+// Host-psql race suites: ROUND8_DB_URL may name another local stack, never a non-loopback host.
+// libpq honours host/hostaddr/service query parameters and comma host lists, so the URL must be
+// a plain loopback URI with no query, fragment or list.
+export const defaultDbUrl = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+export function round8DbUrl(env = process.env) {
+  const value = env.ROUND8_DB_URL ?? defaultDbUrl;
+  let url;
+  try { url = new URL(value); } catch { url = undefined; }
+  if (!url || !['postgresql:', 'postgres:'].includes(url.protocol) || !['127.0.0.1', 'localhost'].includes(url.hostname)
+    || url.search || url.hash || !/^\/[A-Za-z0-9_]+$/.test(url.pathname)) {
+    throw new Error('ROUND8_DB_URL must be a postgresql:// URL on 127.0.0.1 or localhost');
+  }
+  return value;
+}
+// The owned-container ticket label has no default: the suite must be told which provisioning it may use.
+export function round8OwnerTicket(env = process.env) {
+  if (!/^SQ-[1-9][0-9]*$/.test(env.ROUND8_OWNER_TICKET ?? '')) throw new Error('ROUND8_OWNER_TICKET must name the provisioning ticket');
+  return env.ROUND8_OWNER_TICKET;
+}
+// A plain database name only: psql -d expands a value containing = or a URI prefix into a connection string.
+export function round8CloneDb(env = process.env) {
+  const value = env.ROUND8_CLONE_DB ?? 'round8_clone';
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(value)) throw new Error('ROUND8_CLONE_DB must be a plain lowercase database name');
+  return value;
+}
+// "Local API only": an http origin on 127.0.0.1; parsed so userinfo cannot smuggle another host.
+export function round8LocalApiUrl(value) {
+  let url;
+  try { url = new URL(value ?? ''); } catch { url = undefined; }
+  return url?.protocol === 'http:' && url.hostname === '127.0.0.1' && url.port !== '' && !url.username && !url.password
+    && url.pathname === '/' && !url.search && !url.hash;
+}
+
 export function assertOwnedContainer(inspect, owner, ticket) {
   const c = inspect?.[0];
   const h = c?.HostConfig;
@@ -134,6 +167,7 @@ export function main(env = process.env, argv = process.argv, run = spawnSync) {
   if (env.ROUND8_PSQL_TRANSPORT !== 'docker-exec' || !/^[0-9a-f]{64}$/.test(id ?? '')) {
     throw new Error('owned docker-exec transport required');
   }
+  const cloneDb = round8CloneDb(env);
   assertInput(input);
   if (argv.length !== 3) throw new Error('one SQL input required');
   if (control !== undefined && (env.ROUND8_NEGATIVE_CONTROL !== '1'
@@ -170,7 +204,7 @@ export function main(env = process.env, argv = process.argv, run = spawnSync) {
   }
   checkedRun('docker', ['exec', id, 'chmod', '-R', 'a-w', snapshot]);
   const args = ['exec', '-i', '-u', 'postgres', '-e', 'PGPASSFILE=/tmp/round8-owned.pgpass',
-    id, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', 'round8_clone',
+    id, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', cloneDb,
     '-w', '-X', '-v', 'ON_ERROR_STOP=1'];
   if (control !== undefined) args.push('-v', 'external_reading_control=' + snapshot + control.slice(inputRoot.length));
   args.push('-f', snapshot + input);

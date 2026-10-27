@@ -7,8 +7,9 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { round8DbUrl } from './owned_psql.mjs';
 
-const url = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+const url = round8DbUrl();
 const actor = 'f86a0000-0000-4000-8000-000000000001';
 const proposal = 'f86a3000-0000-4000-8000-000000000001';
 const literal = value => `'${String(value).replaceAll("'", "''")}'`;

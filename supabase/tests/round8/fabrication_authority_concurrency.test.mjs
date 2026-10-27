@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-const url = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+import { round8DbUrl } from './owned_psql.mjs';
+const url = round8DbUrl();
 const body = readFileSync(new URL('./fabrication_authority_body.psql', import.meta.url), 'utf8').replaceAll('f878', 'f87e');
 const id = n => `f87e0000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 function section(name) {

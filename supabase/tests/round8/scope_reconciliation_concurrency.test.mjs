@@ -7,8 +7,9 @@
 // ROUND8_OWNED_CONTAINER=<64-hex id> and ROUND8_OWNED_OWNER=<provisioning claim holder>
 // are required; there is no fallback to the shared local Supabase stack. Each session is
 // one `docker exec -i` psql child that reads a private 0600 pgpass file at
-// /tmp/round8-owned.pgpass inside the container and connects to the round8_clone
-// database (schema-only restore, no env override).
+// /tmp/round8-owned.pgpass inside the container and connects to the ROUND8_CLONE_DB
+// database (default round8_clone; see owned_seed.mjs). ROUND8_OWNER_TICKET is required and
+// must equal the container's sidequest.ticket label exactly; it has no default.
 // Run: node --test --test-concurrency=1 supabase/tests/round8/scope_reconciliation_concurrency.test.mjs
 // Negative control: add SCOPE_RECONCILIATION_NEGATIVE_CONTROL=inverted. Only the
 // new retry schedule calls a session-local scratch function; public SQL is untouched.
@@ -21,6 +22,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { round8CloneDb, round8OwnerTicket } from './owned_psql.mjs';
 
 const container = process.env.ROUND8_OWNED_CONTAINER ?? '';
 const pinnedImage = { tag: 'public.ecr.aws/supabase/postgres:17.6.1.063',
@@ -29,7 +31,7 @@ const socketDir = '/var/run/postgresql';
 // W1 predicate (SQ-2170 R1) over one `docker inspect` result; returns every failed check.
 // HostConfig.Tmpfs is the only accepted storage: a bind, a named or anonymous volume,
 // VolumesFrom or any non-tmpfs mount could hand the harness a foreign socket or data dir.
-function ownershipFailures(inspected, { id, owner }) {
+function ownershipFailures(inspected, { id, owner, ticket }) {
   const owned = inspected.length === 1 ? inspected[0] : undefined;
   const host = owned?.HostConfig ?? {};
   const tmpfs = Object.keys(host.Tmpfs ?? {});
@@ -51,7 +53,7 @@ function ownershipFailures(inspected, { id, owner }) {
     tmpfsPgdata: pgdata?.startsWith('/') === true && tmpfs.includes(pgdata),
     privateIpc: !shared(host.IpcMode),
     privatePid: !shared(host.PidMode),
-    ticketLabel: owned?.Config?.Labels?.['sidequest.ticket'] === 'SQ-2110',
+    ticketLabel: !!ticket && owned?.Config?.Labels?.['sidequest.ticket'] === ticket,
     ownerLabel: !!owner && owned?.Config?.Labels?.['sidequest.owner'] === owner,
   };
   return Object.keys(checks).filter(check => !checks[check]);
@@ -61,13 +63,15 @@ function verifyOwnedTransport() {
   assert.equal(process.env.ROUND8_PSQL_TRANSPORT, 'docker-exec', 'ROUND8_PSQL_TRANSPORT=docker-exec is required');
   assert.match(container, /^[0-9a-f]{64}$/, 'ROUND8_OWNED_CONTAINER must be an exact 64-hex container id');
   assert.ok(process.env.ROUND8_OWNED_OWNER, 'ROUND8_OWNED_OWNER must name the claim holder that provisioned the container');
+  const ticket = round8OwnerTicket();
+  round8CloneDb();
   assert.ok(!process.env.DOCKER_HOST, 'DOCKER_HOST must be unset: the owned container is on the local daemon');
   assert.ok([undefined, '', 'default'].includes(process.env.DOCKER_CONTEXT), 'DOCKER_CONTEXT must be unset or default');
   const docker = args => execFileSync('docker', args, { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
   assert.match(JSON.parse(docker(['context', 'inspect', '--format', '{{json .Endpoints.docker.Host}}'])), /^unix:\/\//,
     'the active docker context must be a local unix socket');
   assert.deepEqual(ownershipFailures(JSON.parse(docker(['inspect', '--type', 'container', container])),
-    { id: container, owner: process.env.ROUND8_OWNED_OWNER }), [], 'isolated owned postgres container required');
+    { id: container, owner: process.env.ROUND8_OWNED_OWNER, ticket }), [], 'isolated owned postgres container required');
 }
 // Every backend carries a run-unique application_name so cleanup can prove it ended.
 const runTag = 'scope_recon_' + randomUUID().slice(0, 8);
@@ -75,7 +79,7 @@ const runTag = 'scope_recon_' + randomUUID().slice(0, 8);
 const psqlArgv = applicationName => ['exec', '-i', '-u', 'postgres', '-e', 'PGPASSFILE=/tmp/round8-owned.pgpass',
   '-e', 'PGCONNECT_TIMEOUT=3', '-e', 'PGOPTIONS=-c statement_timeout=15000 -c lock_timeout=10000',
   '-e', 'PGAPPNAME=' + applicationName,
-  container, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', 'round8_clone',
+  container, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', round8CloneDb(),
   '-XAtq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'];
 const actor = 'f87b0000-0000-4000-8000-000000000001';
 const literal = value => "'" + String(value).replaceAll("'", "''") + "'";
@@ -516,7 +520,7 @@ const ownedInspect = () => [{
 }];
 
 test('harness: W1 refuses foreign storage, shared namespaces and unowned provenance', () => {
-  const owner = { id: ownedId, owner: 'owner-fixture' };
+  const owner = { id: ownedId, owner: 'owner-fixture', ticket: 'SQ-2110' };
   assert.deepEqual(ownershipFailures(ownedInspect(), owner), [], 'the r19-shaped owned container passes');
   const failed = mutate => { const inspected = ownedInspect(); mutate(inspected[0]); return ownershipFailures(inspected, owner); };
   const pgdata = '/var/lib/postgresql/data';
@@ -543,7 +547,10 @@ test('harness: W1 refuses foreign storage, shared namespaces and unowned provena
     ['other owner label', c => { c.Config.Labels['sidequest.owner'] = 'another-claim'; }, ['ownerLabel']],
     ['pinned tag on another image id', c => { c.Image = 'sha256:' + '0'.repeat(64); }, ['pinnedImageId']],
   ]) assert.deepEqual(failed(mutate), expected, name + ' is refused by exactly ' + expected.join(', '));
-  assert.deepEqual(ownershipFailures(ownedInspect(), { id: ownedId, owner: undefined }), ['ownerLabel'], 'unset owner is refused');
+  assert.deepEqual(ownershipFailures(ownedInspect(), { id: ownedId, owner: undefined, ticket: 'SQ-2110' }), ['ownerLabel'], 'unset owner is refused');
+  assert.deepEqual(ownershipFailures(ownedInspect(), { ...owner, ticket: undefined }), ['ticketLabel'], 'unset ROUND8_OWNER_TICKET is refused');
+  assert.deepEqual(ownershipFailures(ownedInspect(), { ...owner, ticket: 'SQ-2170' }), ['ticketLabel'], 'another ROUND8_OWNER_TICKET is refused');
+  assert.deepEqual(ownershipFailures(ownedInspect(), { ...owner, ticket: 'SQ-211' }), ['ticketLabel'], 'a prefix of the label is refused');
 });
 
 // A stand-in psql child: plain node in its own process group.
