@@ -8,18 +8,21 @@ function queryBuilder(result: QueryResult = { data: [], error: null }) {
     eq: ReturnType<typeof vi.fn>;
     in: ReturnType<typeof vi.fn>;
     order: ReturnType<typeof vi.fn>;
+    range: ReturnType<typeof vi.fn>;
     then: (resolve: (value: QueryResult) => unknown) => Promise<unknown>;
   } = {
     select: vi.fn(),
     eq: vi.fn(),
     in: vi.fn(),
     order: vi.fn(),
+    range: vi.fn(),
     then: (resolve) => Promise.resolve(result).then(resolve),
   };
   builder.select.mockReturnValue(builder);
   builder.eq.mockReturnValue(builder);
   builder.in.mockReturnValue(builder);
   builder.order.mockReturnValue(builder);
+  builder.range.mockReturnValue(builder);
   return builder;
 }
 
@@ -125,6 +128,9 @@ describe('planRoomKeys', () => {
 describe('usePlanRoom', () => {
   const config = () =>
     usePlanRoom('p1') as unknown as QueryConfig<{
+      sheetRooms: unknown[];
+      sheetPackages: unknown[];
+      packages: unknown[];
       sheets: unknown[];
       prints: unknown[];
       batches: unknown[];
@@ -134,7 +140,7 @@ describe('usePlanRoom', () => {
       tokens: unknown[];
     }>;
 
-  it('is keyed, gated and assembles the bundle from the seven reads', async () => {
+  it('is keyed, gated and assembles the bundle from the ten reads', async () => {
     builders['plan_sheets'] = queryBuilder({
       data: [{ id: 'sheet-1', project_id: 'p1', sheet_number: 'A-101' }],
       error: null,
@@ -174,6 +180,9 @@ describe('usePlanRoom', () => {
 
     const bundle = await query.queryFn();
     expect(bundle).toEqual({
+      sheetRooms: [],
+      sheetPackages: [],
+      packages: [],
       sheets: [{ id: 'sheet-1', project_id: 'p1', sheet_number: 'A-101' }],
       prints: [{ id: 'print-1', sheet_id: 'sheet-1' }],
       batches: [{ id: 'batch-1', project_id: 'p1' }],
@@ -202,9 +211,11 @@ describe('usePlanRoom', () => {
     expect(builders['plan_prints'].in).toHaveBeenCalledWith('sheet_id', [
       ZERO_UUID,
     ]);
-    expect(builders['plan_issue_prints'].in).toHaveBeenCalledWith('issue_id', [
-      ZERO_UUID,
-    ]);
+    expect(builders['plan_issue_prints'].in).toHaveBeenCalledWith('issue_id', [ZERO_UUID]);
+    expect(builders['plan_sheet_rooms']).toBeDefined();
+    expect(builders['plan_sheet_packages']).toBeDefined();
+    expect(builders['plan_sheet_rooms']?.in).toHaveBeenCalledWith('sheet_id', [ZERO_UUID]);
+    expect(builders['plan_sheet_packages']?.in).toHaveBeenCalledWith('sheet_id', [ZERO_UUID]);
   });
 
   it('propagates the first error from the parallel reads', async () => {
@@ -213,6 +224,62 @@ describe('usePlanRoom', () => {
       error: new Error('rls denied'),
     });
     await expect(config().queryFn()).rejects.toThrow('rls denied');
+  });
+
+  it('returns exact composition without transmittals and keeps issue prints separate from current prints', async () => {
+    builders.plan_sheets = queryBuilder({data:[{id:'sheet-1',current_print_id:'new-print'}],error:null});
+    builders.plan_sheet_rooms = queryBuilder({data:[{sheet_id:'sheet-1',project_room_id:'room-1'}],error:null});
+    builders.plan_sheet_packages = queryBuilder({data:[{sheet_id:'sheet-1',package_id:'package-uuid'}],error:null});
+    builders.project_packages = queryBuilder({data:[{id:'package-uuid',package_key:'pkg.kitchen-cabinetry',archived_at:'2026-01-01'}],error:null});
+    builders.plan_issues = queryBuilder({data:[{id:'issue-1'}],error:null});
+    builders.plan_issue_prints = queryBuilder({data:[{issue_id:'issue-1',sheet_id:'sheet-1',print_id:'old-print',sheet_title:'Issued title'}],error:null});
+    const bundle = await config().queryFn();
+    expect(bundle.transmittals).toEqual([]);
+    expect(bundle.sheetRooms).toEqual([{sheet_id:'sheet-1',project_room_id:'room-1'}]);
+    expect(bundle.sheetPackages).toEqual([{sheet_id:'sheet-1',package_id:'package-uuid'}]);
+    expect(bundle.packages).toEqual([{id:'package-uuid',package_key:'pkg.kitchen-cabinetry',archived_at:'2026-01-01'}]);
+    expect(bundle.issuePrints).toEqual([{issue_id:'issue-1',sheet_id:'sheet-1',print_id:'old-print',sheet_title:'Issued title'}]);
+    expect(builders.plan_sheet_rooms.in).toHaveBeenCalledWith('sheet_id',['sheet-1']);
+    expect(builders.plan_sheet_packages.in).toHaveBeenCalledWith('sheet_id',['sheet-1']);
+    expect(builders.project_packages.eq).toHaveBeenCalledWith('project_id','p1');
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+    expect(supabaseClient.from).toHaveBeenCalledTimes(10);
+  });
+
+  it.each(['plan_sheet_rooms','plan_sheet_packages','project_packages'])('propagates %s composition failures instead of false empty', async (table) => {
+    builders[table]=queryBuilder({data:null,error:new Error('composition down')});
+    await expect(config().queryFn()).rejects.toThrow('composition down');
+  });
+
+  const compositionReads = [
+    { table: 'plan_sheet_rooms', field: 'sheetRooms', keys: ['sheet_id', 'project_room_id'] },
+    { table: 'plan_sheet_packages', field: 'sheetPackages', keys: ['sheet_id', 'package_id'] },
+    { table: 'project_packages', field: 'packages', keys: ['id'] },
+  ] as const;
+
+  it.each(compositionReads)('returns every $table row across two ordered pages', async ({ table, field, keys }) => {
+    const rows = Array.from({ length: 1001 }, (_, index) =>
+      Object.fromEntries(keys.map((key) => [key, `${key}-${String(index).padStart(4, '0')}`])),
+    );
+    // Unpaged PostgREST reads are capped at 1000, even though 1001 rows exist.
+    const builder = queryBuilder({ data: rows.slice(0, 1000), error: null });
+    builder.range.mockImplementation((from: number, to: number) =>
+      Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
+    );
+    builders[table] = builder;
+
+    const bundle = await config().queryFn();
+    expect(bundle[field]).toEqual(rows);
+    expect(builder.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
+    expect(builder.order.mock.calls).toEqual(keys.map((key) => [key, { ascending: true }]));
+  });
+
+  it.each(compositionReads)('propagates a later $table page failure without returning partial composition', async ({ table }) => {
+    const builder = queryBuilder({ data: Array.from({ length: 1000 }, (_, id) => ({ id })), error: null });
+    builder.range.mockReturnValueOnce(builder).mockResolvedValueOnce({ data: null, error: new Error('second page down') });
+    builders[table] = builder;
+    await expect(config().queryFn()).rejects.toThrow('second page down');
+    expect(builder.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
   });
 
   it('propagates a sheets read error', async () => {

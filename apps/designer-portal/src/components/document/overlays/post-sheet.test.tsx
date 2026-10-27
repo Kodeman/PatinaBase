@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { openPost, PostSheet } from './post-sheet';
 
 const mockRouterPush = jest.fn();
@@ -152,4 +152,23 @@ describe('PostSheet quiet ledger', () => {
     );
     expect(mockRouterPush).toHaveBeenCalledWith('/desk');
   });
+});
+
+import { readPaperOrigin } from '@/lib/document/paper/paper-origin';
+it('remembers a Post job row and restores it without replaying mark-read', async () => {
+  window.sessionStorage.clear();
+  const jobNotice = { ...recordItem, read: true, row: { ...recordItem.row, href: '/doc/post-job?land=approvals' } };
+  mockUseInboxNotifications.mockReturnValue({ data: [jobNotice], isLoading: false });
+  render(<PostSheet />);
+  act(() => openPost());
+  const panel = screen.getByRole('dialog');
+  panel.scrollTop = 42;
+  fireEvent.click(screen.getByTestId('post-record-row'));
+  expect(mockRouterPush).toHaveBeenCalledWith('/doc/post-job?land=approvals');
+  const held = readPaperOrigin('post-job');
+  expect(held).toMatchObject({ kind: 'studio-overlay', overlay: 'post', filter: 'record', subject: recordItem.key, focusKey: recordItem.key, scrollTop: 42 });
+  act(() => openPost({ overlay: 'post', filter: 'record', focusKey: recordItem.key, scrollTop: 0 }));
+  await waitFor(() => expect(screen.getByTestId('post-record-row')).toHaveFocus());
+  expect(global.fetch).not.toHaveBeenCalled();
+  expect(mockMarkProcurementRead).not.toHaveBeenCalled();
 });

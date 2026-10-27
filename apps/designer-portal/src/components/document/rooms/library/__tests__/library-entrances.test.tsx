@@ -1,3 +1,6 @@
+Object.defineProperty(crypto, "randomUUID", { configurable: true, value: () => require("node:crypto").randomUUID() });
+import { rememberLibraryReturn } from "@/lib/document/library-return";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   act,
@@ -6,13 +9,25 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { LibraryRoom } from "../library-room";
 import { LibrarianBar } from "../librarian-bar";
 import { LibraryToolbar, type LibraryShelfLens } from "../library-toolbar";
 import type { LibraryCapabilityFilter } from "../library-configuration-summary";
 
 const mockUseCrossLayerSearch = jest.fn();
+let mockRenderer = "legacy";
+const mockPush = jest.fn();
+const mockQueryClient = new QueryClient();
+jest.mock("@tanstack/react-query", () => ({
+  ...jest.requireActual("@tanstack/react-query"),
+  useQueryClient: () => mockQueryClient,
+}));
 
 jest.mock("@patina/supabase", () => ({
+  useLayerCounts: () => ({ data: { personal: 2, studio: 7, catalog: 31 } }),
+  useTeachingQueue: () => ({ data: [] }),
+  useValidationQueue: () => ({ data: [] }),
+  useOrganizations: () => ({ data: [] }),
   useCrossLayerSearch: (options: unknown) => mockUseCrossLayerSearch(options),
 }));
 
@@ -226,5 +241,132 @@ describe("Library lens and Add disclosure", () => {
     expect(screen.getByTestId("active-capability")).toHaveTextContent(
       "modular",
     );
+  });
+});
+
+
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }), useSearchParams: () => new URLSearchParams(window.location.search) }));
+jest.mock('@/hooks/use-paper-renderer', () => ({ usePaperRenderer: () => ({ renderer: mockRenderer }) }));
+jest.mock('@/lib/help-system/use-document-surface', () => ({ useDocumentSurface: jest.fn() }));
+jest.mock('../../../mobile/mobile-shell', () => ({ useMobilePrimaryAction: jest.fn() }));
+jest.mock('../../room-shell', () => ({
+  RoomShell: ({ heading, title, action, children }: { heading?: React.ReactNode; title: string; action: React.ReactNode; children: React.ReactNode }) => <main>{heading ?? <h1>{title}</h1>}{action}{children}</main>,
+}));
+jest.mock('../library-shelf', () => ({ LibraryShelf: () => <div data-testid="native-shelf" /> }));
+jest.mock('../capture-extension-prompt', () => ({ CaptureExtensionPrompt: () => null }));
+jest.mock('../capture-sheet', () => ({ CaptureSheet: ({ open }: { open: boolean }) => open ? <div role="dialog" aria-label="Capture a product" /> : null }));
+jest.mock('../import-sheet', () => ({ ImportSheet: ({ open }: { open: boolean }) => open ? <div role="dialog" aria-label="Import product list" /> : null }));
+jest.mock('../deep-analysis-sheet', () => ({ DeepAnalysisSheet: () => null }));
+jest.mock('@/components/products/promotion/promote-to-studio-modal', () => ({ PromoteToStudioModal: () => null }));
+jest.mock('@/components/products/nomination/nominate-to-catalog-modal', () => ({ NominateToCatalogModal: () => null }));
+
+describe('Library renderer boundary', () => {
+  it.each(['legacy', 'pending'])('keeps the existing room while renderer is %s', (renderer) => {
+    mockRenderer = renderer;
+    const { container } = render(<LibraryRoom />);
+    expect(screen.getByRole('heading', { name: 'Resource library' })).toBeInTheDocument();
+    expect(container.querySelector('[data-paper-renderer="round8"]')).toBeNull();
+    expect(screen.queryByText(/Reference prices and lead times/)).not.toBeInTheDocument();
+  });
+
+  it('loads scoped editorial paper with every existing shelf, type, capture, import and compose entrance', async () => {
+    mockRenderer = 'round8';
+    const { container } = render(<LibraryRoom />);
+    const heading = await screen.findByRole('heading', { name: 'A library with a point of view.' });
+    expect(heading.closest('[data-library-room]')).toHaveAttribute('data-paper-renderer', 'round8');
+    expect(heading.closest('.r8-library-intro')).not.toBeNull();
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
+    expect(screen.getByText(/Personal captures, not yet reviewed/)).toBeInTheDocument();
+    expect(screen.getByText(/does not approve it, reserve stock or authorize a purchase/)).toHaveClass('r8-library-note');
+    expect(screen.getAllByRole('tab')).toHaveLength(4);
+    expect(screen.getByRole('button', { name: 'Custom commissions' })).toBeInTheDocument();
+    expect(screen.getByTestId('native-shelf')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Capture/ }));
+    expect(screen.getByRole('dialog', { name: 'Capture a product' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import product list' }));
+    expect(screen.getByRole('dialog', { name: 'Import product list' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create a product record' }));
+    expect(mockPush).toHaveBeenCalledWith('/compose');
+  });
+});
+
+
+describe("Library address ownership", () => {
+  beforeEach(() => {
+    mockRenderer = "legacy";
+    mockUseCrossLayerSearch.mockReturnValue({ data: { rows: [], byLayer: { personal: [], studio: [], catalog: [] } }, isLoading: false, isError: false });
+    window.history.replaceState({}, "", "/library?shelf=studio&capability=modular&q=oak%20linen");
+  });
+  afterEach(() => window.history.replaceState({}, "", "/library"));
+  it("reads the shelf capability and omnibox query from a returning URL", () => {
+    render(<LibraryRoom />);
+    expect(screen.getByRole("tab", { name: "Studio, 7 products" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Modular" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("searchbox")).toHaveValue("oak linen");
+  });
+  it("replaces the current entry for filter and query edits without history spam", () => {
+    const length = history.length;
+    render(<LibraryRoom />);
+    fireEvent.click(screen.getByRole("tab", { name: "Personal, 2 products" }));
+    expect(new URLSearchParams(location.search).get("shelf")).toBe("personal");
+    fireEvent.click(screen.getByRole("button", { name: "Variants" }));
+    expect(new URLSearchParams(location.search).get("capability")).toBe("variant");
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "walnut & oak" } });
+    expect(new URLSearchParams(location.search).get("q")).toBe("walnut & oak");
+    expect(history.length).toBe(length);
+  });
+});
+
+
+describe("Library native-read return deadline", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockRenderer = "legacy";
+    mockQueryClient.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState({}, "", "/library?shelf=studio&q=oak");
+    jest.spyOn(window, "scrollTo").mockImplementation(() => {});
+    jest.spyOn(window, "scrollBy").mockImplementation(() => {});
+    mockUseCrossLayerSearch.mockReturnValue({ data: { rows: [exactRow], byLayer: { personal: [exactRow], studio: [], catalog: [] } }, isLoading: false, isError: false });
+  });
+  afterEach(() => {
+    mockQueryClient.clear();
+    window.sessionStorage.clear();
+    window.history.replaceState({}, "", "/library");
+    jest.restoreAllMocks();
+  });
+  it.each(["layer-products", "cross-layer-search"])("waits past three seconds for its %s read, not unrelated work", async (family) => {
+    const link = document.createElement("a");
+    link.id = "library-match-piece-1";
+    document.body.append(link);
+    rememberLibraryReturn(link);
+    link.remove();
+    const layerKey = ["layer-products", "studio"];
+    const searchKey = ["cross-layer-search", "oak"];
+    mockQueryClient.setQueryData(layerKey, []);
+    mockQueryClient.setQueryData(searchKey, []);
+    let answer!: (value: unknown[]) => void;
+    const pending = mockQueryClient.fetchQuery({ queryKey: family === "layer-products" ? layerKey : searchKey, queryFn: () => new Promise<unknown[]>((resolve) => { answer = resolve; }) });
+    let finishUnrelated!: (value: unknown[]) => void;
+    const unrelated = mockQueryClient.fetchQuery({ queryKey: ["other-job"], queryFn: () => new Promise<unknown[]>((resolve) => { finishUnrelated = resolve; }) });
+    const inactive = new QueryObserver(mockQueryClient, { queryKey: ["layer-products", "studio", { search: "other picker" }], enabled: false }).subscribe(() => {});
+    const observers = [layerKey, searchKey].map((queryKey) => new QueryObserver(mockQueryClient, { queryKey, staleTime: Infinity }).subscribe(() => {}));
+    render(<LibraryRoom />);
+    act(() => jest.advanceTimersByTime(4000));
+    const result = document.getElementById("library-match-piece-1")!;
+    jest.spyOn(result, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+    expect(result).not.toHaveFocus();
+    await act(async () => { answer([]); await pending; });
+    act(() => jest.advanceTimersByTime(32));
+    try {
+      expect(result).toHaveFocus();
+      expect(mockQueryClient.isFetching({ queryKey: ["other-job"] })).toBe(1);
+    } finally {
+      await act(async () => { finishUnrelated([]); await unrelated; });
+      observers.forEach((unsubscribe) => unsubscribe());
+      inactive();
+    }
   });
 });

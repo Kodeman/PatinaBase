@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { boundedIn } from '../lib/bounded-in';
 
 export interface ProjectLead {
   leadUserId: string;
@@ -173,14 +174,13 @@ export function useProjectLeads(organizationId: string) {
       const projectIds = (projects ?? []).map((project: { id: string }) => project.id);
       if (projectIds.length === 0) return new Map<string, ProjectLead>();
 
-      const { data, error } = await client
+      const rows = await boundedIn<ProjectLeadRow>(projectIds, (chunk) => client
         .from('project_team_members')
         .select(LEAD_ROW_COLUMNS)
-        .in('project_id', projectIds)
+        .in('project_id', chunk)
         .in('role', ['lead_designer', 'previous_lead'])
-        .order('assigned_at', { ascending: false });
-      if (error) throw error;
-      return withProjectLeads(client, mapProjectLeadRows((data ?? []) as ProjectLeadRow[]), projects as ProjectLeadSourceRow[]);
+        .order('assigned_at', { ascending: false }));
+      return withProjectLeads(client, mapProjectLeadRows(rows), projects as ProjectLeadSourceRow[]);
     },
     enabled: Boolean(organizationId),
   });

@@ -23,7 +23,8 @@
 --   T. The over line asked to fill as fixed: refused as before 00752.
 --   F. A fixed placeholder on the signed authorization: refused as before.
 --   S. An allowance on a sent authorization: refused as before.
---   N. An allowance on no authorization fills as before and records no row.
+--   N. An allowance on no authorization fills, keeps its current budget (00881),
+--      and records no signed-allowance provenance row.
 --   R. Access: the studio reads its rows, another studio reads none; no API
 --      role may write the table; anon has no SELECT.
 --
@@ -351,7 +352,7 @@ BEGIN
   RAISE NOTICE 'PASS T/F/S: fixed, fill-as-fixed and sent placeholders refuse as before';
 END $$;
 
--- ─── N. an unreleased allowance fills as before ────────────────────────────
+-- ─── N. an unreleased allowance fills at its current budget ─────────────────
 DO $$
 DECLARE
   v_result jsonb;
@@ -361,18 +362,19 @@ BEGIN
   IF v_result->>'outcome' IS DISTINCT FROM 'filled' THEN
     RAISE EXCEPTION 'N: the unreleased allowance did not fill: %', v_result;
   END IF;
+  -- 00881: the stale $1,200 request cannot replace the current $900 budget.
   -- US-37 R3: line_total 100000 (2 × retail $500) → 94500 (2 × round($350 trade × 1.35)); retail kept as retail_unit_cents
   IF (SELECT product_id IS DISTINCT FROM '75200000-0000-4000-8000-000000000023'
-             OR budget_max_cents IS DISTINCT FROM 120000 OR line_total_cents IS DISTINCT FROM 94500
+             OR budget_max_cents IS DISTINCT FROM 90000 OR line_total_cents IS DISTINCT FROM 94500
              OR retail_unit_cents IS DISTINCT FROM 50000
         FROM public.project_ffe_items WHERE id = '75200000-0000-4000-8000-000000000206') THEN
-    RAISE EXCEPTION 'N: the unreleased allowance did not fill as before';
+    RAISE EXCEPTION 'N: the unreleased allowance did not retain its current budget and native pricing';
   END IF;
   IF EXISTS (SELECT 1 FROM public.project_ffe_allowance_fills
               WHERE ffe_item_id = '75200000-0000-4000-8000-000000000206') THEN
     RAISE EXCEPTION 'N: an unreleased fill recorded a row';
   END IF;
-  RAISE NOTICE 'PASS N: an unreleased allowance fills as before, no row';
+  RAISE NOTICE 'PASS N: an unreleased allowance keeps its current budget and native pricing, no provenance row';
 END $$;
 
 -- ─── R. access ─────────────────────────────────────────────────────────────

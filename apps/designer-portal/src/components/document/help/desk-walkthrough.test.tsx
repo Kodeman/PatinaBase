@@ -160,7 +160,7 @@ describe('DeskWalkthrough — step 1 anchor', () => {
 
   it('renders the matching data-tour-anchor="desk-greeting" attribute on the Desk greeting header', () => {
     const source = fs.readFileSync(
-      path.join(__dirname, '../../../app/(document)/desk/page.tsx'),
+      path.join(__dirname, '../frame/legacy-desk-body.tsx'),
       'utf8',
     );
     expect(source).toMatch(/data-tour-anchor="desk-greeting"/);

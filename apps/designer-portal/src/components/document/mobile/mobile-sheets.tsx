@@ -44,6 +44,7 @@ import {
 } from '@/lib/document/margin-derivation';
 import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
 import { MarginItemBody } from '../margin-bodies';
+import { flushSync } from 'react-dom';
 import { useMarginSheet } from '@/hooks/use-margin-sheet';
 import { overdueStampLabel } from '@/lib/document/overdue-condition';
 import { openLedger } from '../command-bar';
@@ -148,7 +149,12 @@ function restoreSheetFocus(
   kind: keyof typeof SHEET_RETURN_FALLBACKS,
   captured: HTMLElement | null,
 ) {
+  const releasedFocus = document.activeElement;
+  const releasedUrl = window.location.href;
   window.requestAnimationFrame(() => {
+    // A navigation or reader movement hands focus to the next owner.
+    if (window.location.href !== releasedUrl) return;
+    if (document.activeElement !== releasedFocus && document.activeElement !== document.body) return;
     // A drawer action may replace this sheet with a DocSheet in the same
     // commit. That new modal owns focus; never pull it back to shell chrome.
     if (topActiveModalDialog()) return;
@@ -532,6 +538,29 @@ export function MobileSheets({
     const ladderRegions = activeSectionKey
       ? paperRegionsForSection(activeSectionKey)
       : [];
+    // WP-01.5 — the round-8 continuous paper publishes its own contents: the
+    // chapters it mounted, in paper order, and the page's chapter jump. The
+    // spread's regions are the legacy paper's contents.
+    const chapters = activeDoc?.chapters;
+    const rows = chapters
+      ? chapters.entries.map((chapter) => ({
+          key: chapter.key,
+          label: chapter.label,
+          value: chapter.subLabel,
+          current: chapters.activeKey === chapter.key,
+          jump: () => chapters.onJump(chapter.key),
+        }))
+      : ladderRegions.map((region) => ({
+          key: region.key,
+          label: DOCUMENT_INDEX_LABELS[region.key],
+          value: ladderValues[region.key],
+          current: activeDoc?.readingIndex === region.key,
+          // D-B18 — the page's handler, and only it: unfold, force every
+          // region through the target to full in one flushed commit, THEN
+          // scroll. This sheet used to run the first and third steps itself,
+          // landing on a stop the lens had never been asked to promote.
+          jump: () => activeDoc?.onJumpRegion(region.key),
+        }));
     return (
       <Sheet kind="spine" onClose={closeSheet}>
         <button
@@ -545,22 +574,15 @@ export function MobileSheets({
           ← Put down · back to the Desk
         </button>
         <ul className="mt-1">
-          {ladderRegions.map((region) => {
-            const current = activeDoc?.readingIndex === region.key;
-            const value = ladderValues[region.key];
+          {rows.map(({ key, label, value, current, jump }) => {
             return (
-              <li key={region.key}>
+              <li key={key}>
                 <button
                   type="button"
                   aria-current={current ? 'true' : undefined}
                   onClick={() => {
                     closeSheet();
-                    // D-B18 — the page's handler, and only it: unfold, force
-                    // every region through the target to full in one flushed
-                    // commit, THEN scroll. This sheet used to run the first and
-                    // third steps itself, landing on a stop the lens had never
-                    // been asked to promote.
-                    activeDoc?.onJumpRegion(region.key);
+                    jump();
                   }}
                   className={`flex min-h-11 w-full flex-col justify-center gap-0.5 py-1.5 text-left ${
                     current ? 'doc-room-lifted' : ''
@@ -573,7 +595,7 @@ export function MobileSheets({
                         : 'text-[var(--color-charcoal)]'
                     }`}
                   >
-                    {DOCUMENT_INDEX_LABELS[region.key]}
+                    {label}
                   </span>
                   {value && (
                     <span className="block truncate font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
@@ -1067,6 +1089,7 @@ export function MobileSheets({
               projectId={projectId}
               clientName={activeDoc?.clientName ?? ''}
               decisionRows={allItems.filter((i) => i.kind === 'decision')}
+              onBeforeRoomOpen={() => flushSync(closeSheet)}
             />
           </div>
         )}

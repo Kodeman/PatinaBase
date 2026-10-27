@@ -38,6 +38,8 @@ const baseWebServer = Array.isArray(base.webServer)
 export default defineConfig({
   ...base,
   testDir: "./e2e/document",
+  globalSetup: "./e2e/fixtures/pieces-global-setup.ts",
+  outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR ?? "test-results",
   fullyParallel: false,
   workers: 1,
   use: { ...base.use, baseURL: BASE_URL },

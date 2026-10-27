@@ -1,0 +1,65 @@
+-- Each spelling fills the SAME requirement; savepoints undo only that Fill.
+RESET ROLE;
+CREATE TEMP TABLE fill_uuid_request(request jsonb);
+GRANT ALL ON fill_uuid_request TO authenticated;
+CREATE FUNCTION pg_temp.fill_uuid_spelling(spelling text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+ req jsonb := (SELECT request FROM fill_uuid_request);
+ l uuid := (req->>'placeholderSelectionId')::uuid;
+ reply jsonb; row_after public.project_ffe_items%ROWTYPE;
+BEGIN
+ req := req || jsonb_build_object('placeholderSelectionId',CASE spelling
+  WHEN 'canonical' THEN l::text
+  WHEN 'unhyphenated' THEN replace(l::text,'-','')
+  WHEN 'uppercase' THEN upper(l::text)
+  WHEN 'braced' THEN '{'||l::text||'}' END);
+ ASSERT (req->>'placeholderSelectionId')::uuid=l,'uuid_spelling_names_same_placeholder';
+ reply := public.place_product_in_project_v2(req);
+ SELECT * INTO row_after FROM public.project_ffe_items WHERE id=l;
+ ASSERT reply->>'outcome'='filled' AND reply->>'selectionId'=l::text
+  AND row_after.product_id=pg_temp.fill_id(30)
+  AND row_after.project_room_id IS NULL AND row_after.assignment_scope='unassigned'
+  AND row_after.design_disposition='not_selected'
+  AND row_after.budget_min_cents=30000 AND row_after.budget_max_cents=80000,
+  'uuid_spelling_preserves_locked_current_context: '||spelling;
+ ASSERT EXISTS (SELECT 1 FROM jsonb_array_elements(pg_temp.fill_state()->'receipts') r
+  WHERE r->>'idempotency_key'=req->>'idempotencyKey'
+   AND r->>'request_hash'=encode(extensions.digest(req::text,'sha256'),'hex') AND r->'response'=reply),
+  'uuid_spelling_receipt_hashes_raw_body: '||spelling;
+ ASSERT public.place_product_in_project_v2(req)=reply,'uuid_spelling_replay_keeps_original_receipt';
+ PERFORM pg_temp.fill_refused(req||jsonb_build_object('placeholderSelectionId',
+  CASE WHEN spelling='canonical' THEN replace(l::text,'-','') ELSE l::text END),'23505');
+ RAISE NOTICE 'PASS: uuid_spelling_preserves_locked_current_context / raw receipt / replay: %',spelling;
+END; $$;
+GRANT EXECUTE ON FUNCTION pg_temp.fill_uuid_spelling(text) TO authenticated;
+SET LOCAL ROLE authenticated;
+INSERT INTO fill_uuid_request
+SELECT pg_temp.fill_request(pg_temp.fill_new('uuid-spelling'), 'uuid-fill');
+DO $$
+DECLARE l uuid := (SELECT (request->>'placeholderSelectionId')::uuid FROM fill_uuid_request);
+BEGIN
+ PERFORM pg_temp.fill_actor(2);
+ PERFORM public.triage_project_ffe_items(jsonb_build_object('projectId',pg_temp.fill_id(10),
+  'selectionIds',jsonb_build_array(l),'assignmentScope','unassigned','disposition','not_selected'));
+ PERFORM pg_temp.fill_budgets(l,30000,80000);
+ PERFORM pg_temp.fill_actor(1);
+END; $$;
+SAVEPOINT uuid_spelling;
+SELECT pg_temp.fill_uuid_spelling('canonical');
+ROLLBACK TO SAVEPOINT uuid_spelling;
+SELECT pg_temp.fill_uuid_spelling('unhyphenated');
+ROLLBACK TO SAVEPOINT uuid_spelling;
+SELECT pg_temp.fill_uuid_spelling('uppercase');
+ROLLBACK TO SAVEPOINT uuid_spelling;
+SELECT pg_temp.fill_uuid_spelling('braced');
+ROLLBACK TO SAVEPOINT uuid_spelling;
+RELEASE SAVEPOINT uuid_spelling;
+DO $$ BEGIN
+ PERFORM pg_temp.fill_refused((SELECT request FROM fill_uuid_request)
+  ||'{"placeholderSelectionId":"not-a-uuid"}', '22P02');
+ RAISE NOTICE 'PASS: invalid_placeholder_id_retains_native_cast_refusal_and_atomicity';
+END; $$;
+RESET ROLE;
+DROP FUNCTION pg_temp.fill_uuid_spelling(text);
+DROP TABLE fill_uuid_request;
+SET LOCAL ROLE authenticated;

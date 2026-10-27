@@ -472,24 +472,35 @@ export function useInvoices(filters?: InvoiceFilters) {
     queryKey: ['invoices', 'list', filters ?? {}],
     queryFn: async () => {
       const supabase = getSupabase() as any;
-      let query = supabase
-        .from('invoices')
-        .select(
-          `
+      const pageSize = 1000;
+      const invoices: Invoice[] = [];
+      let cursor: Invoice | undefined;
+      for (;;) {
+        let query = supabase
+          .from('invoices')
+          .select(
+            `
           *,
           project:projects!invoices_project_id_fkey(id, name),
           client:profiles!invoices_client_id_fkey(id, full_name, email),
           payments:invoice_payments(*)
         `
-        )
-        .order('created_at', { ascending: false });
+          )
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false });
 
-      if (filters?.status) query = query.eq('status', filters.status);
-      if (filters?.projectId) query = query.eq('project_id', filters.projectId);
+        if (filters?.status) query = query.eq('status', filters.status);
+        if (filters?.projectId) query = query.eq('project_id', filters.projectId);
+        if (cursor) {
+          query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`);
+        }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as Invoice[];
+        const { data, error } = await query.limit(pageSize);
+        if (error) throw error;
+        invoices.push(...(data ?? []));
+        if ((data?.length ?? 0) < pageSize) return invoices;
+        cursor = data[data.length - 1];
+      }
     },
   });
 }
@@ -670,7 +681,7 @@ export interface ArAgingBucket {
 }
 
 export interface ArAging {
-  /** Open receivables (sent / partially_paid with a due date), due-date ascending. */
+  /** Open receivables (sent / partially_paid), due-date ascending with undated last. */
   openInvoices: Invoice[];
   /** Open invoices that exhausted the automated reminder cadence (ar_flagged_at set). */
   flagged: Invoice[];
@@ -700,11 +711,12 @@ function arBucketKey(daysOverdue: number): ArBucketKey {
 
 export function computeArAging(invoices: Invoice[]): ArAging {
   const openInvoices = invoices
-    .filter(
-      (inv) =>
-        (inv.status === 'sent' || inv.status === 'partially_paid') && inv.due_date != null
-    )
-    .sort((a, b) => (a.due_date! < b.due_date! ? -1 : a.due_date! > b.due_date! ? 1 : 0));
+    .filter((inv) => inv.status === 'sent' || inv.status === 'partially_paid')
+    .sort((a, b) => {
+      if (a.due_date == null) return b.due_date == null ? 0 : 1;
+      if (b.due_date == null) return -1;
+      return a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0;
+    });
 
   const buckets: ArAgingBucket[] = (
     ['current', 'days_1_30', 'days_31_60', 'days_61_90', 'days_90_plus'] as ArBucketKey[]
@@ -852,6 +864,7 @@ export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
         queryClient.invalidateQueries({ queryKey: ['time'] });
         queryClient.invalidateQueries({ queryKey: ['desk-contents-unbilled-time'] });
         queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+        queryClient.invalidateQueries({ queryKey: ['document-hours-unbilled'] });
       }
       if (input.billingLines?.length) {
         queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'purchases', `project:${input.projectId}`] });
@@ -1770,6 +1783,8 @@ export function useVoidInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (invoice, { projectId, invoiceId }) => {
       invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id, invoiceId);
+      queryClient.invalidateQueries({ queryKey: ['document-hours-week'] });
+      queryClient.invalidateQueries({ queryKey: ['document-hours-unbilled'] });
     },
   });
 }

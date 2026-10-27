@@ -9,8 +9,18 @@
  * reader came back from carries the 3px ink bar (a10). At 390 the row stacks.
  */
 
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import type { RoomFinish } from '@patina/types';
+import {
+  isPlainPress,
+  type WorkRoom,
+} from '../paper/chapters/ffe-work-room';
 import { DocumentAction } from '../document-action';
 import { StrataMark } from '../strata-mark';
 import { FinishSwatch } from './finish-swatch';
@@ -34,6 +44,7 @@ export function PiecesOverviewRow({
   wallSwatch = null,
   purchasingFacts,
   onToggle,
+  onWorkRoom,
   onAddLine,
   children,
 }: {
@@ -49,6 +60,9 @@ export function PiecesOverviewRow({
   wallSwatch?: RoomFinish | null;
   purchasingFacts?: ReactNode;
   onToggle: () => void;
+  /** WP-01.6 — round 8: a plain press opens the sheet in place; the link
+   *  still names the Build room route for a new tab. Absent, it routes. */
+  onWorkRoom?: WorkRoom;
   onAddLine: () => void;
   /** The room's lines, rendered while it is open. */
   children?: ReactNode;
@@ -139,6 +153,15 @@ export function PiecesOverviewRow({
               regionKey="pieces-overview-row"
               variant="secondary"
               href={buildRoomHref(docId, { lens: 'rough', room: row.key })}
+              onClick={
+                onWorkRoom
+                  ? (event: MouseEvent<HTMLAnchorElement>) => {
+                      if (!isPlainPress(event)) return;
+                      event.preventDefault();
+                      onWorkRoom(row.key, 'rough', event.currentTarget);
+                    }
+                  : undefined
+              }
               trailing="→"
             >
               Edit room selections

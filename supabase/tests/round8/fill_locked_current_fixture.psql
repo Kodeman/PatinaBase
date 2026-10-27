@@ -1,0 +1,106 @@
+-- Include-only fixture. The caller owns BEGIN/ROLLBACK (or the N() window).
+CREATE FUNCTION pg_temp.fill_id(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+ SELECT ('f2084000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid;
+$$;
+DO $$ BEGIN
+ ASSERT NOT EXISTS (SELECT 1 FROM auth.users WHERE id::text LIKE 'f2084000-%'),
+   'fill_fixture_starts_absent';
+END; $$;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,instance_id,aud,role)
+SELECT pg_temp.fill_id(n), 'fill-'||n||'@test.invalid', '', now(),
+ '00000000-0000-0000-0000-000000000000', 'authenticated','authenticated'
+FROM generate_series(1,8) n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT pg_temp.fill_id(n),'fill-'||n||'@test.invalid','Fill actor '||n,true
+FROM generate_series(1,8) n ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.organizations(id,type,name,slug) VALUES
+ (pg_temp.fill_id(100),'design_studio','Fill studio A','sq2084-fill-a'),
+ (pg_temp.fill_id(101),'design_studio','Fill studio B','sq2084-fill-b');
+INSERT INTO public.organization_members(user_id,organization_id,role,status,joined_at)
+SELECT pg_temp.fill_id(n),pg_temp.fill_id(100),
+ (CASE n WHEN 1 THEN 'owner' WHEN 3 THEN 'admin' WHEN 4 THEN 'guest' ELSE 'member' END)::public.member_role,
+ (CASE n WHEN 5 THEN 'removed' ELSE 'active' END)::public.member_status,now()
+FROM generate_series(1,5) n;
+INSERT INTO public.organization_members(user_id,organization_id,role,status,joined_at) VALUES
+ (pg_temp.fill_id(1),pg_temp.fill_id(101),'owner','active',now()),
+ (pg_temp.fill_id(6),pg_temp.fill_id(101),'member','active',now()),
+ (pg_temp.fill_id(7),pg_temp.fill_id(101),'member','active',now());
+INSERT INTO public.projects(id,name,designer_id,created_by,studio_id,client_id,status) VALUES
+ (pg_temp.fill_id(10),'Fill house',pg_temp.fill_id(1),pg_temp.fill_id(1),pg_temp.fill_id(100),pg_temp.fill_id(8),'active'),
+ (pg_temp.fill_id(11),'Other house',pg_temp.fill_id(6),pg_temp.fill_id(6),pg_temp.fill_id(101),NULL,'active');
+INSERT INTO public.project_rooms(id,project_id,name,sort_order) VALUES
+ (pg_temp.fill_id(20),pg_temp.fill_id(10),'Living',0),
+ (pg_temp.fill_id(21),pg_temp.fill_id(10),'Dining',1),
+ (pg_temp.fill_id(22),pg_temp.fill_id(11),'Foreign',0);
+INSERT INTO public.products(id,name,captured_at,layer,owner_user_id,price_trade,price_retail) VALUES
+ (pg_temp.fill_id(30),'Fill catalog chair',now(),'catalog',NULL,7000,10000),
+ (pg_temp.fill_id(31),'Other private chair',now(),'personal',pg_temp.fill_id(6),7000,10000);
+INSERT INTO public.product_configurations(id,product_id,owner_user_id,studio_id,project_id,
+ version,schema_revision,evaluation,snapshot,snapshot_hash,is_complete,is_valid) VALUES
+ (pg_temp.fill_id(40),pg_temp.fill_id(30),pg_temp.fill_id(1),pg_temp.fill_id(100),pg_temp.fill_id(10),
+  1,1,'{}','{"selections":[]}',repeat('a',64),true,true),
+ (pg_temp.fill_id(41),pg_temp.fill_id(31),pg_temp.fill_id(6),pg_temp.fill_id(101),pg_temp.fill_id(11),
+  1,1,'{}','{"selections":[]}',repeat('b',64),true,true);
+
+CREATE FUNCTION pg_temp.fill_actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM set_config('request.jwt.claim.sub',pg_temp.fill_id(n)::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.fill_id(n),'role','authenticated')::text,true);
+END; $$;
+CREATE FUNCTION pg_temp.fill_request(line uuid, key text, kind text DEFAULT 'allowance')
+RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object('projectId',pg_temp.fill_id(10),'productId',pg_temp.fill_id(30),
+ 'placeholderSelectionId',line,'itemType',kind,'quantity',4,
+ 'assignmentScope','room','roomId',pg_temp.fill_id(20),'disposition','selected',
+ 'budgetMinCents',20000,'budgetMaxCents',60000,'duplicateMode','reuse','idempotencyKey',key);
+$$;
+CREATE FUNCTION pg_temp.fill_new(key text, kind text DEFAULT 'allowance') RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE result jsonb;
+BEGIN
+ result := public.place_product_in_project_v2(jsonb_build_object('projectId',pg_temp.fill_id(10),
+ 'name','Requirement '||key,'itemType',kind,'quantity',4,'unit','yard','roughCents',150000,
+ 'needLabel','Retain this need','assignmentScope','room','roomId',pg_temp.fill_id(20),
+ 'disposition','selected','budgetMinCents',20000,'budgetMaxCents',60000,'idempotencyKey',key));
+ RETURN (result->>'selectionId')::uuid;
+END; $$;
+-- Compare all side-effect-bearing native records on refused commands.
+CREATE FUNCTION pg_temp.fill_state() RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path TO public,pg_temp AS $$
+ SELECT jsonb_build_object(
+ 'items',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM public.project_ffe_items i WHERE project_id IN (pg_temp.fill_id(10),pg_temp.fill_id(11))),
+ 'specs',(SELECT jsonb_agg(to_jsonb(s) ORDER BY s.ffe_item_id) FROM public.project_ffe_specs s JOIN public.project_ffe_items i ON i.id=s.ffe_item_id WHERE i.project_id=pg_temp.fill_id(10)),
+ 'threads',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM public.project_ffe_selection_threads t WHERE project_id=pg_temp.fill_id(10)),
+ 'receipts',(SELECT jsonb_agg(to_jsonb(r) ORDER BY actor_id,idempotency_key) FROM public.project_ffe_command_idempotency r WHERE actor_id::text LIKE 'f2084000-%'),
+ 'fills',(SELECT jsonb_agg(to_jsonb(f) ORDER BY f.id) FROM public.project_ffe_allowance_fills f JOIN public.project_ffe_items i ON i.id=f.ffe_item_id WHERE i.project_id=pg_temp.fill_id(10)),
+ 'boards',(SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM public.proposal_board_items b JOIN public.project_ffe_items i ON i.id=b.project_ffe_item_id WHERE i.project_id=pg_temp.fill_id(10)),
+ 'placements',(SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id) FROM public.project_ffe_placements p WHERE p.project_id=pg_temp.fill_id(10)),
+ 'placement_events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM public.project_ffe_placement_events e WHERE e.project_id=pg_temp.fill_id(10)),
+ 'pricing_events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM public.ffe_pricing_events e WHERE e.project_id=pg_temp.fill_id(10)),
+ 'groups',(SELECT jsonb_agg(to_jsonb(g) ORDER BY g.id) FROM public.project_line_groups g WHERE g.project_id=pg_temp.fill_id(10)));
+$$;
+CREATE FUNCTION pg_temp.fill_refused(request jsonb, state text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE before_state jsonb := pg_temp.fill_state(); got text;
+BEGIN
+ BEGIN
+  PERFORM public.place_product_in_project_v2(request);
+ EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS got=RETURNED_SQLSTATE;
+ END;
+ ASSERT got=state, format('fill_refusal expected %s, got %s: %s',state,got,request);
+ ASSERT pg_temp.fill_state()=before_state,'fill_refusal_is_atomic';
+END; $$;
+-- Owner-only fixture shaping for legacy budgets (there is no API min/NULL setter).
+CREATE FUNCTION pg_temp.fill_budgets(line uuid, low integer, high integer) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO public,pg_temp AS $$ BEGIN
+ PERFORM set_config('app.ffe_mutation_rpc','on',true);
+ UPDATE public.project_ffe_items SET budget_min_cents=low,budget_max_cents=high
+ WHERE id=line AND project_id=pg_temp.fill_id(10);
+END; $$;
+CREATE FUNCTION pg_temp.fill_remove_member(n integer) RETURNS void
+LANGUAGE sql SECURITY DEFINER SET search_path TO public,pg_temp AS $$
+ UPDATE public.organization_members SET status='removed'
+ WHERE user_id=pg_temp.fill_id(n) AND organization_id=pg_temp.fill_id(100);
+$$;
+DO $$ DECLARE f regprocedure; BEGIN
+ FOR f IN SELECT oid::regprocedure FROM pg_proc WHERE pronamespace=pg_my_temp_schema() LOOP
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated',f);
+ END LOOP;
+END; $$;

@@ -18,6 +18,7 @@
  * untouched and still serves the flag-off room.
  */
 
+import { readScopePackagePayload, scopeEditionCapability } from "@patina/supabase";
 import { DESIGN_BUILD_COPY, type AgreementPart } from "@patina/types";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import {
@@ -294,6 +295,14 @@ export function assessAgreementReadiness({
 
   for (const part of parts) {
     const payload = part.payload ?? {};
+
+    if (part.kind === "scope_package") {
+      if (scopeEditionCapability.status === "inactive") {
+        add(part.id, "Scope packages are not yet available to send. Client and native readers must be ready before activation.", undefined, "scope-inactive");
+      }
+      try { readScopePackagePayload(payload); }
+      catch { add(part.id, "This scope package cannot be read. Check its inclusion, conditions and all five responsibilities.", undefined, "scope-malformed"); }
+    }
 
     // R-12 — the table CHECKs a non-blank title.
     if (!part.title.trim()) {

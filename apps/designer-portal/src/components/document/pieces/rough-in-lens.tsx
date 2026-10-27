@@ -45,6 +45,7 @@ import type {
   FfeAssignmentScope,
   FfeLineUnit,
   FfeRoomPlacement,
+  PlaceProductInProjectRequest,
 } from "@patina/types";
 import { cn } from "@/lib/utils";
 import { useAssignLineRoom } from "@/hooks/use-document-rooms";
@@ -229,6 +230,20 @@ function fillItemType(line: RoughInLine) {
         budgetMaxCents: line.budget_max_cents ?? null,
       }
     : { itemType: "fixed" as const };
+}
+
+function fillPlacement(line: RoughInLine, scope: FfeAssignmentScope) {
+  const disposition = line.design_disposition ?? "";
+  return {
+    placeholderSelectionId: line.id,
+    assignmentScope: (line.assignment_scope ?? scope) as FfeAssignmentScope,
+    roomId: line.project_room_id ?? null,
+    quantity: line.quantity ?? 1,
+    ...fillItemType(line),
+    ...(KEPT_DISPOSITIONS.has(disposition)
+      ? { disposition: disposition as "candidate" | "selected" | "alternate" }
+      : {}),
+  } satisfies Partial<PlaceProductInProjectRequest>;
 }
 
 /** Released, on an order, past `ordered`, or a Trade Scope line. */
@@ -729,7 +744,7 @@ export function RoughInLens({
    * A move keeps focus on the line in its new room; a refusal leaves it on
    * the line's `⋯` and prints the named refusal (F7).
    */
-  function moveLine(row: RoughInRow, roomId: string) {
+  function moveLine(row: RoughInRow, roomId: string, sourcePlaceId: string) {
     if (!byId.has(row.id)) return;
     setNotice(null);
     const to = {
@@ -741,6 +756,8 @@ export function RoughInLens({
         if (refusal === null) setAnnouncement(text);
         if (movedIds.length > 0)
           requestFocus({ lineId: row.id, placeId: roomId });
+        else if (refusal !== null)
+          requestFocus({ lineId: row.id, placeId: sourcePlaceId });
       },
     );
   }
@@ -777,25 +794,11 @@ export function RoughInLens({
     try {
       if (current.kind === "fill") {
         const line = current.line;
-        const disposition = line.design_disposition ?? "";
         // A fill keeps the line where it is and as it was decided (00730).
         const filled = await place.mutateAsync({
           projectId,
           productId: product.id,
-          placeholderSelectionId: line.id,
-          assignmentScope: (line.assignment_scope ??
-            placeItem.scope) as FfeAssignmentScope,
-          roomId: line.project_room_id ?? null,
-          quantity: line.quantity ?? 1,
-          ...fillItemType(line),
-          ...(KEPT_DISPOSITIONS.has(disposition)
-            ? {
-                disposition: disposition as
-                  | "candidate"
-                  | "selected"
-                  | "alternate",
-              }
-            : {}),
+          ...fillPlacement(line, placeItem.scope),
           duplicateMode: "reuse",
           roleConfigurationIdentity: "default",
           idempotencyKey: newKey("fill"),
@@ -893,11 +896,19 @@ export function RoughInLens({
             autoFocus
             label={heading}
             onChoose={(product) => void chooseProduct(product, tool, placeItem)}
-            onSearchLibrary={(query) =>
-              router.push(
-                query ? `/library?q=${encodeURIComponent(query)}` : "/library",
-              )
-            }
+            onSearchLibrary={(query) => {
+              const params = new URLSearchParams({
+                projectId,
+                returnTo: window.location.pathname + window.location.search + window.location.hash,
+              });
+              params.set("assignmentScope", placeItem.scope);
+              if (tool.kind === "fill") {
+                params.set("fill", JSON.stringify(fillPlacement(tool.line, placeItem.scope)));
+              }
+              if (placeItem.roomId) params.set("roomId", placeItem.roomId);
+              if (query) params.set("q", query);
+              router.push("/library?" + params.toString());
+            }}
           />
         )}
       </div>
@@ -924,9 +935,13 @@ export function RoughInLens({
   }
 
   return (
-    <div ref={sheetRef} data-rough-in-lens="" className="flex gap-6 py-6">
+    <div ref={sheetRef} data-rough-in-lens="" className="flex gap-6 py-6 [[data-paper-renderer=round8]_&_thead]:bg-[var(--sheet-row-hover)] [[data-paper-renderer=round8]_&_th]:font-normal">
       {/* The phone's cards fit; only the md–lg table may scroll sideways. */}
       <div className="min-w-0 flex-1 md:overflow-x-auto">
+        <header data-round8-lens="rough" className="hidden border-b border-[var(--sheet-rule-strong)] mb-6 pb-4 [[data-paper-renderer=round8]_&]:block">
+        <h3 className="font-heading text-[24px] font-normal leading-[1.2] text-[var(--sheet-ink)]">Preliminary selections</h3>
+        <p className="mt-2 max-w-[72ch] font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-muted)]">Begin with what the room needs. Enter adds a line; paste several rows for review, or type / to choose from the library.</p>
+      </header>
         {places.map((placeItem) => {
           const target = dropRoom(placeItem);
           const dropLabel = target ? drag.roomDropLabel(target) : null;
@@ -942,7 +957,7 @@ export function RoughInLens({
                 onAdd={(line) => addLine(placeItem, line)}
                 onUpdate={updateLine}
                 onRemove={(row) => removeLine(row, placeItem)}
-                onMove={moveLine}
+                onMove={(row, roomId) => moveLine(row, roomId, placeItem.id)}
                 onFill={(row) => openFill(row, placeItem)}
                 onAlsoPlace={(row) => openAlsoPlace(row, placeItem)}
                 onPaste={(text) =>

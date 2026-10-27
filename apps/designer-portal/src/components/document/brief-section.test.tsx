@@ -11,15 +11,52 @@ import { BriefSection } from "./brief-section";
 import { ACT_LANDING_EVENTS } from "@/lib/document/act-names";
 
 let mockLead: Record<string, unknown> | undefined;
+let mockLoading = false;
+let mockError = false;
+const mockRefetch = jest.fn();
+
+beforeEach(() => {
+  mockLoading = false;
+  mockError = false;
+  mockRefetch.mockClear();
+});
 
 jest.mock("@patina/supabase", () => ({
-  useLead: () => ({ data: mockLead, isLoading: false }),
+  useLead: () => ({ data: mockLead, isLoading: mockLoading, isError: mockError, refetch: mockRefetch }),
 }));
 
 // Not the subject of this test — both render nothing for a lead with no
 // scans / a non-actionable status, which the fixtures below keep true.
 jest.mock("./triage-bar", () => ({ TriageBar: () => null }));
 jest.mock("./brief-scan-strip", () => ({ BriefScanStrip: () => null }));
+
+describe("BriefSection — original record read states", () => {
+  it("keeps a failed read distinct from an absent brief and retries the native query", () => {
+    mockLead = undefined;
+    mockError = true;
+    render(<BriefSection leadId="lead-1" />);
+    expect(screen.getByRole("alert")).toHaveTextContent("The original brief could not be read.");
+    expect(screen.queryByText("Brief unavailable.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry original brief" }));
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not print cached notes as current after a failed refetch", () => {
+    mockLead = { ...BASE_LEAD, project_description: "Old cached words" };
+    mockError = true;
+    render(<BriefSection leadId="lead-1" />);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText(/Old cached words/)).toBeNull();
+  });
+
+  it("does not claim absent history while the brief is loading", () => {
+    mockLead = undefined;
+    mockLoading = true;
+    render(<BriefSection leadId="lead-1" />);
+    expect(screen.getByText("Opening the brief")).toBeInTheDocument();
+    expect(screen.queryByText("Brief unavailable.")).toBeNull();
+  });
+});
 
 const BASE_LEAD = {
   id: "lead-1",

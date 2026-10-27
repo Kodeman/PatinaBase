@@ -1,0 +1,406 @@
+{
+  "kind": "source-anchor-inventory-not-runtime-evidence",
+  "baseline": "ee9c450a582bc677a635a7e451425db4e1e51b4a",
+  "files": [
+    {
+      "path": ".github/workflows/ai-quality-gate.yml",
+      "sha256": "270468478391cb48c4fa32e22abcb98dbbe30af83f1bb2c268d389be9ae70e06"
+    },
+    {
+      "path": ".github/workflows/integration.yml",
+      "sha256": "6cf087b5163c1355cf6b7739ba70ef4c93f98d755b31b7e319470c37c1f4d1d1"
+    },
+    {
+      "path": ".github/workflows/policy-quality.yml",
+      "sha256": "8214685c7582369ff435d25c604c8b877d54a3a4667053e0972fdf15d37ccaea"
+    },
+    {
+      "path": "apps/client-portal/package.json",
+      "sha256": "39feec582ddb39bfe64827fa02bd2afa4f5591ecfe63dac0b0261b9dff487751"
+    },
+    {
+      "path": "apps/client-portal/playwright.config.ts",
+      "sha256": "1d9e2d2237c8045760ded21b55ce3856df8a7519d63b4ba274f3d38de4704187"
+    },
+    {
+      "path": "apps/client-portal/src/app/decisions/[id]/record/page.tsx",
+      "sha256": "ce298a547622fb612d8fee7dd1d87f2964811e08168a53e6bd6020a98c6a64c3"
+    },
+    {
+      "path": "apps/client-portal/src/components/threshold/__tests__/approval-ask.test.tsx",
+      "sha256": "f753cde592f7bcf262d6859db1f9cd5e634c729a93f06e3fe128e7f1a42d2a90"
+    },
+    {
+      "path": "apps/client-portal/src/components/threshold/approval-ask.tsx",
+      "sha256": "9e67fdd43b4f793db5556138abd69662ca1165694ceea579cc21398bcd417006"
+    },
+    {
+      "path": "apps/client-portal/src/lib/data/active-project.ts",
+      "sha256": "723bc77d8a59d308748e7763b99aa3e2cf2d5c319e9bd074c6fe426623ae86ba"
+    },
+    {
+      "path": "apps/client-portal/tests/homeowner-usability.spec.ts",
+      "sha256": "506ad9fee3c1ed4642a8502280956547526ef140b82a9ee89dbd7869068635bd"
+    },
+    {
+      "path": "apps/designer-portal/CLAUDE.md",
+      "sha256": "7a69d4140994471d3be898e67fe6583f025663af93a3b434fdb85f5f1bf67fb8"
+    },
+    {
+      "path": "apps/designer-portal/next.config.js",
+      "sha256": "9b61ee41ec4e05cf166df7f1fdba3312d411bfae140f390b0fd4a3b2989115d4"
+    },
+    {
+      "path": "apps/designer-portal/package.json",
+      "sha256": "93f2d25d3d10da23b5b861f7c17c57bcd662e0dd59c3363d5b06e9d80d4d8681"
+    },
+    {
+      "path": "apps/designer-portal/src/app/(document)/doc/[id]/layout.tsx",
+      "sha256": "a79a8a64899cef5907a89be3edbd38f712a2eb18d92f1f6da481b63d8d44c2a0"
+    },
+    {
+      "path": "apps/designer-portal/src/app/(document)/doc/[id]/page.tsx",
+      "sha256": "063eabe3a18f9cd99b38de8458c2003b684a1fc0eae97c96dd876ba6c21b1f46"
+    },
+    {
+      "path": "apps/designer-portal/src/app/(document)/layout.tsx",
+      "sha256": "d753f0d36860dfd420fc2084d68414b8fb6fd9d16f6a3cb34a3f79b24e45b63c"
+    },
+    {
+      "path": "apps/designer-portal/src/app/globals.css",
+      "sha256": "d85818b8f624176aed17b4a2890ee880078cdaefda7ed689b163c88fb3014dc3"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/account-band.tsx",
+      "sha256": "b108ae3e27748315ad5629c6eddf9e47da91c452c0024f4c5cf9befeec2ec81e"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/account/account-studio-page.tsx",
+      "sha256": "b786527f07b32fbea598bfa7613000cf654b600211f6419b86c1dda124a7b205"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/buying/submittals.tsx",
+      "sha256": "28019fea2b6a6d38a168da231fda2d0290ebbbd5e2c1cc608eb1e97d128f3fb7"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/care-band.tsx",
+      "sha256": "1ba097e5489d617eedcd5e13e784d34edfec50dfabfe9917cf9b4ce0bdb0a4b5"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/desk-contents.tsx",
+      "sha256": "155f12fe0c7aeeab9cf042ae5622c3ad19d843bdc86bf72195cc54ef4c91a482"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/desk-doorway.tsx",
+      "sha256": "10a3906f9319fe02486f466c98373789926ab1d26eb23ffe8d7a54caeb45de1a"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/desk-roster.tsx",
+      "sha256": "8fa4c0d42446b48976a5b8ad642080da40bd68603b69c242faa5e1ccd6556b80"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/document-route-boundary.tsx",
+      "sha256": "fbabbd3ba68642393672cb27f4a58d974672f7986b7960fe7bf347beafa09038"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/ffe-section.tsx",
+      "sha256": "a2bff3c0dd743b4345903bc941791384faa045a247e805827697131d44c52368"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/hours-ledger.tsx",
+      "sha256": "350bab320f87a2db109674a3be0ef1a7db5938b9b0bbf8f04a8ab270605539a8"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/log-time-sheet.tsx",
+      "sha256": "6276a5ed1b97f706542d64f7386e8ee53e82454160b482474a8c9e01cf99c13c"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/margin-rail.tsx",
+      "sha256": "079d7ea0d21a040bf8a7c97029800acfc944a259c9c0d0173543d696e3dfb792"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/mobile/mobile-bar.tsx",
+      "sha256": "1c298b7e447517a4f896d5ca40d83400c98ffef8b514772bb9f615496a6791f8"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/mobile/mobile-shell.tsx",
+      "sha256": "e5a6486df638c4d14583749c41ed547480d0b75b96594740f5aa0096deff671a"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/overlays/doc-sheet.tsx",
+      "sha256": "4637e880c247739dd50bdd65938397d88568d27d75ef22b817f67164517ce01b"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/overlays/post-sheet.tsx",
+      "sha256": "83db38203069c658eeca87d57960f898ddb314bbc2c4f6bf38e45097e0134199"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/people/people-room.tsx",
+      "sha256": "c3319d2b411d34cb7dbeb613a3954542502a147f64aa0f6d9276c990efad0e81"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/pieces/build-room-shell.tsx",
+      "sha256": "721a9a185dad9f49c72eefa0b2241cac663c745050efd5814d354c7c49bc1552"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/purchases/purchase-record.ts",
+      "sha256": "3281a138d2fffb7b2d76024ea929fb68cf875ab63aa8e6b7f0f0e1133aed4c9d"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/rooms/drafting/agreement/agreement-composer.tsx",
+      "sha256": "56565b85e47996a38944f75a771db8de438c70937c6c89d316eb471e52faa1b7"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/rooms/drafting/service-agreement-drafting-room.tsx",
+      "sha256": "4fea29d0e30d70748de0326e8dd432ef5c839dca46e03efc75939fc5736353a3"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/rooms/library/library-room.tsx",
+      "sha256": "451995af06b33d1aa460b9542c83928c43a887c201c71a2022df71baefc1aa71"
+    },
+    {
+      "path": "apps/designer-portal/src/components/document/studio-drawer.tsx",
+      "sha256": "627d69fc855ebc39f2eee036308e02cc1cd1701596c427c5245eb0c7db6d6c7e"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/document-time-provider.tsx",
+      "sha256": "988117e40c42d22984f331ca89fd9427eb468dc63c0745c1768a854b2644d123"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-buffered-autosave.ts",
+      "sha256": "89bf7e7153fd1dd0a6ff0438a89fe049d38f0b5683a492c610b9bb7dafdfff0d"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-commercial-documents.ts",
+      "sha256": "3d8690447cc22c8cc6ac2cc634314f1b0d3358a26b7c31d3ac511598e9e24062"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-desk-engagements.ts",
+      "sha256": "3e83961419adb2085bf659a9382a83699079a68569f9568c09f105b007c69832"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-document-rooms.ts",
+      "sha256": "ea806aec2b493191d886c2ba1555b8446d8c935455e1d5417d2c911b1a3b276e"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-document-running-index.ts",
+      "sha256": "3dd74aad5753239468e767f2944b3cf9b0c10d7acbfa1591fc61c659daeae9e3"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-document-state.ts",
+      "sha256": "f0b655d951aadd1460b5db0815eeafb8f18fe3bdc4219d4e29d31e2fe1beefaa"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-feature-flag.ts",
+      "sha256": "d2ca70a23f54667f708d77562add951c84ced75146d4fcb234a62ef4b7360c97"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-feature-flags.ts",
+      "sha256": "9a7899bdece48c13fa69676744ecf29020e30b8bb9ea5dd3430f771a74c24bc1"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-margin-items.ts",
+      "sha256": "b090a787be2044919136befa3f2d8f50e191132a406d92957d4feb0a9d73ccbb"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-margin-notes.ts",
+      "sha256": "55ed72f49a813be1d9225a640793dad041ea04aba0a4a25e6313c12fcd43d754"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-place-in-document.ts",
+      "sha256": "c67dc6c8b28ef4d10fdf581c1efecc647bc867bd3e6cf08b70a7e37689ffedf5"
+    },
+    {
+      "path": "apps/designer-portal/src/hooks/use-project-lifecycle.ts",
+      "sha256": "a033b34ce91f4650008a3bc2139415e215da3939db25b55424d7c14844a6c50f"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/analytics/PostHogProvider.tsx",
+      "sha256": "4664ea60beb458e613f48c7593812d49945ed7adb47f88e25e1eb7939d43cea6"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/analytics/posthog.ts",
+      "sha256": "8526b58eed599585ae081a58cdcd20cb68897714094162981185143783a29e45"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/document/closure-derivation.ts",
+      "sha256": "5d736f9c6aa7e8b9ddfe0d373373bc181c340853f2373d2e7d63326fd1eb8fe5"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/document/document-index.ts",
+      "sha256": "3412fc406ab7406cf738bf88f69bb7e10184c34c741477df6c2e3a60c19a15ca"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/document/pieces/build-room-url.ts",
+      "sha256": "0b127d6faf836c8c0650dd8fad9c84e9683fdaaf98b7af1cd1b4bdb46161430c"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/document/pieces/live-lines.ts",
+      "sha256": "60e63a641971ba31f60a2ce1e8c45e8e5b9bf6dc029ac629178d87d5bb8c7761"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/document/pieces/sheet-focus.ts",
+      "sha256": "241d793f97c5f040ab6a90290b58c12296bb061a5b71ec71082b26c2ba7298f7"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/document/registry.tsx",
+      "sha256": "c5f2ac22c9a8c6a73fa35dc4097d3b909f777748e3db45b98939552329154b7b"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/document/room-origin.ts",
+      "sha256": "ce50344512d5b3352b4e4ceb0db5e87849d126803217b5612f102f9fd73bfcad"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/document/trade-pricing.ts",
+      "sha256": "75e26d520fb8daff8aec6aea62c7c2fd7628bb92193351b7cf951552e55740c5"
+    },
+    {
+      "path": "apps/designer-portal/src/lib/react-query.ts",
+      "sha256": "b29e239cdbe96a913910d91ca4f037597359c978f888f650b7fd0c114419d0bd"
+    },
+    {
+      "path": "apps/designer-portal/src/providers/providers.tsx",
+      "sha256": "589478e32932316cbf5e13019db1c14312dbcf3070f673389a5b8b4671ab776f"
+    },
+    {
+      "path": "apps/designer-portal/tailwind.config.ts",
+      "sha256": "17eba2ef332a898d6e7d77ec816d00460e56d295bd8907fff46f6bb6c9897df1"
+    },
+    {
+      "path": "apps/mobile/Patina/Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift",
+      "sha256": "2a6f624dbacf46d318ebcbee37290f84fc8a1bec6adbe032c6fcb16ae684fc22"
+    },
+    {
+      "path": "apps/mobile/Patina/Patina/Core/Network/DecisionsAPIClient+SharedDirection.swift",
+      "sha256": "b6791a82b9948154165b06f6172b4f268b4823818b222c62ec74b0cab12bf3af"
+    },
+    {
+      "path": "apps/mobile/Patina/scripts/ios-gate.sh",
+      "sha256": "b752254ec988312764c1dc1e0dcb1ad16cca61f809f1ba621acd2cba9616d249"
+    },
+    {
+      "path": "packages/agent-queue/src/index.ts",
+      "sha256": "2e4ddace9f6e51b7c719f10fe975fc7ca03a6c0d2d4e56031009927cb7aef90c"
+    },
+    {
+      "path": "packages/agent-queue/src/types.ts",
+      "sha256": "c594c840e852f54ebcca5b4c29e4a3c7c33d4a47005f6db7e3f3f3fa1c652d0f"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-agreement-parts.ts",
+      "sha256": "70953995c08e0cadb10bc9cbba64e75da4864d018c66d415ffcf82296c9d9710"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-buying-phase2.ts",
+      "sha256": "04c2f27b268ac2cfff0ba385aa1cb9b4f2ae3d1a6ea43603ab2fd571406ff05b"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-comms.ts",
+      "sha256": "d19931f8ffd9071ce99f3d72dc060f00e6b411c449f1a6c9e327d7752cc52141"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-coordination.ts",
+      "sha256": "a43c020a4195a9e7ae547f2cad2c4d3d164311b05e68f1d37f5d297f46cbd316"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-invoices.ts",
+      "sha256": "d3df7cd2a90613ea610b7805e58566fdd424a3b4ef783bc4022501eb48db2606"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-phase-templates.ts",
+      "sha256": "ce2ef23c8b65554c6b7a3823d1e19da20d32b596caec507139cf063ab4429d09"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-plan-room.ts",
+      "sha256": "e9fbe78773b3d3dbf066d338aed414ee766c29b9cdabeeb2e583f824e0868ec7"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-procurement.ts",
+      "sha256": "1af17db5879cecd88d190ce5dc792dbb9bd185bd73e153b55a438b3404f1c73d"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-product-configurations.ts",
+      "sha256": "6085f7101f08702158b8a33ec5de699f1d06d3e25eb518b2b8656ea916e6758d"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-project-approvals.ts",
+      "sha256": "51ab8ecc8395cb11389abe7527af3676ea7f9941f1403ac5626b15e4cdbbcce5"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-project-contextual-handoffs.ts",
+      "sha256": "b8443cff204df14d89abf9671223077591588069d6e7559b6822c966a1fc2d7a"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-project-ffe-ga.ts",
+      "sha256": "209f3ca60f5b18d05cbb2462326dfcc2ed0e3cc9c1e1105acad3438a132fc82a"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-project-notes.ts",
+      "sha256": "5bb2a4e5961fd74821816975abb7e2769cec020a1ad82df5bba8a494d06f5adf"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-project-v2.ts",
+      "sha256": "21d32dd91257837e22645416714917a228ec6cb19d9cf037bdfeb4942bba805b"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-project-workflow.ts",
+      "sha256": "c200be6f2a52393b4d647e0d841055f84df6ba057f3a939b839cf4b101708dff"
+    },
+    {
+      "path": "packages/supabase/src/hooks/use-time-tracking.ts",
+      "sha256": "a1670cab27c70d07f38704ed9b890ca0e0dfdc6f60921327f30726646c81f9ad"
+    },
+    {
+      "path": "packages/supabase/src/query-keys/document.ts",
+      "sha256": "79c71ac7509f849001a8755a8837bb5f237d1c610f394f06e1c6e34d46746ddb"
+    },
+    {
+      "path": "packages/types/src/product-configuration.ts",
+      "sha256": "bbc93fc1df5c8c30da9b6734438167b072cff55d699c3bc4bb37f25fb52dfbbe"
+    },
+    {
+      "path": "scripts/bootstrap-worktree.sh",
+      "sha256": "daea3dc7a59277f3686c0d21e3fa9f79c068e8c12956e212dfd52fd7ce144850"
+    },
+    {
+      "path": "scripts/bundle-budget.config.json",
+      "sha256": "09cf55e0c51fee43f19b50d0c2a34af9fa7a20ffbbc53b212f256117d58a1083"
+    },
+    {
+      "path": "scripts/hooks/patina-hooks.mjs",
+      "sha256": "7f5d350c482b44b0f71d9fa7e32bbdc2c43951ad4ee58568b7fea219cfec0836"
+    },
+    {
+      "path": "scripts/verify-affected.sh",
+      "sha256": "e1cb5d2d1f678bd6dbf339fad3c5048093518c21955f1dace6f6ebbe8b7488d5"
+    },
+    {
+      "path": "supabase/migrations/00463_project_approval_authority_evidence.sql",
+      "sha256": "a16b0237a2f70f95f28b78b705d50406a14dcd167e900cc3361bb318aea885e5"
+    },
+    {
+      "path": "supabase/migrations/00484_public_rpc_authorization_contract.sql",
+      "sha256": "8f10378b1925bf4c4d1d9b4fcdd81a8542372575b31ac3b026c9fd15f6005cb3"
+    },
+    {
+      "path": "supabase/migrations/00703_studio_purchases.sql",
+      "sha256": "4406e40ac943cf94345b54169bad3692a30c49bdf9dd584356c033e8dafcad32"
+    },
+    {
+      "path": "supabase/migrations/00834_purchasing_authorization_image_readiness.sql",
+      "sha256": "920efd66c612fe0bbbbf4c3dc97b2027a1e96ad19a7a8922aeda4cf01f4bef04"
+    },
+    {
+      "path": "supabase/migrations/00848_client_edition_installed_closeout.sql",
+      "sha256": "a21701ebdbe0f4b8b830a4d3ccbb90a2b2c9d467cdf4d666ef0c65603925f2d3"
+    },
+    {
+      "path": "supabase/tests/decisions/00670_shared_direction_editions_test.sql",
+      "sha256": "8f14a1a946a9152b92299146b457875287ae5cdd9ffd3dc63faf7dd345f3ccfb"
+    },
+    {
+      "path": "supabase/tests/document/close_project_readiness_test.sql",
+      "sha256": "569d1f30ccf68390d9407619b9fa4e3b534f6c13a9d0e722aaa4de3fcac9ea45"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useReceivingInspections, type StudioPurchaseRow } from '@patina/supabase';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
@@ -15,7 +15,9 @@ export function PurchaseArrival({ item, purchase, projectId, projectName, canEdi
 }) {
   const [arranging, setArranging] = useState(false);
   const [method, setMethod] = useState<'picked_up' | 'delivered'>('picked_up');
+  const opener = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [inspectionId, setInspectionId] = useState<string>();
   const { data: receipts, isLoading, error } = useReceivingInspections({ studioPurchaseId: purchase.id });
   const pending = receipts?.find((receipt) => receipt.outcome === null);
   const received = item.received_quantity ?? 0;
@@ -29,7 +31,7 @@ export function PurchaseArrival({ item, purchase, projectId, projectName, canEdi
           {pending && (
             <>
               <p role="status" className="text-[11px] text-[var(--text-muted)]">Arrived · inspection pending.</p>
-              {canEdit && <DocumentAction actionKey="complete-purchase-inspection" surfaceKey="project" regionKey="purchase-arrival" variant="primary" onClick={() => setOpen(true)}>Complete inspection</DocumentAction>}
+              {canEdit && <DocumentAction actionKey="complete-purchase-inspection" surfaceKey="project" regionKey="purchase-arrival" variant="primary" onClick={(event) => { opener.current = event.currentTarget; setInspectionId(pending?.id); setOpen(true); }}>Complete inspection</DocumentAction>}
             </>
           )}
           {complete && !pending && !checked && <p role="status" className="text-[11px] text-[var(--text-muted)]">Arrival recorded. Review its condition in receiving before installation.</p>}
@@ -47,7 +49,7 @@ export function PurchaseArrival({ item, purchase, projectId, projectName, canEdi
                     <label className="inline-flex min-h-11 items-center gap-2 text-[13px]"><input type="radio" name={`arrival-${purchase.id}`} checked={method === 'delivered'} onChange={() => setMethod('delivered')} />Delivered</label>
                   </fieldset>
                   <DocumentActionGroup surfaceKey="project" regionKey="purchase-arrival">
-                    <DocumentAction actionKey="record-purchase-arrival" variant="secondary" onClick={() => setOpen(true)}>Record arrival</DocumentAction>
+                    <DocumentAction actionKey="record-purchase-arrival" variant="secondary" onClick={(event) => { opener.current = event.currentTarget; setInspectionId(undefined); setOpen(true); }}>Record arrival</DocumentAction>
                   </DocumentActionGroup>
                 </div>
               )}
@@ -56,7 +58,7 @@ export function PurchaseArrival({ item, purchase, projectId, projectName, canEdi
           {canEdit && checked && item.status === 'delivered' && <InstallAct itemId={item.id} projectId={projectId} lifted />}
         </>
       )}
-      <LogInspectionDrawer open={open} onOpenChange={setOpen} purchaseOrderId={null} studioPurchaseId={purchase.id} arrivalMethod={method} inspectionId={pending?.id}
+      <LogInspectionDrawer returnFocusTo={opener.current} open={open} onOpenChange={setOpen} purchaseOrderId={null} studioPurchaseId={purchase.id} arrivalMethod={method} inspectionId={inspectionId} subjectStale={open && inspectionId !== pending?.id}
         receiptItems={[{ ffeItemId: item.id, name: item.name, quantity: item.quantity, receivedQuantity: received, received_quantity: received, unit: item.unit, project_id: projectId }]}
         projectId={projectId} projectName={projectName} poLabel={purchase.description ?? item.name} vendorName={purchase.payee_name} />
     </div>

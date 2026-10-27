@@ -7,6 +7,11 @@
  */
 import { render, screen } from '@testing-library/react';
 
+// Help surfaces are outside this suite; PostSheet reaches the ESM help barrel.
+jest.mock('@/lib/help-system/use-sheet-surface-key', () => ({
+  useSheetSurfaceKey: () => {},
+}));
+
 const mockRecentBoards = jest.fn();
 
 // Return teaching (the Desk slot, in-place and act notes): jest cannot load
@@ -61,6 +66,10 @@ jest.mock('@/hooks/use-answered-notes', () => ({
   useAnsweredNotes: () => ({ data: [] }),
 }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'me', name: 'Leah' } }) }));
+// WP-01.8 — this suite reads the legacy Desk body; the renderer latch is settled.
+jest.mock('@/hooks/use-paper-renderer', () => ({
+  usePaperRenderer: () => ({ renderer: 'legacy', source: 'override' }),
+}));
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 
 // US-14 — the Desk's arrival ready mark reads the viewer's studio (settled here).

@@ -8,6 +8,11 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 
+// Help surfaces are outside this suite; PostSheet reaches the ESM help barrel.
+jest.mock('@/lib/help-system/use-sheet-surface-key', () => ({
+  useSheetSurfaceKey: () => {},
+}));
+
 const mockOrgs = jest.fn();
 const mockMembers = jest.fn();
 const mockProjects = jest.fn();
@@ -134,6 +139,10 @@ jest.mock('@/hooks/use-feature-flag', () => ({
           : true,
     isLoading: false,
   }),
+}));
+
+jest.mock('@/hooks/use-paper-renderer', () => ({
+  usePaperRenderer: () => ({ renderer: 'legacy', source: 'override' }),
 }));
 
 // ── Everything else the Desk mounts. ──────────────────────────────────────
@@ -544,15 +553,66 @@ describe('Desk — Back keeps the place (US-28 S0 F6)', () => {
       render(<DeskPage />);
       // The page cannot hold 821 yet and the row is not there: no clamped jump.
       expect(scrollTo).not.toHaveBeenCalled();
+      const row = document.createElement('button');
+      row.id = 'roster-line-late';
+      document.body.appendChild(row);
       height.mockReturnValue(5225);
       act(() => grew!());
       expect(scrollTo).toHaveBeenCalledTimes(1);
       expect(scrollTo).toHaveBeenCalledWith({ top: 821, behavior: 'auto' });
       expect(disconnect).toHaveBeenCalled();
+      document.getElementById('roster-line-late')?.remove();
     } finally {
       global.ResizeObserver = Observer;
     }
   });
+
+  it.each(['focusin', 'keydown', 'none'] as const)(
+    'delayed anchor restoration yields to %s reader intent', (intent) => {
+      window.sessionStorage.setItem(PLACE, JSON.stringify({ y: 400, anchor: 'held-late-control' }));
+      spy(jest.spyOn(document.documentElement, 'scrollHeight', 'get')).mockReturnValue(4624);
+      const Observer = global.ResizeObserver;
+      let grew: () => void = () => {};
+      const disconnect = jest.fn();
+      global.ResizeObserver = class {
+        constructor(callback: () => void) { grew = callback; }
+        observe() {}
+        unobserve() {}
+        disconnect = disconnect;
+      } as unknown as typeof ResizeObserver;
+      const reader = document.createElement('button');
+      const anchor = document.createElement('button');
+      anchor.id = 'held-late-control';
+      anchor.scrollIntoView = jest.fn();
+      const focus = jest.spyOn(anchor, 'focus');
+      document.body.appendChild(reader);
+      try {
+        back();
+        render(<DeskPage />);
+        expect(scrollTo).not.toHaveBeenCalled();
+        if (intent === 'focusin') act(() => reader.focus());
+        if (intent === 'keydown') act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })));
+        document.body.appendChild(anchor);
+        act(() => grew());
+        act(() => grew()); // A queued observer must not restore a second time.
+        if (intent === 'none') {
+          expect(anchor).toHaveFocus();
+          expect(focus).toHaveBeenCalledTimes(1);
+          expect(scrollTo).toHaveBeenCalledTimes(1);
+        } else {
+          if (intent === 'focusin') expect(reader).toHaveFocus();
+          expect(focus).not.toHaveBeenCalled();
+          expect(scrollTo).not.toHaveBeenCalled();
+          expect(anchor.scrollIntoView).not.toHaveBeenCalled();
+        }
+        expect(disconnect).toHaveBeenCalled();
+      } finally {
+        reader.remove();
+        anchor.remove();
+        global.ResizeObserver = Observer;
+      }
+    },
+  );
 
   it('stands down quietly when storage is unavailable', () => {
     spy(jest.spyOn(Storage.prototype, 'getItem')).mockImplementation(() => {

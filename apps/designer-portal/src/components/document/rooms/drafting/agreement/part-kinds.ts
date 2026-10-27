@@ -42,6 +42,8 @@ const KIND_LABELS: Record<AgreementPartKind, string> = {
   schedule: "Schedule",
   attachment: "Attachment",
   attestation: "Attestation",
+  scope_package: "Scope package",
+  acceptance_signer_policy: "Signer policy",
 };
 
 const VARIANT_LABELS: Record<string, string> = {
@@ -100,7 +102,7 @@ export function hasEditor(
   kind: string,
   variant: string | null | undefined,
 ): boolean {
-  if (kind === "clause" || kind === "list") return true;
+  if (kind === "clause" || kind === "list" || kind === "scope_package") return true;
   if (kind !== "schedule") return false;
   return (W1_SCHEDULE_VARIANTS as readonly string[]).includes(variant ?? "");
 }

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import {
   QueryClient,
   QueryCache,
@@ -22,8 +23,9 @@ import type { TeachingBoundaryKey, TeachingNoteState } from './teaching/types';
  * R83 — the error grammar. Mutations on (document) surfaces render failures as
  * a quiet inline band at the act site (terracotta, with the reason and a retry
  * act) and must NOT also raise the global red toast. Since US-34 N12b that
- * holds for every mutation that fails while a (document) surface is mounted
- * (see `enterInlineErrorSurface`). Elsewhere, `meta: { errorSurface:
+ * holds while the mutation's job visit remains on screen and a (document) surface
+ * is mounted (see `enterInlineErrorSurface`). A late failure after leaving
+ * that job uses the existing global toast. Elsewhere, `meta: { errorSurface:
  * 'inline' }` opts out when the caller renders its own alert; supporting
  * background mutations use `'silent'`. The MutationCache logs both without
  * toasting, while mutations without metadata keep the legacy toast behavior.
@@ -91,11 +93,6 @@ const createQueryCache = (isRetired: () => boolean) => new QueryCache({
       meta: query.meta,
     });
 
-    // Don't show toast for background refetches
-    if (query.state.fetchStatus === 'fetching' && query.state.data !== undefined) {
-      return;
-    }
-
     // Handle auth errors. An *expired session* must route to sign-in —
     // otherwise queries like useDecisionMetrics silently return undefined and
     // the dashboard renders a misleading "0 open / 100%" healthy state.
@@ -118,6 +115,7 @@ const createQueryCache = (isRetired: () => boolean) => new QueryCache({
           restoreErrorSurface: (outcome) => {
             // The probe can answer after the subject has left.
             if (isRetired()) return;
+            if (outcome !== 'dead' && query.state.data !== undefined) return;
             if (query.meta?.errorSurface === 'silent') return;
             if (isNetworkError(appError)) return;
             showErrorToast(
@@ -131,6 +129,12 @@ const createQueryCache = (isRetired: () => boolean) => new QueryCache({
       // Auth-shaped but not a clear session-expiry (e.g. a 403 forbidden).
       // Leave it to the individual query's UI rather than bouncing the user.
       console.warn('Authentication error in query:', query.queryKey);
+      return;
+    }
+
+    // Failed refetches are already idle here; retained data identifies a warm query.
+    // Auth/session arbitration above still runs even when cached data is available.
+    if (query.state.data !== undefined) {
       return;
     }
 
@@ -212,8 +216,37 @@ export function enterInlineErrorSurface(): () => void {
 
 export const isInlineErrorSurface = (): boolean => inlineErrorSurfaces > 0;
 
+type JobVisit = { id: string };
+let activeJobVisit: JobVisit | undefined;
+const mutationJobs = new WeakMap<object, JobVisit | undefined>();
+const currentJobVisit = (): JobVisit | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  let id = window.location.pathname.match(/^\/doc\/([^/]+)/)?.[1];
+  if (id === undefined) return undefined;
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // Match Next's decoded param when valid; keep malformed segments raw.
+  }
+  return id === activeJobVisit?.id ? activeJobVisit : undefined;
+};
+
+/** The doc layout owns this lifetime across all of its child routes. Identity
+ * changes on a fresh mount, even when the designer returns to the same job. */
+export function useJobVisit(id: string): void {
+  useEffect(() => {
+    const visit: JobVisit = { id };
+    activeJobVisit = visit;
+    return () => {
+      if (activeJobVisit === visit) activeJobVisit = undefined;
+    };
+  }, [id]);
+}
+
 // Create mutation cache with error handling
-const createMutationCache = (isRetired: () => boolean) => new MutationCache({
+const createMutationCache = (isRetired: () => boolean) => {
+  const notifiedOffJobErrors = new WeakSet<object>();
+  return new MutationCache({
   // PQ15 / O3 — under the default networkMode 'online' an offline mutation
   // pauses and runs by itself on reconnect. Ticks and edits may wait like
   // that; a send or a money write must not fire minutes later. This runs
@@ -221,6 +254,7 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
   // fails the act with no call made.
   onMutate: (_variables, mutation) => {
     if (isRetired()) throw new SubjectChangedError();
+    mutationJobs.set(mutation, currentJobVisit());
     if (mutation.meta?.act && !onlineManager.isOnline()) throw new OfflineRefusal();
   },
   onError: (error, _variables, _context, mutation) => {
@@ -229,11 +263,13 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
 
     const appError = handleApiError(error);
 
-    // R83 — mutations that render their own inline error band opt out of the
-    // global toast (see the meta contract at the top of this file), and so
-    // does every mutation that fails while a (document) surface is mounted.
-    const inlineErrorSurface =
-      mutation.meta?.errorSurface === 'inline' || isInlineErrorSurface();
+    // An inline act site cannot surface its late failure after leaving the job,
+    // even when the shared (document) layout remains mounted on /desk.
+    const originatingJob = mutationJobs.get(mutation);
+    const leftJob = originatingJob !== undefined && originatingJob !== currentJobVisit();
+    const inlineErrorSurface = !leftJob && (
+      mutation.meta?.errorSurface === 'inline' || isInlineErrorSurface()
+    );
     const silentErrorSurface = mutation.meta?.errorSurface === 'silent';
 
     // Log error for monitoring
@@ -241,6 +277,14 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
       mutationKey: mutation.options.mutationKey,
       meta: mutation.meta,
     });
+
+    // Nested wrappers rethrow the same refusal (e.g. project vitals → update).
+    // Claim it only on the off-job toast path, never on inline/silent paths.
+    if (leftJob && !silentErrorSurface && error !== null &&
+        (typeof error === 'object' || typeof error === 'function')) {
+      if (notifiedOffJobErrors.has(error)) return;
+      notifiedOffJobErrors.add(error);
+    }
 
     // Handle auth errors. An expired session routes to sign-in (so a failed
     // write doesn't leave the user staring at a generic toast on a dead
@@ -305,6 +349,7 @@ const createMutationCache = (isRetired: () => boolean) => new MutationCache({
     }
   },
 });
+};
 
 /**
  * Records the boundary in memory (anchors read it), then, only while the

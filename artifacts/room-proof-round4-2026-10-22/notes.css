@@ -1,0 +1,50 @@
+/* Notes & correspondence: paper, thin rules, forest ink. Letters on the job, not chat. */
+.nt { --nt-ink: var(--ink, #1f3a2c); --nt-rule: rgba(31, 58, 44, .28); --nt-soft: rgba(31, 58, 44, .68);
+  box-sizing: border-box; max-width: 100%; min-width: 0; color: var(--nt-ink); font: inherit; font-size: .9rem; line-height: 1.5; }
+.nt *, .nt *::before, .nt *::after { box-sizing: border-box; }
+.nt-home { background: var(--paper, #f8f6f0); border-top: 1px solid var(--nt-rule); padding: 1rem 0; }
+.nt-head h3 { margin: 0 0 .3rem; font-family: var(--serif, "Playfair Display", Georgia, serif); font-weight: 500; font-size: 1.25rem; }
+.nt-sum { display: flex; flex-wrap: wrap; gap: .1rem 1rem; margin: 0 0 .8rem; color: var(--nt-soft); font-size: .8rem; }
+.nt-filters { display: flex; flex-wrap: wrap; gap: .6rem 1rem; margin-bottom: .6rem; }
+.nt label { display: block; min-width: 0; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--nt-soft); }
+.nt-filters label { flex: 1 1 11rem; }
+.nt select, .nt textarea { display: block; width: 100%; max-width: 100%; margin-top: .2rem; padding: .4rem .5rem; font: inherit; font-size: .88rem;
+  letter-spacing: 0; text-transform: none; color: var(--nt-ink); background: transparent; border: 1px solid var(--nt-rule); border-radius: 0; }
+.nt textarea { resize: vertical; min-height: 4.5rem; }
+.nt :is(button, select, textarea, summary):focus-visible { outline: 2px solid var(--nt-ink); outline-offset: 2px; }
+
+.nt-list { list-style: none; margin: 0; padding: 0; }
+.nt-entry { padding: .7rem 0; border-top: 1px solid var(--nt-rule); min-width: 0; }
+.nt-entry[data-kind="draft"] { border-top-style: dashed; }
+.nt-meta { display: flex; flex-wrap: wrap; gap: .1rem .7rem; align-items: baseline; font-size: .76rem; color: var(--nt-soft); }
+.nt-tag { padding: 0 .4rem; border: 1px solid var(--nt-ink); color: var(--nt-ink); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+.nt-entry[data-aud="studio"] .nt-tag { border-style: double; }
+.nt-entry[data-kind="draft"] .nt-tag { border-style: dashed; }
+.nt-text { margin: .35rem 0 0; font-family: var(--serif, Georgia, serif); font-size: 1rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+.nt-about { margin: .3rem 0 0; font-size: .78rem; color: var(--nt-soft); overflow-wrap: anywhere; }
+.nt-jump { padding: 0; font: inherit; color: var(--nt-ink); background: none; border: 0; border-bottom: 1px solid var(--nt-ink); cursor: pointer; text-align: left; }
+.nt-jump:hover { background: rgba(31, 58, 44, .08); }
+.nt-empty { margin: .5rem 0; color: var(--nt-soft); font-style: italic; }
+
+.nt summary { cursor: pointer; font-size: .8rem; }
+.nt-compose, .nt-draft { margin-top: .6rem; border-top: 1px solid var(--nt-rule); padding-top: .5rem; }
+.nt-draft { border: 1px dashed var(--nt-rule); padding: .4rem .6rem; }
+.nt-prev { margin-top: .5rem; }
+.nt-letter { margin-top: .4rem; padding: .7rem .9rem; background: #fffdf8; border: 1px solid var(--nt-rule); font-family: var(--serif, Georgia, serif); overflow-wrap: anywhere; }
+.nt-letter p { margin: 0 0 .5rem; white-space: pre-wrap; }
+.nt-to, .nt-sig { font-family: inherit; font-size: .75rem; color: var(--nt-soft); }
+.nt-sig { margin: 0; }
+
+.nt-form, .nt-edit { display: grid; gap: .55rem; margin-top: .6rem; max-width: 40rem; }
+.nt-hint { margin: 0; font-size: .78rem; color: var(--nt-soft); }
+.nt-save { justify-self: start; max-width: 100%; padding: .45rem .9rem; font: inherit; font-size: .85rem; color: var(--nt-ink); background: transparent; border: 1px solid var(--nt-ink); border-radius: 0; cursor: pointer; }
+.nt-save:hover { background: var(--nt-ink); color: var(--paper, #f8f6f0); }
+.nt-msg { margin: 0; min-height: 1em; font-size: .8rem; }
+.nt-msg.nt-err { color: #8a2a1c; }
+
+.nt-line { margin-top: .4rem; border-top: 1px solid var(--nt-rule); padding-top: .3rem; }
+.nt-count { display: inline-block; min-width: 1.3em; padding: 0 .3em; border: 1px solid var(--nt-rule); text-align: center; font-size: .72rem; }
+.nt-body { padding: .3rem 0 .5rem; min-width: 0; }
+.nt-cc { margin: 0 0 .3rem; overflow-wrap: anywhere; }
+
+@media (max-width: 420px) { .nt { font-size: .86rem; } .nt-save { width: 100%; justify-self: stretch; } }

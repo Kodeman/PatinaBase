@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rememberPaperOrigin, restoreStudioOverlay, studioOverlayScroll } from '@/lib/document/paper/paper-origin';
 import { useRouter } from 'next/navigation';
 import {
   computeArAging,
@@ -29,9 +30,9 @@ import {
 } from '@patina/supabase';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
 import { useStudioMoney } from '@/hooks/use-studio-money';
-import { mixedCurrenciesText } from '@/lib/currency-totals';
-import { collectedCents } from '@/lib/document/account-summary';
-import { fmtUsd } from '@/lib/document/format';
+import { formatCurrencyTotal, mixedCurrenciesText, sumByCurrency } from '@/lib/currency-totals';
+import { billedCents, collectedCents, invoiceBalanceCents } from '@/lib/document/account-summary';
+import { formatCurrency } from '@patina/shared';
 import type { OpenLedgerContext } from '../command-bar';
 import { AccountsLedgerPage } from './accounts-ledger-page';
 import { AccountsReceivablesPage } from './accounts-receivables-page';
@@ -85,21 +86,21 @@ export function AccountsBook({
   const bookAr = useMemo(() => {
     const aging = computeArAging(bookInvoices);
     return {
-      outCents: aging.totalBalanceCents,
-      overdueCents: aging.buckets
-        .filter((b) => b.key !== 'current')
-        .reduce((sum, b) => sum + b.balanceCents, 0),
+      issued: sumByCurrency(bookInvoices, (invoice) => invoice.status === 'draft' || invoice.status === 'void' ? null : billedCents([invoice])),
+      received: sumByCurrency(bookInvoices, (invoice) => invoice.status === 'draft' ? null : collectedCents([invoice])),
+      due: sumByCurrency(bookInvoices, (invoice) => invoice.status === 'sent' || invoice.status === 'partially_paid' ? invoiceBalanceCents(invoice) : null),
+      overdue: sumByCurrency(aging.buckets.filter((bucket) => bucket.key !== 'current').flatMap((bucket) => bucket.invoices), invoiceBalanceCents),
     };
   }, [bookInvoices]);
 
   // U-Q16 — the folio this sheet is showing in place of the book, if any.
-  const [folioId, setFolioId] = useState<string | null>(null);
+  const [folioId, setFolioId] = useState<string | null>(initialContext?.studioReturn?.focusKey === 'folio' ? initialContext.studioReturn.subject ?? null : null);
   // The doorway's invoice (/desk?book=accounts&…&invoiceId=) is spent by the
   // first folio this sheet opens: the ledger remounts on "← Accounts", and
   // an unspent doorway would swap the folio straight back in.
   // A new doorway re-arms it; reset during render, not in an effect, which
   // would run after the ledger's own effect had already spent it.
-  const doorwayProp = initialContext?.invoiceId ?? null;
+  const doorwayProp = initialContext?.studioReturn ? null : initialContext?.invoiceId ?? null;
   const [doorwayId, setDoorwayId] = useState<string | null>(doorwayProp);
   const [doorwaySeen, setDoorwaySeen] = useState<string | null>(doorwayProp);
   if (doorwaySeen !== doorwayProp) {
@@ -135,10 +136,37 @@ export function AccountsBook({
       : 'ledger',
   );
 
+  const pressed = useRef<HTMLElement | null>(null);
+  const returnState = useRef(initialContext?.studioReturn);
+  useEffect(() => {
+    const held = returnState.current;
+    const root = sheetRef.current;
+    if (!held || !root) return;
+    return restoreStudioOverlay(root, held, () => {
+      if (held.focusKey === 'folio') return root.querySelector<HTMLElement>('[data-action-key="open-invoice-document"]');
+      const [invoiceId, actionKey] = (held.focusKey ?? '').split(':');
+      const row = root.querySelector<HTMLElement>('[data-invoice-row="' + CSS.escape(invoiceId ?? '') + '"]');
+      if (!row) return null;
+      const action = actionKey ? row.querySelector<HTMLElement>('[data-action-key="' + CSS.escape(actionKey) + '"]') : null;
+      if (action) return action;
+      row.tabIndex = -1;
+      return row;
+    }, () => { returnState.current = undefined; });
+  }, []);
+
   const openDocument = (projectId: string | null) => {
     if (!projectId) return;
+    const root = sheetRef.current;
+    const row = pressed.current?.closest<HTMLElement>('[data-invoice-row]');
+    const invoiceId = row?.dataset.invoiceRow;
+    const actionKey = pressed.current?.dataset.actionKey;
+    rememberPaperOrigin(projectId, { path: '/desk', focusId: 'studio-door-accounts', studioOverlay: {
+      overlay: 'books', filter: page, subject: folioId ?? undefined,
+      scrollTop: root ? studioOverlayScroll(root).scrollTop : 0,
+      focusKey: folioId ? 'folio' : invoiceId ? invoiceId + ':' + (actionKey ?? '') : undefined,
+    } });
     onClose();
-    router.push(`/doc/${projectId}`);
+    router.push('/doc/' + projectId);
   };
 
   const marginText = margin.data?.mixedCurrencies
@@ -149,9 +177,9 @@ export function AccountsBook({
   const availablePages = canSeeMargin ? PAGES : PAGES.filter((p) => p.key !== 'earnings');
 
   if (folioId) {
-    const folioInvoice = (invoices ?? []).find((inv) => inv.id === folioId);
+    const folioInvoice = visibleInvoices.find((inv) => inv.id === folioId);
     return (
-      <div ref={sheetRef} className="mx-auto max-w-3xl" data-accounts-folio={folioId}>
+      <div ref={sheetRef} onClickCapture={(event) => { pressed.current = (event.target as Element).closest<HTMLElement>('button'); }} className="mx-auto max-w-3xl" data-accounts-folio={folioId}>
         <div className="sh-head money-folio-head">
           <span className="sh-title">
             <ACCOUNTS_ICON className="sh-ic" strokeWidth={1.2} aria-hidden />
@@ -181,6 +209,15 @@ export function AccountsBook({
           </button>
         </div>
         <div className="sh-body">
+          {isError || money.isError ? (
+            <AccountsQueryFailure
+              title="The studio book could not be opened."
+              message="Invoices and receivables are still held in place. Try the account read again."
+              onRetry={() => { void refetch(); money.refetch?.(); }}
+            />
+          ) : isLoading || money.isLoading ? (
+            <SectionLoadingLine label="Opening the book" className="py-3" />
+          ) : null}
           <InvoiceFolio invoiceId={folioId} onOpenDocument={openDocument} />
         </div>
       </div>
@@ -188,7 +225,7 @@ export function AccountsBook({
   }
 
   return (
-    <div ref={sheetRef} className="mx-auto max-w-3xl">
+    <div ref={sheetRef} onClickCapture={(event) => { pressed.current = (event.target as Element).closest<HTMLElement>('button'); }} className="mx-auto max-w-3xl">
       <DocSheetHead
         icon={ACCOUNTS_ICON}
         title="Studio accounts"
@@ -244,13 +281,13 @@ export function AccountsBook({
 
       {/* A failed ledger read must not become a zero-revenue front matter or
           an empty Ledger / Receivables page. */}
-      {isError ? (
+      {isError || money.isError ? (
         <AccountsQueryFailure
           title="The studio book could not be opened."
           message="Invoices and receivables are still held in place. Try the account read again."
-          onRetry={refetch}
+          onRetry={() => { void refetch(); money.refetch?.(); }}
         />
-      ) : isLoading ? (
+      ) : isLoading || money.isLoading ? (
         <SectionLoadingLine label="Opening the book" className="py-3" />
       ) : (
         <>
@@ -259,31 +296,13 @@ export function AccountsBook({
           {canSeeMargin && (
             <div className="money-front" data-accounts-front-matter>
               <p className="t-body">
-                {bookAr.outCents > 0 ? (
-                  <>
-                    <span className="money-num">{fmtUsd(bookAr.outCents)}</span> is out with clients;{' '}
-                    {bookAr.overdueCents > 0 ? (
-                      <span className="od">
-                        <span className="money-num">{fmtUsd(bookAr.overdueCents)}</span> of it is
-                        overdue
-                      </span>
-                    ) : (
-                      'none of it is overdue'
-                    )}
-                    .
-                  </>
-                ) : (
-                  'Nothing is out with clients.'
-                )}
+                <span className="money-num">{formatCurrencyTotal(bookAr.issued, formatCurrency)}</span> issued;{' '}
+                <span className="money-num">{formatCurrencyTotal(bookAr.received, formatCurrency)}</span> received;{' '}
+                <span className="money-num">{formatCurrencyTotal(bookAr.due, formatCurrency)}</span> due.
               </p>
               <p className="t-body-sm money-front-sub">
-                <span className="money-num">{fmtUsd(collectedCents(bookInvoices))}</span> collected
-                {marginText ? (
-                  <>
-                    ; margin <span className="money-num">{marginText}</span>
-                  </>
-                ) : null}
-                .
+                <span className="money-num">{formatCurrencyTotal(bookAr.overdue, formatCurrency)}</span> overdue
+                {marginText ? <>; margin <span className="money-num">{marginText}</span></> : null}.
               </p>
             </div>
           )}

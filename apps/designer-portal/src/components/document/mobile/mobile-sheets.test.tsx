@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import type { WorkflowGate } from '@/lib/document/workflow-gate';
@@ -101,7 +101,9 @@ jest.mock('../account/mobile-account-header', () => ({
 }));
 jest.mock('../account/account-sheet', () => ({ openAccount: jest.fn() }));
 jest.mock('../command-bar', () => ({ openLedger: jest.fn() }));
-jest.mock('../margin-bodies', () => ({ MarginItemBody: () => null }));
+jest.mock('../margin-bodies', () => ({ MarginItemBody: ({ onBeforeRoomOpen }: { onBeforeRoomOpen?: () => void }) => (
+  <button onClick={onBeforeRoomOpen}>Return to recorded room</button>
+) }));
 
 const heldDocument: MobileActiveDoc = {
   projectId: 'proj-1',
@@ -474,6 +476,48 @@ describe('the Margin sheet (D-B30 / W5-R1, the whole margin)', () => {
   });
 });
 
+// WP-01.5 (SQ-1885 F1) — below 1180px the round-8 continuous paper's contents
+// ride this sheet: its mounted chapters, in paper order, each landing through
+// the page's chapter jump. The legacy paper keeps the open spread's regions.
+describe('the Sections sheet on the round-8 continuous paper', () => {
+  it('lists exactly the mounted chapters and asks the page to land on one', () => {
+    const onJump = jest.fn();
+    const onJumpRegion = jest.fn();
+    mountBarAndSheets({
+      doc: {
+        ...heldDocument,
+        onJumpRegion,
+        chapters: {
+          entries: [
+            { key: 'design', label: 'Design' },
+            { key: 'ffe', label: 'FF&E', subLabel: 'Price the console' },
+            { key: 'site', label: 'Site & team' },
+          ],
+          activeKey: 'ffe',
+          onJump,
+        },
+      },
+    });
+    openSections();
+    const panel = sectionsPanel();
+    const rows = within(panel)
+      .getAllByRole('button')
+      .filter((button) => !/back to the Desk/.test(button.textContent ?? ''))
+      .slice(0, 3);
+    expect(rows.map((row) => row.querySelector('span')?.textContent)).toEqual([
+      'Design',
+      'FF&E',
+      'Site & team',
+    ]);
+    expect(rows[1]).toHaveAttribute('aria-current', 'true');
+    expect(within(rows[1]).getByText('Price the console')).toBeInTheDocument();
+
+    fireEvent.click(rows[2]);
+    expect(onJump).toHaveBeenCalledWith('site');
+    expect(onJumpRegion).not.toHaveBeenCalled();
+  });
+});
+
 describe('the Sections sheet no longer carries the margin (D-B30)', () => {
   it('the spine sheet prints no "In the margin" section', () => {
     mockItems = [row({ item_id: 'a' })];
@@ -667,4 +711,41 @@ describe('More → Ledgers (SQ-877 N1): the paper twin of the dock popover', () 
     expect(openLedger).toHaveBeenCalledWith('hours');
     expect(screen.queryByRole('dialog', { name: 'Ledgers' })).not.toBeInTheDocument();
   });
+});
+
+// The actual note/unfold interaction is covered in field-subject-return.spec.ts.
+it('closes the margin-item modal and releases its scroll lock before room handoff', async () => {
+  render(<button>Native room reader</button>);
+  mockItems = [row({ item_id: 'room-note', kind: 'note', title: 'Room observation' })];
+  mountBarAndSheets({ marginCount: 1 });
+  fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+  const marginRow = marginPanel().querySelector('[data-margin-row]')!;
+  fireEvent.click(within(marginRow as HTMLElement).getAllByRole('button')[0]);
+  expect(screen.getByRole('button', { name: 'Return to recorded room' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Return to recorded room' }));
+  expect(document.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
+  expect(document.body.style.overflow).not.toBe('hidden');
+  const reader = screen.getByRole('button', { name: 'Native room reader' });
+  reader.focus();
+  await act(async () => { await new Promise(requestAnimationFrame); });
+  expect(reader).toHaveFocus();
+});
+
+it('does not restore More across a room navigation while its reader is still mounting', async () => {
+  mockItems = [row({ item_id: 'room-note', kind: 'note', title: 'Room observation' })];
+  mountBarAndSheets({ marginCount: 1 });
+  fireEvent.click(openMore().getByRole('button', { name: 'Margin · 1' }));
+  const marginRow = marginPanel().querySelector('[data-margin-row]')!;
+  fireEvent.click(within(marginRow as HTMLElement).getAllByRole('button')[0]);
+  const door = screen.getByRole('button', { name: 'Return to recorded room' });
+  door.focus();
+  fireEvent.click(door);
+  const originalUrl = window.location.href;
+  try {
+    window.history.pushState({}, '', '?unfold=pieces');
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(document.activeElement).toBe(document.body);
+  } finally {
+    window.history.replaceState({}, '', originalUrl);
+  }
 });

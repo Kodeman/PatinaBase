@@ -1,0 +1,14 @@
+\set ON_ERROR_STOP on
+BEGIN;
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '30s';
+\ir ../../migrations/00874_round8_typed_subjects.sql
+\ir typed_subjects_body.psql
+ROLLBACK;
+-- Run the unchanged 00867 matrix on the additive schema too. Its own BEGIN
+-- is redundant inside this transaction; its ROLLBACK owns all fixture cleanup.
+BEGIN;
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '30s';
+\ir ../../migrations/00874_round8_typed_subjects.sql
+\ir ../rls/00867_margin_notes_tenant_guard.test.sql

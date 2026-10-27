@@ -1,0 +1,349 @@
+-- Include-only: every fixture, role and activation grant belongs to the wrapper transaction.
+-- BEGIN shared helpers
+CREATE FUNCTION pg_temp.fa_id(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+ SELECT ('f8780000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.fa_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
+ RAISE NOTICE 'PASS: %',label;
+END $$;
+CREATE FUNCTION pg_temp.fa_error(command text,state text,message text,label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+ BEGIN EXECUTE command;
+ EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+ END;
+ PERFORM pg_temp.fa_assert(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
+  label||format(' expected %s/%s got %s/%s',state,message,actual_state,actual_message));
+END $$;
+CREATE FUNCTION pg_temp.fa_actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM set_config('request.jwt.claim.sub',COALESCE(pg_temp.fa_id(n)::text,''),true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.fa_id(n),'role','authenticated')::text,true);
+END $$;
+-- END shared helpers
+SELECT pg_temp.fa_assert(to_regprocedure('public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text)') IS NOT NULL
+ AND to_regprocedure('public.revoke_fabrication_authority(uuid,text)') IS NOT NULL
+ AND to_regprocedure('public.party_holds_fabrication_authority(uuid,bigint,date)') IS NOT NULL,
+ 'fabrication lifecycle API exists on production bytes');
+CREATE ROLE fa_public_only NOLOGIN;
+DO $$ DECLARE f record; r text; BEGIN
+ FOR f IN SELECT oid,proname FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN
+ ('grant_fabrication_authority','revoke_fabrication_authority','party_holds_fabrication_authority',
+  'guard_fabrication_grant_overlap','guard_fabrication_authority_immutable','guard_fabrication_seat_identity','end_party_authority_at_seat_close') LOOP
+  FOREACH r IN ARRAY ARRAY['anon','authenticated','fa_public_only'] LOOP
+   PERFORM pg_temp.fa_assert(NOT has_function_privilege(r,f.oid,'EXECUTE'),'inactive effective EXECUTE denied '||r||' '||f.proname);
+  END LOOP;
+ END LOOP;
+ PERFORM pg_temp.fa_assert(NOT has_table_privilege('anon','public.project_party_authority','SELECT,INSERT,UPDATE,DELETE')
+  AND NOT has_table_privilege('fa_public_only','public.project_party_authority','SELECT,INSERT,UPDATE,DELETE'),'anon and PUBLIC-only have no direct table grant');
+ PERFORM pg_temp.fa_assert((SELECT count(DISTINCT proowner)=1 FROM pg_proc WHERE oid IN
+  ('public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text)'::regprocedure,
+   'public.revoke_fabrication_authority(uuid,text)'::regprocedure,
+   'public.guard_fabrication_authority_immutable()'::regprocedure,
+   'public.end_party_authority_at_seat_close()'::regprocedure)),'sanctioned writers and INVOKER guard share owner');
+ PERFORM pg_temp.fa_assert(has_function_privilege('service_role','public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text)','EXECUTE')
+  AND has_function_privilege('service_role','public.revoke_fabrication_authority(uuid,text)','EXECUTE'),'fixture lifecycle EXECUTE retained');
+ PERFORM pg_temp.fa_assert((SELECT count(*)=1 FROM pg_constraint WHERE conrelid='public.project_party_authority'::regclass
+  AND confrelid='public.profiles'::regclass AND conname LIKE '%ended_by%' AND confdeltype='r'),'ended_by retains profile with RESTRICT');
+END $$;
+-- BEGIN shared fixture
+SELECT pg_temp.fa_assert(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f8780000-%'),'fixture namespace starts empty');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+ SELECT pg_temp.fa_id(n),'fa-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(1,12)n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+ SELECT id,email,'Fictional fabrication fixture',true FROM auth.users WHERE id::text LIKE 'f8780000-%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+ (pg_temp.fa_id(101),'design_studio','FA A','f878-fa-a','active'),(pg_temp.fa_id(102),'design_studio','FA B','f878-fa-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+ (pg_temp.fa_id(1),pg_temp.fa_id(101),'owner','active'),(pg_temp.fa_id(1),pg_temp.fa_id(102),'owner','active'),
+ (pg_temp.fa_id(2),pg_temp.fa_id(101),'admin','active'),(pg_temp.fa_id(3),pg_temp.fa_id(101),'member','active'),
+ (pg_temp.fa_id(4),pg_temp.fa_id(102),'owner','active'),(pg_temp.fa_id(5),pg_temp.fa_id(101),'guest','active');
+INSERT INTO public.projects(id,name,designer_id,created_by,client_id,studio_id,status) VALUES
+ (pg_temp.fa_id(201),'FA job',pg_temp.fa_id(1),pg_temp.fa_id(1),pg_temp.fa_id(6),pg_temp.fa_id(101),'active'),
+ (pg_temp.fa_id(202),'FA foreign job',pg_temp.fa_id(1),pg_temp.fa_id(1),pg_temp.fa_id(6),pg_temp.fa_id(102),'active');
+INSERT INTO public.project_parties(id,project_id,party_kind,display_name,profile_id,created_by,stage)
+ SELECT pg_temp.fa_id(300+n),pg_temp.fa_id(CASE WHEN n=25 THEN 202 ELSE 201 END),
+  CASE WHEN n=20 THEN 'vendor' WHEN n=21 THEN 'sub' WHEN n=22 THEN 'installer' WHEN n=23 THEN 'receiver'
+       WHEN n=26 THEN 'client' WHEN n=27 THEN 'client_rep' WHEN n=28 THEN 'architect' ELSE 'gc' END,
+  'FA seat '||n,CASE WHEN n=1 THEN pg_temp.fa_id(7) WHEN n=20 THEN pg_temp.fa_id(8) WHEN n=22 THEN pg_temp.fa_id(9) END,
+  pg_temp.fa_id(1),'active' FROM generate_series(1,36)n;
+SET LOCAL session_replication_role=origin;
+-- END shared fixture
+CREATE TEMP TABLE fa_results(k text PRIMARY KEY,a public.project_party_authority);
+GRANT ALL ON fa_results TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.fa_id(integer),pg_temp.fa_assert(boolean,text),pg_temp.fa_error(text,text,text,text),pg_temp.fa_actor(integer) TO authenticated,service_role;
+SELECT pg_temp.fa_actor(1);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(301),current_date,'inactive')$q$,'42501','permission denied for function','inactive owner cannot invoke grant');
+RESET ROLE;
+-- Test-local activation only; never committed or shipped.
+GRANT EXECUTE ON FUNCTION public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text),public.revoke_fabrication_authority(uuid,text) TO authenticated;
+SET LOCAL ROLE authenticated;
+INSERT INTO fa_results VALUES('live',public.grant_fabrication_authority(pg_temp.fa_id(301),current_date,'live',NULL,1000));
+SELECT pg_temp.fa_assert((public.grant_fabrication_authority(pg_temp.fa_id(301),current_date,'live',NULL,1000)).id=(SELECT (a).id FROM fa_results WHERE k='live'),'owner same-request replay returns one grant');
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(301),current_date,'live',NULL,1001)$q$,'23514','idempotency_key_reused','changed arguments refuse replay');
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(301),current_date,'other')$q$,'23514','fabrication_authority_already_open','open grant refuses replacement');
+SELECT pg_temp.fa_actor(2);
+INSERT INTO fa_results VALUES('finite',public.grant_fabrication_authority(pg_temp.fa_id(302),current_date,'finite',current_date+30));
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(301),current_date,'live',NULL,1000)$q$,'23514','idempotency_key_reused','other principal cannot replay original requester');
+SELECT pg_temp.fa_actor(1);
+DO $$ DECLARE n integer; BEGIN
+ FOREACH n IN ARRAY ARRAY[3,4,5,6,7,8,9] LOOP
+  PERFORM pg_temp.fa_actor(n);
+  PERFORM pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(303),current_date,'forbidden')$q$,'42501','fabrication_authority_forbidden','active grant actor denied '||n);
+  PERFORM pg_temp.fa_error($q$SELECT public.revoke_fabrication_authority((SELECT (a).id FROM fa_results WHERE k='live'),'revoked')$q$,'42501','fabrication_authority_forbidden','active revoke actor denied '||n);
+  PERFORM pg_temp.fa_error($q$INSERT INTO public.project_party_authority(engagement_id,scope) VALUES(pg_temp.fa_id(303),'fabrication')$q$,'42501',NULL,'direct fabrication insert denied actor '||n);
+ END LOOP;
+ PERFORM pg_temp.fa_actor(2);
+ PERFORM pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(325),current_date,'cross')$q$,'42501','fabrication_authority_forbidden','recorded studio wins over shared designer');
+ FOREACH n IN ARRAY ARRAY[20,21,22,23] LOOP
+  PERFORM pg_temp.fa_error(format('SELECT public.grant_fabrication_authority(pg_temp.fa_id(%s),current_date,''kind'')',300+n),'23514','fabrication_authority_holder_kind','disallowed holder kind '||n);
+ END LOOP;
+ FOREACH n IN ARRAY ARRAY[26,27,28] LOOP
+  PERFORM pg_temp.fa_assert((public.grant_fabrication_authority(pg_temp.fa_id(300+n),current_date,'kind')).id IS NOT NULL,'allowed holder kind '||n);
+ END LOOP;
+END $$;
+-- Both UPDATE images and DELETE must exclude fabrication even for principals.
+DO $$ DECLARE n integer; affected integer; BEGIN
+ FOREACH n IN ARRAY ARRAY[1,2,3,4,5,6,7,8,9] LOOP
+  PERFORM pg_temp.fa_actor(n);
+  UPDATE public.project_party_authority SET scope='selections' WHERE engagement_id=pg_temp.fa_id(301);
+  GET DIAGNOSTICS affected=ROW_COUNT;
+  PERFORM pg_temp.fa_assert(affected=0,'UPDATE old fabrication image hidden actor '||n);
+  DELETE FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(301);
+  GET DIAGNOSTICS affected=ROW_COUNT;
+  PERFORM pg_temp.fa_assert(affected=0,'DELETE fabrication hidden actor '||n);
+  IF n IN (1,2,3) THEN
+   PERFORM pg_temp.fa_assert((SELECT count(*)=1 FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(301)),'SELECT preserved actor '||n);
+  ELSE
+   PERFORM pg_temp.fa_assert((SELECT count(*)=0 FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(301)),'SELECT nonstudio denied actor '||n);
+  END IF;
+ END LOOP;
+END $$;
+SELECT pg_temp.fa_actor(1);
+SELECT pg_temp.fa_error($q$INSERT INTO public.project_party_authority(engagement_id,scope) VALUES(pg_temp.fa_id(303),'fabrication')$q$,'42501',NULL,'owner direct fabrication insert denied');
+INSERT INTO public.project_party_authority(engagement_id,scope) VALUES(pg_temp.fa_id(303),'money');
+SELECT pg_temp.fa_actor(3);
+INSERT INTO public.project_party_authority(engagement_id,scope) VALUES(pg_temp.fa_id(303),'selections');
+UPDATE public.project_party_authority SET source_clause='member update' WHERE engagement_id=pg_temp.fa_id(303) AND scope='selections';
+SELECT pg_temp.fa_assert((SELECT source_clause='member update' FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(303) AND scope='selections'),'legacy member write preserved');
+SELECT pg_temp.fa_error($q$INSERT INTO public.project_party_authority(engagement_id,scope) VALUES(pg_temp.fa_id(304),'money')$q$,'42501',NULL,'legacy member money still denied');
+-- Policy check, with the independent immutable trigger disabled only in this subtransaction.
+RESET ROLE;
+ALTER TABLE public.project_party_authority DISABLE TRIGGER guard_fabrication_authority_immutable_trg;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.fa_error($q$UPDATE public.project_party_authority SET scope='fabrication' WHERE engagement_id=pg_temp.fa_id(303) AND scope='selections'$q$,'42501',NULL,'UPDATE new fabrication image denied independently of trigger');
+RESET ROLE;
+ALTER TABLE public.project_party_authority ENABLE TRIGGER guard_fabrication_authority_immutable_trg;
+SELECT pg_temp.fa_actor(1);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(304),current_date,'bad-window',current_date-1)$q$,'23514','fabrication_authority_window_invalid','invalid window refused');
+INSERT INTO fa_results VALUES('pending',public.grant_fabrication_authority(pg_temp.fa_id(304),current_date+1,'pending',current_date+30));
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(304),current_date+20,'overlap',current_date+40)$q$,'23514','fabrication_authority_overlap','finite pending overlap refused');
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(304),current_date+30,'inclusive',current_date+40)$q$,'23514','fabrication_authority_overlap','inclusive endpoint overlap refused');
+INSERT INTO fa_results VALUES('adjacent',public.grant_fabrication_authority(pg_temp.fa_id(304),current_date+31,'adjacent',current_date+60));
+INSERT INTO fa_results VALUES('close',public.grant_fabrication_authority(pg_temp.fa_id(305),current_date,'close',current_date+30));
+INSERT INTO fa_results VALUES('close-pending',public.grant_fabrication_authority(pg_temp.fa_id(306),current_date+5,'close-pending',current_date+30));
+INSERT INTO fa_results VALUES('lapsed',public.grant_fabrication_authority(pg_temp.fa_id(307),current_date-30,'lapsed',current_date-1));
+RESET ROLE;
+SELECT pg_temp.fa_assert(public.party_holds_fabrication_authority(pg_temp.fa_id(301),1000)
+ AND NOT public.party_holds_fabrication_authority(pg_temp.fa_id(301),1001)
+ AND NOT public.party_holds_fabrication_authority(pg_temp.fa_id(301),2147483648),'threshold inclusive and bigint safe');
+SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(302),NULL)
+ AND NOT public.party_holds_fabrication_authority(pg_temp.fa_id(302),-1),'unknown and negative fail even unlimited');
+SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(307),0)
+ AND NOT public.party_holds_fabrication_authority(pg_temp.fa_id(304),0),'expired and not-yet-started refuse');
+SET LOCAL ROLE authenticated;
+SELECT public.revoke_fabrication_authority((SELECT (a).id FROM fa_results WHERE k='live'),'revoked');
+SELECT public.revoke_fabrication_authority((SELECT (a).id FROM fa_results WHERE k='live'),'revoked');
+SELECT pg_temp.fa_error($q$SELECT public.revoke_fabrication_authority((SELECT (a).id FROM fa_results WHERE k='live'),'superseded')$q$,'23514','fabrication_authority_already_ended','changed revocation reason refused');
+SELECT pg_temp.fa_assert((public.grant_fabrication_authority(pg_temp.fa_id(301),current_date,'live',NULL,1000)).revoked_at IS NOT NULL,'original request replays revoked outcome without second grant');
+SELECT public.revoke_fabrication_authority((SELECT (a).id FROM fa_results WHERE k='finite'),'superseded');
+SELECT public.revoke_fabrication_authority((SELECT (a).id FROM fa_results WHERE k='pending'),'revoked');
+RESET ROLE;
+SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(301),1000,current_date)
+ AND NOT public.party_holds_fabrication_authority(pg_temp.fa_id(302),0,current_date),'same-day open and finite revocation immediately deny');
+SELECT pg_temp.fa_assert((SELECT effective_to=effective_from AND revoked_at IS NOT NULL FROM public.project_party_authority WHERE id=(SELECT (a).id FROM fa_results WHERE k='pending'))
+ AND NOT public.party_holds_fabrication_authority(pg_temp.fa_id(304),0,current_date+1),'pending revoke clamps without ever becoming live');
+SELECT pg_temp.fa_actor(3);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.fa_error($q$UPDATE public.project_parties SET off_job_at=current_date WHERE id=pg_temp.fa_id(305)$q$,'P0001','seat_close_money_authority_forbidden','member cannot close finite fabrication seat');
+SELECT pg_temp.fa_error($q$UPDATE public.project_parties SET off_job_at=current_date WHERE id=pg_temp.fa_id(306)$q$,'P0001','seat_close_money_authority_forbidden','member cannot close pending fabrication seat');
+SELECT pg_temp.fa_actor(1);
+UPDATE public.project_parties SET off_job_at=current_date WHERE id IN(pg_temp.fa_id(305),pg_temp.fa_id(306),pg_temp.fa_id(307));
+SELECT pg_temp.fa_assert((public.grant_fabrication_authority(pg_temp.fa_id(305),current_date,'close',current_date+30)).end_reason='seat_closed','original request replays seat-close outcome');
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(305),current_date,'new-on-closed')$q$,'23514','fabrication_authority_seat_closed','new grant on closed seat denied');
+RESET ROLE;
+SELECT pg_temp.fa_assert((SELECT count(*)=2 FROM public.project_party_authority WHERE engagement_id IN(pg_temp.fa_id(305),pg_temp.fa_id(306)) AND end_reason='seat_closed' AND ended_by=pg_temp.fa_id(1) AND revoked_at IS NOT NULL),'principal closure retains actor for finite and pending');
+SELECT pg_temp.fa_assert((SELECT revoked_at IS NULL AND end_reason IS NULL FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(307)),'already lapsed grant untouched at close');
+-- Null-auth SQL closure keeps the native legacy carveout, never invents an actor.
+SELECT pg_temp.fa_actor(NULL);
+INSERT INTO public.project_party_authority(engagement_id,scope) VALUES(pg_temp.fa_id(308),'selections');
+UPDATE public.project_parties SET off_job_at=current_date WHERE id IN(pg_temp.fa_id(308),pg_temp.fa_id(309));
+SELECT pg_temp.fa_assert((SELECT effective_to=current_date FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(308))
+ AND (SELECT count(*)=2 FROM public.project_parties WHERE id IN(pg_temp.fa_id(308),pg_temp.fa_id(309)) AND off_job_at=current_date),'NULL-auth legacy and no-grant closure preserved');
+SELECT pg_temp.fa_error($q$UPDATE public.project_parties SET off_job_at=current_date WHERE id=pg_temp.fa_id(304)$q$,'42501','fabrication_authority_seat_close_actor_required','NULL-auth live fabrication closure refuses');
+SELECT pg_temp.fa_assert((SELECT off_job_at IS NULL FROM public.project_parties WHERE id=pg_temp.fa_id(304))
+ AND (SELECT revoked_at IS NULL FROM public.project_party_authority WHERE id=(SELECT (a).id FROM fa_results WHERE k='adjacent')),'NULL-auth refusal leaves seat and grant untouched');
+SELECT pg_temp.fa_actor(1);
+SELECT pg_temp.fa_error($q$UPDATE public.project_party_authority SET threshold_cents=99999 WHERE engagement_id=pg_temp.fa_id(301)$q$,'23514','fabrication_authority_immutable','privileged direct amendment refused');
+SELECT pg_temp.fa_error($q$UPDATE public.project_party_authority SET fabrication_grant_request='{}' WHERE engagement_id=pg_temp.fa_id(301)$q$,'23514','fabrication_authority_immutable','request snapshot immutable');
+SELECT set_config('app.fabrication_authority_write',(SELECT (a).id::text FROM fa_results WHERE k='live'),true);
+SELECT pg_temp.fa_error($q$UPDATE public.project_party_authority SET revoked_at=NULL,ended_by=NULL,end_reason=NULL,effective_to=NULL WHERE engagement_id=pg_temp.fa_id(301)$q$,'23514','fabrication_authority_immutable','marker cannot reopen revoked history');
+SELECT pg_temp.fa_error($q$UPDATE public.project_party_authority SET effective_to=current_date+100 WHERE engagement_id=pg_temp.fa_id(301)$q$,'23514','fabrication_authority_immutable','marker cannot raise end date');
+SELECT pg_temp.fa_error($q$DELETE FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(301)$q$,'23514','fabrication_authority_immutable','fabrication history cannot be deleted');
+SELECT set_config('app.fabrication_authority_write','',true);
+-- Service fixture inserts still serialize and reject overlap; forged marker is no authority.
+SET LOCAL ROLE service_role;
+SELECT pg_temp.fa_error($q$INSERT INTO public.project_party_authority(engagement_id,scope,effective_from,effective_to) VALUES(pg_temp.fa_id(304),'fabrication',current_date+40,current_date+80)$q$,'23514','fabrication_authority_overlap','service insert finite overlap refused');
+RESET ROLE;
+INSERT INTO public.project_party_authority(engagement_id,scope,prepares_only,granted_by) VALUES(pg_temp.fa_id(310),'fabrication',true,pg_temp.fa_id(10));
+INSERT INTO public.project_party_authority(engagement_id,scope,granted_by) VALUES(pg_temp.fa_id(311),'selections',pg_temp.fa_id(11));
+SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(310),0),'prepares-only cannot instruct');
+SELECT pg_temp.fa_error($q$DELETE FROM public.profiles WHERE id=pg_temp.fa_id(10)$q$,'23514','fabrication_authority_immutable','fabrication grantor profile retained');
+SELECT pg_temp.fa_error($q$DELETE FROM public.profiles WHERE id=pg_temp.fa_id(1)$q$,'23503',NULL,'fabrication revoker profile retained');
+DELETE FROM public.profiles WHERE id=pg_temp.fa_id(11);
+SELECT pg_temp.fa_assert((SELECT granted_by IS NULL FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(311)),'legacy grantor SET NULL preserved');
+SELECT set_config('app.fabrication_authority_write',(SELECT id::text FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(310)),true);
+SET LOCAL ROLE service_role;
+SELECT pg_temp.fa_error($q$UPDATE public.project_party_authority SET revoked_at=now(),ended_by=pg_temp.fa_id(1),end_reason='revoked',effective_to=current_date WHERE engagement_id=pg_temp.fa_id(310)$q$,'23514','fabrication_authority_immutable','service forged matching marker cannot revoke');
+RESET ROLE;
+-- Every legacy scope retains its native principal/member DML boundary.
+SELECT pg_temp.fa_actor(1);
+SET LOCAL ROLE authenticated;
+INSERT INTO public.project_party_authority(engagement_id,scope)
+ SELECT pg_temp.fa_id(312),s FROM unnest(ARRAY['money','change_order','selections','schedule','site_access','key','draw_certify'])s;
+SELECT pg_temp.fa_actor(2);
+SELECT pg_temp.fa_error($q$INSERT INTO public.project_party_authority(engagement_id,scope) VALUES(pg_temp.fa_id(313),'fabrication')$q$,'42501',NULL,'admin direct fabrication insert denied');
+SELECT pg_temp.fa_actor(3);
+DO $$ DECLARE s text; affected integer; BEGIN
+ FOREACH s IN ARRAY ARRAY['money','change_order','selections','schedule','site_access','key','draw_certify'] LOOP
+  UPDATE public.project_party_authority SET source_clause='legacy' WHERE engagement_id=pg_temp.fa_id(312) AND scope=s;
+  GET DIAGNOSTICS affected=ROW_COUNT;
+  PERFORM pg_temp.fa_assert(affected=CASE WHEN s IN('money','draw_certify') THEN 0 ELSE 1 END,'legacy UPDATE boundary '||s);
+  DELETE FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(312) AND scope=s;
+  GET DIAGNOSTICS affected=ROW_COUNT;
+  PERFORM pg_temp.fa_assert(affected=CASE WHEN s IN('money','draw_certify') THEN 0 ELSE 1 END,'legacy DELETE boundary '||s);
+ END LOOP;
+ FOREACH s IN ARRAY ARRAY['5','4','6','7','8','9'] LOOP
+  PERFORM pg_temp.fa_actor(s::integer);
+  PERFORM pg_temp.fa_error($q$INSERT INTO public.project_party_authority(engagement_id,scope) VALUES(pg_temp.fa_id(313),'selections')$q$,'42501',NULL,'legacy nonstudio write denied '||s);
+ END LOOP;
+END $$;
+RESET ROLE;
+SELECT pg_temp.fa_actor(1);
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(314),current_date,'foreign-copy',NULL,NULL,ARRAY[pg_temp.fa_id(325)])$q$,'P0001','authority_copy_to_off_project','copy-to same-project validation retained');
+-- No-actor checks also run after test-local activation.
+SELECT pg_temp.fa_actor(NULL);
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(314),current_date,'no-actor')$q$,'42501','fabrication_authority_forbidden','NULL grant actor fails closed');
+SELECT pg_temp.fa_error($q$SELECT public.revoke_fabrication_authority((SELECT (a).id FROM fa_results WHERE k='adjacent'),'revoked')$q$,'42501','fabrication_authority_forbidden','NULL revoke actor fails closed');
+SELECT pg_temp.fa_assert(NOT has_function_privilege('anon','public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text)','EXECUTE')
+ AND NOT has_function_privilege('fa_public_only','public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text)','EXECUTE'),'activation never opens anon or PUBLIC');
+SELECT set_config('app.fabrication_authority_write','',true);
+SELECT pg_temp.fa_assert((SELECT count(*)=1 FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(301)),'replay never appended a second grant');
+SELECT pg_temp.fa_assert(NOT EXISTS(SELECT 1 FROM public.project_party_authority WHERE scope<>'fabrication' AND fabrication_grant_request IS NOT NULL),'legacy request snapshots remain NULL');
+
+-- BEGIN identity setup
+SELECT pg_temp.fa_actor(1);
+SET LOCAL ROLE authenticated;
+UPDATE public.project_parties SET profile_id=pg_temp.fa_id(12) WHERE id=pg_temp.fa_id(331);
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT public.grant_fabrication_authority(pg_temp.fa_id(331),current_date,'identity');
+RESET ROLE;
+-- END identity setup
+-- BEGIN identity move regression
+SELECT pg_temp.fa_actor(4);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.fa_assert((SELECT count(*)=0 FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(331)),
+ 'B-only actor cannot read original studio grant');
+SELECT pg_temp.fa_error($q$UPDATE public.project_parties SET project_id=pg_temp.fa_id(202),profile_id=pg_temp.fa_id(4) WHERE id=pg_temp.fa_id(331)$q$,
+ '23514','fabrication_seat_identity_locked','reviewer B-only move and reassignment refused');
+RESET ROLE;
+SELECT pg_temp.fa_assert((SELECT project_id=pg_temp.fa_id(201) AND profile_id=pg_temp.fa_id(12) FROM public.project_parties WHERE id=pg_temp.fa_id(331))
+ AND (SELECT revoked_at IS NULL FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(331)),
+ 'refused identity transfer leaves seat and grant unchanged');
+-- END identity move regression
+SELECT pg_temp.fa_actor(1);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.fa_error($q$UPDATE public.project_parties SET profile_id=pg_temp.fa_id(4) WHERE id=pg_temp.fa_id(331)$q$,
+ '23514','fabrication_seat_identity_locked','same-studio live holder reassignment refused');
+SELECT pg_temp.fa_error($q$UPDATE public.project_parties SET profile_id=NULL WHERE id=pg_temp.fa_id(331)$q$,
+ '23514','fabrication_seat_identity_locked','live holder cannot be cleared');
+SELECT pg_temp.fa_error($q$UPDATE public.project_parties SET project_id=pg_temp.fa_id(202) WHERE id=pg_temp.fa_id(331)$q$,
+ '23514','fabrication_seat_identity_locked','live project-only move refused');
+UPDATE public.project_parties SET display_name='Unchanged identity edit' WHERE id=pg_temp.fa_id(331);
+UPDATE public.project_parties SET profile_id=pg_temp.fa_id(3) WHERE id=pg_temp.fa_id(332);
+SELECT pg_temp.fa_assert((SELECT profile_id=pg_temp.fa_id(3) FROM public.project_parties WHERE id=pg_temp.fa_id(332)),
+ 'native no-grant same-studio reassignment preserved');
+SELECT pg_temp.fa_actor(4);
+UPDATE public.project_parties SET project_id=pg_temp.fa_id(202),profile_id=pg_temp.fa_id(4) WHERE id=pg_temp.fa_id(333);
+SELECT pg_temp.fa_assert((SELECT project_id=pg_temp.fa_id(202) AND profile_id=pg_temp.fa_id(4) FROM public.project_parties WHERE id=pg_temp.fa_id(333)),
+ 'legacy no-grant cross-job seat policy unchanged');
+RESET ROLE;
+SELECT pg_temp.fa_assert((SELECT fabrication_grant_request->'project_id'=to_jsonb(pg_temp.fa_id(201))
+ AND fabrication_grant_request->'profile_id'=to_jsonb(pg_temp.fa_id(12)) FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(331)),
+ 'immutable request records grant-time job and holder');
+SELECT pg_temp.fa_assert(public.party_holds_fabrication_authority(pg_temp.fa_id(331),0),'matching grant-time identity holds');
+-- BEGIN identity project tamper regression
+SAVEPOINT identity_project_tamper;
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_parties SET project_id=pg_temp.fa_id(202) WHERE id=pg_temp.fa_id(331);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(331),0),'forced project mismatch fails holder closed');
+ROLLBACK TO SAVEPOINT identity_project_tamper;
+-- END identity project tamper regression
+-- BEGIN identity profile tamper regression
+SAVEPOINT identity_profile_tamper;
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_parties SET profile_id=pg_temp.fa_id(4) WHERE id=pg_temp.fa_id(331);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(331),0),'forced holder mismatch fails holder closed');
+ROLLBACK TO SAVEPOINT identity_profile_tamper;
+-- END identity profile tamper regression
+SAVEPOINT identity_null_tamper;
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_parties SET profile_id=NULL WHERE id=pg_temp.fa_id(331);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(331),0),'forced holder clear fails closed');
+ROLLBACK TO SAVEPOINT identity_null_tamper;
+SELECT pg_temp.fa_actor(1);
+SET LOCAL ROLE service_role;
+SELECT pg_temp.fa_assert((public.grant_fabrication_authority(pg_temp.fa_id(331),current_date,'identity')).id=
+ (SELECT id FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(331)),'identity-bound exact replay preserved');
+SELECT public.revoke_fabrication_authority((SELECT id FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(331)),'revoked');
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+UPDATE public.project_parties SET profile_id=pg_temp.fa_id(4) WHERE id=pg_temp.fa_id(331);
+RESET ROLE;
+SELECT pg_temp.fa_assert((SELECT profile_id=pg_temp.fa_id(4) FROM public.project_parties WHERE id=pg_temp.fa_id(331))
+ AND NOT public.party_holds_fabrication_authority(pg_temp.fa_id(331),0),'revoke-first reassignment succeeds without inherited authority');
+SET LOCAL ROLE service_role;
+SELECT pg_temp.fa_error($q$SELECT public.grant_fabrication_authority(pg_temp.fa_id(331),current_date,'identity')$q$,
+ '23514','idempotency_key_reused','old request cannot replay for reassigned holder');
+SELECT public.grant_fabrication_authority(pg_temp.fa_id(334),current_date+1,'identity-pending',current_date+30);
+SELECT public.grant_fabrication_authority(pg_temp.fa_id(335),current_date-30,'identity-lapsed',current_date-1);
+INSERT INTO public.project_party_authority(engagement_id,scope,fabrication_grant_request)
+ VALUES(pg_temp.fa_id(336),'fabrication',jsonb_build_object('project_id',pg_temp.fa_id(202),'profile_id',pg_temp.fa_id(4)));
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.fa_error($q$UPDATE public.project_parties SET profile_id=pg_temp.fa_id(4) WHERE id=pg_temp.fa_id(334)$q$,
+ '23514','fabrication_seat_identity_locked','pending finite grant locks NULL holder identity');
+UPDATE public.project_parties SET profile_id=pg_temp.fa_id(4) WHERE id=pg_temp.fa_id(335);
+RESET ROLE;
+SELECT pg_temp.fa_assert((SELECT profile_id=pg_temp.fa_id(4) FROM public.project_parties WHERE id=pg_temp.fa_id(335))
+ AND NOT public.party_holds_fabrication_authority(pg_temp.fa_id(335),0,current_date-1),'lapsed-grant reassignment preserves history without transfer');
+SELECT pg_temp.fa_assert((SELECT fabrication_grant_request=jsonb_build_object('project_id',pg_temp.fa_id(201),'profile_id',NULL)
+ FROM public.project_party_authority WHERE engagement_id=pg_temp.fa_id(336))
+ AND public.party_holds_fabrication_authority(pg_temp.fa_id(336),0),'service INSERT stamps actual job and explicit NULL holder');
+SAVEPOINT identity_missing_binding;
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_party_authority SET fabrication_grant_request=fabrication_grant_request-'profile_id' WHERE engagement_id=pg_temp.fa_id(336);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.fa_assert(NOT public.party_holds_fabrication_authority(pg_temp.fa_id(336),0),'missing NULL-holder binding fails closed');
+ROLLBACK TO SAVEPOINT identity_missing_binding;
+SELECT pg_temp.fa_error($q$UPDATE public.project_party_authority SET fabrication_grant_request=jsonb_set(fabrication_grant_request,'{profile_id}',to_jsonb(pg_temp.fa_id(4))) WHERE engagement_id=pg_temp.fa_id(336)$q$,
+ '23514','fabrication_authority_immutable','grant-time holder binding cannot be rewritten');

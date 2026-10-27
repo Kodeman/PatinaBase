@@ -185,7 +185,11 @@ function ReleaseLensContent({
   }
 
   return (
-    <div ref={previewReturn} tabIndex={-1} data-testid="release-lens" className="flex flex-col gap-6 py-6">
+    <div ref={previewReturn} tabIndex={-1} data-testid="release-lens" className="flex flex-col gap-6 py-6 [[data-paper-renderer=round8]_&_thead]:bg-[var(--sheet-row-hover)] [[data-paper-renderer=round8]_&_th]:font-normal">
+      <header data-round8-lens="release" className="hidden border-b border-[var(--sheet-rule-strong)] pb-4 [[data-paper-renderer=round8]_&]:block">
+        <h3 className="font-heading text-[24px] font-normal leading-[1.2] text-[var(--sheet-ink)]">Purchasing authorization</h3>
+        <p className="mt-2 max-w-[72ch] font-sans text-[14px] leading-[1.5] text-[var(--sheet-ink-muted)]">Design review and purchasing authority are separate. Preparing a draft does not send it to the client or release a purchase order.</p>
+      </header>
       {readiness.isError && (
         <p
           role="alert"

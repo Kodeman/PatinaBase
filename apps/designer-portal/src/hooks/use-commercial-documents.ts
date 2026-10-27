@@ -438,6 +438,19 @@ export async function fetchCommercialDocumentBundle(
     mapSignature,
   );
   const document = mapDocument(proposalResult.data);
+  // Addenda are linked by their commercial-document row, not proposals.project_id.
+  // An unlinked proposal stays project-less; never infer a job from its parent.
+  if (proposalResult.data.project_id === null) {
+    const link = await supabase
+      .from("project_commercial_documents")
+      .select("project_id")
+      .eq("proposal_id", proposalId)
+      .maybeSingle();
+    if (link.error) throw link.error;
+    if (typeof link.data?.project_id === "string") {
+      document.projectId = link.data.project_id;
+    }
+  }
   const studioSignature = signatures.find(
     (signature) => signature.party === "studio",
   );

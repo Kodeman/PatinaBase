@@ -1,0 +1,238 @@
+-- Include-only. The wrapper owns the rollback; no fixture may be committed.
+-- BEGIN shared helpers
+CREATE FUNCTION pg_temp.c5_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
+ RAISE NOTICE 'PASS: %',label;
+END $$;
+CREATE FUNCTION pg_temp.c5_error(command text,state text,message text,label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+ BEGIN EXECUTE command;
+ EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+ END;
+ PERFORM pg_temp.c5_assert(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
+ label||format(' expected %s/%s got %s/%s',state,message,actual_state,actual_message));
+END $$;
+CREATE FUNCTION pg_temp.c5_id(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+ SELECT ('f8750000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.c5_actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM set_config('request.jwt.claim.sub',pg_temp.c5_id(n)::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.c5_id(n),'role','authenticated')::text,true);
+END $$;
+-- END shared helpers
+
+-- This assertion also runs against exact dispatch-base production bytes: an
+-- absent new API is an assertion failure, never a collection/import error.
+SELECT pg_temp.c5_assert(to_regprocedure('public.create_external_fulfilment(uuid,uuid,text,text,text[],uuid,uuid,text)') IS NOT NULL
+ AND to_regprocedure('public.bind_fulfilment_evidence(uuid,uuid,text[],text)') IS NOT NULL
+ AND to_regprocedure('public.verify_external_fulfilment_event(uuid,text)') IS NOT NULL,
+ 'external foundation provides creation, preapproval binding and verification acts');
+
+DO $$ DECLARE t text; f record; BEGIN
+ PERFORM pg_temp.c5_assert(NOT (SELECT enabled FROM public.server_capabilities WHERE key='scope_editions'),'capability remains false');
+ FOREACH t IN ARRAY ARRAY['project_external_fulfilments','project_external_fulfilment_events','project_external_fulfilment_evidence_bindings','project_external_fulfilment_verifications'] LOOP
+  PERFORM pg_temp.c5_assert((SELECT relrowsecurity FROM pg_class WHERE oid=('public.'||t)::regclass),'RLS enabled '||t);
+  PERFORM pg_temp.c5_assert(NOT has_table_privilege('authenticated','public.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+   AND NOT has_table_privilege('anon','public.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),'direct table access denied '||t);
+ END LOOP;
+ FOR f IN SELECT oid,oid::regprocedure signature,proname,prosecdef,proconfig FROM pg_proc
+  WHERE pronamespace='public'::regnamespace AND (proname LIKE '\_external\_%' ESCAPE '\' OR proname IN
+  ('_fabrication_instructed_amount_cents','create_external_fulfilment','record_external_fulfilment_event','verify_external_fulfilment_event','bind_fulfilment_evidence','get_project_external_fulfilments')) LOOP
+  PERFORM pg_temp.c5_assert(NOT has_function_privilege('anon',f.oid,'EXECUTE')
+   AND NOT EXISTS(SELECT 1 FROM aclexplode((SELECT proacl FROM pg_proc WHERE oid=f.oid)) WHERE grantee=0 AND privilege_type='EXECUTE'),'PUBLIC/anon denied '||f.signature);
+  PERFORM pg_temp.c5_assert(has_function_privilege('authenticated',f.oid,'EXECUTE')=(f.proname='get_project_external_fulfilments'),'authenticated exact execute '||f.signature);
+  IF f.prosecdef THEN PERFORM pg_temp.c5_assert('search_path=public, pg_temp'=ANY(f.proconfig),'definer path pinned '||f.signature); END IF;
+ END LOOP;
+ PERFORM pg_temp.c5_assert((SELECT count(*)=3 FROM pg_constraint WHERE conrelid='public.project_external_fulfilment_events'::regclass
+  AND confrelid='public.profiles'::regclass AND confdeltype='r'),'event actors retained by RESTRICT');
+END $$;
+-- BEGIN shared fixture
+SELECT pg_temp.c5_assert(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f875%'),'fictional fixture namespace starts empty');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT pg_temp.c5_id(n),'c5-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(1,7)n;
+INSERT INTO public.profiles(id,email,full_name,is_designer) SELECT id,email,'C5 fictional fixture',true FROM auth.users WHERE id::text LIKE 'f875%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+(pg_temp.c5_id(101),'design_studio','C5 A','f875-c5-a','active'),(pg_temp.c5_id(102),'design_studio','C5 B','f875-c5-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+(pg_temp.c5_id(1),pg_temp.c5_id(101),'owner','active'),(pg_temp.c5_id(1),pg_temp.c5_id(102),'owner','active'),
+(pg_temp.c5_id(2),pg_temp.c5_id(101),'admin','active'),(pg_temp.c5_id(3),pg_temp.c5_id(101),'member','active'),
+(pg_temp.c5_id(4),pg_temp.c5_id(102),'member','active'),(pg_temp.c5_id(5),pg_temp.c5_id(101),'guest','active'),
+(pg_temp.c5_id(6),pg_temp.c5_id(101),'member','suspended');
+INSERT INTO public.projects(id,name,designer_id,created_by,client_id,studio_id,status)
+SELECT pg_temp.c5_id(200+n),'C5 job',pg_temp.c5_id(1),pg_temp.c5_id(1),pg_temp.c5_id(7),
+ CASE WHEN n=3 THEN NULL ELSE pg_temp.c5_id(101) END,'active' FROM generate_series(1,3)n;
+INSERT INTO public.project_scope_editions(id,project_id,edition_number,kind,commercial_document_id,source_proposal_id,
+ agreement_fingerprint,effective_at,content,content_hash,status)
+SELECT pg_temp.c5_id(300+n),pg_temp.c5_id(200+n),1,'baseline',pg_temp.c5_id(400+n),pg_temp.c5_id(500+n),'fixture',now(),'{}','fixture','active'
+FROM generate_series(1,3)n;
+INSERT INTO public.project_scope_edition_packages(edition_id,package_key,label,inclusion,responsibilities)
+SELECT pg_temp.c5_id(300+n),k,k,'included','{"design":"studio","purchasing":"gc","payer":"gc","fabrication_contract":"gc","installation":"gc"}'::jsonb
+FROM generate_series(1,3)n CROSS JOIN unnest(ARRAY['pkg.cabinets','pkg.client'])k;
+INSERT INTO public.designer_clients(id,designer_id,client_id,status)
+VALUES(pg_temp.c5_id(901),pg_temp.c5_id(1),pg_temp.c5_id(7),'active');
+INSERT INTO public.client_decisions(id,designer_client_id,designer_id,project_id,title,status,court,coordination_kind)
+SELECT pg_temp.c5_id(600+n),pg_temp.c5_id(901),pg_temp.c5_id(1),pg_temp.c5_id(CASE WHEN n=4 THEN 202 ELSE 201 END),'C5 evidence','pending','designer','submittal'
+FROM generate_series(1,8)n;
+INSERT INTO public.coordination_item_revisions(id,decision_id,rev_number,status,reviewed_by,reviewed_at)
+SELECT pg_temp.c5_id(700+n),pg_temp.c5_id(600+n),1,CASE WHEN n=3 THEN 'approved' ELSE 'submitted' END,
+ CASE WHEN n=3 THEN pg_temp.c5_id(2) END,CASE WHEN n=3 THEN now() END FROM generate_series(1,8)n;
+SET LOCAL session_replication_role=origin;
+-- END shared fixture
+-- Activation is test-local and rolled back. Public production ACLs were checked above.
+GRANT EXECUTE ON FUNCTION public.create_external_fulfilment(uuid,uuid,text,text,text[],uuid,uuid,text),
+ public.record_external_fulfilment_event(uuid,text,jsonb,text[],text),public.verify_external_fulfilment_event(uuid,text),
+ public.bind_fulfilment_evidence(uuid,uuid,text[],text) TO authenticated;
+SELECT pg_temp.c5_actor(1);
+SELECT pg_temp.c5_error($q$SELECT public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.client','client_furnishing',ARRAY['chair'],NULL,NULL,'create')$q$,'55000','scope_editions_inactive','inactive create refuses');
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+CREATE TEMP TABLE c5_result(key text PRIMARY KEY,value jsonb);
+GRANT ALL ON c5_result TO authenticated;
+CREATE FUNCTION pg_temp.c5_fid(k text) RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT (value->>'fulfilmentId')::uuid FROM c5_result WHERE key=k; $$;
+GRANT EXECUTE ON FUNCTION pg_temp.c5_fid(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.c5_assert(boolean,text),pg_temp.c5_error(text,text,text,text),pg_temp.c5_id(integer),pg_temp.c5_actor(integer) TO authenticated;
+SET LOCAL ROLE authenticated;
+INSERT INTO c5_result VALUES('client',public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.client','client_furnishing',ARRAY['chair','table'],NULL,NULL,'create'));
+INSERT INTO c5_result VALUES('gc',public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.cabinets','gc_cabinetry',ARRAY['k-1','k-2'],NULL,NULL,'create-gc'));
+SELECT pg_temp.c5_assert((public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.client','client_furnishing',ARRAY['chair','table'],NULL,NULL,'create')->>'replayed')::boolean,'create exact receipt replays');
+SELECT pg_temp.c5_error($q$SELECT public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.client','client_furnishing',ARRAY['other'],NULL,NULL,'create')$q$,'40001','external_request_changed','create changed payload refused');
+SELECT pg_temp.c5_error($q$SELECT public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(302),'pkg.client','client_furnishing',ARRAY['chair'],NULL,NULL,'bad-edition')$q$,'55000','scope_edition_not_active','off-project edition refused');
+SELECT pg_temp.c5_error($q$SELECT public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.client','client_furnishing',ARRAY['chair','chair'],NULL,NULL,'bad-units')$q$,'23514','fulfilment_units_invalid','duplicate units refused');
+SELECT pg_temp.c5_actor(4);
+SELECT pg_temp.c5_error($q$SELECT public.get_project_external_fulfilments(pg_temp.c5_id(201))$q$,'42501','external_fulfilment_access','second studio denied despite shared designer');
+SELECT pg_temp.c5_actor(5);
+SELECT pg_temp.c5_error($q$SELECT public.get_project_external_fulfilments(pg_temp.c5_id(201))$q$,'42501','external_fulfilment_access','guest denied');
+SELECT pg_temp.c5_actor(6);
+SELECT pg_temp.c5_error($q$SELECT public.get_project_external_fulfilments(pg_temp.c5_id(201))$q$,'42501','external_fulfilment_access','inactive membership denied');
+SELECT pg_temp.c5_actor(3);
+SELECT pg_temp.c5_error($q$SELECT public.get_project_external_fulfilments(pg_temp.c5_id(203))$q$,'42501','external_fulfilment_access','unrecorded studio denies co-member');
+SELECT pg_temp.c5_error($q$SELECT public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.client','client_furnishing',ARRAY['chair','table'],NULL,NULL,'create')$q$,'42501','idempotency_key_reused','different requester cannot replay');
+SELECT pg_temp.c5_actor(1);
+SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'package_issued','{}',NULL,'fake-issue')$q$,'42501','package_issue_owner_required','generic caller cannot manufacture package issue');
+SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('gc'),pg_temp.c5_id(601),ARRAY['k-1'],'no-issue')$q$,'23514','fabrication_evidence_issue_missing','gc binder fails closed until X04b native issue owner wiring');
+SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'fabrication_instruction','{}',ARRAY['k-1'],'fake-instruction')$q$,'55000','fabrication_instruction_not_active','no fabrication instruction before X04b');
+INSERT INTO c5_result VALUES('binding',public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(601),ARRAY['chair'],'bind'));
+SELECT pg_temp.c5_assert((public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(601),ARRAY['chair'],'bind')->>'replayed')::boolean,'binding receipt replays');
+SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(602),ARRAY['chair'],'bind')$q$,'40001','external_request_changed','changed binding receipt refused');
+SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(603),ARRAY['chair'],'late')$q$,'23514','fabrication_evidence_already_approved','late evidence cannot bind after first approval');
+SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(604),ARRAY['chair'],'foreign')$q$,'23514','fabrication_evidence_off_project','foreign project evidence refused');
+SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('client'),pg_temp.c5_id(602),ARRAY['other'],'unknown-unit')$q$,'23514','fulfilment_units_invalid','binding cannot widen fulfilment units');
+INSERT INTO c5_result VALUES('contract1',public.record_external_fulfilment_event(pg_temp.c5_fid('client'),'contract_reported','{"contractAmountCents":200000}',NULL,'contract1'));
+INSERT INTO c5_result VALUES('contract2',public.record_external_fulfilment_event(pg_temp.c5_fid('client'),'contract_reported','{"contractAmountCents":300000}',NULL,'contract2'));
+SELECT pg_temp.c5_error($q$SELECT public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract1'),'self')$q$,'42501','fulfilment_verifier_required','recorder cannot self-verify');
+SELECT pg_temp.c5_actor(3);
+SELECT pg_temp.c5_error($q$SELECT public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract1'),'member')$q$,'42501','fulfilment_verifier_required','plain member cannot verify');
+SELECT pg_temp.c5_actor(2);
+SELECT public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract2'),'verify2');
+SELECT public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract1'),'verify1');
+SELECT pg_temp.c5_assert((public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract1'),'verify1')->>'replayed')::boolean,'verification receipt exact replay');
+SELECT pg_temp.c5_error($q$SELECT public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract2'),'verify1')$q$,'40001','external_request_changed','verification receipt cannot target another event');
+RESET ROLE;
+SELECT pg_temp.c5_assert(public._fabrication_instructed_amount_cents(pg_temp.c5_fid('client'))=200000,'amount follows verification sequence not event order or tied transaction time');
+SELECT pg_temp.c5_assert((SELECT array_agg(event_seq ORDER BY event_seq)=ARRAY[1,2]::bigint[] AND count(DISTINCT verification_seq)=2 FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.c5_fid('client')),'sequences gap-free under fulfilment lock');
+SELECT pg_temp.c5_error($q$UPDATE public.project_external_fulfilments SET units=ARRAY['changed'] WHERE id=pg_temp.c5_fid('client')$q$,'23514','external_fulfilment_immutable','unit set immutable');
+SELECT pg_temp.c5_error($q$UPDATE public.project_external_fulfilment_events SET evidence='{}' WHERE fulfilment_id=pg_temp.c5_fid('client')$q$,'23514','external_fulfilment_immutable','verified evidence immutable');
+SELECT pg_temp.c5_error($q$DELETE FROM public.project_external_fulfilment_evidence_bindings WHERE fulfilment_id=pg_temp.c5_fid('client')$q$,'23514','external_fulfilment_immutable','binding append-only');
+-- Deleting a profile is rejected by retained external records, not SET NULL.
+SELECT pg_temp.c5_error($q$DELETE FROM public.profiles WHERE id=pg_temp.c5_id(2)$q$,'23503',NULL,'verifier profile retained');
+-- Direct calls cannot turn a client, guest or bearer of a private GUC into a writer.
+SELECT pg_temp.c5_actor(7);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.c5_error($q$SELECT public.get_project_external_fulfilments(pg_temp.c5_id(201))$q$,'42501','external_fulfilment_access','client cannot read studio external ledger');
+SELECT set_config('patina.external_writer','00875',true);
+SELECT pg_temp.c5_error($q$UPDATE public.project_external_fulfilments SET status='installed'$q$,'42501',NULL,'direct DML denied even with writer marker');
+SELECT pg_temp.c5_error($q$DELETE FROM public.project_external_fulfilment_events$q$,'42501',NULL,'direct event delete denied');
+SELECT pg_temp.c5_error($q$INSERT INTO public.project_external_fulfilment_evidence_bindings DEFAULT VALUES$q$,'42501',NULL,'direct binding insert denied');
+SELECT pg_temp.c5_error($q$SELECT public._fabrication_instructed_amount_cents(pg_temp.c5_fid('client'))$q$,'42501',NULL,'private amount helper denied');
+RESET ROLE;
+SELECT set_config('patina.external_writer','',true);
+-- The responsibility helper is the single rule for creation and later writes.
+DO $$ DECLARE slot text; value text; refusal text; r jsonb; BEGIN
+ SELECT responsibilities INTO r FROM public.project_scope_edition_packages WHERE edition_id=pg_temp.c5_id(301) AND package_key='pkg.client';
+ FOR slot,value,refusal IN SELECT * FROM (VALUES
+  ('purchasing','studio','external_rail_studio_buyer'),('payer','studio','external_rail_studio_liability'),
+  ('fabrication_contract','studio','external_rail_studio_liability'),('payer','none','external_rail_payer_unknown')) cases LOOP
+  SET LOCAL session_replication_role=replica;
+  UPDATE public.project_scope_edition_packages SET responsibilities=jsonb_set(r,ARRAY[slot],to_jsonb(value))
+   WHERE edition_id=pg_temp.c5_id(301) AND package_key='pkg.client';
+  SET LOCAL session_replication_role=origin;
+  PERFORM pg_temp.c5_assert(public._external_rail_refusal(pg_temp.c5_id(301),'pkg.client')=refusal,'external combination '||slot||'='||value);
+  PERFORM pg_temp.c5_actor(1);
+  PERFORM pg_temp.c5_error($q$SELECT public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.client','client_furnishing',ARRAY['chair'],NULL,NULL,'rail-denied')$q$,'23514',refusal,'create uses shared rail refusal '||slot||'='||value);
+  PERFORM pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('client'),'received','{}',NULL,'rail-denied')$q$,'23514',refusal,'event rechecks shared rail refusal '||slot||'='||value);
+ END LOOP;
+ SET LOCAL session_replication_role=replica;
+ UPDATE public.project_scope_edition_packages SET responsibilities=r WHERE edition_id=pg_temp.c5_id(301) AND package_key='pkg.client';
+ SET LOCAL session_replication_role=origin;
+END $$;
+-- Seed immutable source content only: the plan-issue owner graft is X04b.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by)
+SELECT pg_temp.c5_id(1100+n),pg_temp.c5_id(201),n,'C5 issued fixture','fixture-'||n,repeat('a',64),repeat(n::text,64),1,pg_temp.c5_id(1) FROM generate_series(1,2)n;
+INSERT INTO public.product_configurations(id,product_id,project_id,owner_user_id,studio_id,version,schema_revision,evaluation,snapshot,snapshot_hash)
+VALUES(pg_temp.c5_id(1002),pg_temp.c5_id(1001),pg_temp.c5_id(201),pg_temp.c5_id(1),pg_temp.c5_id(101),1,1,'{}','{}',repeat('a',64));
+INSERT INTO public.project_external_fulfilment_events(fulfilment_id,event_kind,evidence,plan_issue_id,recorded_by,event_seq,client_request_id,request_hash,recorded_at)
+SELECT pg_temp.c5_fid('gc'),'package_issued','{}',pg_temp.c5_id(1101),pg_temp.c5_id(1),1,'fixture-issue1','fixture',now()+interval '1 hour';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.c5_actor(1);
+SET LOCAL ROLE authenticated;
+INSERT INTO c5_result VALUES('configured',public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.client','client_furnishing',ARRAY['chair'],NULL,pg_temp.c5_id(1002),'configured'));
+INSERT INTO c5_result VALUES('configured-binding',public.bind_fulfilment_evidence(pg_temp.c5_fid('configured'),pg_temp.c5_id(605),ARRAY['chair'],'configured-bind'));
+INSERT INTO c5_result VALUES('issue-binding',public.bind_fulfilment_evidence(pg_temp.c5_fid('gc'),pg_temp.c5_id(606),ARRAY['k-1'],'issue-bind'));
+INSERT INTO c5_result VALUES('hold',public.record_external_fulfilment_event(pg_temp.c5_fid('client'),'hold',jsonb_build_object('decisionId',pg_temp.c5_id(601)),ARRAY['chair'],'hold'));
+SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('client'),'release_hold',jsonb_build_object('releasesEventId',(SELECT value->>'eventId' FROM c5_result WHERE key='hold'),'decisionId',pg_temp.c5_id(601)),NULL,'early-release')$q$,'23514','fulfilment_hold_evidence_required','unapproved evidence cannot release hold');
+RESET ROLE;
+SELECT public._resolve_coordination_item_authorized(pg_temp.c5_id(601),NULL,NULL,pg_temp.c5_id(701),NULL,pg_temp.c5_id(1));
+SELECT pg_temp.c5_assert((SELECT b.bound_at=r.reviewed_at FROM public.project_external_fulfilment_evidence_bindings b JOIN public.coordination_item_revisions r ON r.decision_id=b.decision_id WHERE b.id=(SELECT (value->>'bindingId')::uuid FROM c5_result WHERE key='binding')),'same-transaction native approval preserves preapproval binding despite tied times');
+SET LOCAL ROLE authenticated;
+SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('client'),'release_hold',jsonb_build_object('releasesEventId',(SELECT value->>'eventId' FROM c5_result WHERE key='hold'),'decisionId',pg_temp.c5_id(601)),NULL,'release');
+SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('client'),'release_hold',jsonb_build_object('releasesEventId',(SELECT value->>'eventId' FROM c5_result WHERE key='hold'),'decisionId',pg_temp.c5_id(601)),NULL,'release-again')$q$,'23514','fulfilment_hold_not_open','hold released exactly once');
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+UPDATE public.product_configurations SET snapshot_hash=repeat('b',64) WHERE id=pg_temp.c5_id(1002);
+INSERT INTO public.project_external_fulfilment_events(fulfilment_id,event_kind,evidence,plan_issue_id,recorded_by,event_seq,client_request_id,request_hash,recorded_at)
+SELECT pg_temp.c5_fid('gc'),'package_issued','{}',pg_temp.c5_id(1102),pg_temp.c5_id(1),2,'fixture-issue2','fixture',now()-interval '1 hour';
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+INSERT INTO c5_result VALUES('new-issue-binding',public.bind_fulfilment_evidence(pg_temp.c5_fid('gc'),pg_temp.c5_id(607),ARRAY['k-2'],'new-issue-bind'));
+SELECT pg_temp.c5_assert((public.bind_fulfilment_evidence(pg_temp.c5_fid('configured'),pg_temp.c5_id(605),ARRAY['chair'],'configured-bind')->>'coversConfigurationSnapshotHash')=repeat('a',64),'binding replay retains original configuration snapshot');
+RESET ROLE;
+SELECT pg_temp.c5_assert((SELECT covers_plan_issue_id=pg_temp.c5_id(1101) FROM public.project_external_fulfilment_evidence_bindings WHERE decision_id=pg_temp.c5_id(606)),'old coverage retains exact issued identity');
+SELECT pg_temp.c5_assert((SELECT covers_plan_issue_id=pg_temp.c5_id(1102) FROM public.project_external_fulfilment_evidence_bindings WHERE decision_id=pg_temp.c5_id(607)),'new binding uses highest issue event sequence not timestamp');
+SELECT pg_temp.c5_error($q$UPDATE public.project_external_fulfilment_evidence_bindings SET units=ARRAY['table'] WHERE decision_id=pg_temp.c5_id(601)$q$,'23514','external_fulfilment_immutable','binding cannot be widened');
+SELECT pg_temp.c5_error($q$UPDATE public.project_external_fulfilment_events SET evidence_level='reported',verified_by=NULL,verified_at=NULL,verification_seq=NULL WHERE id=(SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract1')$q$,'23514','external_fulfilment_immutable','verified tuple cannot be reversed');
+-- A requester's exact receipts survive later cancellation/staleness but not lost access.
+SELECT pg_temp.c5_actor(1);
+SET LOCAL ROLE authenticated;
+SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'cancelled','{}',NULL,'cancel');
+SELECT pg_temp.c5_assert((public.create_external_fulfilment(pg_temp.c5_id(201),pg_temp.c5_id(301),'pkg.cabinets','gc_cabinetry',ARRAY['k-1','k-2'],NULL,NULL,'create-gc')->>'replayed')::boolean,'create receipt survives cancellation');
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_scope_editions SET status='stale' WHERE id=pg_temp.c5_id(301);
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.c5_assert((public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'cancelled','{}',NULL,'cancel')->>'replayed')::boolean,'event receipt survives stale edition and terminal status');
+SELECT pg_temp.c5_assert((public.bind_fulfilment_evidence(pg_temp.c5_fid('gc'),pg_temp.c5_id(606),ARRAY['k-1'],'issue-bind')->>'replayed')::boolean,'binding receipt survives cancelled fulfilment and stale edition');
+SELECT pg_temp.c5_actor(2);
+SELECT pg_temp.c5_assert((public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract1'),'verify1')->>'replayed')::boolean,'verification receipt survives stale edition');
+SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('gc'),pg_temp.c5_id(606),ARRAY['k-1'],'issue-bind')$q$,'42501','idempotency_key_reused','other studio admin cannot replay binding');
+SELECT pg_temp.c5_actor(1);
+SELECT pg_temp.c5_error($q$SELECT public.verify_external_fulfilment_event((SELECT (value->>'eventId')::uuid FROM c5_result WHERE key='contract1'),'verify1')$q$,'42501','idempotency_key_reused','other original recorder cannot replay verification');
+RESET ROLE;
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'cancelled','{}',NULL,'cancel')$q$,'55000','scope_editions_inactive','capability suspension precedes exact event replay');
+SELECT pg_temp.c5_error($q$SELECT public.bind_fulfilment_evidence(pg_temp.c5_fid('gc'),pg_temp.c5_id(606),ARRAY['k-1'],'issue-bind')$q$,'55000','scope_editions_inactive','capability suspension precedes exact binding replay');
+RESET ROLE;
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SET LOCAL session_replication_role=replica;
+UPDATE public.organization_members SET status='suspended' WHERE organization_id=pg_temp.c5_id(101) AND user_id=pg_temp.c5_id(1);
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.c5_error($q$SELECT public.record_external_fulfilment_event(pg_temp.c5_fid('gc'),'cancelled','{}',NULL,'cancel')$q$,'42501','external_fulfilment_access','original requester loses replay with current access');
+RESET ROLE;
+SELECT pg_temp.c5_assert(NOT EXISTS(SELECT 1 FROM public.project_external_fulfilment_events WHERE event_kind='fabrication_instruction'),'no instruction fabricated');
+\echo 'C5 external fulfilment assertions complete; wrapper rolls back every fixture and temporary grant.'

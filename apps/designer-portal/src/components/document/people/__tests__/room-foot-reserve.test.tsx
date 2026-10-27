@@ -32,3 +32,9 @@ it('gives the window scroller dock clearance in every Room at both widths', () =
     expect.stringContaining('scroll-padding-bottom: max(72px, var(--doc-drawer-height, 0px))'),
   ]));
 });
+
+it('reserves the measured dock beneath the independent round-8 contents scrollport', () => {
+  const css = readFileSync(resolve(process.cwd(), 'src/components/document/paper/round8.css'), 'utf8');
+  const rule = css.match(/\[data-paper-renderer="round8"\] \[data-contents-margin\]\s*\{([^}]*)\}/)?.[1];
+  expect(rule).toContain('max-height: calc(100dvh - (var(--r8-head) + 24px) - var(--doc-shell-floating-bottom))');
+});

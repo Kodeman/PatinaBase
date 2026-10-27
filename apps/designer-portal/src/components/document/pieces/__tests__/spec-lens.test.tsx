@@ -839,12 +839,25 @@ describe("at 390 (a14, F9)", () => {
     setStacked(true);
     renderLens();
     await pane();
-    fireEvent.click(rowFor("Countertop for custom cabinets"));
+    fireEvent.click(rowFor("Countertop for custom cabinets"), { detail: 1 });
     const section = await pane();
     const heading = within(section).getByRole("heading", { level: 2 });
     await waitFor(() => expect(heading).toHaveFocus());
     expect(heading).toHaveTextContent("Countertop for custom cabinets · ×2");
     expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 767.98px)");
+  });
+
+  it("reveals the phone pane for keyboard activation", async () => {
+    setStacked(true);
+    renderLens();
+    await pane();
+    screen.getByRole("list", { name: "Lines" }).parentElement!.style.order = "3";
+    const row = rowFor("Countertop for custom cabinets");
+    row.focus();
+    fireEvent.click(row, { detail: 0 });
+    const section = await pane();
+    await waitFor(() => expect(within(section).getByRole("heading", { level: 2 })).toHaveFocus());
+    expect(row).toHaveAttribute("aria-current", "true");
   });
 
   it("leaves focus on the list at 1440, where the pane sits beside it", async () => {
@@ -1244,5 +1257,57 @@ describe("spec-progress", () => {
     ).toEqual(["w"]);
     expect(linesForPlace(lines, placements, "removed", rooms)).toEqual([]);
     expect(linesForPlace(lines, placements, null, rooms)).toHaveLength(4);
+  });
+});
+
+
+describe("fitted Spec editor (C03)", () => {
+  it("uses the rendered container stack to focus a chosen line even on a wide viewport", async () => {
+    renderLens();
+    await pane();
+    const list = screen.getByRole("list", { name: "Lines" }).parentElement!;
+    list.style.order = "3";
+    fireEvent.click(rowFor("Countertop for custom cabinets"), { detail: 1 });
+    await waitFor(() => expect(within(screen.getByTestId("spec-fields-pane")).getByRole("heading", { level: 2 })).toHaveFocus());
+  });
+
+  it.each(["0", "3"])(
+    "keeps keyboard activation on the line control when rendered list order is %s",
+    async (order) => {
+      renderLens();
+      await pane();
+      screen.getByRole("list", { name: "Lines" }).parentElement!.style.order = order;
+      const row = rowFor("Countertop for custom cabinets");
+      row.focus();
+      // Enter/Space and assistive activation dispatch a click without a pointer count.
+      fireEvent.click(row, { detail: 0 });
+      const section = await pane();
+      expect(within(section).getByRole("heading", { level: 2 })).toHaveTextContent(
+        "Countertop for custom cabinets · ×2",
+      );
+      expect(row).toHaveAttribute("aria-current", "true");
+      expect(row).toHaveFocus();
+    },
+  );
+
+  it("reports a missing addressed stable ID even when the room has no lines", async () => {
+    mockItems.data = [];
+    render(<SpecLens docId="d1" projectId="p1" room="living" canSeeMoney line="removed-id" />, { wrapper });
+    expect(await screen.findByRole("status")).toHaveTextContent("That line is no longer in this room.");
+    expect(screen.queryByTestId("spec-fields-pane")).not.toBeInTheDocument();
+    expect(mockUpdateSpec).not.toHaveBeenCalled();
+  });
+
+  it("keeps the same focused editor after its versioned save acknowledges", async () => {
+    renderLens();
+    const section = await pane();
+    const finish = within(section).getByRole("textbox", { name: "Finish" });
+    finish.focus();
+    fireEvent.change(finish, { target: { value: "Phone finish" } });
+    fireEvent.keyDown(finish, { key: "Enter" });
+    await waitFor(() => expect(mockUpdateSpec).toHaveBeenCalledTimes(1));
+    expect(within(section).getByRole("textbox", { name: "Finish" })).toBe(finish);
+    expect(finish).toHaveFocus();
+    expect(finish).toHaveValue("Phone finish");
   });
 });

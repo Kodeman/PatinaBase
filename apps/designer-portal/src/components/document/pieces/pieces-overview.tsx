@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useProjectPalettes, useProjectRoomPlacements } from '@patina/supabase';
+import type { WorkRoom } from '../paper/chapters/ffe-work-room';
 import {
   deriveOverviewRows,
   overviewFrontMatter,
@@ -43,6 +44,9 @@ export interface PiecesOverviewProps {
   heldRoomId?: string | null;
   /** A room folded while the line it held open was in it. */
   onRoomFolded?: (lineIds: readonly string[]) => void;
+  /** WP-01.6 — round 8 only: a room's door opens the sheet in place.
+   *  Absent, it routes to `/doc/[id]/pieces` as before. */
+  onWorkRoom?: WorkRoom;
   onAddLine: (row: OverviewRow) => void;
   renderLines: (row: OverviewRow, lineIds: readonly string[]) => ReactNode;
   /** Stands above the rows (the `Choose the piece` prompt). */
@@ -90,6 +94,7 @@ export function PiecesOverview({
   returnedRoomId = null,
   heldRoomId = null,
   onRoomFolded,
+  onWorkRoom,
   onAddLine,
   renderLines,
   lead,
@@ -160,6 +165,7 @@ export function PiecesOverview({
               wallSwatch={row.roomId ? roomWallFinish(finishes.get(row.roomId)) : null}
               purchasingFacts={<PurchasingOverviewFacts projectId={projectId} lines={lines.filter((line) => row.primaryLineIds.includes(line.id))} />}
               onToggle={() => toggle(row.key)}
+              onWorkRoom={onWorkRoom}
               onAddLine={() => onAddLine(row)}
             >
               {open && renderLines(row, allOpen ? row.primaryLineIds : row.lineIds)}

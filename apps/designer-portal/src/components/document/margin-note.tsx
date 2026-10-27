@@ -1,5 +1,11 @@
 'use client';
 
+import { useContext } from 'react';
+import { Round8MarginContext } from './paper/margin-layout';
+
+export const ROUND8_FIRST_TOUCH_DESKTOP = 'One client, one paper. The contents on the right say where this stands; the margin beneath them is where decisions, messages, and money gather. Nothing is a form — it fills as the work happens.';
+export const ROUND8_FIRST_TOUCH_COMPACT = 'One client, one paper. Open Project file sections for the contents, or More then Margin for decisions, messages, and money. Nothing is a form — it fills as the work happens.';
+
 /**
  * Margin note (R94 — the first-touch primitive). A single pencil-idiom note in
  * the page margin: a Playfair-italic line with an en-dash lead, a narrow
@@ -253,6 +259,7 @@ export function MarginNote({
   onSeen,
   className,
 }: MarginNoteProps) {
+  const round8 = useContext(Round8MarginContext);
   const footnote =
     caption === null
       ? undefined
@@ -353,7 +360,12 @@ export function MarginNote({
           <span aria-hidden className="mr-1 not-italic text-[var(--text-muted)]">
             –
           </span>
-          {children}
+          {round8 && noteKey === 'doc-first-touch' ? (
+            <>
+              <span className="hidden min-[1180px]:inline">{ROUND8_FIRST_TOUCH_DESKTOP}</span>
+              <span className="min-[1180px]:hidden">{ROUND8_FIRST_TOUCH_COMPACT}</span>
+            </>
+          ) : children}
         </span>
         {act &&
           (act.href !== undefined ? (

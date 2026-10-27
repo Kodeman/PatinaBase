@@ -298,6 +298,34 @@ describe("RoughInTable keys", () => {
 });
 
 describe("RoughInTable row menu", () => {
+  it("toggles the same trigger without replacing its focused node", async () => {
+    const { user } = setup();
+    const trigger = screen.getByRole("button", { name: "Acts for Custom cabinet" });
+    await user.click(trigger);
+    await user.click(trigger);
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Acts for Custom cabinet" })).toBe(trigger);
+  });
+
+  it("escapes the scrolling Body but retains the drafting stock and submenu focus", async () => {
+    const { props, view, user } = setup();
+    view.rerender(
+      <div data-drafting-stock="">
+        <main data-testid="scrolling-body"><RoughInTable {...props} /></main>
+      </div>,
+    );
+    const trigger = screen.getByRole("button", { name: "Acts for Custom cabinet" });
+    await user.click(trigger);
+    const menu = screen.getByRole("menu", { name: "Acts for Custom cabinet" });
+    expect(screen.getByTestId("scrolling-body")).not.toContainElement(menu);
+    expect(menu.closest("[data-drafting-stock]")).toBeTruthy();
+    await user.keyboard("{ArrowDown}{Enter}");
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("menuitem", { name: "Move to room…" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(trigger).toHaveFocus();
+  });
   it("carries Fill with a product, Move to room…, Also place in…, Remove", async () => {
     const { props, user } = setup();
     const trigger = screen.getByRole("button", {
@@ -345,12 +373,12 @@ describe("RoughInTable row menu", () => {
     expect(items[0]).toHaveFocus();
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
     expect(props.onMove).toHaveBeenCalledWith(LIVING[0], "kitchen");
-    // T-60a F4/F7: nothing is said before the server answers (the lens says
-    // it), and the hand stays on the acted line, never the entry row.
+    // The lens owns focus after settlement; the source row is about to leave.
     expect(screen.getByRole("status")).not.toHaveTextContent(/Moved/);
     expect(
       screen.getByRole("button", { name: "Acts for Custom cabinet" }),
-    ).toHaveFocus();
+    ).not.toHaveFocus();
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("Move to room… works by touch, and Esc steps back out", async () => {

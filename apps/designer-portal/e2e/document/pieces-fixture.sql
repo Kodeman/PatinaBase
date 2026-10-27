@@ -166,6 +166,13 @@ SELECT public.place_product_in_project_v2(jsonb_build_object(
   'quantity', 9, 'itemType', 'fixed', 'duplicateMode', 'reuse',
   'roleConfigurationIdentity', 'default', 'idempotencyKey', 'e659-fill-r1-' || gen_random_uuid()));
 
+-- R1's 00809 pricing basis is explicit so another test's designer defaults
+-- cannot change S4's subtotal: 9 × ($184 + 35%) = $2,235.60.
+SELECT public.set_ffe_line_pricing(
+  (SELECT id FROM public.project_ffe_items WHERE project_id = 'e6590000-0000-4000-8000-000000000001'
+     AND product_id = 'e6590000-0000-4000-8000-000000000103'),
+  'markup_percent', 35);
+
 -- R1a: the hanger's labor, on R1 (D4, D5).
 SELECT public.add_labor_line(
   (SELECT id FROM public.project_ffe_items WHERE project_id = 'e6590000-0000-4000-8000-000000000001'

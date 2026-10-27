@@ -1,0 +1,2 @@
+Commerce.init();
+Design.init();

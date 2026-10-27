@@ -118,21 +118,37 @@ function PieceImages({ piece }: { piece: ClientSelection }) {
 function PieceFacts({ piece }: { piece: ClientSelection }) {
   return <div><p>{piece.name}</p><p>{pieceStatus(piece)}</p>
     {piece.quantity > 1 && <p>{piece.quantity} of them</p>}
-    {piece.clientLineTotalCents > 0 && <p>{formatCurrency(piece.clientLineTotalCents)}</p>}
+    {piece.clientLineTotalCents != null && piece.clientLineTotalCents > 0 && <p>{formatCurrency(piece.clientLineTotalCents)}</p>}
     <PieceInstrument piece={piece} />
   </div>;
 }
 
 export function GalleryPieces({ band, issue, extras }: { band: RoomBandModel; issue?: HouseIssue | null; extras?: ReactNode }) {
+  const choice = issue?.rooms.get(band.roomId);
+  // Live studio facts do not replace an edition's recorded external responsibility.
+  const frozenIssue = issue && band.pieces.length > 0 ? {
+    ...issue,
+    editorial: { ...issue.editorial, rooms: issue.editorial.rooms.map((room) => room.id === band.roomId
+      ? { ...room, items: room.items.filter((item) => item.responsibility === 'external') }
+      : room) },
+  } : issue;
+  const recordedRoom = frozenIssue?.editorial.rooms.find((room) => room.id === band.roomId);
+  const recordLabel = issue?.editorial.edition ? 'In the shared edition' : 'In the house record';
   return <>
     {band.varianceLine && <p>{band.varianceLine}</p>}
-    <ul className="gallery-piece-list">
-      {band.pieces.map((piece) => <li key={piece.id} data-threshold-piece={piece.id}>
-        <PieceImages piece={piece} />
-        <PieceFacts piece={piece} />
-      </li>)}
-    </ul>
-    {band.pieces.length === 0 && issue?.rooms.get(band.roomId) && <EditorialPieces issue={issue} choice={issue.rooms.get(band.roomId)!} />}
+    {band.pieces.length > 0 && <section aria-label="Current studio pieces">
+      <h3 className="mt-6 font-medium">Current studio pieces</h3>
+      <ul className="gallery-piece-list">
+        {band.pieces.map((piece) => <li key={piece.id} data-threshold-piece={piece.id}>
+          <PieceImages piece={piece} />
+          <PieceFacts piece={piece} />
+        </li>)}
+      </ul>
+    </section>}
+    {frozenIssue && choice && recordedRoom && recordedRoom.items.length > 0 && <section aria-label={recordLabel}>
+      <h3 className="mt-6 font-medium">{recordLabel}</h3>
+      <EditorialPieces issue={frozenIssue} choice={choice} />
+    </section>}
     {extras}
   </>;
 }

@@ -7,7 +7,7 @@
  * competing primaries.
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
 
 const SRC = join(__dirname, "..", "..", "..");
@@ -36,7 +36,10 @@ function expectOneStaticPrimary(region: string): void {
   expect(region.match(/variant="primary"/g) ?? []).toHaveLength(1);
 }
 
-const desk = readRoute("desk/page.tsx");
+const desk = [
+  readRoute("desk/page.tsx"),
+  readComponent("frame/legacy-desk-body.tsx"),
+].join("\n");
 const letterhead = readComponent("letterhead-instruments.tsx");
 const proposalDraft = readComponent("proposal-instruments.tsx");
 const proposalWatch = readComponent("proposal-watch.tsx");
@@ -359,5 +362,367 @@ describe("Project region ledgers", () => {
     expect(head).not.toContain("'inked'");
     // US-25 Q8's band context is gone: the band no longer demotes the lead.
     expect(head).not.toContain("BandLeadsContext");
+  });
+});
+
+/**
+ * P02 (Kody 2026-10-23; house sheet SPEC §H-3; token-mapping §6–§7.2).
+ *
+ * Inside `[data-paper-renderer="round8"]` the filled navigation and save
+ * controls are the R203 plate, unchanged but for its geometry; terminal
+ * commercial and signature acts keep the forest terminal and their §A6
+ * consequence sentence. Every round-8 rule lives in round8.css, which only
+ * the round-8 renderer imports, so globals.css — and with it the scored-ink
+ * slice every R203 / R5 assertion above reads — carries none of it.
+ */
+const ROUND8_SCOPE = '[data-paper-renderer="round8"]';
+const round8CssPath = join(COMPONENTS, "paper", "round8.css");
+const round8Css = existsSync(round8CssPath) ? readFileSync(round8CssPath, "utf8") : "";
+
+/** Where round-8 components live (token-mapping §7.2 item 4), plus the
+ *  frame's own `frame/round8-*` files. */
+const ROUND8_SOURCE_DIRS = [join(COMPONENTS, "paper"), join(COMPONENTS, "studio")];
+const ROUND8_FRAME_DIR = join(COMPONENTS, "frame");
+
+/**
+ * token-mapping §6.1, frozen: file (relative to components/document) → the
+ * plate actionKeys it may print. Empty until WP-02/03/04 name their keys
+ * against the enumerated sites: the studio cover note, library placement and
+ * resource handoffs; the chapter acts for Brief & agreement, Design,
+ * Cabinetry, Approvals, FF&E and Financials; one foot act per unfolded
+ * instrument. A plate not listed here fails until the map and §6.1 change
+ * together.
+ */
+const ROUND8_PLATE_SITES: Readonly<Record<string, readonly string[]>> = Object.freeze({});
+
+/** §6.2 — a plate never sends, issues, pays, signs, accepts, authorises,
+ *  dispatches, voids or approves. Anchored to a kebab segment's start, so a
+ *  `design` key is not read as `sign`. */
+const CONSEQUENTIAL_KEY = /(^|-)(send|issue|pay|sign|accept|authori[sz]e|dispatch|void|approve)/;
+
+function round8SourceFiles(): string[] {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== "__tests__") walk(full);
+      } else if (/\.tsx?$/.test(entry.name) && !/\.(test|spec)\.tsx?$/.test(entry.name)) {
+        out.push(full);
+      }
+    }
+  };
+  ROUND8_SOURCE_DIRS.forEach(walk);
+  if (existsSync(ROUND8_FRAME_DIR)) {
+    for (const name of readdirSync(ROUND8_FRAME_DIR)) {
+      if (/^round8-.*\.tsx?$/.test(name)) out.push(join(ROUND8_FRAME_DIR, name));
+    }
+  }
+  return out;
+}
+
+/** Each `<DocumentAction …>` opening element (not Group / Row), read to the
+ *  `>` that closes it at brace depth zero, so an arrow's `=>` inside a prop
+ *  does not end it early. */
+function documentActionElements(source: string): string[] {
+  const found: string[] = [];
+  const opener = /<DocumentAction(?![A-Za-z])/g;
+  let match: RegExpExecArray | null;
+  while ((match = opener.exec(source)) !== null) {
+    let depth = 0;
+    for (let i = match.index; i < source.length; i += 1) {
+      const ch = source[i];
+      if (ch === "{") depth += 1;
+      else if (ch === "}") depth -= 1;
+      else if (ch === ">" && depth === 0) {
+        found.push(source.slice(match.index, i + 1));
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+/** Every DocumentActionGroup / DocumentActionRow in a source, open to close. */
+function actionRegions(source: string): string[] {
+  const found: string[] = [];
+  for (const tag of ["DocumentActionGroup", "DocumentActionRow"]) {
+    const opener = new RegExp(`<${tag}(?![A-Za-z])`, "g");
+    let match: RegExpExecArray | null;
+    while ((match = opener.exec(source)) !== null) {
+      const end = source.indexOf(`</${tag}>`, match.index);
+      if (end > match.index) found.push(source.slice(match.index, end));
+    }
+  }
+  return found;
+}
+
+interface CssRule {
+  selector: string;
+  body: string;
+}
+
+/** Top-level and @media-nested rules of a comment-stripped sheet. */
+function cssRules(css: string): CssRule[] {
+  const found: CssRule[] = [];
+  const RULE = /([^{}]+)\{([^{}]*)\}/g;
+  let match: RegExpExecArray | null;
+  while ((match = RULE.exec(css)) !== null) {
+    const selector = match[1]!.trim().replace(/\s+/g, " ");
+    if (!selector || selector.startsWith("@")) continue;
+    found.push({ selector, body: match[2]!.trim().replace(/\s+/g, " ") });
+  }
+  return found;
+}
+
+/** Selector list items, split only on top-level commas. */
+function selectorList(selector: string): string[] {
+  const parts: string[] = [];
+  const closers: string[] = [];
+  let quote: "\"" | "'" | null = null;
+  let start = 0;
+  for (let i = 0; i < selector.length; i += 1) {
+    const char = selector[i]!;
+    if (quote) {
+      if (char === "\\") i += 1;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "\\") {
+      i += 1;
+      continue;
+    }
+    if (char === "\"" || char === "'") quote = char;
+    else if (char === "[") closers.push("]");
+    else if (char === "(") closers.push(")");
+    else if (char === "]" || char === ")") closers.pop();
+    else if (char === "," && closers.length === 0) {
+      parts.push(selector.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(selector.slice(start).trim());
+  return parts;
+}
+
+describe("selectorList", () => {
+  it("splits only on commas outside strings and nested selectors", () => {
+    expect(selectorList('a[x="1,2"], b')).toHaveLength(2);
+    expect(selectorList(":is(a, b) c, d")).toHaveLength(2);
+    expect(selectorList("a, b")).toHaveLength(2);
+  });
+});
+
+describe("P02 round-8 plate (Kody 2026-10-23)", () => {
+  const strippedRound8 = round8Css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const round8Rules = cssRules(strippedRound8);
+
+  const ts = require("typescript") as typeof import("typescript");
+  type Element = import("typescript").JsxElement | import("typescript").JsxSelfClosingElement;
+
+  function jsxElements(source: string): Element[] {
+    const elements: Element[] = [];
+    const visit = (node: import("typescript").Node): void => {
+      if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) elements.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(ts.createSourceFile("round8.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX));
+    return elements;
+  }
+
+  function attribute(element: Element, name: string) {
+    const opening = ts.isJsxElement(element) ? element.openingElement : element;
+    const property = opening.attributes.properties.find(
+      (prop) => ts.isJsxAttribute(prop) && prop.name.getText() === name,
+    );
+    return property && ts.isJsxAttribute(property) ? property.initializer : undefined;
+  }
+
+  function hasLiteralVariants(source: string): boolean {
+    const spelled = source.match(/(['"])(plate|terminal)\1/g)?.length ?? 0;
+    const literal = source.match(/variant="(plate|terminal)"/g)?.length ?? 0;
+    const computed = jsxElements(source).some((element) => {
+      const opening = ts.isJsxElement(element) ? element.openingElement : element;
+      const variant = attribute(element, "variant");
+      return opening.tagName.getText() === "DocumentAction" && variant !== undefined && !ts.isStringLiteral(variant);
+    });
+    // Keep the ledger ban as well as rejecting expressions with no quoted tier.
+    return !computed && spelled === literal;
+  }
+
+  function descriptionKey(value: import("typescript").JsxAttributeValue | undefined): string | undefined {
+    if (!value) return undefined;
+    const expression = ts.isJsxExpression(value) ? value.expression : value;
+    if (!expression) return undefined;
+    if (ts.isStringLiteral(expression)) return expression.text.trim() ? `text:${expression.text}` : undefined;
+    return `expression:${expression.getText()}`;
+  }
+
+  function hasSentence(element: import("typescript").JsxElement | import("typescript").JsxFragment): boolean {
+    return element.children.some((child) => {
+      if (ts.isJsxText(child)) return child.text.trim().length > 0;
+      if (ts.isJsxElement(child) || ts.isJsxFragment(child)) return hasSentence(child);
+      if (ts.isJsxExpression(child) && child.expression && ts.isStringLiteral(child.expression)) {
+        return child.expression.text.trim().length > 0;
+      }
+      return false;
+    });
+  }
+
+  function unboundTerminals(source: string): string[] {
+    const elements = jsxElements(source);
+    const sentences = new Set(elements
+      .filter((element) => ts.isJsxElement(element) && hasSentence(element))
+      .map((element) => descriptionKey(attribute(element, "id")))
+      .filter((key) => key !== undefined));
+    return elements.flatMap((element) => {
+      const opening = ts.isJsxElement(element) ? element.openingElement : element;
+      const variant = attribute(element, "variant");
+      if (opening.tagName.getText() !== "DocumentAction" || !variant || !ts.isStringLiteral(variant) || variant.text !== "terminal") return [];
+      const describedBy = descriptionKey(attribute(element, "aria-describedby"));
+      const key = attribute(element, "actionKey");
+      return describedBy && sentences.has(describedBy) ? [] : [key && ts.isStringLiteral(key) ? key.text : "(no actionKey)"];
+    });
+  }
+
+  it.each([
+    ["computed prop carrying plate and a consequential key", '<DocumentActionGroup><DocumentAction variant={variant} actionKey="send-invoice"/><DocumentAction variant={variant} actionKey="pay-invoice"/></DocumentActionGroup>'],
+    ["computed call", '<DocumentAction variant={chooseVariant()} actionKey="send-invoice"/>'],
+    ["computed string literal", '<DocumentAction variant={"plate"} actionKey="save"/>'],
+  ])("rejects %s", (_name, source) => {
+    expect(hasLiteralVariants(source)).toBe(false);
+  });
+
+  it.each([
+    ["data-id target", '<p data-id={sentenceId}>This sends the invoice.</p>'],
+    ["self-closing target", '<span id={sentenceId}/>'],
+    ["empty paired target", '<span id={sentenceId}></span>'],
+    ["whitespace target", '<span id={sentenceId}>  \n </span>'],
+    ["comment-only target", '<span id={sentenceId}>{/* sentence goes here */}</span>'],
+  ])("rejects terminal with %s", (_name, target) => {
+    const source = `const view = <><DocumentAction variant="terminal" actionKey="send-invoice" aria-describedby={sentenceId}/>${target}</>`;
+    expect(unboundTerminals(source)).toEqual(["send-invoice"]);
+  });
+
+  it.each(['""', '"   "', '{""}', '{"   "}'])(
+    "rejects empty terminal aria-describedby=%s",
+    (description) => {
+      const source = `const view = <><DocumentAction variant="terminal" actionKey="send-invoice" aria-describedby=${description}/><p id=${description}>This sends the invoice.</p></>`;
+      expect(unboundTerminals(source)).toEqual(["send-invoice"]);
+    },
+  );
+
+  it.each([
+    '<p id={sentenceId}>This sends the invoice.</p>',
+    '<p id={sentenceId}>This <strong>sends</strong> the invoice.</p>',
+  ])("accepts a terminal bound to a real consequence sentence: %s", (target) => {
+    const source = `const view = <><DocumentAction variant="terminal" actionKey="send-invoice" aria-describedby={sentenceId}/>${target}</>`;
+    expect(hasLiteralVariants(source)).toBe(true);
+    expect(unboundTerminals(source)).toEqual([]);
+  });
+
+  it("accepts literal plate and primary variants for the other P02 checks", () => {
+    expect(hasLiteralVariants('<DocumentActionGroup><DocumentAction variant="plate" actionKey="save"/><DocumentAction variant="primary" actionKey="next"/></DocumentActionGroup>')).toBe(true);
+  });
+
+  it("holds every round-8 rule in its own delimited sheet, none in globals.css", () => {
+    expect(round8Css.trimStart().startsWith("/* Round 8 paper renderer (P02)")).toBe(true);
+    expect(round8Css.trimEnd().endsWith("/* end Round 8 paper renderer */")).toBe(true);
+    expect(round8Rules.length).toBeGreaterThan(0);
+    // the scored-ink slice every R203 / R5 assertion reads stays legacy-only
+    expect(scoredInkBlock).not.toContain("data-paper-renderer");
+    expect(globalsCss).not.toContain("data-paper-renderer");
+  });
+
+  it("scopes every selector in the round-8 sheet to the round-8 renderer", () => {
+    const unscoped = round8Rules
+      .flatMap(({ selector }) => selectorList(selector))
+      .filter((selector) => !selector.startsWith(ROUND8_SCOPE));
+    expect(unscoped).toEqual([]);
+  });
+
+  it("restyles only the plate's geometry: inset 0 paint, ring 2px off it", () => {
+    const actionRules = round8Rules.filter(({ selector }) => /\.da-/.test(selector));
+    // the plate is the only tier round 8 touches — terminal, danger and the
+    // scored primary keep their grammar byte for byte
+    expect(strippedRound8).not.toMatch(/\.da-(terminal|danger|primary|secondary|tertiary)\b/);
+    for (const { selector } of actionRules) {
+      expect(new Set(selector.match(/\.da-[a-z-]+/g))).toEqual(new Set([".da-plate"]));
+    }
+    expect(actionRules).toEqual([
+      { selector: `${ROUND8_SCOPE} .da-plate::after`, body: "inset: 0;" },
+      {
+        selector: `${ROUND8_SCOPE} .da-plate:focus-visible::after, ${ROUND8_SCOPE} .da-plate[data-held-focus-cue]::after`,
+        body: "outline-offset: 2px;",
+      },
+    ]);
+    const plateCss = actionRules.map(({ selector, body }) => `${selector}{${body}}`).join("");
+    expect(plateCss).not.toMatch(/background|forest|transform/);
+    // the override mirrors the legacy focus rule's selector list exactly
+    expect(cssRule(".da-plate:focus-visible::after,")).toContain(".da-plate[data-held-focus-cue]::after");
+  });
+
+  it("keeps the frozen plate-site map free of a consequential act, and every listed file real", () => {
+    for (const [file, keys] of Object.entries(ROUND8_PLATE_SITES)) {
+      expect(existsSync(join(COMPONENTS, file))).toBe(true);
+      for (const key of keys) expect(key).not.toMatch(CONSEQUENTIAL_KEY);
+    }
+    // the segment anchor reads the §6.2 verbs, not their letters inside a word
+    expect("save-unsent-design-set").not.toMatch(CONSEQUENTIAL_KEY);
+    expect("send-invoice").toMatch(CONSEQUENTIAL_KEY);
+    expect("record-client-approves").toMatch(CONSEQUENTIAL_KEY);
+  });
+
+  it("prints a round-8 plate only at a frozen site, never for a consequential act", () => {
+    const offences: string[] = [];
+    for (const file of round8SourceFiles()) {
+      const name = file.slice(COMPONENTS.length + 1);
+      const allowed = ROUND8_PLATE_SITES[name] ?? [];
+      for (const element of documentActionElements(readFileSync(file, "utf8"))) {
+        if (!element.includes('variant="plate"')) continue;
+        const key = element.match(/actionKey="([^"]+)"/)?.[1];
+        if (!key) offences.push(`${name}: a plate with no literal actionKey`);
+        else if (CONSEQUENTIAL_KEY.test(key)) offences.push(`${name}: ${key} is a consequential act`);
+        else if (!allowed.includes(key)) offences.push(`${name}: ${key} is not a §6.1 plate site`);
+      }
+    }
+    expect(offences).toEqual([]);
+  });
+
+  it("spells every round-8 plate and terminal as a literal variant the gate can read", () => {
+    // A computed variant (`variant={x ? 'plate' : …}`) or a ledger entry would
+    // slip past the site and consequence checks, so round-8 files write them
+    // only as `variant="plate"` / `variant="terminal"` on a DocumentAction.
+    const offences: string[] = [];
+    for (const file of round8SourceFiles()) {
+      const source = readFileSync(file, "utf8");
+      if (!hasLiteralVariants(source)) offences.push(file.slice(COMPONENTS.length + 1));
+    }
+    expect(offences).toEqual([]);
+  });
+
+  it("keeps one leader (primary or plate) per round-8 action region", () => {
+    const crowded: string[] = [];
+    for (const file of round8SourceFiles()) {
+      for (const region of actionRegions(readFileSync(file, "utf8"))) {
+        const leaders = region.match(/variant="(primary|plate)"/g) ?? [];
+        if (leaders.length > 1) crowded.push(`${file.slice(COMPONENTS.length + 1)}: ${leaders.length} leaders`);
+      }
+    }
+    expect(crowded).toEqual([]);
+  });
+
+  it("binds every round-8 terminal to its §A6 consequence sentence", () => {
+    // The sentence is the act's description: the terminal names it through
+    // aria-describedby, and the same file renders the element carrying that id.
+    const unbound: string[] = [];
+    for (const file of round8SourceFiles()) {
+      const source = readFileSync(file, "utf8");
+      for (const key of unboundTerminals(source)) {
+        unbound.push(`${file.slice(COMPONENTS.length + 1)}: ${key}`);
+      }
+    }
+    expect(unbound).toEqual([]);
   });
 });

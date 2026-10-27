@@ -1,5 +1,11 @@
 'use client';
 
+import { LegacyDocumentFrame } from '@/components/document/frame/legacy-document-frame';
+import { Round8DocumentLoading } from '@/components/document/frame/round8-document-loading';
+import type { DocumentFrameSlots } from '@/components/document/frame/frame-slots';
+import { usePaperRenderer } from '@/hooks/use-paper-renderer';
+import { useLandParam } from '@/lib/document/paper/use-land-param';
+
 import { calendarDaysPast } from '@patina/supabase';
 /**
  * The open document — full bleed (D12): the paper IS the screen. No
@@ -10,7 +16,7 @@ import { calendarDaysPast } from '@patina/supabase';
  * presence. Esc puts down (sheet-first priority, §3).
  */
 
-import { use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -42,6 +48,7 @@ import {
   useNeedStates,
   useSetNeedState,
   useUnbilledTime,
+  useProjectVisits,
 } from '@patina/supabase';
 import type { DiscoveryRead } from '@patina/supabase';
 import {
@@ -79,6 +86,13 @@ import {
   isPreWorkSection,
 } from '@/lib/document/document-index';
 import {
+  ROUND8_INDEX_KEYS,
+  ROUND8_PAPER_ORDER,
+  round8ChapterHeadingId,
+  round8ChapterRegion,
+  type Round8ChapterKey,
+} from '@/lib/document/round8-paper-order';
+import {
   scrollToRegion,
   useDocumentRunningIndex,
 } from '@/hooks/use-document-running-index';
@@ -108,6 +122,7 @@ import { VisitsBlock } from '@/components/document/visits-block';
 import { InstallWindowCeremony } from '@/components/document/schedule/install-window-ceremony';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
+import { SectionLoadingLine } from '@/components/document/section-loading-line';
 import {
   CareBand,
   type CloseoutState,
@@ -969,6 +984,49 @@ function ladderFactsSignature(input: TicketInput): string {
   });
 }
 
+// WP-01.5 — the round-8 paper is its own chunk (and its own stylesheet); the
+// legacy route never downloads it. React.lazy, not next/dynamic: the loader
+// would ride the legacy route's static chunks (G5). Client-only by construction
+// — the page renders the skeleton until hydrated and the latch settles, so the
+// import only ever runs in the browser; the same skeleton covers its load.
+const Round8DocumentState = lazy(() => import('@/components/document/frame/round8-states').then((module) => ({ default: module.Round8DocumentState })));
+const Round8PaperFrame = lazy(() => import('@/components/document/frame/round8-paper-frame'));
+const DesignChapter = lazy(() => import('@/components/document/paper/chapters/design-chapter').then((module) => ({ default: module.DesignChapter })));
+
+// R8-02 — two chapters carry pieces that print nothing on an empty read. The
+// chapter mounts on the SAME reads its piece makes (one query each, shared
+// through the cache), so it never stands as an empty heading. The page owns
+// the data path; the frame only places these gates around its chapters.
+function WhenVisits({ projectId, children }: { projectId: string; children: ReactNode }) {
+  const { data: visits, isError } = useProjectVisits(projectId);
+  // VisitsBlock's own rule: a failed read prints "Field data unavailable",
+  // which is content — an outage is not a field-less project.
+  return isError || (visits && visits.length > 0) ? children : null;
+}
+
+const ROUND8_GATES = { site: WhenVisits };
+
+// R8-02 — the continuous paper prints no active-section wrapper, so a section
+// landing with no anchor lands on the chapter holding the control it was asked
+// to focus, or else the chapter that carries that stage's work. On the legacy
+// paper there are no chapters and this answers null: nothing changes there.
+const SECTION_CHAPTER: Partial<Record<SectionKey, Round8ChapterKey>> = {
+  project: 'ffe',
+  install: 'ffe',
+  care: 'closeout',
+};
+function sectionChapter(key: SectionKey, focus: HTMLElement | null): HTMLElement | null {
+  const paper = document.querySelector('[data-document-paper]');
+  const chapter = (k?: string) =>
+    paper?.querySelector<HTMLElement>(k ? `[data-paper-chapter="${k}"]` : '[data-paper-chapter]') ?? null;
+  if (!chapter()) return null;
+  return (
+    focus?.closest<HTMLElement>('[data-paper-chapter]') ??
+    chapter(SECTION_CHAPTER[key] ?? 'brief') ??
+    chapter()
+  );
+}
+
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   // F2 — the body is keyed on the document id so picking up a DIFFERENT
   // document is a fresh mount by our own construction, not by trusting the
@@ -1002,6 +1060,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // US-19 slice 2 (`one-voice`) — read once, above the guide: the guide, the
   // need acts and the band's own act all name an act from the one table.
   const oneVoice = useFeatureFlag('one-voice').value === true;
+  // WP-01.5 — presentation only; settles once per page load and never swaps a
+  // frame under an edit (flag-inventory §4).
+  const paperRenderer = usePaperRenderer();
+  // The round-8 frame is a lazy chunk: the page's effects run while it is
+  // still suspended under the skeleton. Anything that lands on the paper waits
+  // for the selected frame to have committed, not merely been chosen.
+  const [round8Committed, setRound8Committed] = useState(false);
+  const frameCommitted =
+    paperRenderer.renderer === 'legacy' ||
+    (paperRenderer.renderer === 'round8' && round8Committed);
 
   // L3 (00559) — the checklist's sixth row fires here, not on the Desk: the
   // moment it marks is a non-owner member opening a real Document. Reads the
@@ -1216,7 +1284,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const settledCountRef = useRef(0);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const [requestedFfeItemId, setRequestedFfeItemId] = useState<string | null>(null);
+  const hasLandInstruction = useRef(false);
   useEffect(() => {
+    hasLandInstruction.current ||= new URLSearchParams(window.location.search).has('land');
     setRequestedFfeItemId(
       new URLSearchParams(window.location.search).get('ffeItemId'),
     );
@@ -1288,14 +1358,22 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     if (focusId?.startsWith('document-handoff-')) openMarginRail();
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const section = document.getElementById(sectionAnchorId(key));
+        const anchor = document.getElementById(sectionAnchorId(key));
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         const responsiveFocusId =
           focusId === 'document-pulse-control'
             ? `${focusId}-${window.matchMedia?.('(min-width: 1180px)').matches ? 'desktop' : 'mobile'}`
             : focusId;
+        const requested = responsiveFocusId ? document.getElementById(responsiveFocusId) : null;
+        const section = anchor ?? sectionChapter(key, requested);
+        // A chapter landing (round 8) puts focus on the chapter's own heading.
+        const chapterHeading =
+          !anchor && section
+            ? document.getElementById(section.getAttribute('aria-labelledby') ?? '')
+            : null;
         const focusTarget =
-          (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
+          requested ??
+          chapterHeading ??
           section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
         // SQ-544 (walk D6, P-2) — the section lands at its start unless that
         // would rest the focused control under the dock.
@@ -1625,12 +1703,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
   useEffect(() => {
     const token = consumeArriveToken(window.location.pathname, Date.now());
-    if (token?.landing) arrivalLandingRef.current = { landing: token.landing, done: false };
+    if (token?.landing && !hasLandInstruction.current) arrivalLandingRef.current = { landing: token.landing, done: false };
   }, []);
   const landedRef = useRef<{ seen: boolean; done: boolean } | null>(null);
   const landingEngagementId = row?.engagement_id ?? null;
+  const landingSection = row?.active_section;
   useEffect(() => {
-    if (!landingEngagementId || arrivalLandingRef.current) return;
+    if (!landingEngagementId || arrivalLandingRef.current || hasLandInstruction.current) return;
     if (!landedRef.current) {
       landedRef.current = {
         seen: readRecentDocumentsInHand().some((d) => d.id === landingEngagementId),
@@ -1638,16 +1717,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       };
     }
     const landing = landedRef.current;
-    if (!landing.seen || landing.done) return;
+    if (!landing.seen || landing.done || !frameCommitted) return;
     return afterArrival((unplayed) => {
       landing.done = true;
       if (!unplayed) return;
-      const el = mainRef.current?.querySelector('[data-active-section]');
+      const el = mainRef.current?.querySelector('[data-active-section]') ??
+        (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null);
       if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
         el.scrollIntoView({ block: 'start' });
       }
     });
-  }, [landingEngagementId]);
+  }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.
   const lineage: SectionLineage | null = useMemo(() => {
@@ -2136,12 +2216,37 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         : isPreWorkSection(row.active_section)
           ? paperRegionsForSection(row.active_section)
           : [];
-  const {
-    activeKey,
-    mountedKeys,
-  } = useDocumentRunningIndex(
-    runningIndexRegions.map((region) => region.key),
+  // R8-02 — under round 8 a project job is ONE continuous paper, so the index
+  // observes its chapters; pre-work documents keep their own regions. The
+  // consumers that speak legacy stops (ladder, margin rail, mobile bar) read
+  // the region each chapter carries.
+  const round8Continuous =
+    paperRenderer.renderer === 'round8' &&
+    row?.engagement_kind === 'project' &&
+    Boolean(row.project_id) &&
+    !isPreWorkSection(row.active_section);
+  const runningIndex = useDocumentRunningIndex<DocumentIndexKey | Round8ChapterKey>(
+    round8Continuous
+      ? ROUND8_INDEX_KEYS
+      : runningIndexRegions.map((region) => region.key),
     row?.project_id ?? '',
+  );
+  const chapterKey = round8Continuous
+    ? (runningIndex.activeKey as Round8ChapterKey | null)
+    : null;
+  const activeKey = round8Continuous
+    ? round8ChapterRegion(chapterKey)
+    : (runningIndex.activeKey as DocumentIndexKey | null);
+  const indexMountedKeys = runningIndex.mountedKeys;
+  const mountedKeys = useMemo(
+    () =>
+      round8Continuous
+        ? indexMountedKeys.flatMap((key) => {
+            const region = round8ChapterRegion(key as Round8ChapterKey);
+            return region ? [region] : [];
+          })
+        : (indexMountedKeys as readonly DocumentIndexKey[]),
+    [round8Continuous, indexMountedKeys],
   );
   const runningIndexProjectId = row?.project_id ?? '';
   // D-B18 — the press order, in one place. The unfold sets the index's 700ms
@@ -2159,6 +2264,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     [lens, runningIndexProjectId],
   );
 
+  const jumpToChapter = useCallback(
+    (key: Round8ChapterKey) => {
+      const region = round8ChapterRegion(key);
+      if (region && region !== key) requestRegionUnfold(region);
+      // The unfold event and the lens key their roots by DOM value; a chapter
+      // root is one, so its key travels the same way.
+      requestRegionUnfold(key as DocumentIndexKey);
+      lens.forceFullThrough(key as DocumentIndexKey);
+      scrollToRegion(key, runningIndexProjectId, round8ChapterHeadingId(key));
+    },
+    [lens, runningIndexProjectId],
+  );
+
   // D-B46 — the same press order for a target INSIDE a region: the Margin
   // sheet's line rows and the sections sheet's room rows both land on ids that
   // live in the FF&E body, and a body that is quiet (or that she closed
@@ -2168,6 +2286,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // `scrollToRegion` uses, for the same reason.
   const landOnFfeAnchor = useCallback(
     (elementId: string) => {
+      const lineId = /^ffe-selection-(.+)$/.exec(elementId)?.[1];
+      if (lineId) setRequestedFfeItemId(lineId);
       requestRegionUnfold('ffe');
       lens.forceFullThrough('ffe');
       const reduceMotion = window.matchMedia?.(
@@ -2407,6 +2527,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           ladderValues,
           clientCopy: ticketInput?.clientCopy != null,
           onJumpRegion: jumpToRegion,
+          // R8-02 — below 1180px the continuous paper's contents ride the
+          // sections sheet: the mounted chapters, landing on their headings.
+          chapters: round8Continuous
+            ? {
+                entries: ROUND8_PAPER_ORDER.filter((chapter) =>
+                  runningIndex.mountedKeys.includes(chapter.key),
+                ).map(({ key, label, region }) => ({
+                  key,
+                  label,
+                  subLabel: region ? ladderValues[region] : undefined,
+                })),
+                activeKey: chapterKey,
+                onJump: (key) => jumpToChapter(key as Round8ChapterKey),
+              }
+            : null,
           onJumpToLine: jumpToLine,
           onJumpToRoom: jumpToRoom,
           marginCount: marginSheetCount,
@@ -3026,7 +3161,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // A press promotes without the lens, so it does not wait for its resolution.
   useEffect(() => {
     const pending = arrivalLandingRef.current;
-    if (!pending || pending.done || !paperSettled) return;
+    if (!pending || pending.done || !paperSettled || !frameCommitted) return;
     pending.done = true;
     const { landing } = pending;
     if (landing.kind === 'region') {
@@ -3038,7 +3173,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
       jumpToSection(landing.sectionKey as SectionKey);
     }
-  }, [paperSettled, jumpToRegion, jumpToLine, jumpToSection]);
+  }, [paperSettled, frameCommitted, jumpToRegion, jumpToLine, jumpToSection]);
+  useLandParam(paperSettled && frameCommitted, (landing) => {
+    if (landing.kind === 'ffe') {
+      if (!landAct(ACT_LANDING_EVENTS.ffeAct, { act: 'spec', itemId: landing.ffeItemId })) {
+        setRequestedFfeItemId(landing.ffeItemId);
+      }
+    } else if (landing.kind === 'region') {
+      if (Object.prototype.hasOwnProperty.call(DOCUMENT_INDEX_LABELS, landing.region)) {
+        jumpToRegion(landing.region as DocumentIndexKey);
+      }
+    } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
+      jumpToSection(landing.sectionKey as SectionKey);
+    }
+  }, round8Continuous);
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
@@ -3062,7 +3210,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // SSR always starts with an empty engagement cache, while client navigation
   // can arrive with a warm React Query cache. Hold the first client paint to
   // the server's loading tree so those two render contracts cannot diverge.
-  if (!hydrated || resolutionState === 'loading') {
+  if (
+    !hydrated ||
+    resolutionState === 'loading' ||
+    paperRenderer.renderer === 'pending'
+  ) {
+    if (paperRenderer.renderer === 'round8') return <Round8DocumentLoading />;
     if (loadingRegister) return <DocumentSkeleton />;
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
@@ -3074,6 +3227,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }
 
   if (resolutionState === 'error') {
+    if (paperRenderer.renderer === 'round8') {
+      return <Suspense fallback={<Round8DocumentLoading />}><Round8DocumentState state="error" onRetry={() => void retryDocumentResolution()} /></Suspense>;
+    }
     return (
       <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
         <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -3096,6 +3252,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }
 
   if (resolutionState === 'missing' || !row) {
+    if (paperRenderer.renderer === 'round8') return <Suspense fallback={<Round8DocumentLoading />}><Round8DocumentState state="missing" /></Suspense>;
     return (
       <div className="min-h-screen bg-[var(--doc-paper)] px-10 py-12">
         <p className="mb-3 font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -3392,8 +3549,230 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       }
     : null;
 
-  return (
+  const supportingSlots =
+    row.engagement_kind === 'project' && row.project_id
+      ? {
+          accountBand: (
+            <>
+              {/* Supporting project records follow the active work so a newly
+                  opened document reaches the schedule before its reference material.
+                  W2 — the accounts moved into the money region on the Project
+                  spread; every other section keeps the band here, where it has
+                  always been (Install and Care mount the region without them). */}
+              {/* F1 — the band and the money region's accounts are one
+                  either-or, so both sides read the SAME section. The money region
+                  mounts inside the pinned spread; a band gated on the live row
+                  would print the accounts twice (or nowhere) for as long as an
+                  armed turn goes unpressed. Off the flag `spreadSection` IS
+                  `row.active_section`. */}
+              {spreadSection !== 'project' && (
+                <AccountBand
+                  projectId={row.project_id}
+                  clientName={row.client_name}
+                  activeSection={spreadSection}
+                />
+              )}
+            </>
+          ),
+          kickoff: (
+            <>
+              {/* The four supporting rooms moved to the shelves, so the
+                  not-started band that collapsed them has nothing left to
+                  collapse. The first-staffing nudge has no other home and stays
+                  here, ungated: it self-silences on the flag, a staffed sheet, or
+                  its own dismissal. */}
+              <KickoffBand
+                projectId={row.project_id}
+                rows={rosterRows ?? []}
+                isLead={Boolean(user?.id) && handoffLead?.leadUserId === user?.id}
+              />
+            </>
+          ),
+        }
+      : { accountBand: null, kickoff: null };
+
+  // R24 — the active section's file-drop host. The legacy frame hangs it on
+  // the active section; the round-8 frame on the FF&E chapter, whose install
+  // and care bodies print the folio strip it feeds.
+  const sectionFileDrop = {
+    onDragOver: (e: ReactDragEvent<HTMLElement>) => {
+      if (!sectionTakesFiles || !e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+      setSectionDrag(true);
+    },
+    onDragLeave: () => setSectionDrag(false),
+    onDrop: (e: ReactDragEvent<HTMLElement>) => {
+      if (!sectionTakesFiles) return;
+      e.preventDefault();
+      setSectionDrag(false);
+      const files = Array.from(e.dataTransfer.files ?? []);
+      if (files.length) setFolioDrop(files);
+    },
+  };
+  // The stage sub-label and its live workflow tracks: the head of the open
+  // section on the legacy paper, the head of the Schedule chapter on round 8.
+  const stageLine = stageOnGlass ? (
+    <SectionStageLineMount
+      projectId={row.engagement_kind === 'project' ? row.project_id : null}
+      activeSection={row.active_section}
+    />
+  ) : null;
+
+  // WP-01.5 — the spread's pieces, declared once. The legacy frame prints the
+  // one active spread (§4); the round-8 frame prints them as chapters of one
+  // continuous paper (R8-02). Only one frame ever mounts, so nothing doubles.
+  const scheduleSpine = row.project_id ? (
     <>
+      <ScheduleSpine
+        projectId={row.project_id}
+        clientUserId={row.client_profile_id}
+        clientName={oneVoice ? householdDisplayName(row.client_name) || null : row.client_name}
+        projectStatus={project?.status}
+      />
+    </>
+  ) : null;
+  const roomFiles = row.project_id ? (
+    <>
+      <RoomFilesSection projectId={row.project_id} />
+    </>
+  ) : null;
+  const visits = row.project_id ? (
+    <>
+      <VisitsBlock projectId={row.project_id} />
+    </>
+  ) : null;
+  const projectFfe = row.project_id ? (
+    <>
+      <FFESection
+        projectId={row.project_id}
+        docId={id}
+        projectName={row.title}
+        mode="project"
+        projectStatus={row.project_status}
+        needs={rankedOperationalNeeds}
+        highlightId={highlightLineId ?? requestedFfeItemId}
+        requestedLineId={requestedFfeItemId}
+        onRequestedLineConsumed={() => setRequestedFfeItemId(null)}
+        onAddNote={setPendingNoteAnchor}
+        sectionKey="project"
+        clientUserId={row.client_profile_id}
+        clientName={row.client_name}
+        releaseLeaderElsewhere={deliveryProcurement}
+        onReleaseOffered={
+          deliveryProcurement || oneVoice ? setReleaseOffered : undefined
+        }
+      />
+    </>
+  ) : null;
+  const projectMoney = row.project_id ? (
+    <>
+      {row.engagement_kind === 'project' && (
+        <MoneyRegion
+          projectId={row.project_id}
+          projectName={row.title}
+          clientName={row.client_name}
+          activeSection={row.active_section}
+          /* W4b — on the table money is what the work is measured
+             against, not the work: one seam, one press from full. */
+          tableSeam={deliveryProcurement}
+        />
+      )}
+    </>
+  ) : null;
+  const projectCare = row.project_id ? (
+    <>
+      <CareBand
+        projectId={row.project_id}
+        onCloseoutReady={acceptCloseout}
+        indexRoot
+      />
+    </>
+  ) : null;
+  const installFfe = row.project_id ? (
+    <>
+      <FFESection
+        projectId={row.project_id}
+        projectName={row.title}
+        mode="install"
+        needs={rankedOperationalNeeds}
+        highlightId={highlightLineId}
+        onAddNote={setPendingNoteAnchor}
+        sectionKey="install"
+        clientUserId={row.client_profile_id}
+        clientName={row.client_name}
+        folioDrop={folioDrop}
+        onFolioDropConsumed={() => setFolioDrop(null)}
+        sectionDragOver={sectionDrag}
+      />
+    </>
+  ) : null;
+  const installCeremony = row.project_id ? (
+    <>
+      <InstallWindowCeremony projectId={row.project_id} />
+    </>
+  ) : null;
+  const installMoney = row.project_id ? (
+    <>
+      {row.engagement_kind === 'project' && (
+        <MoneyRegion
+          projectId={row.project_id}
+          projectName={row.title}
+          clientName={row.client_name}
+          activeSection={spreadSection}
+          accountsElsewhere
+        />
+      )}
+    </>
+  ) : null;
+  const installCare = row.project_id ? (
+    <>
+      <CareBand projectId={row.project_id} onCloseoutReady={acceptCloseout} />
+    </>
+  ) : null;
+  const careSection = true ? (
+    <>
+      <CareSection
+        completedLabel={
+          project?.target_end_date ? fmtMonthYear(project.target_end_date) : null
+        }
+        projectId={row.project_id}
+      />
+    </>
+  ) : null;
+  const careFfe = true ? (
+    <>
+      {row.project_id && (
+        <FFESection
+          projectId={row.project_id}
+          mode="install"
+          needs={rankedOperationalNeeds}
+          highlightId={highlightLineId}
+          sectionKey="care"
+          clientUserId={row.client_profile_id}
+          clientName={row.client_name}
+          folioDrop={folioDrop}
+          onFolioDropConsumed={() => setFolioDrop(null)}
+          sectionDragOver={sectionDrag}
+        />
+      )}
+    </>
+  ) : null;
+  const careMoney = true ? (
+    <>
+      {row.engagement_kind === 'project' && row.project_id && (
+        <MoneyRegion
+          projectId={row.project_id}
+          projectName={row.title}
+          clientName={row.client_name}
+          activeSection={spreadSection}
+          accountsElsewhere
+        />
+      )}
+    </>
+  ) : null;
+
+  const slots: DocumentFrameSlots = {
+    arrival: (<>
     {/* N10 arrival C — held under the loading register, the DocumentSkeleton
         stands over the paper (zero height, so the paper beneath still lays out
         and reads exactly as it will once shown) and nothing is veiled: the
@@ -3415,35 +3794,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </>
     )}
-    <div
-      ref={lensShellRef}
-      data-document-shell
-      // Held, the paper is mounted (every read runs beside the ready
-      // waterfall) but unmarked, and arrival.css hides it under `arr-pre`.
-      data-arrival={arrivalHeld ? undefined : 'document'}
-      data-arrival-held={arrivalHeld ? 'document' : undefined}
-      // N10 — no arr-pre veil under the register: the held paper hides itself
-      // (laid out, out of sight and out of the accessibility tree) beneath its
-      // skeleton until ready.
-      style={arrivalHeld && loadingRegister ? { visibility: 'hidden' } : undefined}
-      data-arrival-ready={arrivalReady ? '' : undefined}
-      data-arr-engagement={row.engagement_id}
-      data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
-      // W3 · the reading stop, published where the rail and the mobile bar
-      // already publish it. Absent rather than `"null"` when nothing reads.
-      data-reading-index={activeKey ?? undefined}
-      className="relative grid min-h-screen grid-cols-1 overflow-x-clip bg-[var(--doc-paper)] [grid-template-rows:auto_1fr] min-[1180px]:grid-cols-[136px_minmax(0,1fr)] min-[1180px]:[grid-template-rows:none] min-[1440px]:grid-cols-[200px_minmax(0,1fr)_232px] motion-safe:animate-[doc-raise_270ms_ease-out] motion-reduce:animate-[doc-fade_200ms_ease-out]"
-    >
-      {/* Paper grain at the threshold of perception */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0"
-        style={{
-          background:
-            'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(139,115,85,0.01) 3px, rgba(139,115,85,0.01) 4px)',
-        }}
-      />
 
+    </>),
+    spine: (<>
       <DocSpine
         sections={sections}
         onJump={jumpToSection}
@@ -3477,17 +3830,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         onReleaseRoom={toggleRoom}
       />
 
-      {/* No z-index here: a stacking context on main would trap the fixed
-          procurement panels (inspection drawer, Order Assistant) mounted in
-          line unfolds beneath the aside rail and the drawer strip. The z-0
-          grain painting over content is imperceptible at 1% alpha. */}
-      <main
-        ref={mainRef}
-        data-document-paper
-        data-spotlight-frame
-        data-shelf-open={openShelf ? 'true' : undefined}
-        className="w-full min-w-0 max-w-[1040px] justify-self-center px-7 pb-32 pt-8 min-[1180px]:px-10 min-[1440px]:px-12"
-      >
+
+    </>),
+    letterhead: (<>
         {/* The household — who this document is for — is a first-class subtitle
             in the title block (R68.2): a prominent clickable line directly under
             the title, not a tiny line tucked below the divider. View / set /
@@ -3551,12 +3896,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           instruments={letterheadInstruments}
         />
 
+
+    </>),
+    ticketFacts: (<>
         {/* The document's own reads — mounted by the DOCUMENT rather than the
             section, so all seven spreads read identically (B1, B2). Prints
             nothing; it reports the rows and the input the band and the ladder
             are derived from. */}
         {ticketFacts}
 
+
+    </>),
+    band: (<>
         {/* THE BAND — where the ticket stood, and the one printing of the
             worst standing exception (or the stage's guide sentence) at every
             width. It carries `#doc-ticket-sentinel` as its own immediate
@@ -3585,6 +3936,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         )}
         {/* US-19 D8 — the one-note tour, in flow under the band. */}
         {bandModel && <BandTourNote hasAct={bandModel.voice.next !== null} />}
+
+    </>),
+    household: (<>
         {/* D10 — the SETUP row's `Link a client` opens the household sheet the
             chip uses; the chip prints nothing while no client is linked. */}
         {setupHouseholdOpen && row.engagement_kind === 'project' && (
@@ -3602,6 +3956,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           />
         )}
 
+
+    </>),
+    frontMatter: (<>
         {row.engagement_kind === 'project' && row.project_id && (
           <FolioLetterhead projectId={row.project_id} />
         )}
@@ -3629,6 +3986,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             Margin sheet (mobile-bar's "In this document" door) replaces it.
             The `marginCount` it needs rides `useMobileActiveDoc` below. */}
 
+
+    </>),
+    approvals: (<>
         <ProjectApprovalDocumentMount
           quietLeader={approvalsQuietLeaderAct}
           projectId={
@@ -3641,27 +4001,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           phases={phases}
         />
 
-        {/* ScheduleNavProvider wires the Rule (below) to the Spine (mounted
-            deeper, inside the active section) so a minimap click reveals
-            through to the ledger (§3.5). Context.Provider renders no wrapper
-            element — it adds nothing to the DOM, so the Rule's real parent
-            stays <main> (the mount contract in schedule-rule.tsx's header)
-            and the gate-off tree below is unaffected by its presence. */}
-        <ScheduleNavProvider>
-          {/* RippleProvider owns the ONE time-edit preview session (Slice 04
-              R100). It wraps the SAME subtree as ScheduleNavProvider so the two
-              surfaces that begin an edit — the Rule's drags and the Spine's
-              inline duration/anchor fields — share a single session, and the
-              confirm strip below reads the same diff. It renders no DOM (a
-              context provider), so the gate-off / non-project DOM stays
-              byte-identical; on a PROJECT doc with the gate off the provider
-              does add a background schedule fetch (useResolvedSchedule —
-              React-Query-deduped against the Rule/Spine's own reads, so at most
-              one extra schedule-milestones query; negligible). On an empty id
-              (a non-project document) the hook is fully inert — `??''` keeps
-              the provider total there (proposal/brief docs never begin a
-              ripple). */}
-          <RippleProvider projectId={row.project_id ?? ''}>
+
+    </>),
+    schedule: (<>
             {/* Field Coordination (light-PM slice): the phase schedule as a
                 horizontal instrument — status-weighted segments, a today cut,
                 draggable phase bars. Project-wide (shows across
@@ -3678,25 +4020,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               summary={scheduleRuleSummary}
             />
 
+
+    </>),
+    activeSpread: (<>
           {/* The active section — exactly one (§4). */}
           <div
             id={sectionAnchorId(row.active_section)}
             data-active-section
             tabIndex={-1}
             className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-            onDragOver={(e) => {
-              if (!sectionTakesFiles || !e.dataTransfer?.types?.includes('Files')) return;
-              e.preventDefault();
-              setSectionDrag(true);
-            }}
-            onDragLeave={() => setSectionDrag(false)}
-            onDrop={(e) => {
-              if (!sectionTakesFiles) return;
-              e.preventDefault();
-              setSectionDrag(false);
-              const files = Array.from(e.dataTransfer.files ?? []);
-              if (files.length) setFolioDrop(files);
-            }}
+            {...sectionFileDrop}
           >
             {/* R1 / M1-after (I114): the stage sub-label and its track bands are
                 the head of the OPEN section, not a free-standing band under the
@@ -3708,14 +4041,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 strip carries a real position and a real fidelity. The gate
                 reads `spreadSection`, not the row's own section, so a pinned
                 worktable cannot disagree with the paper it is printing. */}
-            {stageOnGlass && (
-              <SectionStageLineMount
-                projectId={
-                  row.engagement_kind === 'project' ? row.project_id : null
-                }
-                activeSection={row.active_section}
-              />
-            )}
+            {stageLine}
             <TableFrame
               composition={table}
               pending={worktableOn ? tablePin.pending : null}
@@ -3858,172 +4184,55 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     B3 retired the schedule-spine flip gate — the Spine is the
                     ledger, unconditionally; CoordinationBand was its fallback
                     and no longer mounts anywhere. */}
-                  <ScheduleSpine
-                    projectId={row.project_id}
-                    clientUserId={row.client_profile_id}
-                    clientName={oneVoice ? householdDisplayName(row.client_name) || null : row.client_name}
-                    projectStatus={project?.status}
-                  />
+                  {scheduleSpine}
                   {/* Wave 1P (spec §11.2) — the Room-files zone the component's
                     own docstring was written for and nothing ever mounted.
                     Unflagged by FC-R10: it returns null for a project with no
                     Room-File-bearing scans, so a field-less project renders
                     exactly as it did before this line existed. */}
-                  <RoomFilesSection projectId={row.project_id} />
-                  <VisitsBlock projectId={row.project_id} />
-                  <FFESection
-                    projectId={row.project_id}
-                    docId={id}
-                    projectName={row.title}
-                    mode="project"
-                    projectStatus={row.project_status}
-                    needs={rankedOperationalNeeds}
-                    highlightId={highlightLineId ?? requestedFfeItemId}
-                    requestedLineId={requestedFfeItemId}
-                    onRequestedLineConsumed={() => setRequestedFfeItemId(null)}
-                    onAddNote={setPendingNoteAnchor}
-                    sectionKey="project"
-                    clientUserId={row.client_profile_id}
-                    clientName={row.client_name}
-                    releaseLeaderElsewhere={deliveryProcurement}
-                    onReleaseOffered={
-                      deliveryProcurement || oneVoice ? setReleaseOffered : undefined
-                    }
-                  />
+                  {roomFiles}
+                  {visits}
+                  {projectFfe}
                   {/* W2 — one money region: authority → plan → committed →
                     moved, over the four surfaces that used to stand apart
                     (design authority, working budget, authorizations & trade
                     scopes, the accounts). Gated on engagement_kind exactly as
                     the four tail mounts it replaced were. */}
-                  {row.engagement_kind === 'project' && (
-                    <MoneyRegion
-                      projectId={row.project_id}
-                      projectName={row.title}
-                      clientName={row.client_name}
-                      activeSection={row.active_section}
-                      /* W4b — on the table money is what the work is measured
-                         against, not the work: one seam, one press from full. */
-                      tableSeam={deliveryProcurement}
-                    />
-                  )}
+                  {projectMoney}
                   {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears).
                     W2 (C-2): the project spread's mount is the running index's
                     `care` root — one root per stop, so the scrollspy cannot
                     see two. */}
-                  <CareBand
-                    projectId={row.project_id}
-                    onCloseoutReady={acceptCloseout}
-                    indexRoot
-                  />
+                  {projectCare}
                 </>
               )}
             {spreadSection === 'install' && row.project_id && (
               <>
-                <FFESection
-                  projectId={row.project_id}
-                  projectName={row.title}
-                  mode="install"
-                  needs={rankedOperationalNeeds}
-                  highlightId={highlightLineId}
-                  onAddNote={setPendingNoteAnchor}
-                  sectionKey="install"
-                  clientUserId={row.client_profile_id}
-                  clientName={row.client_name}
-                  folioDrop={folioDrop}
-                  onFolioDropConsumed={() => setFolioDrop(null)}
-                  sectionDragOver={sectionDrag}
-                />
+                {installFfe}
                 {/* R112: the install week's commitment act, on the section
                     whose whole subject is that week. */}
-                <InstallWindowCeremony projectId={row.project_id} />
+                {installCeremony}
                 {/* Buying continues at install, so the Working budget's
                     recovery links must land here too. */}
-                {row.engagement_kind === 'project' && (
-                  <MoneyRegion
-                    projectId={row.project_id}
-                    projectName={row.title}
-                    clientName={row.client_name}
-                    activeSection={spreadSection}
-                    accountsElsewhere
-                  />
-                )}
+                {installMoney}
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
-                <CareBand projectId={row.project_id} onCloseoutReady={acceptCloseout} />
+                {installCare}
               </>
             )}
             {spreadSection === 'care' && (
               <>
-                <CareSection
-                  completedLabel={
-                    project?.target_end_date ? fmtMonthYear(project.target_end_date) : null
-                  }
-                  projectId={row.project_id}
-                />
-                {row.project_id && (
-                  <FFESection
-                    projectId={row.project_id}
-                    mode="install"
-                    needs={rankedOperationalNeeds}
-                    highlightId={highlightLineId}
-                    sectionKey="care"
-                    clientUserId={row.client_profile_id}
-                    clientName={row.client_name}
-                    folioDrop={folioDrop}
-                    onFolioDropConsumed={() => setFolioDrop(null)}
-                    sectionDragOver={sectionDrag}
-                  />
-                )}
-                {row.engagement_kind === 'project' && row.project_id && (
-                  <MoneyRegion
-                    projectId={row.project_id}
-                    projectName={row.title}
-                    clientName={row.client_name}
-                    activeSection={spreadSection}
-                    accountsElsewhere
-                  />
-                )}
+                {careSection}
+                {careFfe}
+                {careMoney}
               </>
             )}
             </TableFrame>
           </div>
-          </RippleProvider>
-        </ScheduleNavProvider>
 
-        {row.engagement_kind === 'project' && row.project_id && (
-          <>
-            {/* Supporting project records follow the active work so a newly
-                opened document reaches the schedule before its reference material.
-                W2 — the accounts moved into the money region on the Project
-                spread; every other section keeps the band here, where it has
-                always been (Install and Care mount the region without them). */}
-            {/* F1 — the band and the money region's accounts are one
-                either-or, so both sides read the SAME section. The money region
-                mounts inside the pinned spread; a band gated on the live row
-                would print the accounts twice (or nowhere) for as long as an
-                armed turn goes unpressed. Off the flag `spreadSection` IS
-                `row.active_section`. */}
-            {spreadSection !== 'project' && (
-              <AccountBand
-                projectId={row.project_id}
-                clientName={row.client_name}
-                activeSection={spreadSection}
-              />
-            )}
-            {/* The four supporting rooms moved to the shelves, so the
-                not-started band that collapsed them has nothing left to
-                collapse. The first-staffing nudge has no other home and stays
-                here, ungated: it self-silences on the flag, a staffed sheet, or
-                its own dismissal. */}
-            <KickoffBand
-              projectId={row.project_id}
-              rows={rosterRows ?? []}
-              isLead={Boolean(user?.id) && handoffLead?.leadUserId === user?.id}
-            />
-          </>
-        )}
-
+    </>),
+    record: (<>
         {/* The Record — the settled bars, at the FOOT of the paper: history is
             an appendix, not a preamble. Every phase with a read-only body
             unfolds in place so completed work stays reviewable (R66); reached
@@ -4067,7 +4276,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           // → the captured facts recap; Direction/Proposal → the proposal blocks.
           let body: ReactNode = null;
           if (s.key === 'brief') {
-            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />;
+            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} designerClientId={designerClientId} />;
           } else if (s.key === 'discovery') {
             body = (
               <DiscoveryRecap
@@ -4108,6 +4317,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           })}
         </PreviousWork>
 
+
+    </>),
+    colophon: (<>
         {/* R29: the colophon — the paper's last line states its own facts. */}
         {row.engagement_kind === 'project' && row.project_id && (
           <DocColophon
@@ -4118,8 +4330,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             handsOnTheWork={others}
           />
         )}
-      </main>
 
+    </>),
+    margin: (<>
       {/* Margin rail (D12; D2: the margin IS the notification model).
           Below 1180px the margin lives as anchored chips + the mobile spine
           sheet's summary. From 1180–1439px it opens on demand; only the wide
@@ -4146,6 +4359,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         )}
       </ResponsiveMarginRail>
 
+
+    </>),
+    overlays: (<>
       {/* D1: the Call Sheet is an overlay, never a section — mounted once
           here (closed by default), opened by document:open-call-sheet from
           ⌘K, the letterhead instrument, and the kickoff band. Project docs
@@ -4203,7 +4419,119 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       {row.engagement_kind === 'project' && row.project_id && (
         <RecordAChangeSheet projectId={row.project_id} clientName={row.client_name} />
       )}
-    </div>
-    </>
+
+    </>),
+    ...supportingSlots,
+    // Both schedule surfaces retain the same provider scope and mount order.
+    scheduleScope: (children) => (
+      <ScheduleNavProvider>
+        <RippleProvider projectId={row.project_id ?? ''}>{children}</RippleProvider>
+      </ScheduleNavProvider>
+    ),
+  };
+
+  // R8-02 — the round-8 project paper's pieces, built once above and handed to
+  // the frame, which places them as chapters. Lead and proposal documents
+  // print their pre-work regions instead (round8Continuous false → null).
+  const round8Pieces = round8Continuous
+    ? {
+        section: spreadSection,
+        stageLine,
+        fileDrop: sectionFileDrop,
+        brief: {
+          brief: projectIsLoading ? <SectionLoadingLine label="Opening the brief" /> : projectIsError ? (
+            <p role="alert" className="t-body-sm">The original brief could not be read.</p>
+          ) : <BriefRecap designerClientId={designerClientId} leadId={row.lead_id} />,
+          discovery: projectIsLoading ? <SectionLoadingLine label="Opening discovery notes" /> : projectIsError ? (
+            <p role="alert" className="t-body-sm">Discovery notes could not be read.</p>
+          ) : row.lead_id || unfoldProposalId ? (
+            <DiscoveryRecap
+              clientProfileId={row.client_profile_id}
+              engagementKind={row.engagement_kind}
+              engagementId={row.engagement_id}
+              proposalId={row.proposal_id}
+            />
+          ) : null,
+          agreement: projectIsLoading ? <SectionLoadingLine label="Opening the agreement record" /> : projectIsError ? (
+            <p role="alert" className="t-body-sm">The agreement record could not be read.</p>
+          ) : unfoldProposalId ? <ProposalBlocksReadOnly proposalId={unfoldProposalId} /> : null,
+        },
+        design: (workRoom: import('@/components/document/paper/chapters/ffe-work-room').WorkRoom) => (
+          <Suspense fallback={<p role="status">Reading room evidence…</p>}>
+            <DesignChapter
+              projectId={row.project_id!}
+              routeId={id}
+              onWorkRoom={(room, opener) => workRoom(room, 'spec', opener)}
+            />
+          </Suspense>
+        ),
+        roomFiles,
+        scheduleSpine,
+        visits,
+        projectFfe,
+        projectMoney,
+        projectCare,
+        installFfe,
+        installCeremony,
+        installMoney,
+        installCare,
+        careSection,
+        careFfe,
+        careMoney,
+      }
+    : null;
+
+  const shellProps = {
+    ref: lensShellRef,
+    'data-arrival': arrivalHeld ? undefined : 'document',
+    'data-arrival-held': arrivalHeld ? 'document' : undefined,
+    style: arrivalHeld && loadingRegister ? { visibility: 'hidden' as const } : undefined,
+    'data-arrival-ready': arrivalReady ? '' : undefined,
+    'data-arr-engagement': row.engagement_id,
+    // R8-02 — a chapter with no legacy region reads as its own key.
+    'data-reading-index': activeKey ?? chapterKey ?? undefined,
+  };
+  const paperProps = { ref: mainRef, 'data-shelf-open': openShelf ? 'true' : undefined };
+
+  if (paperRenderer.renderer === 'round8') {
+    return (
+      <Suspense fallback={<DocumentSkeleton />}>
+        <Round8PaperFrame
+          slots={slots}
+          shellProps={shellProps}
+          paperProps={paperProps}
+          docId={id}
+          onCommitted={setRound8Committed}
+          jobName={row.title}
+          context={householdName}
+          pieces={round8Pieces}
+          gates={ROUND8_GATES}
+          projectId={row.project_id}
+          contents={{
+            subLabels: ladderValues,
+            regions: runningIndexRegions,
+            mountedKeys: runningIndex.mountedKeys,
+            activeKey: runningIndex.activeKey,
+            onSelect: (key) =>
+              round8Continuous
+                ? jumpToChapter(key as Round8ChapterKey)
+                : jumpToRegion(key as DocumentIndexKey),
+          }}
+          roomInHand={
+            heldRoomId && heldRoomName
+              ? { name: heldRoomName, onRelease: () => toggleRoom(heldRoomId) }
+              : null
+          }
+        />
+      </Suspense>
+    );
+  }
+
+  return (
+    <LegacyDocumentFrame
+      slots={slots}
+      shellProps={shellProps}
+      paperProps={paperProps}
+    />
   );
 }
