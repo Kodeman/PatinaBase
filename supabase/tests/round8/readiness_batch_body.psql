@@ -157,8 +157,11 @@ DO $$ DECLARE n integer; actual jsonb; expected jsonb; batch jsonb; BEGIN
     'missing-image fixture exercises an actual readiness hold');
   PERFORM pg_temp.batch_assert(public.get_project_ffe_readiness(pg_temp.batch_id(10))->'missingFields' ? 'parent_not_ready',
     'recursive labor parent hold survives batching');
-  PERFORM pg_temp.batch_assert(public.get_project_ffe_readiness(pg_temp.batch_id(11))->'missingFields' ? 'clientPrice',
-    'external GC responsibility retains native zero-price hold');
+  -- C5 §3.3 procurement readiness (00883): external lines carry no studio ordering checklist.
+  PERFORM pg_temp.batch_assert(public.get_project_ffe_readiness(pg_temp.batch_id(11))
+      = jsonb_build_object('selectionId',pg_temp.batch_id(11),'responsibility','external',
+          'ready',false,'missingFields','[]'::jsonb),
+    'external GC responsibility is never ready and has no ordering checklist');
 END $$;
 SELECT pg_temp.batch_assert(public.get_project_ffe_readiness_batch(ARRAY[]::text[])='[]'::jsonb,'empty batch is empty');
 SELECT pg_temp.batch_assert(jsonb_array_length(public.get_project_ffe_readiness_batch(array_fill(pg_temp.batch_id(1)::text,ARRAY[100])))=100,

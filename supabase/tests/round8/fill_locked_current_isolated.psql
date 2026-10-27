@@ -7,7 +7,10 @@
 SELECT :'HOST' = '127.0.0.1' AND :'PORT' = :'expected_port' AS local_stack \gset
 \if :local_stack
 \else
-\quit 3
+-- Fail closed: `\quit 3` ignores its argument and exits 0 with no assertions run.
+\echo REFUSED: fill_locked_current_isolated needs 127.0.0.1 port :expected_port, got :HOST port :PORT
+DO $$ BEGIN RAISE EXCEPTION 'fill_locked_current_isolated refused: not the expected local stack'; END $$;
+\quit
 \endif
 BEGIN;
 SET LOCAL lock_timeout = '5s';

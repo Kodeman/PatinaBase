@@ -12,6 +12,7 @@ SET LOCAL statement_timeout='45s';
 \ir ../../migrations/00881_round8_fill_locked_current.sql
 \ir ../../migrations/00882_round8_billing_lock_order.sql
 \ir ../../migrations/00883_round8_external_reader_parity.sql
+\ir ../../migrations/00884_round8_external_package_reading.sql
 \if :{?fi_control}
 \i :fi_control
 \endif
