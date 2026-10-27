@@ -1,0 +1,371 @@
+-- Include-only fictional read fixture. No activation, public SQL stubs or financial rows.
+CREATE FUNCTION pg_temp.ep_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
+ RAISE NOTICE 'PASS: %',label;
+END $$;
+CREATE FUNCTION pg_temp.ep_error(command text,state text,label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual text;
+BEGIN
+ BEGIN EXECUTE command; EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual=RETURNED_SQLSTATE; END;
+ PERFORM pg_temp.ep_assert(actual=state,label||format(' expected %s got %s',state,actual));
+END $$;
+CREATE FUNCTION pg_temp.ep_id(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+ SELECT ('f8840000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.ep_actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM set_config('request.jwt.claim.sub',pg_temp.ep_id(n)::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.ep_id(n),'role','authenticated')::text,true);
+END $$;
+INSERT INTO public.server_capabilities(key, enabled) VALUES ('scope_editions', false)
+ ON CONFLICT (key) DO NOTHING;
+SELECT pg_temp.ep_assert(NOT (SELECT enabled FROM public.server_capabilities WHERE key='scope_editions'),'writers remain inactive');
+DO $$ DECLARE t text; signature text; BEGIN
+ FOREACH t IN ARRAY ARRAY['project_external_fulfilments','project_external_fulfilment_events',
+ 'project_external_fulfilment_evidence_bindings','project_external_fulfilment_verifications','evidence_manifest_members'] LOOP
+  PERFORM pg_temp.ep_assert(NOT has_table_privilege('authenticated','public.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+   AND NOT has_table_privilege('anon','public.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE'),'direct tables denied: '||t);
+ END LOOP;
+ FOREACH signature IN ARRAY ARRAY['record_external_fulfilment_event(uuid,text,jsonb,text[],text)',
+ 'record_fabrication_instruction(uuid,uuid,uuid,text[],jsonb,uuid)','verify_external_fulfilment_event(uuid,text)'] LOOP
+  PERFORM pg_temp.ep_assert(NOT has_function_privilege('authenticated','public.'||signature,'EXECUTE')
+   AND NOT has_function_privilege('service_role','public.'||signature,'EXECUTE'),'writers stay ungranted: '||signature);
+ END LOOP;
+ PERFORM pg_temp.ep_assert(has_function_privilege('authenticated','public.get_project_external_fulfilments(uuid)','EXECUTE')
+  AND NOT has_function_privilege('anon','public.get_project_external_fulfilments(uuid)','EXECUTE')
+  AND NOT has_function_privilege('service_role','public.get_project_external_fulfilments(uuid)','EXECUTE')
+  AND NOT EXISTS(SELECT 1 FROM aclexplode((SELECT proacl FROM pg_proc
+   WHERE oid='public.get_project_external_fulfilments(uuid)'::regprocedure)) WHERE grantee=0 AND privilege_type='EXECUTE'),
+  'reader retains authenticated-only execute');
+ PERFORM pg_temp.ep_assert((SELECT prosecdef AND provolatile='s' AND 'search_path=public, pg_temp'=ANY(proconfig)
+  FROM pg_proc WHERE oid='public.get_project_external_fulfilments(uuid)'::regprocedure),'stable definer path retained');
+END $$;
+SELECT pg_temp.ep_assert(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f884%'),'fixture namespace starts empty');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT pg_temp.ep_id(n),'package-reader-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(1,4)n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT id,email,'Fictional package reader',true FROM auth.users WHERE id::text LIKE 'f884%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+(pg_temp.ep_id(101),'design_studio','Reader A','f884-a','active'),(pg_temp.ep_id(102),'design_studio','Reader B','f884-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+(pg_temp.ep_id(1),pg_temp.ep_id(101),'owner','active'),(pg_temp.ep_id(2),pg_temp.ep_id(101),'admin','active'),
+(pg_temp.ep_id(4),pg_temp.ep_id(102),'owner','active');
+INSERT INTO public.projects(id,name,designer_id,created_by,client_id,studio_id,status)
+SELECT pg_temp.ep_id(200+n),'Reader job',pg_temp.ep_id(CASE WHEN n=3 THEN 4 ELSE 1 END),pg_temp.ep_id(1),
+ pg_temp.ep_id(3),pg_temp.ep_id(CASE WHEN n=3 THEN 102 ELSE 101 END),'active' FROM generate_series(1,3)n;
+INSERT INTO public.project_scope_editions(id,project_id,edition_number,kind,commercial_document_id,source_proposal_id,
+ agreement_fingerprint,effective_at,content,content_hash,status)
+SELECT pg_temp.ep_id(300+n),pg_temp.ep_id(200+n),1,'baseline',pg_temp.ep_id(900+n),pg_temp.ep_id(910+n),'fixture',now(),'{}','fixture','active'
+FROM generate_series(1,3)n;
+INSERT INTO public.project_scope_edition_packages(edition_id,package_key,label,inclusion,responsibilities)
+SELECT pg_temp.ep_id(300+n),'pkg.cabinets','Cabinets','included',
+ '{"design":"studio","purchasing":"gc","payer":"gc","fabrication_contract":"gc","installation":"gc"}'::jsonb FROM generate_series(1,3)n;
+INSERT INTO public.project_packages(id,project_id,package_kind,code,title,package_key,created_by,idempotency_key,request_hash)
+VALUES(pg_temp.ep_id(801),pg_temp.ep_id(201),'cabinetry','A','Cabinets','pkg.cabinets',pg_temp.ep_id(1),'package-a','fixture'),
+(pg_temp.ep_id(802),pg_temp.ep_id(201),'cabinetry','C','Other package','pkg.other',pg_temp.ep_id(1),'package-c','fixture'),
+(pg_temp.ep_id(803),pg_temp.ep_id(203),'cabinetry','B','Foreign','pkg.cabinets',pg_temp.ep_id(4),'package-b','fixture');
+INSERT INTO public.project_parties(id,project_id,profile_id,party_kind,stage,display_name,created_by)
+VALUES(pg_temp.ep_id(811),pg_temp.ep_id(201),pg_temp.ep_id(3),'gc','active','GC/client fixture',pg_temp.ep_id(1));
+INSERT INTO public.project_party_authority(id,engagement_id,scope,effective_from,granted_by,threshold_cents,idempotency_key,fabrication_grant_request)
+VALUES(pg_temp.ep_id(850),pg_temp.ep_id(811),'fabrication',current_date,pg_temp.ep_id(1),250000,'fixture-grant',
+ jsonb_build_object('project_id',pg_temp.ep_id(201),'profile_id',pg_temp.ep_id(3)));
+INSERT INTO public.designer_clients(id,designer_id,client_id,status)
+VALUES(pg_temp.ep_id(901),pg_temp.ep_id(1),pg_temp.ep_id(3),'active');
+INSERT INTO public.client_decisions(id,designer_client_id,designer_id,project_id,title,status,court,coordination_kind)
+VALUES(pg_temp.ep_id(601),pg_temp.ep_id(901),pg_temp.ep_id(1),pg_temp.ep_id(201),'Private evidence','pending','designer','submittal'),
+(pg_temp.ep_id(603),pg_temp.ep_id(901),pg_temp.ep_id(4),pg_temp.ep_id(203),'Foreign evidence','pending','designer','submittal');
+INSERT INTO public.coordination_item_revisions(id,decision_id,rev_number,status,reviewed_by,reviewed_at,note)
+VALUES(pg_temp.ep_id(701),pg_temp.ep_id(601),1,'approved',pg_temp.ep_id(2),now(),'PRIVATE_BODY_NOT_FOR_READER');
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by)
+SELECT pg_temp.ep_id(820+n),pg_temp.ep_id(201),n,'Pinned issue','issue-'||n,repeat('a',64),repeat(n::text,64),1,pg_temp.ep_id(1)
+FROM generate_series(1,2)n;
+INSERT INTO public.product_configurations(id,product_id,project_id,owner_user_id,version,schema_revision,status,evaluation,snapshot,snapshot_hash,approved_at,approved_by)
+VALUES(pg_temp.ep_id(831),pg_temp.ep_id(832),pg_temp.ep_id(201),pg_temp.ep_id(1),1,1,'approved','{}','{}',public._configuration_snapshot_hash('{}'),now(),pg_temp.ep_id(1));
+INSERT INTO public.project_external_fulfilments(id,project_id,scope_edition_id,package_key,units,kind,
+ buyer_party_kind,payer_party_kind,contracting_party_kind,configuration_id,created_by,client_request_id,request_hash)
+SELECT pg_temp.ep_id(400+n),pg_temp.ep_id(CASE WHEN n=3 THEN 203 ELSE 201 END),pg_temp.ep_id(CASE WHEN n=3 THEN 303 ELSE 301 END),
+ 'pkg.cabinets',ARRAY['k-1','k-2'],'gc_cabinetry','gc','gc','gc',CASE WHEN n=1 THEN pg_temp.ep_id(831) END,
+ pg_temp.ep_id(CASE WHEN n=3 THEN 4 ELSE 1 END),'fulfilment-'||n,'fixture' FROM generate_series(1,3)n;
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_actor(1);
+-- Use the actual mint/immutable membership authority; no replacement SQL stub.
+CREATE FUNCTION pg_temp.ep_members(issue integer) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_array(
+  jsonb_build_object('kind','plan_issue','id',i.id,'version',i.issue_number,'sha256',i.set_checksum),
+  jsonb_build_object('kind','product_configuration','id',c.id,'version',c.version,'sha256',c.snapshot_hash),
+  jsonb_build_object('kind','coordination_item_revision','id',r.id,'rev',r.rev_number,'sha256',
+   encode(extensions.digest(public._plan_room_canonical_json(jsonb_build_object('decisionId',r.decision_id,
+    'rev',r.rev_number,'attachments',r.attachments,'note',r.note)),'sha256'),'hex')))
+ FROM public.plan_issues i,public.product_configurations c,public.coordination_item_revisions r
+ WHERE i.id=pg_temp.ep_id(issue) AND c.id=pg_temp.ep_id(831) AND r.id=pg_temp.ep_id(701);
+$$;
+SELECT public.create_evidence_manifest(pg_temp.ep_id(201),pg_temp.ep_id(801),'fabrication_instruction',pg_temp.ep_members(821),'manifest-old');
+CREATE FUNCTION pg_temp.ep_manifest(key text) RETURNS uuid LANGUAGE sql AS $$
+ SELECT manifest_id FROM public.evidence_manifest_requests WHERE project_id=pg_temp.ep_id(201) AND idempotency_key=key;
+$$;
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.project_external_fulfilment_evidence_bindings(id,fulfilment_id,decision_id,units,covers_plan_issue_id,
+ covers_configuration_snapshot_hash,bound_by,client_request_id,request_hash)
+VALUES(pg_temp.ep_id(501),pg_temp.ep_id(401),pg_temp.ep_id(601),ARRAY['k-1','k-2'],pg_temp.ep_id(821),
+ public._configuration_snapshot_hash('{}'),pg_temp.ep_id(1),'binding','fixture');
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,plan_issue_id,recorded_by,event_seq,client_request_id,request_hash)
+VALUES(pg_temp.ep_id(1006),pg_temp.ep_id(401),'package_issued',jsonb_build_object('planIssueId',pg_temp.ep_id(821),
+ 'configurationSnapshotHash',public._configuration_snapshot_hash('{}')),pg_temp.ep_id(821),pg_temp.ep_id(1),1,'issued','fixture');
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,evidence_level,recorded_by,
+ verified_by,verified_at,verification_seq,event_seq,client_request_id,request_hash)
+VALUES(pg_temp.ep_id(1005),pg_temp.ep_id(401),'contract_reported','{"contractAmountCents":200000}','verified',
+ pg_temp.ep_id(1),pg_temp.ep_id(2),now(),1,2,'contract','fixture');
+INSERT INTO public.project_external_fulfilment_verifications(event_id,fulfilment_id,client_request_id,request_hash,verified_by)
+VALUES(pg_temp.ep_id(1005),pg_temp.ep_id(401),'verify','fixture',pg_temp.ep_id(2));
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,affected_units,recorded_by,event_seq,client_request_id,request_hash)
+SELECT pg_temp.ep_id(1005-n),pg_temp.ep_id(401),'hold',jsonb_build_object('decisionId',pg_temp.ep_id(601)),ARRAY['k-'||n],
+ pg_temp.ep_id(1),2+n,'hold-'||n,'fixture' FROM generate_series(1,2)n;
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,releases_event_id,recorded_by,event_seq,client_request_id,request_hash)
+VALUES(pg_temp.ep_id(1002),pg_temp.ep_id(401),'release_hold',jsonb_build_object('releasesEventId',pg_temp.ep_id(1004),
+ 'decisionId',pg_temp.ep_id(601)),pg_temp.ep_id(1004),pg_temp.ep_id(1),5,'release','fixture');
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,affected_units,authority_id,manifest_id,
+ manifest_hash,amount_cents,actor_id,evidence_route,coverage,recorded_by,event_seq,client_request_id,request_hash)
+SELECT pg_temp.ep_id(1001),pg_temp.ep_id(401),'fabrication_instruction',jsonb_build_object('manifestId',m.id,'authorizingPartyId',pg_temp.ep_id(811)),
+ ARRAY['k-1'],pg_temp.ep_id(850),m.id,m.manifest_hash,200000,pg_temp.ep_id(1),'shop_drawing',
+ jsonb_build_array(jsonb_build_object('unit','k-1','revisionIds',jsonb_build_array(pg_temp.ep_id(701)))),pg_temp.ep_id(1),6,'instruction','fixture'
+FROM public.evidence_manifests m WHERE m.id=pg_temp.ep_manifest('manifest-old');
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,recorded_by,event_seq,client_request_id,request_hash)
+VALUES(pg_temp.ep_id(1101),pg_temp.ep_id(402),'received','{}',pg_temp.ep_id(1),1,'sibling','fixture'),
+(pg_temp.ep_id(1201),pg_temp.ep_id(403),'received','{}',pg_temp.ep_id(4),1,'foreign','fixture');
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,recorded_by,event_seq,client_request_id,request_hash)
+SELECT pg_temp.ep_id(2000+n),pg_temp.ep_id(402),'quote_reported','{}',pg_temp.ep_id(1),n,'many-'||n,'fixture'
+FROM generate_series(2,1002)n;
+UPDATE public.project_external_fulfilment_events SET recorded_at='2026-10-20'::timestamptz + (7-event_seq)*interval '1 second'
+ WHERE fulfilment_id=pg_temp.ep_id(401);
+UPDATE public.project_external_fulfilment_events SET evidence_level='verified',verified_by=pg_temp.ep_id(2),
+ verified_at=now(),verification_seq=2 WHERE id=pg_temp.ep_id(1003);
+INSERT INTO public.project_external_fulfilment_verifications(event_id,fulfilment_id,client_request_id,request_hash,verified_by)
+ VALUES(pg_temp.ep_id(1003),pg_temp.ep_id(401),'verify-hold','fixture',pg_temp.ep_id(2));
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by)
+ VALUES(pg_temp.ep_id(823),pg_temp.ep_id(203),1,'Foreign issue','foreign-issue',repeat('a',64),repeat('3',64),1,pg_temp.ep_id(4));
+INSERT INTO public.project_parties(id,project_id,profile_id,party_kind,stage,display_name,created_by)
+ VALUES(pg_temp.ep_id(813),pg_temp.ep_id(203),pg_temp.ep_id(3),'gc','active','Foreign GC',pg_temp.ep_id(4));
+INSERT INTO public.project_party_authority(id,engagement_id,scope,effective_from,granted_by,threshold_cents,idempotency_key,fabrication_grant_request)
+ VALUES(pg_temp.ep_id(853),pg_temp.ep_id(813),'fabrication',current_date,pg_temp.ep_id(4),250000,'foreign-grant','{}');
+UPDATE public.evidence_manifest_members mm SET id=pg_temp.ep_id(6000-frozen.ord::integer)
+ FROM public.evidence_manifests m,jsonb_array_elements(m.members) WITH ORDINALITY frozen(member,ord)
+ WHERE m.id=mm.manifest_id AND m.id=pg_temp.ep_manifest('manifest-old')
+ AND to_jsonb(mm)->>((member->>'kind')||'_id')=member->>'id';
+SET LOCAL session_replication_role=origin;
+SELECT public.create_evidence_manifest(pg_temp.ep_id(201),pg_temp.ep_id(801),'fabrication_instruction',pg_temp.ep_members(822),'manifest-new');
+GRANT EXECUTE ON FUNCTION pg_temp.ep_id(integer),pg_temp.ep_actor(integer),pg_temp.ep_assert(boolean,text),pg_temp.ep_error(text,text,text) TO authenticated,anon;
+CREATE TEMP TABLE ep_first_read AS SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201)) AS value;
+GRANT SELECT ON ep_first_read TO authenticated;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.ep_assert(jsonb_array_length(public.get_project_external_fulfilments(pg_temp.ep_id(201)))=2,'authorized owner reads only this project');
+DO $$ DECLARE rows jsonb; item jsonb; events jsonb; m jsonb; BEGIN
+ rows:=public.get_project_external_fulfilments(pg_temp.ep_id(201));
+ SELECT value INTO item FROM jsonb_array_elements(rows) WHERE value->>'id'=pg_temp.ep_id(401)::text;
+ events:=item->'reading'->'events';
+ PERFORM pg_temp.ep_assert(jsonb_array_length(events)=6,'authoritative package includes complete ordered native evidence');
+ PERFORM pg_temp.ep_assert((SELECT jsonb_array_length(value->'reading'->'events')=1002
+  FROM jsonb_array_elements(rows) WHERE value->>'id'=pg_temp.ep_id(402)::text),
+  'sibling evidence stays separate with no hidden thousand-row cap');
+ PERFORM pg_temp.ep_assert(item->>'package_key'='pkg.cabinets' AND item->>'status'='planned'
+  AND item->'reported_price_cents'='null'::jsonb AND item->'units'='["k-1","k-2"]', 'existing header facts preserved without inferred status');
+ PERFORM pg_temp.ep_assert(item->>'client_request_id'='fulfilment-1' AND item->>'request_hash'='fixture'
+  AND NOT (item ? 'reading_package_id'),'header preserves retry fields without internal package alias');
+ PERFORM pg_temp.ep_assert(events->1->>'recorded_by'=pg_temp.ep_id(1)::text AND events->1->>'verified_by'=pg_temp.ep_id(2)::text
+  AND events->1->'actor_id'='null'::jsonb AND events->5->>'actor_id'=pg_temp.ep_id(1)::text
+  AND events->5->'verified_by'='null'::jsonb AND events->5->>'evidence_level'='reported','recorder actor verifier and reported instruction stay distinct');
+ PERFORM pg_temp.ep_assert((SELECT array_agg((value->>'event_seq')::integer ORDER BY ordinality)=ARRAY[1,2,3,4,5,6]
+  FROM jsonb_array_elements(events) WITH ORDINALITY),'event sequence order never timestamp order');
+ PERFORM pg_temp.ep_assert(events->2->'affected_units'='["k-1"]'::jsonb AND events->3->'affected_units'='["k-2"]'::jsonb
+  AND events->4->>'releases_event_id'=events->2->>'id' AND events->4->'affected_units'='null'::jsonb,'independent partial holds retain native release link');
+ PERFORM pg_temp.ep_assert(jsonb_array_length(item->'reading'->'bindings')=1 AND jsonb_array_length(item->'reading'->'verifications')=2
+  AND item->'reading'->'verifications'->0->>'verified_by'=events->1->>'verified_by','bindings and genuine verification receipt agree');
+ PERFORM pg_temp.ep_assert(jsonb_array_length(item->'reading'->'manifests')=1,'only referenced manifest not newer live package evidence');
+ m:=item->'reading'->'manifests'->0;
+ PERFORM pg_temp.ep_assert(m->>'id'=events->5->>'manifest_id' AND m->>'manifest_hash'=events->5->>'manifest_hash'
+  AND jsonb_array_length(m->'typed_members')=3 AND jsonb_array_length(m->'members')=3,'instruction retains exact immutable manifest members and hash');
+ PERFORM pg_temp.ep_assert(EXISTS(SELECT 1 FROM jsonb_array_elements(m->'members') x WHERE x->>'kind'='plan_issue'
+  AND x->>'id'=pg_temp.ep_id(821)::text AND x->>'sha256'=repeat('1',64)),'newer issue never replaces old pinned issue hash');
+ PERFORM pg_temp.ep_assert(position('PRIVATE_BODY_NOT_FOR_READER' IN rows::text)=0
+  AND NOT (events->0 ? 'request_hash') AND NOT (m ? 'idempotency_key'),'private body and retry metadata not projected');
+ PERFORM pg_temp.ep_assert(events->0->>'id'>events->1->>'id'
+  AND events->0->>'recorded_at'>events->1->>'recorded_at','event UUID and timestamp orders differ from sequence');
+ PERFORM pg_temp.ep_assert(item->'reading'->'verifications'->0->>'event_id'=pg_temp.ep_id(1005)::text
+  AND item->'reading'->'verifications'->1->>'event_id'=pg_temp.ep_id(1003)::text,
+  'receipts follow verification sequence not event UUID');
+ PERFORM pg_temp.ep_assert(NOT EXISTS(SELECT 1 FROM jsonb_array_elements(m->'members') WITH ORDINALITY frozen(member,ord)
+  WHERE m->'typed_members'->(ord::integer-1)->>((member->>'kind')||'_id') IS DISTINCT FROM member->>'id'),
+  'typed members follow frozen canonical member order');
+END $$;
+SELECT pg_temp.ep_assert(public.get_project_external_fulfilments(pg_temp.ep_id(201))=(SELECT value FROM ep_first_read),'deterministic order across separate statements');
+SELECT pg_temp.ep_assert(public.get_project_external_fulfilments(pg_temp.ep_id(202))='[]'::jsonb,'real empty success remains empty');
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(203))$q$,'42501','foreign project denied');
+SELECT pg_temp.ep_actor(3);
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'42501','client and appointed GC do not gain studio reader');
+RESET ROLE;
+SET LOCAL ROLE anon;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'42501','anon execute denied');
+RESET ROLE;
+SELECT pg_temp.ep_actor(1);
+-- Corrupt only rollback-owned fixture references. Every case must refuse the
+-- read, not filter away the bad row and produce valid-looking empty evidence.
+SAVEPOINT bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_evidence_bindings SET decision_id=pg_temp.ep_id(603) WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','foreign binding refuses instead of disappearing');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_verifications SET verified_by=pg_temp.ep_id(1) WHERE event_id=pg_temp.ep_id(1005);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','mismatched verifier receipt refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+DELETE FROM public.project_external_fulfilment_verifications WHERE event_id=pg_temp.ep_id(1005);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing verification receipt refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET manifest_id=pg_temp.ep_manifest('manifest-new') WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','recorded hash cannot be substituted with newer manifest');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:197–199 blocks this write path.
+SET LOCAL session_replication_role=replica;
+DELETE FROM public.evidence_manifest_members WHERE manifest_id=pg_temp.ep_manifest('manifest-old') AND coordination_item_revision_id IS NOT NULL;
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing immutable member refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:158–163 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.evidence_manifests SET project_id=pg_temp.ep_id(203),package_id=pg_temp.ep_id(803) WHERE id=pg_temp.ep_manifest('manifest-old');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','manifest from another project refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:158–163 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.evidence_manifests SET package_id=pg_temp.ep_id(802) WHERE id=pg_temp.ep_manifest('manifest-old');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','manifest from another package refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:158–163 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.evidence_manifests SET purpose='service_acceptance' WHERE id=pg_temp.ep_manifest('manifest-old');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','wrong manifest purpose refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET evidence=jsonb_set(evidence,'{manifestId}',to_jsonb(pg_temp.ep_manifest('manifest-new')::text)) WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','evidence manifest identity mismatch refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET affected_units=ARRAY['foreign'] WHERE id=pg_temp.ep_id(1004);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','event units outside fulfilment refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+-- Empty coverage is unreachable-by-constraint 00879_round8_fabrication_instruction.sql:28–35.
+-- Duplicate the existing nonempty entry: native CHECK accepts it, reader cardinality must refuse it.
+UPDATE public.project_external_fulfilment_events SET coverage=coverage||coverage WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','coverage cardinality mismatch refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET coverage='[{"unit":"k-1"}]' WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing coverage revisions refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET coverage='[{"unit":"k-1","revisionIds":{}}]' WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','non-array coverage revisions refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET coverage='[{"unit":"k-1","revisionIds":[]}]' WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','empty coverage revisions refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET plan_issue_id=pg_temp.ep_id(823) WHERE id=pg_temp.ep_id(1006);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','cross-project plan issue refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+-- Keep the release inside project 201's reader scope; sibling 402 already owns event_seq 1..1002.
+UPDATE public.project_external_fulfilment_events SET fulfilment_id=pg_temp.ep_id(402),event_seq=1003 WHERE id=pg_temp.ep_id(1002);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','release across fulfilments refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET event_seq=7 WHERE id=pg_temp.ep_id(1004);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','release precedes hold refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_evidence_bindings SET units=ARRAY['foreign'] WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','binding units outside fulfilment refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_evidence_bindings SET covers_plan_issue_id=pg_temp.ep_id(823) WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','cross-project covered plan issue refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_verifications SET fulfilment_id=pg_temp.ep_id(402) WHERE event_id=pg_temp.ep_id(1005);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','receipt for another fulfilment refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00877_round8_evidence_manifests.sql:158–163 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.evidence_manifests SET members=jsonb_set(members,ARRAY[(SELECT (ord-1)::text FROM jsonb_array_elements(members) WITH ORDINALITY frozen(member,ord) WHERE member->>'kind'='plan_issue'),'id'],to_jsonb(pg_temp.ep_id(822)::text)) WHERE id=pg_temp.ep_manifest('manifest-old');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','non-revision member disagrees with typed row refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_evidence_bindings SET covers_plan_issue_id=NULL WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing pinned issue binding refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_evidence_bindings SET covers_configuration_snapshot_hash=NULL WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','missing pinned configuration binding refuses');
+ROLLBACK TO bad_reference;
+-- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET authority_id=pg_temp.ep_id(853) WHERE id=pg_temp.ep_id(1001);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','authority seat on another project refuses');
+ROLLBACK TO bad_reference;
+-- Reported events with verified fields are unreachable-by-constraint 00875_round8_external_fulfilment.sql:64–65.
+-- This existing assertion checks native write rejection, not a reader refusal.
+SET LOCAL session_replication_role=replica;
+SELECT pg_temp.ep_error($q$UPDATE public.project_external_fulfilment_events SET verified_by=pg_temp.ep_id(2),verified_at=now(),verification_seq=3 WHERE id=pg_temp.ep_id(1001)$q$,'23514','native CHECK refuses verified fields on a reported event');
+SET LOCAL session_replication_role=origin;
+RELEASE SAVEPOINT bad_reference;
+SELECT pg_temp.ep_assert(NOT EXISTS(SELECT 1 FROM public.purchase_orders WHERE project_id IN (pg_temp.ep_id(201),pg_temp.ep_id(202),pg_temp.ep_id(203)))
+ AND NOT EXISTS(SELECT 1 FROM public.studio_purchases WHERE project_id IN (pg_temp.ep_id(201),pg_temp.ep_id(202),pg_temp.ep_id(203)))
+ AND NOT EXISTS(SELECT 1 FROM public.invoices WHERE project_id IN (pg_temp.ep_id(201),pg_temp.ep_id(202),pg_temp.ep_id(203))),
+ 'fixture and reader create zero PO purchase invoice rows');
+SELECT pg_temp.ep_assert(NOT (SELECT enabled FROM public.server_capabilities WHERE key='scope_editions'),'capability unchanged at exit');
