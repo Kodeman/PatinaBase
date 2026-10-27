@@ -1,0 +1,588 @@
+-- C4 service acceptance (00886) real PostgreSQL oracle. The enclosing runner
+-- owns BEGIN/ROLLBACK, so every test-only grant and capability change rolls back.
+-- The "shared" sections are reused by service_acceptance_concurrency.test.mjs.
+-- BEGIN shared assertion helpers
+CREATE FUNCTION pg_temp.assert_true(ok boolean, name text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',name; END IF;
+  RAISE NOTICE 'PASS: %',name;
+END $$;
+CREATE FUNCTION pg_temp.expect_error(command text, state text, message text, name text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+  BEGIN EXECUTE command;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+  END;
+  PERFORM pg_temp.assert_true(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
+    name||format(' [expected %s/%s, got %s/%s]',state,message,actual_state,actual_message));
+END $$;
+CREATE FUNCTION pg_temp.uid(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+  SELECT ('f8860000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub',CASE WHEN n IS NULL THEN '' ELSE pg_temp.uid(n)::text END,true);
+  PERFORM set_config('request.jwt.claims',CASE WHEN n IS NULL THEN '' ELSE jsonb_build_object('sub',pg_temp.uid(n),
+    'role','authenticated')::text END,true);
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_true(boolean,text),pg_temp.expect_error(text,text,text,text),
+  pg_temp.actor(integer),pg_temp.uid(integer) TO authenticated;
+-- END shared assertion helpers
+
+-- Shipped inactive: no mutation or helper is executable by PUBLIC, anon,
+-- authenticated or service_role; only the two reads reach authenticated.
+DO $$ DECLARE f record; r text; BEGIN
+  FOR f IN SELECT p.oid::regprocedure signature, p.proname FROM pg_proc p
+    WHERE p.pronamespace='public'::regnamespace AND (p.proname LIKE '%service_acceptance%')
+      AND p.proname NOT IN ('_can_access_service_acceptance_paper_object') LOOP
+    IF f.proname IN ('get_project_service_acceptance','get_my_service_acceptance_requests') THEN
+      PERFORM pg_temp.assert_true(has_function_privilege('authenticated',f.signature,'EXECUTE')
+        AND NOT has_function_privilege('anon',f.signature,'EXECUTE'),'read granted to authenticated only '||f.signature);
+      CONTINUE;
+    END IF;
+    FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+      PERFORM pg_temp.assert_true(NOT has_function_privilege(r,f.signature,'EXECUTE'),r||' no execute '||f.signature);
+    END LOOP;
+    PERFORM pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM pg_proc p,
+      aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl
+      WHERE p.oid=f.signature::oid AND acl.grantee=0 AND acl.privilege_type='EXECUTE'),'PUBLIC no execute '||f.signature);
+  END LOOP;
+END $$;
+SELECT pg_temp.assert_true((SELECT count(*)=6 FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN
+  ('create_service_acceptance_request','respond_service_acceptance','record_service_acceptance_paper_intake',
+   'review_service_acceptance_paper_intake','replace_service_acceptance_signer','withdraw_service_acceptance_request')),
+  'six mutation RPCs exist');
+SELECT pg_temp.assert_true((SELECT bool_and(c.relrowsecurity) AND bool_and(NOT has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE'))
+  AND bool_and(NOT has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE')) AND count(*)=4
+  FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relname IN ('service_acceptance_requests',
+  'service_acceptance_signers','service_acceptance_responses','service_acceptance_paper_intakes')),
+  'four acceptance tables have RLS and no anon/authenticated table privilege');
+SELECT pg_temp.assert_true((SELECT NOT public FROM storage.buckets WHERE id='service-acceptance-paper'),'paper bucket is private');
+SELECT pg_temp.assert_true((SELECT NOT enabled FROM public.server_capabilities WHERE key='scope_editions'),'capability ships false');
+SELECT pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname='close_project' AND prosrc LIKE '%service_acceptance%'),
+  'close_project does not read acceptance');
+
+-- Inactive: every mutation refuses even with its grant restored here.
+DO $$ DECLARE f regprocedure; BEGIN
+  FOR f IN SELECT p.oid::regprocedure FROM pg_proc p WHERE p.pronamespace='public'::regnamespace AND p.proname IN
+    ('create_service_acceptance_request','respond_service_acceptance','record_service_acceptance_paper_intake',
+     'review_service_acceptance_paper_intake','replace_service_acceptance_signer','withdraw_service_acceptance_request') LOOP
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated',f);
+  END LOOP;
+END $$;
+SELECT pg_temp.actor(1);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.expect_error('SELECT public.create_service_acceptance_request(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),''k'')',
+  '55000','scope_editions_inactive','inactive create refuses with grant restored');
+SELECT pg_temp.expect_error('SELECT public.respond_service_acceptance(gen_random_uuid(),''accept'',''[]'',NULL,''h'',''h'',1,''k'')',
+  '55000','scope_editions_inactive','inactive respond refuses with grant restored');
+SELECT pg_temp.expect_error('SELECT public.record_service_acceptance_paper_intake(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),current_date,''n'',''accept'',''[]'',NULL,1,''h'',''h'',1,''k'')',
+  '55000','scope_editions_inactive','inactive paper intake refuses with grant restored');
+SELECT pg_temp.expect_error('SELECT public.review_service_acceptance_paper_intake(gen_random_uuid(),''confirm'',''h'',NULL,''k'')',
+  '55000','scope_editions_inactive','inactive paper review refuses with grant restored');
+SELECT pg_temp.expect_error('SELECT public.replace_service_acceptance_signer(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),NULL,1,''r'',''k'')',
+  '55000','scope_editions_inactive','inactive replace refuses with grant restored');
+SELECT pg_temp.expect_error('SELECT public.withdraw_service_acceptance_request(gen_random_uuid(),''r'',''k'')',
+  '55000','scope_editions_inactive','inactive withdraw refuses with grant restored');
+RESET ROLE;
+DO $$ DECLARE f regprocedure; BEGIN
+  FOR f IN SELECT p.oid::regprocedure FROM pg_proc p WHERE p.pronamespace='public'::regnamespace AND p.proname IN
+    ('create_service_acceptance_request','respond_service_acceptance','record_service_acceptance_paper_intake',
+     'review_service_acceptance_paper_intake','replace_service_acceptance_signer','withdraw_service_acceptance_request') LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM authenticated',f);
+  END LOOP;
+END $$;
+
+-- Fixture: studio A (1 owner, 2 member, 3 admin), studio B (4 owner), client 5,
+-- household partner 6 (with a profile), outsider 7; two profile-less cards.
+-- BEGIN shared fixture
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f8860000-%'),'fixture starts absent');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT pg_temp.uid(n),'service-acceptance-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated'
+FROM generate_series(1,7) n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT id,email,'Service acceptance fixture',true FROM auth.users WHERE id::text LIKE 'f8860000-%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+('f8861000-0000-4000-8000-000000000001','design_studio','Acceptance A','service-acceptance-a','active'),
+('f8861000-0000-4000-8000-000000000002','design_studio','Acceptance B','service-acceptance-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+(pg_temp.uid(1),'f8861000-0000-4000-8000-000000000001','owner','active'),
+(pg_temp.uid(2),'f8861000-0000-4000-8000-000000000001','member','active'),
+(pg_temp.uid(3),'f8861000-0000-4000-8000-000000000001','admin','active'),
+(pg_temp.uid(4),'f8861000-0000-4000-8000-000000000002','owner','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT p.id,r.id,p.id FROM public.profiles p CROSS JOIN public.roles r
+WHERE p.id::text LIKE 'f8860000-%' AND r.name='studio_owner';
+INSERT INTO public.studio_contacts(id,organization_id,entity_kind,contact_kind,full_name,profile_id) VALUES
+('f8866000-0000-4000-8000-000000000001','f8861000-0000-4000-8000-000000000001','person','client','Client',pg_temp.uid(5)),
+('f8866000-0000-4000-8000-000000000002','f8861000-0000-4000-8000-000000000001','person','client','Partner',pg_temp.uid(6)),
+('f8866000-0000-4000-8000-000000000003','f8861000-0000-4000-8000-000000000001','person','client','Household card',NULL),
+('f8866000-0000-4000-8000-000000000004','f8861000-0000-4000-8000-000000000001','person','client','Second card',NULL);
+INSERT INTO public.client_households(id,organization_id,designer_id,display_name,member_person_ids) VALUES
+('f8867000-0000-4000-8000-000000000001','f8861000-0000-4000-8000-000000000001',pg_temp.uid(1),'Acceptance household',
+ ARRAY['f8866000-0000-4000-8000-000000000001','f8866000-0000-4000-8000-000000000002',
+       'f8866000-0000-4000-8000-000000000003','f8866000-0000-4000-8000-000000000004']::uuid[]);
+INSERT INTO public.designer_clients(id,designer_id,client_id,client_name,client_email,status,source,household_id) VALUES
+('f8862000-0000-4000-8000-000000000001',pg_temp.uid(1),pg_temp.uid(5),'Acceptance client',
+ 'service-acceptance-5@test.invalid','active','direct','f8867000-0000-4000-8000-000000000001');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+-- END shared fixture
+
+-- BEGIN shared native helpers
+CREATE FUNCTION pg_temp.policy() RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object('kind','acceptance_signer_policy','partKey','scope.signers','title','Signers','payload',
+  jsonb_build_object('policyRevision',1,'signers',jsonb_build_array(
+    jsonb_build_object('slot','client','required',true,'profileId',pg_temp.uid(5)),
+    jsonb_build_object('slot','partner','required',true,'profileId',pg_temp.uid(6)),
+    jsonb_build_object('slot','household','required',false,'householdPersonId','f8866000-0000-4000-8000-000000000003'))));
+$$;
+CREATE FUNCTION pg_temp.parts(p uuid) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT COALESCE(jsonb_agg(jsonb_build_object('kind',kind,'variant',variant,'partKey',part_key,'title',title,
+   'payload',payload,'required',required,'clientVisible',client_visible) ORDER BY position),'[]')
+ FROM public.proposal_agreement_parts WHERE proposal_id=p;
+$$;
+CREATE FUNCTION pg_temp.draft(p uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE phase_id uuid;
+BEGIN
+ INSERT INTO public.proposals(id,designer_id,designer_client_id,client_id,title,total_amount,status,valid_until)
+ VALUES(p,pg_temp.uid(1),'f8862000-0000-4000-8000-000000000001',pg_temp.uid(5),'Acceptance draft',0,'draft',now()+interval '30 days');
+ INSERT INTO public.proposal_phases(proposal_id,name,phase_key,duration_days,lane,fee_cents,sort_order)
+ VALUES(p,'Design','design-development',5,'main',0,0) RETURNING id INTO phase_id;
+ PERFORM public.upsert_design_services_draft(p,jsonb_build_object('scope','Interior design services',
+   'deliverables',jsonb_build_array('Selections'),'exclusions','[]'::jsonb,'billingCeilingCents',100000,
+   'retainerAmountCents',0,'retainerActivationPolicy','immediate','billingCadence','monthly',
+   'currency','USD','terms','Signed actual hours','currentRateVersion',1),
+   jsonb_build_array(jsonb_build_object('version',1,'roleName','Designer','hourlyRateCents',12000,'sortOrder',0,'effectiveAt',now()-interval '1 day')));
+ PERFORM public.materialize_standard_parts(p);
+ PERFORM public.upsert_agreement_parts(p,pg_temp.parts(p)||jsonb_build_array(
+   jsonb_build_object('kind','scope_package','partKey','scope.kitchen','title','Kitchen','payload',
+     jsonb_build_object('packageKey','pkg.kitchen','label','Kitchen','inclusion','included',
+       'responsibilities',jsonb_build_object('design','studio','purchasing','client','payer','client',
+         'fabrication_contract','gc','installation','gc'),
+       'serviceBindings',jsonb_build_object('design',jsonb_build_array(phase_id)))),
+   pg_temp.policy()),'acceptance fixture');
+END $$;
+CREATE FUNCTION pg_temp.send_and_sign(p uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE snapshot jsonb;
+BEGIN
+ snapshot:=public.get_commercial_document_send_snapshot(p);
+ PERFORM public.send_commercial_document(p,snapshot->>'documentFingerprint',NULL,now()+interval '30 days');
+ PERFORM pg_temp.actor(5);
+ PERFORM public.sign_design_services_agreement(p,'Acceptance Client');
+ PERFORM pg_temp.actor(1);
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.send_and_sign(uuid) TO authenticated;
+CREATE TEMP TABLE sa_results(key text PRIMARY KEY,value jsonb);
+GRANT ALL ON sa_results TO authenticated;
+CREATE FUNCTION pg_temp.v(k text) RETURNS jsonb LANGUAGE sql AS $$ SELECT value FROM sa_results WHERE key=k $$;
+CREATE FUNCTION pg_temp.req(k text) RETURNS uuid LANGUAGE sql AS $$ SELECT (value->>'requestId')::uuid FROM sa_results WHERE key=k $$;
+CREATE FUNCTION pg_temp.project() RETURNS uuid LANGUAGE sql AS $$ SELECT (value->>'projectId')::uuid FROM sa_results WHERE key='origin' $$;
+CREATE FUNCTION pg_temp.closure() RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object('status',status,'closure',closure_checklist,'snapshot',portfolio_snapshot)
+  FROM public.projects WHERE id=pg_temp.project();
+$$;
+CREATE FUNCTION pg_temp.signer(req uuid, s text) RETURNS uuid LANGUAGE sql AS $$
+  SELECT id FROM public.service_acceptance_signers WHERE request_id=req AND slot=s AND status='active';
+$$;
+CREATE FUNCTION pg_temp.request(req uuid) RETURNS public.service_acceptance_requests LANGUAGE sql AS $$
+  SELECT * FROM public.service_acceptance_requests WHERE id=req;
+$$;
+CREATE FUNCTION pg_temp.create(k text, manifest text DEFAULT 'f8868000-0000-4000-8000-000000000001') RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.create_service_acceptance_request(pg_temp.project(),
+    (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active'),manifest::uuid,k);
+$$;
+CREATE FUNCTION pg_temp.respond(req uuid, response text, k text, conditions jsonb DEFAULT '[]', reason text DEFAULT NULL,
+  revision integer DEFAULT NULL, hash text DEFAULT NULL, method text DEFAULT 'portal_authenticated') RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.respond_service_acceptance(r.id,response,conditions,reason,COALESCE(hash,r.scope_content_hash),
+    r.evidence_manifest_hash,COALESCE(revision,r.signer_policy_revision),k,method)
+  FROM public.service_acceptance_requests r WHERE r.id=req;
+$$;
+CREATE FUNCTION pg_temp.paper(n integer, owner_n integer) RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE o uuid := ('f8869000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+BEGIN
+  INSERT INTO storage.objects(id,bucket_id,name,owner_id,metadata)
+  VALUES (o,'service-acceptance-paper',pg_temp.project()||'/'||o||'.pdf',pg_temp.uid(owner_n)::text,
+    jsonb_build_object('mimetype','application/pdf','size',2048,'eTag','"etag-'||n||'"'));
+  RETURN o;
+END $$;
+CREATE FUNCTION pg_temp.record_paper(req uuid, signer uuid, obj uuid, disposition text, k text, revision integer DEFAULT NULL)
+RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.record_service_acceptance_paper_intake(r.id,signer,obj,current_date,'Signed Name',disposition,
+    CASE WHEN disposition='accept_with_conditions' THEN '[{"text":"Paper condition"}]'::jsonb ELSE '[]'::jsonb END,
+    CASE WHEN disposition='return' THEN 'Paper return' END,r.request_number,r.scope_content_hash,r.evidence_manifest_hash,
+    COALESCE(revision,r.signer_policy_revision),k)
+  FROM public.service_acceptance_requests r WHERE r.id=req;
+$$;
+-- V22 delivery as the service path (no JWT): claim, deliver, finalize, after-send.
+CREATE FUNCTION pg_temp.deliver(req uuid, rejected boolean DEFAULT false) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE d uuid; f timestamptz; caller text := current_setting('request.jwt.claim.sub',true);
+BEGIN
+  SELECT outbound_draft_id INTO STRICT d FROM public.service_acceptance_requests WHERE id=req;
+  PERFORM pg_temp.actor(NULL);
+  PERFORM public.claim_outbound_draft_for_send(d);
+  PERFORM public.record_outbound_draft_send_attempt(d);
+  IF rejected THEN
+    PERFORM public.record_outbound_draft_send_rejected(d);
+  ELSE
+    PERFORM public.record_outbound_draft_delivery(d,'msg-'||d);
+    SELECT finalizing_at INTO f FROM public.claim_outbound_draft_finalize(d);
+    PERFORM public.record_outbound_draft_after_send(d,f);
+    PERFORM public.mark_outbound_draft_sent(d,pg_temp.uid(1),'msg-'||d);
+  END IF;
+  PERFORM set_config('request.jwt.claim.sub',COALESCE(caller,''),true);
+  PERFORM set_config('request.jwt.claims',CASE WHEN COALESCE(caller,'')='' THEN '' ELSE
+    jsonb_build_object('sub',caller,'role','authenticated')::text END,true);
+END $$;
+-- END shared native helpers
+
+-- Origin edition with the two-required-signer policy (local activation rolls back).
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+-- BEGIN shared origin
+SELECT pg_temp.draft('f8863000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.send_and_sign('f8863000-0000-4000-8000-000000000001');
+INSERT INTO sa_results VALUES('origin',public.countersign_design_services_agreement(
+ 'f8863000-0000-4000-8000-000000000001','Acceptance Designer'));
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=3 FROM public.project_scope_edition_signers s JOIN public.project_scope_editions e
+  ON e.id=s.edition_id WHERE e.project_id=pg_temp.project() AND e.status='active'),'origin edition freezes three signers');
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
+('f8868000-0000-4000-8000-000000000001',pg_temp.project(),NULL,'service_acceptance','[]',repeat('a',64),repeat('1',64),'sa-1',pg_temp.uid(1)),
+('f8868000-0000-4000-8000-000000000002',pg_temp.project(),NULL,'service_acceptance','[{"m":2}]',repeat('b',64),repeat('2',64),'sa-2',pg_temp.uid(1)),
+('f8868000-0000-4000-8000-000000000003',pg_temp.project(),'f8868100-0000-4000-8000-000000000001','fabrication_instruction',
+ '[{"m":3}]',repeat('c',64),repeat('3',64),'sa-3',pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+-- END shared origin
+-- X08 fixture: one native approval artifact on the same project.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.client_decisions(id,designer_client_id,title,designer_id,project_id,approval_contract,decision_type,decision_kind,coordination_kind,court,phase_id,blocking_status,blocks_kind) VALUES
+('f886a000-0000-4000-8000-000000000001','f8862000-0000-4000-8000-000000000001','Approve plan',pg_temp.uid(1),pg_temp.project(),'project_artifact_v1','approval','approval','signoff','client','f886a200-0000-4000-8000-000000000001','blocks_phase','phase');
+INSERT INTO public.project_decision_authority_snapshots(decision_id,project_id,decision_lead_id,authority_revision,assigned_by)
+VALUES ('f886a000-0000-4000-8000-000000000001',pg_temp.project(),pg_temp.uid(1),1,pg_temp.uid(1));
+INSERT INTO public.project_approval_artifacts(decision_id,project_id,source_kind,source_id,source_version,artifact_hash,
+  artifact_title,question,due_at,phase_id,cost_cents_delta,schedule_days_delta,lead_time_days_delta,source_snapshot)
+VALUES ('f886a000-0000-4000-8000-000000000001',pg_temp.project(),'plan_issue','f886a100-0000-4000-8000-000000000001',1,
+  repeat('d',64),'Plan issue','Approve the plan?',now()+interval '7 days','f886a200-0000-4000-8000-000000000001',0,0,0,'{}');
+SET LOCAL session_replication_role=origin;
+INSERT INTO sa_results VALUES('closure0',pg_temp.closure());
+
+-- Create: authority, inputs, receipt replay (R15).
+SELECT pg_temp.actor(7);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.create('c-outsider')$q$,'42501',NULL,'outsider cannot create');
+SELECT pg_temp.actor(4);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.create('c-foreign')$q$,'42501',NULL,'foreign studio cannot create');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.create(NULL)$q$,'23514','client_request_id_invalid','create requires a client request id');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.create('c-fab','f8868000-0000-4000-8000-000000000003')$q$,
+  '23514','evidence_manifest_invalid','create refuses a manifest of another purpose');
+SELECT pg_temp.expect_error($q$SELECT public.create_service_acceptance_request(pg_temp.project(),gen_random_uuid(),
+  'f8868000-0000-4000-8000-000000000001','c-noedition')$q$,'55000','scope_edition_not_active','create refuses an unknown edition');
+SELECT pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM public.service_acceptance_requests),'refused creates leave no request');
+INSERT INTO sa_results VALUES('r1',pg_temp.create('c-r1'));
+INSERT INTO sa_results VALUES('r1-replay',pg_temp.create('c-r1'));
+SELECT pg_temp.assert_true((pg_temp.v('r1')->>'lifecycle')='draft' AND jsonb_array_length(pg_temp.v('r1')->'signers')=3
+  AND (pg_temp.v('r1')->>'signerPolicyRevision')::int=1 AND NOT (pg_temp.v('r1')->>'replayed')::boolean,'create returns a draft with three signers');
+SELECT pg_temp.assert_true(pg_temp.req('r1-replay')=pg_temp.req('r1') AND (pg_temp.v('r1-replay')->>'replayed')::boolean,
+  'create replays its receipt');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.create('c-r1','f8868000-0000-4000-8000-000000000002')$q$,
+  '23505','idempotency_key_reused','create refuses a reused key with another payload');
+SELECT pg_temp.assert_true((SELECT d.kind='service_acceptance_request' AND d.status='awaiting_review' AND d.ref_id=pg_temp.req('r1')
+  AND d.to_client_id=pg_temp.uid(5) AND position('signature' in lower(d.subject||d.body))=0
+  FROM public.outbound_drafts d WHERE d.id=(pg_temp.v('r1')->>'outboundDraftId')::uuid),'create composes one V22 draft awaiting review');
+SELECT pg_temp.assert_true((SELECT bool_and(source='edition_policy' AND policy_slot=slot) AND count(*) FILTER (WHERE required)=2
+  FROM public.service_acceptance_signers WHERE request_id=pg_temp.req('r1')),'signers come from the edition policy only');
+SELECT pg_temp.assert_true((SELECT scope_content_hash=(SELECT content_hash FROM public.project_scope_editions WHERE id=scope_edition_id)
+  AND evidence_manifest_hash=repeat('a',64) FROM public.service_acceptance_requests WHERE id=pg_temp.req('r1')),
+  'request pins edition and manifest hashes');
+
+-- Guards: direct writes fail without the RPC markers.
+SELECT pg_temp.expect_error(format('UPDATE public.service_acceptance_requests SET lifecycle=''sent'',sent_at=now() WHERE id=%L',
+  pg_temp.req('r1')),'42501','service_acceptance_write_unauthorized','direct request update refuses');
+SELECT pg_temp.expect_error(format($q$DO $d$ BEGIN PERFORM set_config('app.service_acceptance_request_id',%L,true);
+  UPDATE public.service_acceptance_requests SET aggregate_outcome='accepted',lifecycle='closed',closed_reason='accepted',
+  closed_at=now(),sent_at=now() WHERE id=%L; END $d$$q$,pg_temp.req('r1'),pg_temp.req('r1')),
+  '23514','service_acceptance_transition_invalid','draft cannot jump to closed');
+SELECT pg_temp.expect_error(format('DELETE FROM public.service_acceptance_signers WHERE request_id=%L',pg_temp.req('r1')),
+  '23514','service_acceptance_record_immutable','signers cannot be deleted');
+
+-- Delivery: a rejected send leaves draft; the after-send hook marks sent once.
+SELECT pg_temp.actor(5);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','early')$q$,pg_temp.req('r1')),
+  '55000','request_not_open','a draft request refuses responses');
+SELECT pg_temp.deliver(pg_temp.req('r1'),true);
+SELECT pg_temp.assert_true((pg_temp.request(pg_temp.req('r1'))).lifecycle='draft','rejected delivery leaves the request in draft');
+SELECT pg_temp.deliver(pg_temp.req('r1'));
+SELECT pg_temp.assert_true((SELECT lifecycle='sent' AND sent_at IS NOT NULL FROM public.service_acceptance_requests WHERE id=pg_temp.req('r1')),
+  'after-send hook marks the request sent');
+INSERT INTO sa_results VALUES('r1-sent-at',to_jsonb((pg_temp.request(pg_temp.req('r1'))).sent_at));
+-- Replay the after-send transition itself: the hook fires again but is a no-op.
+SET LOCAL session_replication_role=replica;
+UPDATE public.outbound_drafts SET after_send_done_at=NULL WHERE id=(pg_temp.v('r1')->>'outboundDraftId')::uuid;
+SET LOCAL session_replication_role=origin;
+UPDATE public.outbound_drafts SET after_send_done_at=clock_timestamp() WHERE id=(pg_temp.v('r1')->>'outboundDraftId')::uuid;
+SELECT pg_temp.assert_true(to_jsonb((pg_temp.request(pg_temp.req('r1'))).sent_at)=pg_temp.v('r1-sent-at'),'after-send runs once');
+
+-- Respond: authority, binding, payload, replay.
+SELECT pg_temp.actor(7);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x7')$q$,pg_temp.req('r1')),'42501',NULL,'non-signer cannot respond');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-hash',hash=>repeat('0',64))$q$,pg_temp.req('r1')),
+  '40001','stale_scope','respond refuses a stale scope hash');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-rev',revision=>2)$q$,pg_temp.req('r1')),
+  '40001','stale_signer_policy','respond refuses a stale signer revision');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept_with_conditions','x-empty')$q$,pg_temp.req('r1')),
+  '23514','service_acceptance_response_invalid','conditional response needs conditions');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'return','x-reason')$q$,pg_temp.req('r1')),
+  '23514','service_acceptance_response_invalid','return needs a reason');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-paper',method=>'paper_intake')$q$,pg_temp.req('r1')),
+  '23514','service_acceptance_response_invalid','paper is never an online method');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept_with_conditions','x-id','[{"conditionId":"c","text":"t"}]')$q$,
+  pg_temp.req('r1')),'23514','service_acceptance_response_invalid','client cannot assign condition ids');
+-- The activation path: the same RPC through the authenticated role (grant restored here only).
+GRANT EXECUTE ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) TO authenticated;
+SELECT id AS r1_id,scope_content_hash AS r1_scope,evidence_manifest_hash AS r1_manifest
+FROM public.service_acceptance_requests WHERE id=pg_temp.req('r1') \gset
+SET LOCAL ROLE authenticated;
+INSERT INTO sa_results VALUES('r1-client',public.respond_service_acceptance(:'r1_id','accept_with_conditions',
+  '[{"text":"Keep the oak floor"}]',NULL,:'r1_scope',:'r1_manifest',1,'x-client'));
+INSERT INTO sa_results VALUES('r1-client-replay',public.respond_service_acceptance(:'r1_id','accept_with_conditions',
+  '[{"text":"Keep the oak floor"}]',NULL,:'r1_scope',:'r1_manifest',1,'x-client'));
+RESET ROLE;
+REVOKE EXECUTE ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) FROM authenticated;
+SELECT pg_temp.assert_true((pg_temp.v('r1-client')->>'aggregateOutcome')='pending'
+  AND (pg_temp.v('r1-client')->'pendingRequiredSigners'->0->>'slot')='partner'
+  AND jsonb_array_length(pg_temp.v('r1-client')->'pendingRequiredSigners')=1,'one of two required signers leaves the outcome pending');
+SELECT pg_temp.assert_true(pg_temp.v('r1-client-replay')->>'responseId'=pg_temp.v('r1-client')->>'responseId'
+  AND (pg_temp.v('r1-client-replay')->>'replayed')::boolean,'respond replays its receipt');
+SELECT pg_temp.assert_true((SELECT conditions->0->>'text'='Keep the oak floor' AND (conditions->0->>'conditionId') IS NOT NULL
+  AND method='portal_authenticated' AND responder_profile_id=pg_temp.uid(5)
+  FROM public.service_acceptance_responses WHERE id=(pg_temp.v('r1-client')->>'responseId')::uuid),'server assigns condition ids');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-client')$q$,pg_temp.req('r1')),
+  '23505','idempotency_key_reused','respond refuses a reused key with another payload');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-again')$q$,pg_temp.req('r1')),
+  '23505','already_responded','a signer responds once');
+SELECT pg_temp.expect_error(format($q$SELECT public.withdraw_service_acceptance_request(%L,'client withdraw','w-client')$q$,
+  pg_temp.req('r1')),'42501',NULL,'client cannot withdraw');
+
+-- T5 paper across a revision: an intake at revision 1 lapses on replacement.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('p1',pg_temp.record_paper(pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner'),
+  pg_temp.paper(1,1),'accept','p-1'));
+SELECT pg_temp.assert_true((pg_temp.v('p1')->>'reviewState')='pending_review'
+  AND pg_temp.v('p1')->>'documentSha256'=public._service_acceptance_paper_fingerprint('f8869000-0000-4000-8000-000000000001'),
+  'paper intake records a pending intake bound to the stored document');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error(format($q$SELECT public.replace_service_acceptance_signer(%L,%L,NULL,'f8866000-0000-4000-8000-000000000004',1,'moved','rp-member')$q$,
+  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'42501',NULL,'a member cannot replace a signer');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error(format($q$SELECT public.replace_service_acceptance_signer(%L,%L,%L,NULL,1,'outsider','rp-out')$q$,
+  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner'),pg_temp.uid(7)),'23514','signer_policy_unbound',
+  'replacement refuses a person outside the household');
+SELECT pg_temp.expect_error(format($q$SELECT public.replace_service_acceptance_signer(%L,%L,%L,NULL,1,'dup','rp-dup')$q$,
+  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner'),pg_temp.uid(5)),'23514','signer_policy_duplicate',
+  'replacement refuses a person already signing');
+SELECT pg_temp.expect_error(format($q$SELECT public.replace_service_acceptance_signer(%L,%L,NULL,'f8866000-0000-4000-8000-000000000003',1,'dup card','rp-dup2')$q$,
+  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'23514','signer_policy_duplicate',
+  'replacement refuses the optional card already signing');
+SELECT pg_temp.expect_error(format($q$SELECT public.replace_service_acceptance_signer(%L,%L,NULL,'f8866000-0000-4000-8000-000000000004',2,'stale','rp-stale')$q$,
+  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'40001','stale_signer_policy','replacement checks the revision');
+INSERT INTO sa_results VALUES('rp1',public.replace_service_acceptance_signer(pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner'),
+  NULL,'f8866000-0000-4000-8000-000000000004',1,'Partner travelling; second card signs on paper','rp-1'));
+INSERT INTO sa_results VALUES('rp1-replay',public.replace_service_acceptance_signer(
+  (SELECT request_id FROM public.service_acceptance_signers WHERE replacement_client_request_id='rp-1'),
+  (SELECT id FROM public.service_acceptance_signers WHERE replacement_client_request_id='rp-1'),
+  NULL,'f8866000-0000-4000-8000-000000000004',1,'Partner travelling; second card signs on paper','rp-1'));
+SELECT pg_temp.assert_true((pg_temp.v('rp1')->>'signerPolicyRevision')::int=2
+  AND pg_temp.v('rp1')->'lapsedIntakeIds'=jsonb_build_array(pg_temp.v('p1')->>'intakeId')
+  AND pg_temp.v('rp1-replay')->>'signerId'=pg_temp.v('rp1')->>'signerId' AND (pg_temp.v('rp1-replay')->>'replayed')::boolean,
+  'replacement bumps the revision, lapses the intake and replays');
+SELECT pg_temp.assert_true((SELECT review_state='lapsed' AND lapsed_reason='signer_policy_revised'
+  FROM public.service_acceptance_paper_intakes WHERE id=(pg_temp.v('p1')->>'intakeId')::uuid),'T5 intake lapses on signer revision');
+SELECT pg_temp.assert_true((SELECT s.required AND s.profile_id IS NULL AND old.status='replaced' AND old.replaced_by=pg_temp.uid(3)
+  AND old.replacement_reason LIKE 'Partner travelling%' AND old.replaced_by_signer_id=s.id
+  FROM public.service_acceptance_signers s JOIN public.service_acceptance_signers old ON old.replaced_by_signer_id=s.id
+  WHERE s.id=(pg_temp.v('rp1')->>'signerId')::uuid),'a profile-less required signer is accepted and the replacement audited');
+SELECT pg_temp.assert_true((SELECT count(*)=0 FROM (SELECT public._validate_service_acceptance_signers(e.source_proposal_id,
+  '[{"slot":"only","required":true,"householdPersonId":"f8866000-0000-4000-8000-000000000003"}]')
+  FROM public.project_scope_editions e WHERE e.project_id=pg_temp.project() AND e.status='active') v WHERE false),
+  'create-time validation accepts a profile-less required signer (reachable on paper)');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-lapsed')$q$,
+  pg_temp.v('p1')->>'intakeId',pg_temp.v('p1')->>'documentSha256'),'55000','request_not_open','a lapsed intake cannot be confirmed');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,%L,pg_temp.paper(2,1),'accept','p-stale',1)$q$,
+  pg_temp.req('r1'),pg_temp.v('rp1')->>'signerId'),'40001','stale_signer_policy','paper presented at the old revision refuses');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,%L,pg_temp.paper(3,1),'accept','p-old')$q$,
+  pg_temp.req('r1'),(SELECT id FROM public.service_acceptance_signers WHERE replaced_by_signer_id=(pg_temp.v('rp1')->>'signerId')::uuid)),
+  '55000','signer_not_active','paper for a replaced signer refuses');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,%L,pg_temp.paper(4,2),'accept','p-owner')$q$,
+  pg_temp.req('r1'),pg_temp.v('rp1')->>'signerId'),'23514','service_acceptance_paper_invalid','paper must be the recorder''s upload');
+INSERT INTO sa_results VALUES('p2',pg_temp.record_paper(pg_temp.req('r1'),(pg_temp.v('rp1')->>'signerId')::uuid,
+  pg_temp.paper(5,1),'accept','p-2'));
+SELECT pg_temp.expect_error($q$UPDATE storage.objects SET name=name WHERE id='f8869000-0000-4000-8000-000000000005'$q$,
+  '23514','Recorded acceptance paper','recorded paper object is immutable');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-member')$q$,
+  pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'42501',NULL,'a member cannot review paper');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-self')$q$,
+  pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'42501',NULL,'the recorder cannot review their own intake');
+SELECT pg_temp.actor(3);
+SET LOCAL session_replication_role=replica;
+UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}','"changed"') WHERE id='f8869000-0000-4000-8000-000000000005';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-changed')$q$,
+  pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'40001','paper_document_changed','changed paper bytes refuse review');
+SET LOCAL session_replication_role=replica;
+UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}',to_jsonb('"etag-5"'::text)) WHERE id='f8869000-0000-4000-8000-000000000005';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-expect')$q$,
+  pg_temp.v('p2')->>'intakeId',repeat('0',64)),'40001','paper_document_changed','review checks the expected document hash');
+INSERT INTO sa_results VALUES('rv2',public.review_service_acceptance_paper_intake((pg_temp.v('p2')->>'intakeId')::uuid,'confirm',
+  pg_temp.v('p2')->>'documentSha256',NULL,'rv-2'));
+INSERT INTO sa_results VALUES('rv2-replay',public.review_service_acceptance_paper_intake((pg_temp.v('p2')->>'intakeId')::uuid,'confirm',
+  pg_temp.v('p2')->>'documentSha256',NULL,'rv-2'));
+SELECT pg_temp.assert_true((pg_temp.v('rv2')->>'aggregateOutcome')='accepted_with_conditions'
+  AND (pg_temp.v('rv2-replay')->>'replayed')::boolean AND pg_temp.v('rv2-replay')->>'responseId'=pg_temp.v('rv2')->>'responseId',
+  'confirmed paper completes the required set; the optional signer never blocks');
+SELECT pg_temp.assert_true((SELECT lifecycle='closed' AND closed_reason='accepted_with_conditions' AND closed_at IS NOT NULL
+  FROM public.service_acceptance_requests WHERE id=pg_temp.req('r1'))
+  AND (SELECT method='paper_intake' AND responder_profile_id IS NULL AND presented_signer_policy_revision=2
+  FROM public.service_acceptance_responses WHERE id=(pg_temp.v('rv2')->>'responseId')::uuid),'non-pending outcome closes the request');
+SELECT pg_temp.expect_error(format($q$DO $d$ BEGIN PERFORM set_config('app.service_acceptance_request_id',%L,true);
+  UPDATE public.service_acceptance_requests SET aggregate_outcome='returned',closed_reason='returned' WHERE id=%L; END $d$$q$,
+  pg_temp.req('r1'),pg_temp.req('r1')),'23514','service_acceptance_transition_invalid','a closed request never moves');
+SELECT pg_temp.expect_error($q$UPDATE public.service_acceptance_responses SET return_reason=NULL$q$,
+  '23514','service_acceptance_record_immutable','responses are append-only');
+SELECT pg_temp.expect_error(format($q$SELECT public.withdraw_service_acceptance_request(%L,'late','w-late')$q$,pg_temp.req('r1')),
+  '55000','request_not_open','a closed request cannot be withdrawn');
+
+-- T6 withdrawal receipt.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('r2',pg_temp.create('c-r2','f8868000-0000-4000-8000-000000000002'));
+SELECT pg_temp.deliver(pg_temp.req('r2'));
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error(format($q$SELECT public.withdraw_service_acceptance_request(%L,NULL,'w-2')$q$,pg_temp.req('r2')),
+  '23514','service_acceptance_withdraw_invalid','withdraw needs a reason');
+SELECT pg_temp.expect_error(format($q$SELECT public.withdraw_service_acceptance_request(%L,'no key',NULL)$q$,pg_temp.req('r2')),
+  '23514','client_request_id_invalid','withdraw has no default key');
+INSERT INTO sa_results VALUES('w2',public.withdraw_service_acceptance_request(pg_temp.req('r2'),'Scope conversation reopened','w-2'));
+INSERT INTO sa_results VALUES('w2-replay',public.withdraw_service_acceptance_request(pg_temp.req('r2'),'Scope conversation reopened','w-2'));
+SELECT pg_temp.assert_true((pg_temp.v('w2')->>'lifecycle')='withdrawn' AND pg_temp.v('w2-replay')->>'withdrawnAt'=pg_temp.v('w2')->>'withdrawnAt'
+  AND (pg_temp.v('w2-replay')->>'replayed')::boolean AND NOT (pg_temp.v('w2')->>'replayed')::boolean,'T6 withdrawal replays its receipt');
+SELECT pg_temp.assert_true((SELECT withdrawn_by=pg_temp.uid(2) AND withdraw_reason='Scope conversation reopened'
+  AND withdraw_client_request_id='w-2' AND length(withdraw_request_hash)=64 FROM public.service_acceptance_requests
+  WHERE id=pg_temp.req('r2')),'withdrawal records its five columns');
+SELECT pg_temp.expect_error(format($q$SELECT public.withdraw_service_acceptance_request(%L,'other reason','w-2')$q$,pg_temp.req('r2')),
+  '23505','idempotency_key_reused','withdraw refuses a reused key with another reason');
+SELECT pg_temp.expect_error(format($q$SELECT public.withdraw_service_acceptance_request(%L,'again','w-2b')$q$,pg_temp.req('r2')),
+  '55000','request_not_open','a withdrawn request is terminal');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-withdrawn')$q$,pg_temp.req('r2')),
+  '55000','request_not_open','a withdrawn request refuses responses');
+
+-- Draft withdrawal discards the unsent V22 draft.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('r3',pg_temp.create('c-r3'));
+SELECT public.withdraw_service_acceptance_request(pg_temp.req('r3'),'Created by mistake','w-3');
+SELECT pg_temp.assert_true((SELECT status='discarded' FROM public.outbound_drafts WHERE id=(pg_temp.v('r3')->>'outboundDraftId')::uuid),
+  'withdrawing a draft discards its unsent outbound draft');
+
+-- Return closes at once even with a required signer pending.
+INSERT INTO sa_results VALUES('r4',pg_temp.create('c-r4'));
+SELECT pg_temp.deliver(pg_temp.req('r4'));
+SELECT pg_temp.actor(6);
+INSERT INTO sa_results VALUES('r4-return',pg_temp.respond(pg_temp.req('r4'),'return','x-return',reason=>'The kitchen scope is missing'));
+SELECT pg_temp.assert_true((pg_temp.v('r4-return')->>'aggregateOutcome')='returned'
+  AND (SELECT lifecycle='closed' AND closed_reason='returned' FROM public.service_acceptance_requests WHERE id=pg_temp.req('r4')),
+  'any required return closes the request returned');
+
+-- Client projection (no studio-only fields) and studio projection.
+SELECT pg_temp.actor(5);
+INSERT INTO sa_results VALUES('mine5',public.get_my_service_acceptance_requests());
+SELECT pg_temp.assert_true(jsonb_array_length(pg_temp.v('mine5'))=3
+  AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(pg_temp.v('mine5')) e WHERE e->>'lifecycle'='draft'
+    OR e ? 'paperIntakes' OR e ? 'outboundDraftId' OR e ? 'withdrawReason' OR (e->'signers')::text LIKE '%profileId%')
+  AND (SELECT bool_and(e->>'viewerRole'='signer_required') FROM jsonb_array_elements(pg_temp.v('mine5')) e),
+  'client sees sent and terminal requests as a required signer, without studio fields');
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((SELECT jsonb_agg(e->>'requestId' ORDER BY e->>'requestId')=jsonb_agg(x ORDER BY x)
+  FROM jsonb_array_elements(public.get_my_service_acceptance_requests()) e,
+  LATERAL (SELECT to_jsonb(r) x FROM unnest(ARRAY[pg_temp.req('r2')::text,pg_temp.req('r4')::text]) r WHERE r=e->>'requestId') y),
+  'a replaced signer stops seeing that request; other requests still show');
+SELECT pg_temp.actor(7);
+SELECT pg_temp.assert_true(public.get_my_service_acceptance_requests()='[]'::jsonb,'an outsider sees no requests');
+SELECT pg_temp.expect_error(format('SELECT public.get_project_service_acceptance(%L)',pg_temp.project()),'42501',NULL,
+  'an outsider cannot read the studio projection');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.expect_error(format('SELECT public.get_project_service_acceptance(%L)',pg_temp.project()),'42501',NULL,
+  'the client cannot read the studio projection');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.assert_true((SELECT jsonb_array_length(v->'requests')=4 AND v->>'capability'='active'
+  AND (v->'requests'->0->>'requestNumber')::int=4 AND jsonb_array_length(v->'requests'->3->'paperIntakes')=2
+  FROM public.get_project_service_acceptance(pg_temp.project()) v),'studio projection lists every request with paper intakes');
+
+-- X08: the old approval list never sees acceptance rows.
+SELECT pg_temp.actor(1);
+SELECT pg_temp.assert_true((SELECT position('service_acceptance' in v::text)=0 AND position('f886a000-0000-4000-8000-000000000001' in v::text)>0
+  FROM public.get_project_decision_reviews(pg_temp.project()) v),'old approval list returns only artifact kinds');
+SELECT pg_temp.assert_true(pg_temp.closure()=pg_temp.v('closure0'),'acceptance transitions leave project closure state unchanged');
+
+-- Supersession: a successor request, then a material scope change.
+GRANT EXECUTE ON FUNCTION pg_temp.project(),pg_temp.v(text) TO authenticated;
+INSERT INTO sa_results VALUES('r5',pg_temp.create('c-r5'));
+INSERT INTO sa_results VALUES('r6',pg_temp.create('c-r6'));
+SELECT pg_temp.assert_true((SELECT lifecycle='superseded' AND superseded_reason='successor_request' FROM public.service_acceptance_requests
+  WHERE id=pg_temp.req('r5')) AND (pg_temp.request(pg_temp.req('r6'))).predecessor_request_id=pg_temp.req('r5')
+  AND (SELECT status='discarded' FROM public.outbound_drafts WHERE id=(pg_temp.v('r5')->>'outboundDraftId')::uuid),
+  'a new request supersedes the open one and discards its draft');
+SELECT pg_temp.deliver(pg_temp.req('r6'));
+INSERT INTO sa_results VALUES('p6',pg_temp.record_paper(pg_temp.req('r6'),pg_temp.signer(pg_temp.req('r6'),'client'),
+  pg_temp.paper(6,1),'accept','p-6'));
+SET LOCAL ROLE authenticated;
+INSERT INTO sa_results VALUES('amendment',public.create_service_addendum(pg_temp.project(),'Acceptance amendment'));
+SELECT public.copy_agreement_parts_from_authority((pg_temp.v('amendment')->>'proposalId')::uuid,'copy frozen composition');
+SELECT pg_temp.send_and_sign((pg_temp.v('amendment')->>'proposalId')::uuid);
+SELECT public.countersign_design_services_agreement((pg_temp.v('amendment')->>'proposalId')::uuid,'Acceptance Designer');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT lifecycle='superseded' AND superseded_reason='scope_edition_superseded'
+  FROM public.service_acceptance_requests WHERE id=pg_temp.req('r6'))
+  AND (SELECT review_state='lapsed' AND lapsed_reason='request_terminal' FROM public.service_acceptance_paper_intakes
+  WHERE id=(pg_temp.v('p6')->>'intakeId')::uuid),'an executed amendment supersedes the open request and lapses its paper');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-superseded')$q$,pg_temp.req('r6')),
+  '55000','request_not_open','a superseded request refuses responses');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.expect_error(format($q$SELECT public.create_service_acceptance_request(%L,%L,'f8868000-0000-4000-8000-000000000001','c-old')$q$,
+  pg_temp.project(),(pg_temp.request(pg_temp.req('r6'))).scope_edition_id),'55000','scope_edition_not_active',
+  'create refuses a superseded edition');
+INSERT INTO sa_results VALUES('closure1',pg_temp.closure());
+INSERT INTO sa_results VALUES('r7',pg_temp.create('c-r7'));
+SELECT pg_temp.deliver(pg_temp.req('r7'));
+SELECT pg_temp.assert_true((pg_temp.request(pg_temp.req('r7'))).scope_edition_id<>(pg_temp.request(pg_temp.req('r6'))).scope_edition_id
+  AND jsonb_array_length(pg_temp.v('r7')->'signers')=3,'a request on the amended edition takes its frozen policy');
+SELECT pg_temp.assert_true(pg_temp.closure()=pg_temp.v('closure1'),'post-amendment acceptance leaves closure state unchanged');
+SET LOCAL ROLE authenticated;
+INSERT INTO sa_results VALUES('paused',public.create_service_addendum(pg_temp.project(),'Paused amendment'));
+SELECT public.copy_agreement_parts_from_authority((pg_temp.v('paused')->>'proposalId')::uuid,'copy before pause');
+SELECT pg_temp.send_and_sign((pg_temp.v('paused')->>'proposalId')::uuid);
+RESET ROLE;
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
+SET LOCAL ROLE authenticated;
+SELECT public.countersign_design_services_agreement((pg_temp.v('paused')->>'proposalId')::uuid,'Acceptance Designer');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT lifecycle='superseded' AND superseded_reason='scope_edition_stale'
+  FROM public.service_acceptance_requests WHERE id=pg_temp.req('r7'))
+  AND (SELECT status='stale' FROM public.project_scope_editions WHERE id=(pg_temp.request(pg_temp.req('r7'))).scope_edition_id),
+  'a stale edition supersedes its open request');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-inactive')$q$,pg_temp.req('r7')),
+  '55000','scope_editions_inactive','responses re-check the capability at entry');
+SELECT pg_temp.assert_true((SELECT count(*)=7 FROM public.service_acceptance_requests WHERE project_id=pg_temp.project())
+  AND (SELECT count(*)=0 FROM public.service_acceptance_requests WHERE lifecycle IN ('draft','sent')),
+  'seven requests, none left open');

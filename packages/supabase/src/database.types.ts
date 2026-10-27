@@ -28807,6 +28807,497 @@ export type Database = {
         }
         Relationships: []
       }
+      service_acceptance_paper_intakes: {
+        Row: {
+          client_request_id: string
+          conditions: Json
+          disposition: string
+          document_sha256: string
+          id: string
+          lapsed_at: string | null
+          lapsed_reason: string | null
+          paper_signed_on: string
+          presented_evidence_manifest_hash: string
+          presented_request_number: number
+          presented_scope_content_hash: string
+          presented_signer_policy_revision: number
+          recorded_at: string
+          recorded_by: string
+          request_hash: string
+          request_id: string
+          return_reason: string | null
+          review_client_request_id: string | null
+          review_note: string | null
+          review_request_hash: string | null
+          review_state: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          signed_name: string
+          signer_id: string
+          storage_object_id: string
+        }
+        Insert: {
+          client_request_id: string
+          conditions?: Json
+          disposition: string
+          document_sha256: string
+          id?: string
+          lapsed_at?: string | null
+          lapsed_reason?: string | null
+          paper_signed_on: string
+          presented_evidence_manifest_hash: string
+          presented_request_number: number
+          presented_scope_content_hash: string
+          presented_signer_policy_revision: number
+          recorded_at?: string
+          recorded_by: string
+          request_hash: string
+          request_id: string
+          return_reason?: string | null
+          review_client_request_id?: string | null
+          review_note?: string | null
+          review_request_hash?: string | null
+          review_state?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          signed_name: string
+          signer_id: string
+          storage_object_id: string
+        }
+        Update: {
+          client_request_id?: string
+          conditions?: Json
+          disposition?: string
+          document_sha256?: string
+          id?: string
+          lapsed_at?: string | null
+          lapsed_reason?: string | null
+          paper_signed_on?: string
+          presented_evidence_manifest_hash?: string
+          presented_request_number?: number
+          presented_scope_content_hash?: string
+          presented_signer_policy_revision?: number
+          recorded_at?: string
+          recorded_by?: string
+          request_hash?: string
+          request_id?: string
+          return_reason?: string | null
+          review_client_request_id?: string | null
+          review_note?: string | null
+          review_request_hash?: string | null
+          review_state?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          signed_name?: string
+          signer_id?: string
+          storage_object_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_acceptance_paper_intakes_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_paper_intakes_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_paper_intakes_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_paper_intakes_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_paper_intakes_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_paper_intakes_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_signers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_acceptance_requests: {
+        Row: {
+          aggregate_outcome: string
+          client_request_id: string
+          closed_at: string | null
+          closed_reason: string | null
+          created_at: string
+          created_by: string
+          evidence_manifest_hash: string
+          evidence_manifest_id: string
+          id: string
+          lifecycle: string
+          outbound_draft_id: string
+          predecessor_request_id: string | null
+          project_id: string
+          request_hash: string
+          request_number: number
+          scope_content_hash: string
+          scope_edition_id: string
+          sent_at: string | null
+          signer_policy_revision: number
+          superseded_at: string | null
+          superseded_reason: string | null
+          withdraw_client_request_id: string | null
+          withdraw_reason: string | null
+          withdraw_request_hash: string | null
+          withdrawn_at: string | null
+          withdrawn_by: string | null
+        }
+        Insert: {
+          aggregate_outcome?: string
+          client_request_id: string
+          closed_at?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          created_by: string
+          evidence_manifest_hash: string
+          evidence_manifest_id: string
+          id?: string
+          lifecycle?: string
+          outbound_draft_id: string
+          predecessor_request_id?: string | null
+          project_id: string
+          request_hash: string
+          request_number: number
+          scope_content_hash: string
+          scope_edition_id: string
+          sent_at?: string | null
+          signer_policy_revision?: number
+          superseded_at?: string | null
+          superseded_reason?: string | null
+          withdraw_client_request_id?: string | null
+          withdraw_reason?: string | null
+          withdraw_request_hash?: string | null
+          withdrawn_at?: string | null
+          withdrawn_by?: string | null
+        }
+        Update: {
+          aggregate_outcome?: string
+          client_request_id?: string
+          closed_at?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          created_by?: string
+          evidence_manifest_hash?: string
+          evidence_manifest_id?: string
+          id?: string
+          lifecycle?: string
+          outbound_draft_id?: string
+          predecessor_request_id?: string | null
+          project_id?: string
+          request_hash?: string
+          request_number?: number
+          scope_content_hash?: string
+          scope_edition_id?: string
+          sent_at?: string | null
+          signer_policy_revision?: number
+          superseded_at?: string | null
+          superseded_reason?: string | null
+          withdraw_client_request_id?: string | null
+          withdraw_reason?: string | null
+          withdraw_request_hash?: string | null
+          withdrawn_at?: string | null
+          withdrawn_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_acceptance_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_evidence_manifest_id_fkey"
+            columns: ["evidence_manifest_id"]
+            isOneToOne: false
+            referencedRelation: "evidence_manifests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_outbound_draft_id_fkey"
+            columns: ["outbound_draft_id"]
+            isOneToOne: false
+            referencedRelation: "outbound_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_predecessor_request_id_fkey"
+            columns: ["predecessor_request_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_scope_edition_id_fkey"
+            columns: ["scope_edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_withdrawn_by_fkey"
+            columns: ["withdrawn_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_withdrawn_by_fkey"
+            columns: ["withdrawn_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_acceptance_responses: {
+        Row: {
+          client_request_id: string | null
+          conditions: Json
+          id: string
+          method: string
+          paper_intake_id: string | null
+          presented_evidence_manifest_hash: string
+          presented_scope_content_hash: string
+          presented_signer_policy_revision: number
+          request_hash: string | null
+          request_id: string
+          responded_at: string
+          responder_profile_id: string | null
+          response: string
+          return_reason: string | null
+          signer_id: string
+        }
+        Insert: {
+          client_request_id?: string | null
+          conditions?: Json
+          id?: string
+          method: string
+          paper_intake_id?: string | null
+          presented_evidence_manifest_hash: string
+          presented_scope_content_hash: string
+          presented_signer_policy_revision: number
+          request_hash?: string | null
+          request_id: string
+          responded_at?: string
+          responder_profile_id?: string | null
+          response: string
+          return_reason?: string | null
+          signer_id: string
+        }
+        Update: {
+          client_request_id?: string | null
+          conditions?: Json
+          id?: string
+          method?: string
+          paper_intake_id?: string | null
+          presented_evidence_manifest_hash?: string
+          presented_scope_content_hash?: string
+          presented_signer_policy_revision?: number
+          request_hash?: string | null
+          request_id?: string
+          responded_at?: string
+          responder_profile_id?: string | null
+          response?: string
+          return_reason?: string | null
+          signer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_acceptance_responses_paper_intake_id_fkey"
+            columns: ["paper_intake_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_paper_intakes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_responses_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_responses_responder_profile_id_fkey"
+            columns: ["responder_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_responses_responder_profile_id_fkey"
+            columns: ["responder_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_responses_signer_id_fkey"
+            columns: ["signer_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_signers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_acceptance_signers: {
+        Row: {
+          created_at: string
+          household_person_id: string | null
+          id: string
+          policy_slot: string
+          profile_id: string | null
+          replaced_at: string | null
+          replaced_by: string | null
+          replaced_by_signer_id: string | null
+          replacement_client_request_id: string | null
+          replacement_lapsed_intake_ids: string[] | null
+          replacement_policy_revision: number | null
+          replacement_reason: string | null
+          replacement_request_hash: string | null
+          request_id: string
+          required: boolean
+          slot: string
+          source: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          household_person_id?: string | null
+          id?: string
+          policy_slot: string
+          profile_id?: string | null
+          replaced_at?: string | null
+          replaced_by?: string | null
+          replaced_by_signer_id?: string | null
+          replacement_client_request_id?: string | null
+          replacement_lapsed_intake_ids?: string[] | null
+          replacement_policy_revision?: number | null
+          replacement_reason?: string | null
+          replacement_request_hash?: string | null
+          request_id: string
+          required: boolean
+          slot: string
+          source?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          household_person_id?: string | null
+          id?: string
+          policy_slot?: string
+          profile_id?: string | null
+          replaced_at?: string | null
+          replaced_by?: string | null
+          replaced_by_signer_id?: string | null
+          replacement_client_request_id?: string | null
+          replacement_lapsed_intake_ids?: string[] | null
+          replacement_policy_revision?: number | null
+          replacement_reason?: string | null
+          replacement_request_hash?: string | null
+          request_id?: string
+          required?: boolean
+          slot?: string
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_acceptance_signers_household_person_id_fkey"
+            columns: ["household_person_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_signers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_signers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_signers_replaced_by_fkey"
+            columns: ["replaced_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_signers_replaced_by_fkey"
+            columns: ["replaced_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_signers_replaced_by_signer_id_fkey"
+            columns: ["replaced_by_signer_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_signers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_signers_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_arrangements: {
         Row: {
           arrangement_key: string
@@ -38799,6 +39290,10 @@ export type Database = {
         Args: { p_key: string }
         Returns: boolean
       }
+      _can_access_service_acceptance_paper_object: {
+        Args: { p_key: string }
+        Returns: boolean
+      }
       _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
       _can_manage_configurable_product: {
         Args: { p_product_id: string }
@@ -39423,6 +39918,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _derive_service_acceptance_outcome: {
+        Args: { p_request_id: string }
+        Returns: string
+      }
       _derive_working_budget_draft_00661_impl: {
         Args: { p_project_id: string }
         Returns: Json
@@ -39847,6 +40346,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: boolean
       }
+      _is_service_acceptance_studio_admin: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       _issue_design_services_agreement_on_paper: {
         Args: { p_proposal_id: string }
         Returns: undefined
@@ -39950,6 +40453,47 @@ export type Database = {
       _k8_rate_row_refusal: {
         Args: { p_actor: string; p_rate_id: string }
         Returns: string
+      }
+      _lapse_service_acceptance_intakes: {
+        Args: { p_reason: string; p_request_id: string }
+        Returns: string[]
+      }
+      _lock_service_acceptance_request: {
+        Args: { p_exclusive: boolean; p_request_id: string }
+        Returns: {
+          aggregate_outcome: string
+          client_request_id: string
+          closed_at: string | null
+          closed_reason: string | null
+          created_at: string
+          created_by: string
+          evidence_manifest_hash: string
+          evidence_manifest_id: string
+          id: string
+          lifecycle: string
+          outbound_draft_id: string
+          predecessor_request_id: string | null
+          project_id: string
+          request_hash: string
+          request_number: number
+          scope_content_hash: string
+          scope_edition_id: string
+          sent_at: string | null
+          signer_policy_revision: number
+          superseded_at: string | null
+          superseded_reason: string | null
+          withdraw_client_request_id: string | null
+          withdraw_reason: string | null
+          withdraw_request_hash: string | null
+          withdrawn_at: string | null
+          withdrawn_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "service_acceptance_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       _lock_studio: {
         Args: { p_org_id: string }
@@ -40676,6 +41220,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _service_acceptance_conditions: {
+        Args: {
+          p_conditions: Json
+          p_response: string
+          p_return_reason: string
+        }
+        Returns: Json
+      }
+      _service_acceptance_create_receipt: {
+        Args: { p_replayed: boolean; p_request_id: string }
+        Returns: Json
+      }
+      _service_acceptance_hash: { Args: { p_value: Json }; Returns: string }
+      _service_acceptance_key: { Args: { p_key: string }; Returns: string }
+      _service_acceptance_paper_fingerprint: {
+        Args: { p_object_id: string }
+        Returns: string
+      }
+      _service_acceptance_pending_required: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      _service_acceptance_request_json: {
+        Args: { p_request_id: string; p_studio: boolean }
+        Returns: Json
+      }
+      _service_acceptance_response_receipt: {
+        Args: { p_replayed: boolean; p_response_id: string }
+        Returns: Json
+      }
       _sign_design_services_agreement_authorized:
         | {
             Args: {
@@ -40861,6 +41435,14 @@ export type Database = {
         Args: { p_id: string; p_kind: string }
         Returns: string
       }
+      _supersede_service_acceptance_request: {
+        Args: { p_reason: string; p_request_id: string }
+        Returns: undefined
+      }
+      _supersede_service_acceptance_requests: {
+        Args: { p_edition_id: string; p_reason: string }
+        Returns: number
+      }
       _sync_person_company_pointer: {
         Args: { p_person_id: string }
         Returns: undefined
@@ -40903,6 +41485,10 @@ export type Database = {
       }
       _validate_scope_signer_parts: {
         Args: { p_parts: Json; p_proposal_id: string }
+        Returns: undefined
+      }
+      _validate_service_acceptance_signers: {
+        Args: { p_proposal_id: string; p_signers: Json }
         Returns: undefined
       }
       _void_invoice_authorized_legacy_00397: {
@@ -43614,6 +44200,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_service_acceptance_request: {
+        Args: {
+          p_client_request_id: string
+          p_evidence_manifest_id: string
+          p_project_id: string
+          p_scope_edition_id: string
+        }
+        Returns: Json
+      }
       create_service_addendum: {
         Args: { p_project_id: string; p_title: string }
         Returns: Json
@@ -44969,6 +45564,7 @@ export type Database = {
         }[]
       }
       get_my_pricing_settings: { Args: never; Returns: Json }
+      get_my_service_acceptance_requests: { Args: never; Returns: Json }
       get_or_create_conversation: {
         Args: { p_context?: Json; p_screen?: string; p_user_id: string }
         Returns: string
@@ -45066,6 +45662,10 @@ export type Database = {
         Returns: Json
       }
       get_project_scope_editions: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      get_project_service_acceptance: {
         Args: { p_project_id: string }
         Returns: Json
       }
@@ -47597,6 +48197,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_service_acceptance_paper_intake: {
+        Args: {
+          p_client_request_id: string
+          p_conditions: Json
+          p_disposition: string
+          p_paper_signed_on: string
+          p_presented_evidence_manifest_hash: string
+          p_presented_request_number: number
+          p_presented_scope_content_hash: string
+          p_presented_signer_policy_revision: number
+          p_request_id: string
+          p_return_reason: string
+          p_signed_name: string
+          p_signer_id: string
+          p_storage_object_id: string
+        }
+        Returns: Json
+      }
       record_studio_purchase: {
         Args: { p_request: Json }
         Returns: {
@@ -48210,6 +48828,18 @@ export type Database = {
         Args: { p_elements: Json; p_header: Json; p_scan_id: string }
         Returns: undefined
       }
+      replace_service_acceptance_signer: {
+        Args: {
+          p_client_request_id: string
+          p_expected_signer_policy_revision: number
+          p_new_household_person_id: string
+          p_new_profile_id: string
+          p_reason: string
+          p_request_id: string
+          p_signer_id: string
+        }
+        Returns: Json
+      }
       reply_to_feedback: {
         Args: { p_id: string; p_text: string }
         Returns: {
@@ -48628,6 +49258,20 @@ export type Database = {
         }
         Returns: Json
       }
+      respond_service_acceptance: {
+        Args: {
+          p_client_request_id: string
+          p_conditions: Json
+          p_evidence_manifest_hash: string
+          p_method?: string
+          p_request_id: string
+          p_response: string
+          p_return_reason: string
+          p_scope_content_hash: string
+          p_signer_policy_revision: number
+        }
+        Returns: Json
+      }
       restore_product_image: {
         Args: { p_index: number; p_product_id: string; p_src: string }
         Returns: string[]
@@ -48699,6 +49343,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      review_service_acceptance_paper_intake: {
+        Args: {
+          p_client_request_id: string
+          p_decision: string
+          p_expected_document_sha256: string
+          p_intake_id: string
+          p_note: string
+        }
+        Returns: Json
       }
       review_sms_message: {
         Args: { p_action: string; p_effect?: Json; p_message_id: string }
@@ -51762,6 +52416,14 @@ export type Database = {
           p_expected_updated_at: string
           p_idempotency_key: string
           p_reason: string
+        }
+        Returns: Json
+      }
+      withdraw_service_acceptance_request: {
+        Args: {
+          p_client_request_id: string
+          p_reason: string
+          p_request_id: string
         }
         Returns: Json
       }

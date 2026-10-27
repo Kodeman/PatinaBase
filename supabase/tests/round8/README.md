@@ -8,7 +8,7 @@ Every guard defaults to the shared stack (`127.0.0.1:54322`). Pointing a suite e
 
 | Parameter | Used by | Default | Refuses |
 | --- | --- | --- | --- |
-| `ROUND8_DB_URL` | the seven `*_concurrency.test.mjs` host-psql suites | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` | any host other than `127.0.0.1`/`localhost`, query or fragment (`?host=`, `?hostaddr=`, `?service=`), comma host lists, socket form, a non-plain database path |
+| `ROUND8_DB_URL` | the eight `*_concurrency.test.mjs` host-psql suites | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` | any host other than `127.0.0.1`/`localhost`, query or fragment (`?host=`, `?hostaddr=`, `?service=`), comma host lists, socket form, a non-plain database path |
 | `API_URL` | `fabrication_instruction` | none | anything but `http://127.0.0.1:<port>/` |
 | `-v expected_port=<n>` | `fill_locked_current_concurrency.psql`, `fill_locked_current_isolated.psql`, `scope_composition_concurrency_test.sql`, `scope_consumer_projection_test.sql` | `54322` | `HOST` must still equal `127.0.0.1` |
 | `ROUND8_OWNER_TICKET` | `scope_reconciliation_concurrency.test.mjs` | none: unset refuses | any value not exactly equal to the owned container's `sidequest.ticket` label |
