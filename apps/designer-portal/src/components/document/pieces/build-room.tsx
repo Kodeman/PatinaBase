@@ -23,6 +23,7 @@ import {
   roomFinishesByRoom,
 } from "@/components/document/pieces/finishes-lens";
 import { PriceLens } from "@/components/document/pieces/price-lens";
+import { PurchaseLens } from "@/components/document/pieces/purchase-lens";
 import { ReleaseLens } from "@/components/document/pieces/release-lens";
 import { RoughInLens } from "@/components/document/pieces/rough-in-lens";
 import { SpecLens } from "@/components/document/pieces/spec-lens";
@@ -236,6 +237,15 @@ export function BuildRoom({
           projectId={projectId}
           room={room}
           canSeeMoney={canSeeMoney}
+        />
+      )}
+      {/* Round 8 only: the embedded sheet is the round-8 unfold (ruling 2026-10-27). */}
+      {lens === "purchase" && embedded && (
+        <PurchaseLens
+          projectId={projectId}
+          room={room}
+          canSeeMoney={canSeeMoney}
+          onOpenLine={(chosen) => onNavigate({ lens: "spec", room, line: chosen })}
         />
       )}
       </>}

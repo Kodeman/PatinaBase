@@ -7,7 +7,9 @@
 
 /**
  * The lens words, in head order; Finishes is the fifth (a11, Q10). Price is
- * dropped for a seat without money (R1, Q7).
+ * dropped for a seat without money (R1, Q7). Purchase is the sixth, and only
+ * the round-8 sheet has it (Purchase lens ruling, 2026-10-27): the legacy
+ * sheet keeps five, and reads `lens=purchase` as Rough in.
  */
 export const BUILD_ROOM_LENSES = [
   "rough",
@@ -15,6 +17,7 @@ export const BUILD_ROOM_LENSES = [
   "price",
   "release",
   "finishes",
+  "purchase",
 ] as const;
 export type BuildRoomLens = (typeof BUILD_ROOM_LENSES)[number];
 
@@ -34,23 +37,31 @@ export interface BuildRoomState {
 /** The overview's Pieces region (ffe-section `id="project-ffe"`). */
 export const PIECES_REGION_ANCHOR = "project-ffe";
 
-export function availableLenses(canSeeMoney: boolean): BuildRoomLens[] {
-  return BUILD_ROOM_LENSES.filter((lens) => lens !== "price" || canSeeMoney);
+/** `round8`: the sheet unfolded in the round-8 paper, the one with Purchase. */
+export function availableLenses(
+  canSeeMoney: boolean,
+  round8 = false,
+): BuildRoomLens[] {
+  return BUILD_ROOM_LENSES.filter(
+    (lens) =>
+      (lens !== "price" || canSeeMoney) && (lens !== "purchase" || round8),
+  );
 }
 
 /**
- * Reads `?lens=` and `?room=`. An unknown lens, or Price for a seat without
- * money, reads as Rough in; the URL itself is left as it is, so a seat whose
- * money answer arrives late still lands on Price.
+ * Reads `?lens=` and `?room=`. An unknown lens, Price for a seat without
+ * money, or Purchase outside round 8, reads as Rough in; the URL itself is
+ * left as it is, so a seat whose money answer arrives late still lands on Price.
  */
 export function parseBuildRoomSearch(
   params: { get(name: string): string | null } | null | undefined,
-  { canSeeMoney }: { canSeeMoney: boolean },
+  { canSeeMoney, round8 = false }: { canSeeMoney: boolean; round8?: boolean },
 ): BuildRoomState {
   const rawLens = params?.get("lens") ?? null;
   const lens =
-    availableLenses(canSeeMoney).find((candidate) => candidate === rawLens) ??
-    "rough";
+    availableLenses(canSeeMoney, round8).find(
+      (candidate) => candidate === rawLens,
+    ) ?? "rough";
   const rawRoom = params?.get("room")?.trim() ?? "";
   return { lens, room: rawRoom === "" ? null : rawRoom };
 }

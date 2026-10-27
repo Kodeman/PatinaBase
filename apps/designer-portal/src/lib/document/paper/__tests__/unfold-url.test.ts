@@ -45,17 +45,18 @@ describe("unfold-url", () => {
     }
   });
 
-  it("reads lens and room exactly as parseBuildRoomSearch does", () => {
+  it("reads lens and room exactly as parseBuildRoomSearch does for round 8", () => {
     for (const search of [
       "?unfold=pieces&lens=price&room=r1",
       "?unfold=pieces&lens=bogus",
       "?unfold=pieces&lens=finishes&room=%20",
+      "?unfold=pieces&lens=purchase&room=r1",
       "?unfold=pieces",
     ]) {
       for (const canSeeMoney of [true, false]) {
         const params = new URLSearchParams(search);
         const unfolded = parseUnfoldSearch(params, { canSeeMoney });
-        const route = parseBuildRoomSearch(params, { canSeeMoney });
+        const route = parseBuildRoomSearch(params, { canSeeMoney, round8: true });
         expect(unfolded && { lens: unfolded.lens, room: unfolded.room }).toEqual(
           route,
         );
@@ -64,7 +65,12 @@ describe("unfold-url", () => {
   });
 
   it("reads an unknown lens, or Price without money, as Rough in", () => {
-    expect(parse("?unfold=pieces&lens=purchase")?.lens).toBe("rough");
+    expect(parse("?unfold=pieces&lens=bogus")?.lens).toBe("rough");
+    // Purchase lens ruling (2026-10-27): the unfold is the round-8 sheet.
+    expect(parse("?unfold=pieces&lens=purchase")?.lens).toBe("purchase");
+    expect(parse("?unfold=pieces&lens=purchase", { canSeeMoney: false })?.lens).toBe(
+      "purchase",
+    );
     expect(parse("?unfold=pieces&lens=price", { canSeeMoney: false })?.lens).toBe(
       "rough",
     );

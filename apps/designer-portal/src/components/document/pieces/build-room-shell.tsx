@@ -106,6 +106,7 @@ const LENS_WORD: Record<BuildRoomLens, string> = {
   price: "Pricing",
   release: "Purchasing authorization",
   finishes: "Finish schedule",
+  purchase: "Purchasing",
 };
 
 const LENS_READING: Record<BuildRoomLens, string> = {
@@ -118,6 +119,8 @@ const LENS_READING: Record<BuildRoomLens, string> = {
     "Review the client edition, then issue rooms for purchasing authorization. Edit specifications and pricing in their tabs.",
   finishes:
     "Document surfaces, products and sheens by room for the painter. Item specifications are managed separately.",
+  purchase:
+    "Follow each selection from client decision and purchasing authority to its order or studio purchase. Nothing here sends an order.",
 };
 
 function plural(n: number, one: string, many: string): string {
@@ -317,7 +320,9 @@ export function BuildRoomShell({
   const Body = sheetBody(as, embedded);
   const close = sheetClose(embedded, onRequestClose, onReturn);
   const titleId = useId();
-  const lenses = availableLenses(canSeeMoney);
+  // The embedded sheet is the round-8 unfold, the only sheet with Purchase;
+  // the `/doc/[id]/pieces` route keeps the legacy five.
+  const lenses = availableLenses(canSeeMoney, embedded);
   const activeLens = lenses.includes(lens) ? lens : "rough";
   const returnHref = buildRoomReturnHref(docId, room);
   const summary = placeSummary(
