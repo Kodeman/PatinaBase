@@ -1,9 +1,9 @@
 -- Include-only fictional read fixture. No activation, public SQL stubs or financial rows.
 -- N2 redundant disjuncts in 00884_round8_external_package_reading.sql:
--- :59 f.reading_package_id IS NULL is unreachable-by-constraint
--- 00877_round8_evidence_manifests.sql:138 together with 00884:60 (fabrication
--- purpose), the manifest FK (00879_round8_fabrication_instruction.sql:40–43)
--- and the package identity comparison (00884:59).
+-- :59 f.reading_package_id IS NULL is subsumed by the package identity comparison
+-- (00884:59): a missing package is reachable, but cannot decide refusal alone.
+-- A fabrication manifest has a non-NULL package (00877_round8_evidence_manifests.sql:138,
+-- 00884:60 purpose check; manifest FK 00879_round8_fabrication_instruction.sql:41–43).
 -- :68 v.fulfilment_id IS DISTINCT FROM f.id duplicates receipt validation :104;
 -- :69 v.verified_by IS DISTINCT FROM e.verified_by duplicates :105.
 CREATE FUNCTION pg_temp.ep_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
@@ -19,6 +19,12 @@ BEGIN
  END;
  PERFORM pg_temp.ep_assert(actual=state AND actual_message=message,
   label||format(' expected (%s, %s) got (%s, %s)',state,message,actual,actual_message));
+END $$;
+CREATE FUNCTION pg_temp.ep_success(command text,label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual text;
+BEGIN
+ BEGIN EXECUTE command; EXCEPTION WHEN OTHERS THEN actual=SQLSTATE; END;
+ PERFORM pg_temp.ep_assert(actual IS NULL,label||coalesce(' got SQLSTATE '||actual,''));
 END $$;
 CREATE FUNCTION pg_temp.ep_id(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
  SELECT ('f8840000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
@@ -142,7 +148,7 @@ $$;
 -- Replica-mode SETUP bypasses external INSERT/UPDATE guards (00875:174–189,376)
 -- and member UPDATE immutability (00877:197–199). FK triggers are suppressed,
 -- but every external target exists (00875:40,45–46,51,54,56,80–85,96–100;
--- instruction CHECK 00879:35 and authority/manifest FKs 00879:37–42).
+-- instruction CHECK 00879:28–35; authority FK 00879:37–40; manifest FK 00879:41–43).
 -- No CHECK is disabled.
 SET LOCAL session_replication_role=replica;
 INSERT INTO public.project_external_fulfilment_evidence_bindings(id,fulfilment_id,decision_id,units,covers_plan_issue_id,
@@ -274,7 +280,7 @@ ROLLBACK TO bad_reference;
 SELECT public.create_evidence_manifest(pg_temp.ep_id(201),pg_temp.ep_id(801),'fabrication_instruction',
  (SELECT jsonb_agg(member) FROM jsonb_array_elements(pg_temp.ep_members(821)) member
   WHERE member->>'kind'<>'coordination_item_revision'),'manifest-no-revision');
--- Guard bypass: 00875:174–189,376; manifest FK stays real (00879:40–43).
+-- Guard bypass: 00875:174–189,376; manifest FK stays real (00879:41–43).
 SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_events e SET manifest_id=m.id,manifest_hash=m.manifest_hash,
  evidence=jsonb_set(e.evidence,'{manifestId}',to_jsonb(m.id::text))
@@ -298,6 +304,73 @@ SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilment_evidence_bindings SET fulfilment_id=pg_temp.ep_id(402) WHERE id=pg_temp.ep_id(501);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1e sibling binding alone refuses');
+ROLLBACK TO bad_reference;
+
+-- (f) 00884:89: a later re-issue must not invalidate the earlier instruction.
+-- Guard bypass: 00875:174–189,376; same-project issue FK is real (00875:46).
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,plan_issue_id,recorded_by,event_seq,client_request_id,request_hash)
+VALUES(pg_temp.ep_id(1007),pg_temp.ep_id(401),'package_issued',jsonb_build_object('planIssueId',pg_temp.ep_id(822)),pg_temp.ep_id(822),pg_temp.ep_id(1),7,'reissue-after-instruction','fixture');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_success($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'N1f reissue after instruction remains readable');
+ROLLBACK TO bad_reference;
+-- (g) 00884:88: a sibling issue precedes instruction 6 but follows own issue 1.
+-- Guard bypass and real issue FK as (f); only sibling 402's seq 4 is changed.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET event_kind='package_issued',plan_issue_id=pg_temp.ep_id(822),
+ evidence=jsonb_build_object('planIssueId',pg_temp.ep_id(822)) WHERE fulfilment_id=pg_temp.ep_id(402) AND event_seq=4;
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_success($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'N1g sibling issue does not invalidate instruction');
+ROLLBACK TO bad_reference;
+-- (h) 00884:89: CHECK-legal other_external has no cabinetry issue pin.
+-- Bypass _external_guard (00875:174–189,376), not the kind CHECK (00875:20).
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilments SET kind='other_external' WHERE id=pg_temp.ep_id(401);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1h other external cannot borrow cabinetry issue pin');
+ROLLBACK TO bad_reference;
+-- (i) 00884:93: mint with a different real, approved same-project configuration.
+-- Replica-mode SETUP suppresses configuration FK triggers (00403:192–230);
+-- real product, project, owner and approver targets remain; no CHECK is disabled.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.product_configurations(id,product_id,project_id,owner_user_id,version,schema_revision,status,evaluation,snapshot,snapshot_hash,approved_at,approved_by)
+VALUES(pg_temp.ep_id(833),pg_temp.ep_id(832),pg_temp.ep_id(201),pg_temp.ep_id(1),2,1,'approved','{}','{"different":true}',public._configuration_snapshot_hash('{"different":true}'),now(),pg_temp.ep_id(1));
+SET LOCAL session_replication_role=origin;
+SELECT public.create_evidence_manifest(pg_temp.ep_id(201),pg_temp.ep_id(801),'fabrication_instruction',
+ (SELECT jsonb_agg(CASE WHEN member->>'kind'='product_configuration' THEN
+  jsonb_build_object('kind','product_configuration','id',c.id,'version',c.version,'sha256',c.snapshot_hash) ELSE member END)
+  FROM jsonb_array_elements(pg_temp.ep_members(821)) member,public.product_configurations c WHERE c.id=pg_temp.ep_id(833)),
+ 'manifest-different-configuration');
+-- Guard bypass: external UPDATE 00875:174–189,376; manifest FK 00879:41–43
+-- and configuration FK 00875:25 retain real native targets.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events e SET manifest_id=m.id,manifest_hash=m.manifest_hash,
+ evidence=jsonb_set(e.evidence,'{manifestId}',to_jsonb(m.id::text))
+ FROM public.evidence_manifests m WHERE e.id=pg_temp.ep_id(1001) AND m.id=pg_temp.ep_manifest('manifest-different-configuration');
+UPDATE public.project_external_fulfilment_evidence_bindings SET covers_configuration_snapshot_hash=public._configuration_snapshot_hash('{"different":true}') WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1i different pinned configuration alone refuses');
+ROLLBACK TO bad_reference;
+-- (j) 00884:93: UUIDs are table-local. A real configuration can share an issue's
+-- UUID without making that plan_issue manifest member a product_configuration.
+-- Mint the manifest natively without a configuration member; do not relabel it.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.product_configurations(id,product_id,project_id,owner_user_id,version,schema_revision,status,evaluation,snapshot,snapshot_hash,approved_at,approved_by)
+VALUES(pg_temp.ep_id(821),pg_temp.ep_id(832),pg_temp.ep_id(201),pg_temp.ep_id(1),2,1,'approved','{}','{}',public._configuration_snapshot_hash('{}'),now(),pg_temp.ep_id(1));
+SET LOCAL session_replication_role=origin;
+SELECT public.create_evidence_manifest(pg_temp.ep_id(201),pg_temp.ep_id(801),'fabrication_instruction',
+ (SELECT jsonb_agg(member) FROM jsonb_array_elements(pg_temp.ep_members(821)) member
+  WHERE member->>'kind'<>'product_configuration'),'manifest-no-configuration');
+-- Same documented guard bypass as (i); real fulfilment configuration and manifest
+-- FKs remain. The issue checksum matches the binding, not a configuration member.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilments SET configuration_id=pg_temp.ep_id(821) WHERE id=pg_temp.ep_id(401);
+UPDATE public.project_external_fulfilment_events e SET manifest_id=m.id,manifest_hash=m.manifest_hash,
+ evidence=jsonb_set(e.evidence,'{manifestId}',to_jsonb(m.id::text))
+ FROM public.evidence_manifests m WHERE e.id=pg_temp.ep_id(1001) AND m.id=pg_temp.ep_manifest('manifest-no-configuration');
+UPDATE public.project_external_fulfilment_evidence_bindings SET covers_configuration_snapshot_hash=repeat('1',64) WHERE id=pg_temp.ep_id(501);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ep_error($q$SELECT public.get_project_external_fulfilments(pg_temp.ep_id(201))$q$,'23514','external_fulfilment_reading_invalid','N1j same UUID with wrong pinned kind alone refuses');
 ROLLBACK TO bad_reference;
 
 -- simulated out-of-band corruption; native guard 00875_round8_external_fulfilment.sql:174–189 blocks this write path.
@@ -454,7 +527,7 @@ ROLLBACK TO bad_reference;
 -- 00884:65 i.id IS NULL: 00875_round8_external_fulfilment.sql:46 plan-issue FK.
 -- 00884:100 d.id IS NULL: 00875_round8_external_fulfilment.sql:81 decision FK.
 -- 00884:101 i.id IS NULL: 00875_round8_external_fulfilment.sql:83 covered-issue FK.
--- 00884:57 seat.id IS NULL: 00879_round8_fabrication_instruction.sql:37–39 authority FK,
+-- 00884:57 seat.id IS NULL: 00879_round8_fabrication_instruction.sql:37–40 authority FK,
 -- then 00624_project_party_window_and_authority.sql:827 engagement FK.
 -- 00884:69–70 NULL verified tuple: 00875_round8_external_fulfilment.sql:64–65 CHECK.
 -- 00884:107 non-array members: 00877_round8_evidence_manifests.sql:130 CHECK.

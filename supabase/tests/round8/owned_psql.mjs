@@ -5,7 +5,25 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const inputRoot = '/tmp/round8-input/';
-const controls = ['old-reader.sql', 'deleted-bindings.sql', 'deleted-receipts.sql'];
+// Each overlay removes exactly one native coverage conjunct; never replace the reader wholesale.
+const coverageControls = {
+  'n1a.sql': ' AND r.id::text=revision_id',
+  'n1b.sql': " AND (c->>'unit')=ANY(b.units)",
+  'n1c.sql': 'mm.manifest_id=e.manifest_id AND ',
+  'n1d.sql': `         AND b.covers_plan_issue_id IS NOT DISTINCT FROM
+          (SELECT issued.plan_issue_id FROM events issued
+           WHERE issued.fulfilment_id=e.fulfilment_id AND issued.event_kind='package_issued'
+            AND issued.event_seq<e.event_seq AND f.kind='gc_cabinetry'
+           ORDER BY issued.event_seq DESC LIMIT 1)
+`,
+  'n1e.sql': ' AND b.fulfilment_id=e.fulfilment_id',
+  'n1f.sql': ' AND issued.event_seq<e.event_seq',
+  'n1g.sql': 'issued.fulfilment_id=e.fulfilment_id AND ',
+  'n1h.sql': " AND f.kind='gc_cabinetry'",
+  'n1i.sql': " AND pinned->>'id'=f.configuration_id::text",
+  'n1j.sql': "pinned->>'kind'='product_configuration' AND ",
+};
+const controls = ['old-reader.sql', 'deleted-bindings.sql', 'deleted-receipts.sql', ...Object.keys(coverageControls)];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
 export function assertOwnedContainer(inspect, owner, ticket) {
@@ -80,6 +98,11 @@ export function controlSql(file, readCommitted) {
     return Buffer.from(old);
   }
   const reader = readCommitted('supabase/migrations/00884_round8_external_package_reading.sql').toString('utf8');
+  const needle = file.startsWith('control/') && coverageControls[file.slice('control/'.length)];
+  if (needle) {
+    if (reader.split(needle).length !== 2) throw new Error('native reader control conjunct missing or ambiguous');
+    return Buffer.from(reader.replace(needle, ''));
+  }
   const start = file === 'control/deleted-bindings.sql'
     ? '   SELECT 1 FROM bindings b JOIN fulfilments f ON f.id=b.fulfilment_id'
     : file === 'control/deleted-receipts.sql' ? '   SELECT 1 FROM receipts v LEFT JOIN events e ON e.id=v.event_id' : undefined;

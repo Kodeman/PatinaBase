@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { assertOwnedContainer, verifySqlInputs, controlSql, main } from './owned_psql.mjs';
 
 const owner = 'sq2173-test-owner';
@@ -9,7 +10,8 @@ const owned = () => [{ Name: '/round8-reader-test',
   Config: { Image: 'public.ecr.aws/supabase/postgres:17.6.1.063', Env: ['PGDATA=/var/lib/postgresql/data'],
     Labels: { 'sidequest.ticket': ticket, 'sidequest.owner': owner } },
   Mounts: [{ Type: 'tmpfs', Destination: '/var/lib/postgresql/data' }, { Type: 'tmpfs', Destination: '/var/run/postgresql' }],
-  HostConfig: { NetworkMode: 'none', PortBindings: {}, ReadonlyRootfs: true, IpcMode: 'private', PidMode: '' }, NetworkSettings: { Ports: {} } }];
+  HostConfig: { NetworkMode: 'none', PortBindings: {}, ReadonlyRootfs: true, IpcMode: 'private', PidMode: '',
+    SecurityOpt: ['no-new-privileges:true'] }, NetworkSettings: { Ports: {} } }];
 test('accepts an isolated native postgres fixture', () => assert.doesNotThrow(() => assertOwnedContainer(owned(), owner, ticket)));
 for (const [name, change] of [
   ['shared name', c => { c.Name = '/supabase_db_supabase'; }],
@@ -150,3 +152,80 @@ test('deleted-block controls remove only their named native block', () => {
   assert.ok(!binding.includes('bindings body') && binding.includes('receipts body'));
   assert.ok(!receipt.includes('receipts body') && receipt.includes('bindings body'));
 });
+
+const nativeReaderPath = 'supabase/migrations/00884_round8_external_package_reading.sql';
+const nativeReader = readFileSync(new URL('../../migrations/00884_round8_external_package_reading.sql', import.meta.url), 'utf8');
+const coverageDeletions = [
+  ['n1a', ' AND r.id::text=revision_id'],
+  ['n1b', " AND (c->>'unit')=ANY(b.units)"],
+  ['n1c', 'mm.manifest_id=e.manifest_id AND '],
+  ['n1d', `         AND b.covers_plan_issue_id IS NOT DISTINCT FROM
+          (SELECT issued.plan_issue_id FROM events issued
+           WHERE issued.fulfilment_id=e.fulfilment_id AND issued.event_kind='package_issued'
+            AND issued.event_seq<e.event_seq AND f.kind='gc_cabinetry'
+           ORDER BY issued.event_seq DESC LIMIT 1)
+`],
+  ['n1e', ' AND b.fulfilment_id=e.fulfilment_id'],
+  ['n1f', ' AND issued.event_seq<e.event_seq'],
+  ['n1g', 'issued.fulfilment_id=e.fulfilment_id AND '],
+  ['n1h', " AND f.kind='gc_cabinetry'"],
+  ['n1i', " AND pinned->>'id'=f.configuration_id::text"],
+  ['n1j', "pinned->>'kind'='product_configuration' AND "],
+];
+for (const [name, needle] of coverageDeletions) {
+  const file = 'control/' + name + '.sql';
+  const expected = Buffer.from(nativeReader.replace(needle, ''));
+  test(name + ' removes exactly its single native conjunct and rejects source drift', () => {
+    const read = path => { assert.equal(path, nativeReaderPath); return Buffer.from(nativeReader); };
+    assert.equal(nativeReader.split(needle).length, 2);
+    assert.deepEqual(controlSql(file, read), expected);
+    for (const source of [nativeReader.replace(needle, ''), nativeReader + needle]) {
+      assert.throws(() => controlSql(file, () => Buffer.from(source)), /conjunct missing or ambiguous/);
+    }
+  });
+  test(name + ' verifies control bytes and refuses mutable overlay drift', () => {
+    const read = path => Buffer.from(path === file ? expected : '\\i :external_reading_control\n');
+    const control = '/tmp/round8-input/' + file;
+    assert.deepEqual(verifySqlInputs('supabase/tests/entry.sql', control, read,
+      path => read(path.slice('/tmp/round8-input/'.length))), ['supabase/tests/entry.sql', file]);
+    assert.throws(() => verifySqlInputs('supabase/tests/entry.sql', control, read,
+      path => path === control ? Buffer.from('changed') : read(path.slice('/tmp/round8-input/'.length))), /mismatch/);
+  });
+  test(name + ' executes only a read-only hashed overlay derived from the pinned commit', () => {
+    const snapshot = new Map();
+    let executed = false;
+    const entry = Buffer.from('\\i :external_reading_control\n');
+    const run = (binary, args, options) => {
+      const ok = stdout => ({ status: 0, stdout: Buffer.from(stdout ?? '') });
+      if (binary === 'git') {
+        if (args[0] === 'rev-parse') return ok('b'.repeat(40));
+        assert.ok(args[1].startsWith('b'.repeat(40) + ':'));
+        return ok(args[1].endsWith(':supabase/tests/entry.sql') ? entry : nativeReader);
+      }
+      assert.equal(binary, 'docker');
+      if (args[0] === 'inspect') return ok(JSON.stringify(owned()));
+      if (args.includes('install')) {
+        assert.equal(args[args.indexOf('-m') + 1], '0444');
+        snapshot.set(args.at(-1), options.input);
+      } else if (args.includes('cat')) {
+        const path = args.at(-1);
+        return ok(path.startsWith('/tmp/round8-input/') ? (path.endsWith(file) ? expected : entry) : snapshot.get(path));
+      } else if (args.includes('psql')) {
+        const variable = args.find(arg => arg.startsWith('external_reading_control='));
+        const overlay = variable.slice('external_reading_control='.length);
+        assert.match(overlay, /^\/tmp\/round8-verified-[0-9a-f-]+\/control\/n1[a-j]\.sql$/);
+        assert.deepEqual(snapshot.get(overlay), expected);
+        executed = true;
+      } else if (args.includes('chmod')) assert.deepEqual(args.slice(3, 5), ['-R', 'a-w']);
+      else assert.ok(args.includes('mkdir'));
+      return ok();
+    };
+    const env = { ROUND8_PSQL_TRANSPORT: 'docker-exec', ROUND8_OWNED_TICKET: ticket,
+      ROUND8_OWNED_OWNER: owner, ROUND8_OWNED_CONTAINER: 'a'.repeat(64), ROUND8_NEGATIVE_CONTROL: '1',
+      ROUND8_EXTERNAL_READING_CONTROL: '/tmp/round8-input/' + file };
+    assert.throws(() => main({ ...env, ROUND8_NEGATIVE_CONTROL: undefined },
+      ['node', 'helper', 'supabase/tests/entry.sql'], () => assert.fail('must not spawn')), /negative-control/);
+    assert.equal(main(env, ['node', 'helper', 'supabase/tests/entry.sql'], run), 0);
+    assert.ok(executed);
+  });
+}
