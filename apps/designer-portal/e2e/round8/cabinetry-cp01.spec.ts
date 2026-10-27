@@ -19,14 +19,19 @@ const sam = cp(11);
 
 test.describe('CP-01 cabinetry package reading', () => {
   test.setTimeout(240_000);
+  // Set only once this run's fixture committed: a refused setup (residue, wrong
+  // host, missing designer) never deletes rows this run did not create.
+  let seeded = false;
   test.beforeAll(() => {
     for (const url of [process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres']) {
       if (new URL(url).hostname !== '127.0.0.1') throw new Error('CP-01 fixtures require 127.0.0.1');
     }
     psqlRun(readFileSync(path.join(__dirname, 'cabinetry-cp01-fixture.sql'), 'utf8'));
+    seeded = true;
   });
 
   test.afterAll(() => {
+    if (!seeded) return;
     // Exact fictional ids only; refuse if the project is not the F01 designer's.
     // The C5 ledger rejects DELETE by trigger, so cleanup runs in replica mode,
     // transaction-local, scoped to the prefix-checked rows.
@@ -87,13 +92,19 @@ test.describe('CP-01 cabinetry package reading', () => {
     // Exact issue: issue B (highest event_seq), not issue A.
     await expect(pkg.locator(`[data-exact-issue="${cp(822)}"]`)).toContainText('Issue 2 · CP01 cabinet issue B');
 
-    // Partial, independent holds: k-3/k-4 held; instructed k-1/k-2 proceed; k-5 released.
-    for (const [unit, state] of [['k-1', 'instructed'], ['k-2', 'instructed'], ['k-3', 'held'], ['k-4', 'held'], ['k-5', 'not-instructed'], ['k-6', 'not-instructed']]) {
+    // Partial, independent holds: k-3/k-4 held; only instructed k-1/k-2 proceed;
+    // k-5 (released) and k-6 are not held but not instructed, so they do not proceed.
+    for (const [unit, state, proceeds] of [
+      ['k-1', 'instructed', 'true'], ['k-2', 'instructed', 'true'], ['k-3', 'held', 'false'],
+      ['k-4', 'held', 'false'], ['k-5', 'not-instructed', 'false'], ['k-6', 'not-instructed', 'false'],
+    ]) {
       await expect(pkg.locator(`[data-unit="${unit}"]`)).toHaveAttribute('data-unit-state', state);
+      await expect(pkg.locator(`[data-unit="${unit}"]`)).toHaveAttribute('data-unit-proceeds', proceeds);
     }
     const hold = pkg.locator(`[data-hold="${cp(1005)}"]`);
     await expect(hold.locator('[data-held-units]')).toHaveText('k-3, k-4');
-    await expect(hold.locator('[data-proceeding-units]')).toHaveText('k-1, k-2, k-5, k-6');
+    await expect(hold.locator('[data-proceeding-units]')).toHaveText('k-1, k-2');
+    await expect(hold.locator('[data-uninstructed-units]')).toHaveText('k-5, k-6');
     await expect(hold).toContainText('CP01 H-14 hardware substitution');
     await expect(pkg.locator(`[data-hold="${cp(1006)}"]`)).toHaveCount(0);
 
@@ -115,7 +126,10 @@ test.describe('CP-01 cabinetry package reading', () => {
     for (const name of ['Record instruction', 'Place a hold', 'Record receipt', 'Verify an event']) {
       await expect(pkg.getByRole('button', { name })).toHaveAttribute('aria-disabled', 'true');
     }
-    await pkg.getByRole('button', { name: 'Record instruction' }).click();
+    // A held act stays focusable but aria-disabled, so Playwright's click() waits
+    // for "enabled" forever; activate it from the keyboard like a user would.
+    await pkg.getByRole('button', { name: 'Record instruction' }).focus();
+    await page.keyboard.press('Enter');
     expect(psqlScalar(`SELECT count(*) FROM public.project_external_fulfilment_events WHERE fulfilment_id = '${fulfilment}'`)).toBe('8');
 
     // Zero studio commerce: no PO, studio purchase or invoice exists for this job.

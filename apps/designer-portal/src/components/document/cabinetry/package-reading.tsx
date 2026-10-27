@@ -8,12 +8,16 @@ import {
   type ExternalFulfilmentReading,
   type PlanRoomBundle,
   type ProjectRosterRow,
+  useProductConfiguration,
 } from "@patina/supabase";
 import { DocumentAction, DocumentActionRow } from "../document-action";
 
 type ProjectRoom = Database["public"]["Tables"]["project_rooms"]["Row"];
 type FulfilmentEvent = ExternalFulfilmentReading["reading"]["events"][number];
 type Manifest = ExternalFulfilmentReading["reading"]["manifests"][number];
+
+/** Maker evidence against the current issue and the configuration's live snapshot. */
+export type EvidenceState = "current" | "earlier" | "unknown" | "none";
 
 /** One read each; `data` is undefined while pending or after a failed read. */
 export interface PackageJoins {
@@ -29,11 +33,15 @@ export interface UnitReading {
   holds: FulfilmentEvent[];
   /** The latest instruction (highest event_seq) that covers this unit. */
   instruction: FulfilmentEvent | null;
-  /** Maker evidence bound to this unit, against the current issue or an earlier one. */
-  evidence: "current" | "earlier" | "none";
+  /** Instructed, named by no open hold, and the package is not installed or cancelled. */
+  proceeds: boolean;
+  /** Maker evidence bound to this unit (see `bindingEvidence`). */
+  evidence: EvidenceState;
 }
 
 export interface PackageReadingModel {
+  /** Every recorded event, in event_seq order. */
+  events: FulfilmentEvent[];
   issues: FulfilmentEvent[];
   currentIssue: FulfilmentEvent | null;
   openHolds: FulfilmentEvent[];
@@ -42,15 +50,29 @@ export interface PackageReadingModel {
   receipts: FulfilmentEvent[];
   installs: FulfilmentEvent[];
   contracts: FulfilmentEvent[];
+  /** Installed or cancelled: nothing proceeds. */
+  terminal: boolean;
+  /** Per binding id; a binding is never "none". */
+  bindingEvidence: Map<string, Exclude<EvidenceState, "none">>;
   units: UnitReading[];
 }
+
+const TERMINAL_STATUSES = new Set(["installed", "cancelled"]);
 
 /**
  * Reads the package from its recorded events only. Order is event_seq (the
  * server's lock order), never a timestamp; nothing here infers a fact the
  * reading does not carry.
+ *
+ * `liveSnapshot` is the configuration's current snapshot hash: `null` when the
+ * package has no configuration, `undefined` while it is unread or failed. Like
+ * the native fabrication gate (00879), evidence covers the latest issue AND
+ * that live snapshot; a binding to an older snapshot no longer covers.
  */
-export function readPackage(row: ExternalFulfilmentReading): PackageReadingModel {
+export function readPackage(
+  row: ExternalFulfilmentReading,
+  liveSnapshot: string | null | undefined,
+): PackageReadingModel {
   const events = [...row.reading.events].sort((a, b) => a.event_seq - b.event_seq);
   const ofKind = (kind: string) => events.filter((event) => event.event_kind === kind);
   const releases = ofKind("release_hold");
@@ -59,21 +81,43 @@ export function readPackage(row: ExternalFulfilmentReading): PackageReadingModel
   const issues = ofKind("package_issued");
   const currentIssue = issues.at(-1) ?? null;
   const instructions = ofKind("fabrication_instruction");
+  const terminal = TERMINAL_STATUSES.has(row.status);
+  const expectedSnapshot = row.configuration_id ? liveSnapshot : null;
+  const bindingEvidence = new Map(
+    row.reading.bindings.map((binding): [string, Exclude<EvidenceState, "none">] => {
+      if (currentIssue === null || binding.covers_plan_issue_id !== currentIssue.plan_issue_id) {
+        return [binding.id, "earlier"];
+      }
+      if (expectedSnapshot === undefined) return [binding.id, "unknown"];
+      return [
+        binding.id,
+        binding.covers_configuration_snapshot_hash === expectedSnapshot ? "current" : "earlier",
+      ];
+    }),
+  );
   const units = row.units.map((unit): UnitReading => {
-    const bindings = row.reading.bindings.filter((binding) => binding.units.includes(unit));
-    const current = bindings.some(
-      (binding) =>
-        currentIssue !== null && binding.covers_plan_issue_id === currentIssue.plan_issue_id,
-    );
+    const states = row.reading.bindings
+      .filter((binding) => binding.units.includes(unit))
+      .map((binding) => bindingEvidence.get(binding.id));
+    const holds = openHolds.filter((hold) => hold.affected_units?.includes(unit));
+    const instruction =
+      instructions.filter((event) => event.affected_units?.includes(unit)).at(-1) ?? null;
     return {
       unit,
-      holds: openHolds.filter((hold) => hold.affected_units?.includes(unit)),
-      instruction:
-        instructions.filter((event) => event.affected_units?.includes(unit)).at(-1) ?? null,
-      evidence: current ? "current" : bindings.length > 0 ? "earlier" : "none",
+      holds,
+      instruction,
+      proceeds: !terminal && holds.length === 0 && instruction !== null,
+      evidence: states.includes("current")
+        ? "current"
+        : states.includes("unknown")
+          ? "unknown"
+          : states.length > 0
+            ? "earlier"
+            : "none",
     };
   });
   return {
+    events,
     issues,
     currentIssue,
     openHolds,
@@ -82,8 +126,45 @@ export function readPackage(row: ExternalFulfilmentReading): PackageReadingModel
     receipts: ofKind("received"),
     installs: ofKind("installed"),
     contracts: ofKind("contract_reported"),
+    terminal,
+    bindingEvidence,
     units,
   };
+}
+
+function unitEvidenceWords(unit: UnitReading, terminal: boolean): string {
+  if (unit.evidence === "current") return "Maker evidence bound to the current issue";
+  // C5: a recorded instruction keeps its frozen contents through a re-issue.
+  if (unit.instruction) {
+    return "Instructed against an earlier issue or configuration; the recorded instruction keeps its frozen contents";
+  }
+  if (unit.evidence === "unknown") {
+    return "The configuration could not be read, so evidence coverage is not confirmed";
+  }
+  if (unit.evidence === "earlier") {
+    return terminal
+      ? "Maker evidence covers an earlier issue or configuration"
+      : "Maker evidence covers an earlier issue or configuration; a new submittal is needed before instruction";
+  }
+  return "No maker evidence bound";
+}
+
+function siteWords(
+  row: ExternalFulfilmentReading,
+  pkg: PlanRoomBundle["packages"][number] | undefined,
+  joins: PackageJoins,
+): string {
+  if (!row.reading.package_id) return "No package record for this key";
+  // Never a fabricated scope while the drawing record is unread or failed.
+  if (joins.plans.isError) return "Site could not be read";
+  if (!joins.plans.data) return "Reading site…";
+  if (!pkg) return "This package is not in the job's drawing record";
+  if (!pkg.project_room_id) return "Whole job";
+  const room = joins.rooms.data?.find((entry) => entry.id === pkg.project_room_id);
+  if (room) return room.name;
+  if (joins.rooms.isError) return `Room ${short(pkg.project_room_id)} (rooms could not be read)`;
+  if (!joins.rooms.data) return "Reading room…";
+  return `Room ${short(pkg.project_room_id)}`;
 }
 
 const EVENT_LABELS: Record<string, string> = {
@@ -142,7 +223,8 @@ function namer(roster: PackageJoins["roster"]) {
     if (roster.isError) return "A recorded person (names could not be read)";
     if (!roster.data) return "A recorded person";
     const row = roster.data.find((entry) => entry.profile_id === profileId);
-    return row?.display_name ?? "A person no longer on this job's roster";
+    // The roster has no implicit-owner row, so an absent name says nothing about departure.
+    return row?.display_name ?? "A recorded person (name unresolved)";
   };
 }
 
@@ -196,7 +278,8 @@ function ExactIssue({
     <div data-exact-issue={event.plan_issue_id ?? ""}>
       {plans.isError ? (
         <p role="alert" className="t-body-sm py-3">
-          Issue contents could not be read. The issue identity below is still the recorded one.
+          Issue contents could not be read. The recorded issue is{" "}
+          <span data-recorded-issue>{short(event.plan_issue_id)}</span>.
         </p>
       ) : !plans.data ? (
         <p role="status" className="t-body-sm py-3">Reading issue contents…</p>
@@ -308,13 +391,17 @@ export function PackageReading({
   const [showPrice, setShowPrice] = useState(false);
   const inactiveId = useId();
   const priceId = useId();
-  const model = readPackage(row);
+  const configuration = useProductConfiguration(row.configuration_id);
+  const model = readPackage(
+    row,
+    row.configuration_id ? configuration.data?.snapshotHash : null,
+  );
   const nameOf = namer(joins.roster);
   const pkg = joins.plans.data?.packages.find((entry) => entry.id === row.reading.package_id);
-  const room = pkg?.project_room_id
-    ? joins.rooms.data?.find((entry) => entry.id === pkg.project_room_id)
-    : undefined;
-  const heldUnits = new Set(model.openHolds.flatMap((hold) => hold.affected_units ?? []));
+  const proceeding = model.units.filter((unit) => unit.proceeds).map((unit) => unit.unit);
+  const awaiting = model.units
+    .filter((unit) => unit.holds.length === 0 && !unit.instruction)
+    .map((unit) => unit.unit);
   const headingId = `cabinet-package-${row.id}`;
 
   return (
@@ -360,9 +447,7 @@ export function PackageReading({
               : "No package record for this key"}
           </dd>
           <dt>Site</dt>
-          <dd data-join="site">
-            {room ? room.name : pkg?.project_room_id ? `Room ${short(pkg.project_room_id)}` : "Whole job"}
-          </dd>
+          <dd data-join="site">{siteWords(row, pkg, joins)}</dd>
           <dt>Commercial scope</dt>
           <dd data-join="commercial">
             Edition {short(row.scope_edition_id)} · {row.package_key}
@@ -375,10 +460,11 @@ export function PackageReading({
                   <span key={binding.id} className="block" data-binding={binding.decision_id}>
                     {decisionWords(joins.decisions, binding.decision_id)} · units{" "}
                     {binding.units.join(", ")} · bound by {nameOf(binding.bound_by)}
-                    {binding.covers_plan_issue_id &&
-                    binding.covers_plan_issue_id !== model.currentIssue?.plan_issue_id
-                      ? " · covers an earlier issue"
-                      : ""}
+                    {model.bindingEvidence.get(binding.id) === "earlier"
+                      ? " · covers an earlier issue or configuration"
+                      : model.bindingEvidence.get(binding.id) === "unknown"
+                        ? " · configuration coverage not confirmed"
+                        : ""}
                   </span>
                 ))}
           </dd>
@@ -401,20 +487,17 @@ export function PackageReading({
               data-unit-state={
                 unit.holds.length > 0 ? "held" : unit.instruction ? "instructed" : "not-instructed"
               }
+              data-unit-proceeds={unit.proceeds}
             >
               <span className="font-medium">{unit.unit}</span> ·{" "}
               {unit.holds.length > 0
                 ? "Held"
                 : unit.instruction
-                  ? `Instructed (${unit.instruction.evidence_level}) · proceeds`
+                  ? `Instructed (${unit.instruction.evidence_level}) · ${
+                      unit.proceeds ? "proceeds" : `package ${row.status}`
+                    }`
                   : "Not instructed"}
-              <span className="t-meta block">
-                {unit.evidence === "current"
-                  ? "Maker evidence bound to the current issue"
-                  : unit.evidence === "earlier"
-                    ? "Maker evidence covers an earlier issue; a new submittal is needed"
-                    : "No maker evidence bound"}
-              </span>
+              <span className="t-meta block">{unitEvidenceWords(unit, model.terminal)}</span>
             </li>
           ))}
         </ul>
@@ -425,18 +508,27 @@ export function PackageReading({
           <h4 className="font-heading text-xl">Holds</h4>
           {model.openHolds.map((hold) => {
             const affected = hold.affected_units ?? [];
-            const proceeding = row.units.filter((unit) => !heldUnits.has(unit));
             return (
               <div key={hold.id} className="py-3" data-hold={hold.id}>
                 <p className="t-body-sm">
                   Held units: <span data-held-units>{affected.join(", ")}</span>
                 </p>
                 <p className="t-body-sm">
-                  Not held, so they continue under their own instruction:{" "}
+                  Instructed and not held, so they proceed:{" "}
                   <span data-proceeding-units>
-                    {proceeding.length > 0 ? proceeding.join(", ") : "none"}
+                    {proceeding.length > 0
+                      ? proceeding.join(", ")
+                      : model.terminal
+                        ? `none, the package is ${row.status}`
+                        : "none"}
                   </span>
                 </p>
+                {awaiting.length > 0 && (
+                  <p className="t-body-sm">
+                    Not held, and not instructed yet:{" "}
+                    <span data-uninstructed-units>{awaiting.join(", ")}</span>
+                  </p>
+                )}
                 <p className="t-meta">
                   Decision: {decisionWords(joins.decisions, evidenceField(hold, "decisionId"))}
                 </p>
@@ -491,14 +583,12 @@ export function PackageReading({
       <section aria-label="Package history" className="mt-6">
         <h4 className="font-heading text-xl">History</h4>
         <ol>
-          {[...row.reading.events]
-            .sort((a, b) => a.event_seq - b.event_seq)
-            .map((event) => (
-              <li key={event.id} className="t-body-sm py-1" data-event-seq={event.event_seq}>
-                {event.event_seq}. {EVENT_LABELS[event.event_kind] ?? event.event_kind}
-                <Authorship event={event} nameOf={nameOf} />
-              </li>
-            ))}
+          {model.events.map((event) => (
+            <li key={event.id} className="t-body-sm py-1" data-event-seq={event.event_seq}>
+              {event.event_seq}. {EVENT_LABELS[event.event_kind] ?? event.event_kind}
+              <Authorship event={event} nameOf={nameOf} />
+            </li>
+          ))}
         </ol>
       </section>
 
