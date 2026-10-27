@@ -377,8 +377,10 @@ describe("CP-01 package reading", () => {
   it("renders the recorded issue identity when its contents cannot be read", async () => {
     await mount([nativeReading()], { plans: failed });
     const alert = within(document.querySelector(`[data-exact-issue="${ISSUE_B}"]`) as HTMLElement).getByRole("alert");
-    expect(alert).toHaveTextContent(`The recorded issue is ${ISSUE_B.slice(0, 8)}.`);
-    expect(alert.querySelector("[data-recorded-issue]")).toHaveTextContent(ISSUE_B.slice(0, 8));
+    // Fixture issues share their first 8 characters, so only the full id distinguishes them.
+    expect(ISSUE_A.slice(0, 8)).toBe(ISSUE_B.slice(0, 8));
+    expect(alert).toHaveTextContent(`The recorded issue is ${ISSUE_B}.`);
+    expect(alert.querySelector("[data-recorded-issue]")!.textContent).toBe(ISSUE_B);
   });
 
   it("joins evidence by stable ids and flags evidence bound to an earlier issue", async () => {
@@ -425,13 +427,31 @@ describe("CP-01 package reading", () => {
     expect(unit("k-6")).toHaveTextContent("a new submittal is needed before instruction");
   });
 
-  it("a configuration change stops older evidence from covering, like the native gate", async () => {
-    const row = variant((r) => {
+  /**
+   * Native-valid configured package (00884): the instruction's manifest pins the
+   * configuration at H1, and the binding its coverage names carries that same
+   * hash, so the reader accepts it.
+   */
+  const configured = () =>
+    variant((r) => {
       r.configuration_id = CONFIG;
+      r.reading.events[1].evidence = { planIssueId: ISSUE_B, configurationSnapshotHash: H1 };
+      r.reading.manifests[0].members = [
+        { kind: "plan_issue", id: ISSUE_B, version: 2, sha256: "2".repeat(64) },
+        { kind: "coordination_item_revision", id: REVISION, rev: 1, sha256: "7".repeat(64) },
+        { kind: "product_configuration", id: CONFIG, version: 1, sha256: H1 },
+      ];
+      r.reading.manifests[0].typed_members.push(typedMember(854, "product_configuration_id", CONFIG));
       r.reading.bindings[0].covers_configuration_snapshot_hash = H1;
       r.reading.bindings.push(binding(503, DECISION_K5, ["k-5"], ISSUE_B, H1));
     });
+
+  it("a configuration change stops older evidence from covering, like the native gate", async () => {
+    const row = configured();
     const reading = await validated(row);
+    const members = reading.reading.manifests[0].members as unknown as Array<Record<string, unknown>>;
+    const pinned = members.find((member) => member.kind === "product_configuration");
+    expect(pinned).toMatchObject({ id: CONFIG, sha256: reading.reading.bindings[0].covers_configuration_snapshot_hash });
     const at = (snapshot: string | undefined) =>
       Object.fromEntries(readPackage(reading, snapshot).units.map((u) => [u.unit, u.evidence]));
     expect(at(H1)).toMatchObject({ "k-1": "current", "k-5": "current" });
@@ -451,6 +471,27 @@ describe("CP-01 package reading", () => {
     second.unmount();
     await mount([row], { configuration: ok({ id: CONFIG, snapshotHash: H1 }) });
     expect(unit("k-5")).toHaveTextContent("Maker evidence bound to the current issue");
+  });
+
+  it("a failed configuration refetch with retained data does not confirm coverage", async () => {
+    // TanStack keeps the last data after a failed background refetch.
+    const stale = { data: { id: CONFIG, snapshotHash: H1 }, isPending: false, isError: true, refetch: jest.fn() };
+    await mount([configured()], { configuration: stale });
+    expect(unit("k-5")).toHaveTextContent("evidence coverage is not confirmed");
+    expect(unit("k-5")).not.toHaveTextContent("bound to the current issue");
+    expect(document.querySelector(`[data-binding="${DECISION_K5}"]`)).toHaveTextContent("configuration coverage not confirmed");
+  });
+
+  it.each([
+    ["pending", pending],
+    ["failed", failed],
+  ])("an instruction against the current issue keeps its frozen contents and invents no mismatch while the configuration is %s", async (_state, configuration) => {
+    await mount([configured()], { configuration });
+    for (const name of ["k-1", "k-2"]) {
+      expect(unit(name)).toHaveTextContent("the recorded instruction keeps its frozen contents");
+      expect(unit(name)).toHaveTextContent("Its match to the current configuration is not confirmed");
+      expect(unit(name)).not.toHaveTextContent("earlier issue or configuration");
+    }
   });
 
   it("names the route: designer intent to maker drawing", async () => {

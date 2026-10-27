@@ -134,12 +134,15 @@ export function readPackage(
 
 function unitEvidenceWords(unit: UnitReading, terminal: boolean): string {
   if (unit.evidence === "current") return "Maker evidence bound to the current issue";
+  // The live configuration is pending or failed: no mismatch is known.
+  if (unit.evidence === "unknown") {
+    return unit.instruction
+      ? "Instructed; the recorded instruction keeps its frozen contents. Its match to the current configuration is not confirmed"
+      : "The current configuration has not been read, so evidence coverage is not confirmed";
+  }
   // C5: a recorded instruction keeps its frozen contents through a re-issue.
   if (unit.instruction) {
     return "Instructed against an earlier issue or configuration; the recorded instruction keeps its frozen contents";
-  }
-  if (unit.evidence === "unknown") {
-    return "The configuration could not be read, so evidence coverage is not confirmed";
   }
   if (unit.evidence === "earlier") {
     return terminal
@@ -279,7 +282,7 @@ function ExactIssue({
       {plans.isError ? (
         <p role="alert" className="t-body-sm py-3">
           Issue contents could not be read. The recorded issue is{" "}
-          <span data-recorded-issue>{short(event.plan_issue_id)}</span>.
+          <span data-recorded-issue>{event.plan_issue_id ?? "none"}</span>.
         </p>
       ) : !plans.data ? (
         <p role="status" className="t-body-sm py-3">Reading issue contents…</p>
@@ -392,9 +395,14 @@ export function PackageReading({
   const inactiveId = useId();
   const priceId = useId();
   const configuration = useProductConfiguration(row.configuration_id);
+  // A failed refetch keeps stale data; only a successful read confirms coverage.
   const model = readPackage(
     row,
-    row.configuration_id ? configuration.data?.snapshotHash : null,
+    !row.configuration_id
+      ? null
+      : configuration.isError
+        ? undefined
+        : configuration.data?.snapshotHash,
   );
   const nameOf = namer(joins.roster);
   const pkg = joins.plans.data?.packages.find((entry) => entry.id === row.reading.package_id);
