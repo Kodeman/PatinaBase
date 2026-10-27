@@ -2683,6 +2683,7 @@ export {
   externalFulfilmentCapability,
   externalFulfilmentKeys,
   useExternalFulfilments,
+  useExternalFulfilmentReadings,
   useCreateExternalFulfilment,
   useRecordExternalFulfilmentEvent,
   useVerifyExternalFulfilmentEvent,
@@ -2693,4 +2694,4 @@ export {
   useRevokeFabricationAuthority,
   useRecordFabricationInstruction,
 } from './use-external-fulfilments';
-export type { ExternalFulfilment } from './use-external-fulfilments';
+export type { ExternalFulfilment, ExternalFulfilmentReading } from './use-external-fulfilments';

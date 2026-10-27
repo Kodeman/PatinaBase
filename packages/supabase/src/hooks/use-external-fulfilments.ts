@@ -25,6 +25,25 @@ type SetFfeItemExternalFulfilmentArgs = NullableRpcArgs<'set_ffe_item_external_f
 type GrantFabricationAuthorityArgs = NullableRpcArgs<'grant_fabrication_authority',
   'p_effective_to' | 'p_threshold_cents' | 'p_source_clause'>;
 export type ExternalFulfilment = Database['public']['Tables']['project_external_fulfilments']['Row'];
+type ExternalEvent = Omit<Database['public']['Tables']['project_external_fulfilment_events']['Row'],
+  'client_request_id' | 'request_hash'>;
+type ExternalBinding = Omit<Database['public']['Tables']['project_external_fulfilment_evidence_bindings']['Row'],
+  'client_request_id' | 'request_hash'>;
+type ExternalVerification = Pick<Database['public']['Tables']['project_external_fulfilment_verifications']['Row'],
+  'event_id' | 'fulfilment_id' | 'verified_by'>;
+type ExternalManifest = Pick<Database['public']['Tables']['evidence_manifests']['Row'],
+  'id' | 'project_id' | 'package_id' | 'purpose' | 'members' | 'manifest_hash' | 'created_by' | 'created_at'> & {
+    typed_members: Database['public']['Tables']['evidence_manifest_members']['Row'][];
+  };
+export type ExternalFulfilmentReading = ExternalFulfilment & {
+  reading: {
+    package_id: Database['public']['Tables']['project_packages']['Row']['id'] | null;
+    events: ExternalEvent[];
+    bindings: ExternalBinding[];
+    verifications: ExternalVerification[];
+    manifests: ExternalManifest[];
+  };
+};
 
 // W3 does not authorize activation or a browser read of server_capabilities.
 export const externalFulfilmentCapability = {
@@ -52,6 +71,7 @@ export function useExternalFulfilments(projectId: string | null | undefined) {
   const query = useQuery({
     queryKey: externalFulfilmentKeys.project(projectId),
     enabled: !!projectId,
+    retry: false,
     queryFn: async () => {
       if (!projectId) throw new Error('A project is required.');
       const { data, error } = await createBrowserClient().rpc('get_project_external_fulfilments', {
@@ -59,6 +79,180 @@ export function useExternalFulfilments(projectId: string | null | undefined) {
       });
       if (error) throw error;
       return parseFulfilments(data, projectId);
+    },
+  });
+  return { ...query, capability: externalFulfilmentCapability };
+}
+
+const readingMemberColumns = {
+  plan_issue: 'plan_issue_id', plan_issue_print: 'plan_issue_print_id', plan_print: 'plan_print_id',
+  product_configuration: 'product_configuration_id', custom_commission_revision: 'custom_commission_revision_id',
+  review_item: 'review_item_id', approval_artifact: 'approval_artifact_id', po_spec_snapshot: 'po_spec_snapshot_id',
+  coordination_item_revision: 'coordination_item_revision_id',
+} as const;
+
+function readingObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+function readingStrings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string') &&
+    new Set(value).size === value.length;
+}
+function requireReading(ok: unknown): asserts ok {
+  if (!ok) throw new Error('External fulfilment evidence could not be read for this project.');
+}
+
+function validateReadingManifest(manifest: ExternalManifest, row: ExternalFulfilmentReading) {
+  requireReading(typeof manifest.id === 'string' && manifest.project_id === row.project_id &&
+    manifest.package_id === row.reading.package_id && manifest.package_id !== null &&
+    manifest.purpose === 'fabrication_instruction' && /^[0-9a-f]{64}$/.test(manifest.manifest_hash) &&
+    typeof manifest.created_by === 'string' && typeof manifest.created_at === 'string' &&
+    Array.isArray(manifest.members) && manifest.members.length > 0 &&
+    Array.isArray(manifest.typed_members) && manifest.typed_members.every(readingObject));
+  requireReading(manifest.members.length === manifest.typed_members.length &&
+    new Set(manifest.typed_members.map((member) => member.id)).size === manifest.typed_members.length);
+  const identities = new Set<string>();
+  for (const member of manifest.members) {
+    requireReading(readingObject(member) && typeof member.kind === 'string' &&
+      Object.prototype.hasOwnProperty.call(readingMemberColumns, member.kind) && typeof member.id === 'string' &&
+      typeof member.sha256 === 'string' && /^[0-9a-f]{64}$/.test(member.sha256));
+    const column = readingMemberColumns[member.kind as keyof typeof readingMemberColumns];
+    const identity = `${member.kind}:${member.id}`;
+    requireReading(!identities.has(identity));
+    identities.add(identity);
+    const versioned = ['plan_issue', 'product_configuration', 'review_item', 'approval_artifact'].includes(member.kind);
+    requireReading(versioned ? Number.isSafeInteger(member.version) :
+      (['plan_print', 'plan_issue_print'].includes(member.kind) ? typeof member.rev === 'string' :
+        Number.isSafeInteger(member.rev)));
+    requireReading(manifest.typed_members.some((typed) => typeof typed.id === 'string' &&
+      typed.manifest_id === manifest.id && typed[column] === member.id &&
+      Object.values(readingMemberColumns).every((key) => key === column || typed[key] === null)));
+  }
+}
+
+function validateReadingEvent(event: ExternalEvent, row: ExternalFulfilmentReading) {
+  requireReading(typeof event.id === 'string' && event.fulfilment_id === row.id &&
+    Number.isSafeInteger(event.event_seq) && event.event_seq > 0 && readingObject(event.evidence) &&
+    typeof event.recorded_by === 'string' && typeof event.recorded_at === 'string' &&
+    ['quote_reported', 'contract_reported', 'package_issued', 'fabrication_instruction', 'hold',
+      'release_hold', 'received', 'installed', 'cancelled'].includes(event.event_kind) &&
+    ['reported', 'verified'].includes(event.evidence_level));
+  for (const key of ['actor_id', 'authority_id', 'manifest_id', 'manifest_hash', 'plan_issue_id',
+    'releases_event_id', 'verified_by', 'verified_at', 'evidence_route'] as const) {
+    requireReading(event[key] === null || typeof event[key] === 'string');
+  }
+  requireReading(event.affected_units === null || (readingStrings(event.affected_units) &&
+    event.affected_units.length > 0 && event.affected_units.every((unit) => row.units.includes(unit))));
+  const receipt = row.reading.verifications.find((item) => item.event_id === event.id);
+  if (event.evidence_level === 'verified') {
+    requireReading(receipt && receipt.fulfilment_id === row.id && receipt.verified_by === event.verified_by &&
+      typeof event.verified_by === 'string' && event.verified_by !== event.recorded_by &&
+      typeof event.verified_at === 'string' && Number.isSafeInteger(event.verification_seq) &&
+      event.verification_seq! > 0);
+  } else {
+    requireReading(!receipt && event.verified_by === null && event.verified_at === null && event.verification_seq === null);
+  }
+  if (event.event_kind === 'release_hold') {
+    const hold = row.reading.events.find((item) => item.id === event.releases_event_id);
+    requireReading(hold?.event_kind === 'hold' && hold.event_seq < event.event_seq &&
+      typeof event.evidence.releasesEventId === 'string' &&
+      event.evidence.releasesEventId.toLowerCase() === hold.id.toLowerCase() && event.affected_units === null);
+  } else requireReading(event.releases_event_id === null);
+  if (event.event_kind === 'hold') requireReading(event.affected_units !== null);
+  if (event.event_kind === 'package_issued') {
+    requireReading(typeof event.plan_issue_id === 'string' && event.evidence.planIssueId === event.plan_issue_id &&
+      (event.evidence.configurationSnapshotHash === null ||
+        typeof event.evidence.configurationSnapshotHash === 'string'));
+  }
+  if (event.event_kind === 'fabrication_instruction') validateInstructionReading(event, row);
+  else requireReading(event.manifest_id === null && event.manifest_hash === null && event.coverage === null &&
+    event.actor_id === null && event.authority_id === null && event.amount_cents === null && event.evidence_route === null);
+}
+
+function validateInstructionReading(event: ExternalEvent, row: ExternalFulfilmentReading) {
+  const manifest = row.reading.manifests.find((item) => item.id === event.manifest_id);
+  requireReading(manifest && manifest.manifest_hash === event.manifest_hash && readingObject(event.evidence) &&
+    event.evidence.manifestId === event.manifest_id && typeof event.evidence.authorizingPartyId === 'string' &&
+    event.actor_id === event.recorded_by && typeof event.authority_id === 'string' &&
+    Number.isSafeInteger(event.amount_cents) && event.amount_cents! >= 0 &&
+    ['shop_drawing', 'configured', 'approved_submittal'].includes(event.evidence_route ?? '') &&
+    readingStrings(event.affected_units) && event.affected_units.length > 0 && Array.isArray(event.coverage));
+  const covered = new Set<string>();
+  for (const coverage of event.coverage) {
+    requireReading(readingObject(coverage) && typeof coverage.unit === 'string' &&
+      !covered.has(coverage.unit) && event.affected_units.includes(coverage.unit) &&
+      readingStrings(coverage.revisionIds) && coverage.revisionIds.length > 0);
+    covered.add(coverage.unit);
+    requireReading(coverage.revisionIds.every((id) => manifest.typed_members.some((member) =>
+      member.coordination_item_revision_id === id)) &&
+      row.reading.bindings.some((binding) => binding.units.includes(coverage.unit as string)));
+  }
+  requireReading(covered.size === event.affected_units.length);
+}
+
+function validatePackageReading(row: ExternalFulfilmentReading) {
+  requireReading(readingStrings(row.units) && row.units.length > 0 && typeof row.package_key === 'string' &&
+    typeof row.scope_edition_id === 'string' && typeof row.kind === 'string' && typeof row.status === 'string' &&
+    (row.configuration_id === null || typeof row.configuration_id === 'string') && readingObject(row.reading));
+  const reading = row.reading;
+  requireReading(reading.package_id === null || typeof reading.package_id === 'string');
+  for (const values of [reading.events, reading.bindings, reading.verifications, reading.manifests]) {
+    requireReading(Array.isArray(values) && values.every(readingObject));
+  }
+  requireReading(new Set(reading.events.map((event) => event.id)).size === reading.events.length &&
+    new Set(reading.manifests.map((manifest) => manifest.id)).size === reading.manifests.length &&
+    new Set(reading.bindings.map((binding) => binding.decision_id)).size === reading.bindings.length &&
+    new Set(reading.verifications.map((receipt) => receipt.event_id)).size === reading.verifications.length);
+  for (const binding of reading.bindings) {
+    requireReading(typeof binding.id === 'string' && binding.fulfilment_id === row.id &&
+      typeof binding.decision_id === 'string' && typeof binding.bound_by === 'string' &&
+      typeof binding.bound_at === 'string' && readingStrings(binding.units) && binding.units.length > 0 &&
+      binding.units.every((unit) => row.units.includes(unit)) &&
+      (binding.covers_plan_issue_id === null || typeof binding.covers_plan_issue_id === 'string') &&
+      (binding.covers_configuration_snapshot_hash === null || typeof binding.covers_configuration_snapshot_hash === 'string'));
+  }
+  for (const receipt of reading.verifications) {
+    requireReading(typeof receipt.event_id === 'string' && receipt.fulfilment_id === row.id &&
+      typeof receipt.verified_by === 'string' && reading.events.some((event) => event.id === receipt.event_id));
+  }
+  for (const manifest of reading.manifests) {
+    validateReadingManifest(manifest, row);
+    requireReading(reading.events.some((event) => event.manifest_id === manifest.id));
+  }
+  let priorSequence = 0;
+  const verificationSequences = new Set<number>();
+  const releasedHolds = new Set<string>();
+  for (const event of reading.events) {
+    validateReadingEvent(event, row);
+    requireReading(event.event_seq > priorSequence);
+    priorSequence = event.event_seq;
+    if (event.verification_seq !== null) {
+      requireReading(!verificationSequences.has(event.verification_seq));
+      verificationSequences.add(event.verification_seq);
+    }
+    if (event.releases_event_id !== null) {
+      requireReading(!releasedHolds.has(event.releases_event_id));
+      releasedHolds.add(event.releases_event_id);
+    }
+  }
+}
+
+/** Separate validation/cache identity; both queries receive the same additive RPC rows. */
+export function useExternalFulfilmentReadings(projectId: string | null | undefined) {
+  const query = useQuery({
+    queryKey: [...externalFulfilmentKeys.project(projectId), 'readings'] as const,
+    enabled: !!projectId,
+    retry: false,
+    queryFn: async () => {
+      if (!projectId) throw new Error('A project is required.');
+      const { data, error } = await createBrowserClient().rpc('get_project_external_fulfilments', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      const rows = parseFulfilments(data, projectId) as ExternalFulfilmentReading[];
+      requireReading(new Set(rows.map((row) => row.id)).size === rows.length);
+      rows.forEach(validatePackageReading);
+      return rows;
     },
   });
   return { ...query, capability: externalFulfilmentCapability };
