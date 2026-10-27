@@ -256,6 +256,34 @@ The four C4 tables are C6 *contributing* tables (C6 §2.5, F7): a write to any o
   - Read RPCs stay granted, so recorded evidence remains visible on every surface.
   - Open requests remain `sent` and cannot be answered. The consumer shows "responses are paused", never an error that looks like data loss.
 
+**Activation grant plan (appended 2026-10-27, SQ-2202 / WP-10A; 00886 shipped inactive).** This is a plan, not a migration. Nothing below runs until a separate, reviewed activation migration is approved.
+
+- **Preconditions:**
+  - K3, K4 and K5 are recorded (DECISIONS.md, 2026-10-27).
+  - WP-10C ships the renderer and registry entry for the outbound kind `service_acceptance_request` in `supabase/functions/_shared/outbound-kinds`. Until then a created request can never be sent.
+  - WP-10C ships the client-portal and iOS consumers, whose sign-off follows activation (above).
+  - 00886 has no C6 interlock. WP-10B adds the contributing-table trigger on the four C4 tables (§2.3), and the activation review records whether activation waits for it.
+  - `scope_editions` stays the runtime pause switch. Every mutation re-checks it at entry.
+- **The activation migration grants exactly these six functions to `authenticated`, with signatures as in 00886:**
+
+```sql
+-- GRANT EXECUTE ON FUNCTION public.create_service_acceptance_request(uuid,uuid,uuid,text) TO authenticated;
+-- GRANT EXECUTE ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) TO authenticated;
+-- GRANT EXECUTE ON FUNCTION public.record_service_acceptance_paper_intake(uuid,uuid,uuid,date,text,text,jsonb,text,integer,text,text,integer,text) TO authenticated;
+-- GRANT EXECUTE ON FUNCTION public.review_service_acceptance_paper_intake(uuid,text,text,text,text) TO authenticated;
+-- GRANT EXECUTE ON FUNCTION public.replace_service_acceptance_signer(uuid,uuid,uuid,uuid,integer,text,text) TO authenticated;
+-- GRANT EXECUTE ON FUNCTION public.withdraw_service_acceptance_request(uuid,text,text) TO authenticated;
+```
+
+- **It never grants:**
+  - anything to `PUBLIC`, `anon` or `service_role`;
+  - any table privilege on the four C4 tables (reads stay the two definer RPCs);
+  - any internal helper, guard or trigger function (`_service_acceptance_*`, `_lock_service_acceptance_request`, `_derive_service_acceptance_outcome`, `_supersede_service_acceptance_request(s)`, `_lapse_service_acceptance_intakes`, `_validate_service_acceptance_signers`, `_guard_*service_acceptance*`).
+- **Storage:** the paper bucket's policies already exist in 00886. They let a studio composer upload a PDF under `<projectId>/<objectId>.pdf`. Recording it as evidence still needs the activated intake RPC.
+- **In the same change:** regenerate `supabase/seed/00-legacy-grants.sql`. `database.types.ts` does not change, because grants are not typed.
+- **Gate:** a SQL suite asserting `has_function_privilege` is true for `authenticated` on the six functions and false for `anon` and `service_role`. Every helper stays false for all three, and `PUBLIC` holds no EXECUTE. The 00886 oracle (`supabase/tests/round8/service_acceptance_*`) still passes.
+- **Deactivation** is the inverse: `REVOKE EXECUTE … FROM authenticated` on the same six functions. Reads stay granted.
+
 ### 2.9 Audit
 
 - Every row carries its actor and time.

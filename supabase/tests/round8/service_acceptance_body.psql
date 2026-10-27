@@ -1,5 +1,7 @@
 -- C4 service acceptance (00886) real PostgreSQL oracle. The enclosing runner
 -- owns BEGIN/ROLLBACK, so every test-only grant and capability change rolls back.
+-- The "shared" sections are reused by service_acceptance_concurrency.test.mjs.
+-- BEGIN shared assertion helpers
 CREATE FUNCTION pg_temp.assert_true(ok boolean, name text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',name; END IF;
@@ -27,6 +29,7 @@ BEGIN
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assert_true(boolean,text),pg_temp.expect_error(text,text,text,text),
   pg_temp.actor(integer),pg_temp.uid(integer) TO authenticated;
+-- END shared assertion helpers
 
 -- Shipped inactive: no mutation or helper is executable by PUBLIC, anon,
 -- authenticated or service_role; only the two reads reach authenticated.
@@ -94,6 +97,7 @@ END $$;
 
 -- Fixture: studio A (1 owner, 2 member, 3 admin), studio B (4 owner), client 5,
 -- household partner 6 (with a profile), outsider 7; two profile-less cards.
+-- BEGIN shared fixture
 SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f8860000-%'),'fixture starts absent');
 SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
@@ -126,7 +130,9 @@ INSERT INTO public.designer_clients(id,designer_id,client_id,client_name,client_
  'service-acceptance-5@test.invalid','active','direct','f8867000-0000-4000-8000-000000000001');
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.actor(1);
+-- END shared fixture
 
+-- BEGIN shared native helpers
 CREATE FUNCTION pg_temp.policy() RETURNS jsonb LANGUAGE sql AS $$
  SELECT jsonb_build_object('kind','acceptance_signer_policy','partKey','scope.signers','title','Signers','payload',
   jsonb_build_object('policyRevision',1,'signers',jsonb_build_array(
@@ -231,9 +237,11 @@ BEGIN
   PERFORM set_config('request.jwt.claims',CASE WHEN COALESCE(caller,'')='' THEN '' ELSE
     jsonb_build_object('sub',caller,'role','authenticated')::text END,true);
 END $$;
+-- END shared native helpers
 
 -- Origin edition with the two-required-signer policy (local activation rolls back).
 UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+-- BEGIN shared origin
 SELECT pg_temp.draft('f8863000-0000-4000-8000-000000000001');
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.send_and_sign('f8863000-0000-4000-8000-000000000001');
@@ -248,7 +256,10 @@ INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,m
 ('f8868000-0000-4000-8000-000000000002',pg_temp.project(),NULL,'service_acceptance','[{"m":2}]',repeat('b',64),repeat('2',64),'sa-2',pg_temp.uid(1)),
 ('f8868000-0000-4000-8000-000000000003',pg_temp.project(),'f8868100-0000-4000-8000-000000000001','fabrication_instruction',
  '[{"m":3}]',repeat('c',64),repeat('3',64),'sa-3',pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+-- END shared origin
 -- X08 fixture: one native approval artifact on the same project.
+SET LOCAL session_replication_role=replica;
 INSERT INTO public.client_decisions(id,designer_client_id,title,designer_id,project_id,approval_contract,decision_type,decision_kind,coordination_kind,court,phase_id,blocking_status,blocks_kind) VALUES
 ('f886a000-0000-4000-8000-000000000001','f8862000-0000-4000-8000-000000000001','Approve plan',pg_temp.uid(1),pg_temp.project(),'project_artifact_v1','approval','approval','signoff','client','f886a200-0000-4000-8000-000000000001','blocks_phase','phase');
 INSERT INTO public.project_decision_authority_snapshots(decision_id,project_id,decision_lead_id,authority_revision,assigned_by)
