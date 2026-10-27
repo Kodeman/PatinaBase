@@ -3,14 +3,31 @@
 // scope_editions=true, outbound workers stopped. No migration/grant is installed.
 // Paused executions flip the setting only within their transaction, restoring
 // true before COMMIT; no committed capability setting is changed.
+// Transport (shared with SQ-2170): ROUND8_PSQL_TRANSPORT=docker-exec and
+// ROUND8_OWNED_CONTAINER=<64-hex id> are required; there is no fallback to the
+// shared local Supabase stack. Each session is one `docker exec -i` psql child that
+// reads a private 0600 pgpass file at /tmp/round8-owned.pgpass inside the container
+// and connects to the round8_clone database (schema-only restore, no env override).
 // Run: node --test --test-concurrency=1 supabase/tests/round8/scope_reconciliation_concurrency.test.mjs
+// Negative control: add SCOPE_RECONCILIATION_NEGATIVE_CONTROL=inverted. Only the
+// new retry schedule calls a session-local scratch function; public SQL is untouched.
+// It must assertion-fail with 40P01/55P03, never count a setup failure as the control:
+// a missing copy, a missing project-tuple wait, or any other contention error fails
+// with an INVALID-CONTROL message instead of the contention assertion.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
-const url = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+// Fail closed before any child is spawned.
+assert.equal(process.env.ROUND8_PSQL_TRANSPORT, 'docker-exec', 'ROUND8_PSQL_TRANSPORT=docker-exec is required');
+assert.match(process.env.ROUND8_OWNED_CONTAINER ?? '', /^[0-9a-f]{64}$/, 'ROUND8_OWNED_CONTAINER must be an exact 64-hex container id');
+// The docker CLI does not forward host env, so the session timeouts travel with -e.
+const psqlArgv = ['exec', '-i', '-u', 'postgres', '-e', 'PGPASSFILE=/tmp/round8-owned.pgpass',
+  '-e', 'PGCONNECT_TIMEOUT=3', '-e', 'PGOPTIONS=-c statement_timeout=15000 -c lock_timeout=10000',
+  process.env.ROUND8_OWNED_CONTAINER, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', 'round8_clone',
+  '-XAtq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'];
 const actor = 'f87b0000-0000-4000-8000-000000000001';
 const literal = value => "'" + String(value).replaceAll("'", "''") + "'";
 const body = readFileSync(new URL('./scope_reconciliation_body.psql', import.meta.url), 'utf8').replaceAll('f870', 'f87b');
@@ -22,6 +39,27 @@ function section(name) {
   return body.split(start)[1].split(end)[0];
 }
 
+function invertedReconciliation(definition) {
+  const name = 'CREATE OR REPLACE FUNCTION public.reconcile_scope_edition(';
+  const projectLock = 'PERFORM 1 FROM public.projects WHERE id=p_project_id FOR UPDATE;';
+  const proposalLock = `PERFORM 1 FROM public.proposals p WHERE p.id IN (
+   SELECT d.proposal_id FROM public.project_commercial_documents d WHERE d.id=ANY(documents))
+   ORDER BY p.id FOR UPDATE;`;
+  const documentSet = `SELECT array_agg((d->>'id')::uuid ORDER BY d->>'id') INTO documents
+  FROM jsonb_array_elements(before_lock->'documents') d;`;
+  for (const anchor of [name, projectLock, proposalLock, documentSet]) {
+    assert.equal(definition.split(anchor).length, 2, 'negative-control source anchor must be unique: ' + anchor);
+  }
+  assert.ok(definition.indexOf(projectLock) < definition.indexOf(proposalLock),
+    'negative-control source must start with canonical project→proposal locks');
+  // Copy the installed native body, changing only its name and lock placement.
+  // The receipt/snapshot checks remain; this schedule always uses a fresh request.
+  // pg_get_functiondef has no terminator; without one psql only buffers the CREATE.
+  return definition.replace(name, 'CREATE OR REPLACE FUNCTION pg_temp.scope_reconciliation_inverted(')
+    .replace(proposalLock, '')
+    .replace(projectLock, `${documentSet}\n ${proposalLock}\n ${projectLock}`) + ';';
+}
+
 // Each process owns one backend. ON_ERROR_STOP makes an expected SQL refusal
 // terminal for that client; finally closes/awaits every process before cleanup.
 class Session {
@@ -29,10 +67,7 @@ class Session {
     this.buffer = '';
     this.errors = '';
     this.pending = null;
-    this.child = spawn('psql', [url, '-XAtq', '-v', 'ON_ERROR_STOP=1'], {
-      stdio: ['pipe', 'pipe', 'pipe'], detached: true,
-      env: { ...process.env, PGCONNECT_TIMEOUT: '3', PGOPTIONS: '-c statement_timeout=15000 -c lock_timeout=10000' },
-    });
+    this.child = spawn('docker', psqlArgv, { stdio: ['pipe', 'pipe', 'pipe'], detached: true });
     this.exited = new Promise(resolve => {
       this.child.once('error', error => { this.pending?.reject(error); resolve(); });
       this.child.once('exit', (code, signal) => {
@@ -124,6 +159,8 @@ COMMIT;`;
 
 test('reconciliation follows execution locks and refuses moved sets with atomic receipts', { timeout: 180000 }, async () => {
   assert.equal(process.env.SCOPE_RECONCILIATION_DB_WINDOW, 'owned', 'orchestrator-owned committed DB window required');
+  const negativeControl = process.env.SCOPE_RECONCILIATION_NEGATIVE_CONTROL;
+  assert.ok(negativeControl === undefined || negativeControl === 'inverted', 'only the explicit inverted negative control is supported');
   const sessions = new Set();
   const open = () => { const s = new Session(); sessions.add(s); return s; };
   const a = open();
@@ -176,13 +213,82 @@ test('reconciliation follows execution locks and refuses moved sets with atomic 
     const aPid = Number(await a.query('SELECT pg_backend_pid();'));
     const bPid = Number(await b.query('SELECT pg_backend_pid();'));
     async function waitForProjectLock() {
-      await a.query(`DO $wait$ DECLARE deadline timestamptz:=clock_timestamp()+interval '5s'; BEGIN
-        WHILE NOT ${aPid}=ANY(pg_blocking_pids(${bPid})) LOOP
-          IF clock_timestamp()>deadline THEN RAISE EXCEPTION 'ASSERTION FAILED: reconciliation did not wait on project'; END IF;
+      // A row wait is normally an ungranted transactionid lock, while B's
+      // heavyweight tuple lock is already granted. Bind both to this project
+      // and A's actual transaction; an unrelated pg_blocking_pids hit is not proof.
+      const wait = `SELECT tuple_lock.relation::regclass::text AS relation,
+        tuple_lock.page, tuple_lock.tuple, blocked.transactionid::text AS transaction_id,
+        blocked.pid AS waiter_pid, holder.pid AS blocker_pid
+        FROM pg_locks tuple_lock
+        JOIN pg_locks blocked ON blocked.pid=tuple_lock.pid
+          AND blocked.locktype='transactionid' AND blocked.mode='ShareLock' AND NOT blocked.granted
+        JOIN pg_locks holder ON holder.locktype=blocked.locktype AND holder.transactionid=blocked.transactionid
+          AND holder.mode='ExclusiveLock' AND holder.granted AND holder.pid=${aPid}
+        JOIN public.projects project ON project.id=${literal(job)}
+          AND project.ctid=('(' || tuple_lock.page::text || ',' || tuple_lock.tuple::text || ')')::tid
+        WHERE tuple_lock.pid=${bPid} AND tuple_lock.locktype='tuple'
+          AND tuple_lock.relation='public.projects'::regclass
+          AND tuple_lock.database=(SELECT oid FROM pg_database WHERE datname=current_database())
+          AND ${aPid}=ANY(pg_blocking_pids(${bPid}))`;
+      const evidence = JSON.parse(await a.query(`DO $wait$ DECLARE deadline timestamptz:=clock_timestamp()+interval '5s'; BEGIN
+        WHILE NOT EXISTS(${wait}) LOOP
+          IF clock_timestamp()>deadline THEN RAISE EXCEPTION 'ASSERTION FAILED: reconciliation did not wait on the owned project tuple and transaction'; END IF;
           PERFORM pg_sleep(0.02);
         END LOOP;
-      END $wait$;`);
+      END $wait$;
+      SELECT row_to_json(proven_wait) FROM (${wait}) proven_wait;`));
+      assert.equal(evidence.blocker_pid, aPid, 'project tuple wait is blocked by session A');
+      assert.equal(evidence.waiter_pid, bPid, 'project tuple wait belongs to reconciliation session B');
+      console.info('project-row wait proved', evidence);
     }
+    let retryReconcile = reconcile(documents[2], randomUUID());
+    if (negativeControl === 'inverted') {
+      const definition = await b.query("SELECT pg_get_functiondef('public.reconcile_scope_edition(uuid,uuid,uuid)'::regprocedure);");
+      await b.query(invertedReconciliation(definition));
+      assert.equal(await b.query("SELECT to_regprocedure('pg_temp.scope_reconciliation_inverted(uuid,uuid,uuid)') IS NOT NULL;"), 't',
+        'INVALID-CONTROL (setup): session B must hold the installed pg_temp.scope_reconciliation_inverted copy');
+      retryReconcile = retryReconcile.replace('public.reconcile_scope_edition(', 'pg_temp.scope_reconciliation_inverted(');
+      console.info('negative control: session-local proposal→project reconciliation copy');
+    }
+    // Unlike the moved-set schedule, retry an already-executed proposal IN B's
+    // snapshot. Inverted reconciliation holds that proposal while waiting for
+    // A's project, so A's native project→proposal retry closes the deadlock cycle.
+    assert.equal(await a.query(`SELECT EXISTS(SELECT 1 FROM
+      jsonb_array_elements(public._scope_reconciliation_snapshot(${literal(job)})->'documents') d
+      WHERE d->>'id'=${literal(documents[2])} AND d->>'proposalId'=${literal(proposals[2])}) AND
+      (SELECT commercial_state='executed' FROM public.proposals WHERE id=${literal(proposals[2])});`),
+    't', 'native retry proposal is already executed and belongs to the reconciliation snapshot');
+    await a.query(`BEGIN; SELECT 1 FROM public.projects WHERE id=${literal(job)} FOR UPDATE;`);
+    const ordered = b.query('BEGIN; ' + retryReconcile + ' ROLLBACK;').then(value => ({ value }), error => ({ error }));
+    try {
+      await waitForProjectLock();
+    } catch (error) {
+      // The inverted copy still takes the project lock, only later; no wait means it never ran.
+      if (negativeControl === 'inverted') throw new Error('INVALID-CONTROL (setup): inverted reconciliation never waited on the owned project tuple: ' + error.message);
+      throw error;
+    }
+    const retried = await a.query(`SELECT public.countersign_design_services_agreement(${literal(proposals[2])},'Execution Designer'); COMMIT;`)
+      .then(value => ({ value }), error => ({ error }));
+    const orderedOutcome = await ordered;
+    const contention = [retried.error?.message, orderedOutcome.error?.message].filter(Boolean).join('\n');
+    // Under inversion only a deadlock or lock timeout is a detection; a timeout kill or other error is not.
+    if (negativeControl === 'inverted' && contention && !/\b(40P01|55P03)\b/.test(contention)) {
+      throw new Error('INVALID-CONTROL: inverted contention failed without 40P01/55P03: ' + contention);
+    }
+    assert.equal(contention, '',
+      'project→proposal contention: native executed-proposal retry and reconciliation both complete without deadlock or lock timeout');
+    const retriedResult = JSON.parse(retried.value);
+    assert.equal(retriedResult.newlyExecuted, false, 'contending native countersign is an execution retry, not an appended execution');
+    assert.equal(retriedResult.proposalId, proposals[2], 'native retry used the proposal in reconciliation snapshot');
+    assert.equal(retriedResult.projectId, job, 'native retry used the project owned by session A');
+    const orderedResult = JSON.parse(orderedOutcome.value);
+    assert.equal(orderedResult.commercialDocumentId, documents[2], 'contending reconciliation reaches the current executed document');
+    assert.equal(orderedResult.editionIds.length, 2, 'contending reconciliation composes both recorded successors');
+    assert.equal(await a.query(`SELECT
+      (SELECT count(*)=1 AND bool_and(status='stale') FROM public.project_scope_editions WHERE project_id=${literal(job)}) AND
+      NOT EXISTS(SELECT 1 FROM public.project_scope_reconciliations WHERE project_id=${literal(job)}) AND
+      (SELECT count(*)=3 FROM public.project_commercial_execution_order WHERE project_id=${literal(job)});`),
+    't', 'rolled-back contention proof preserves existing moved-set and receipt fixtures');
     // B snapshots the old set while A owns the project. A then appends a real
     // execution before releasing it. B must refuse instead of omitting it.
     await a.query(`BEGIN; SELECT 1 FROM public.projects WHERE id=${literal(job)} FOR UPDATE;`);
