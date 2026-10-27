@@ -19,6 +19,12 @@ jest.mock("@patina/supabase", () => ({
   useScanContextCaptures: jest.fn(),
   useRoomConceptRenderRecord: jest.fn(),
   usePlanRoom: jest.fn(),
+  usePlanRoomComposition: () => ({
+    data: { sheetRooms: [], sheetPackages: [], packages: [] },
+    isPending: false,
+    isError: false,
+    refetch: jest.fn(),
+  }),
   useRoomScanCovers: jest.fn(),
 }));
 jest.mock("@/components/feedback/inline-error-surface", () => ({

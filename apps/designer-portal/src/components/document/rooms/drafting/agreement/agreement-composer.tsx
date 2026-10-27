@@ -49,6 +49,7 @@ import { useAttachDocumentClient } from "@/hooks/use-attach-client";
 import { useAuth } from "@/hooks/use-auth";
 import { useClients } from "@/hooks/use-clients";
 import { useFeatureFlag } from "@/hooks/use-feature-flag";
+import { usePaperRenderer } from "@/hooks/use-paper-renderer";
 import { documentEvents } from "@/lib/analytics/document-events";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 import type { CommercialDocument } from "@/lib/document/commercial-documents";
@@ -142,6 +143,14 @@ function refusalMessage(error: unknown, fallback: string): string {
 
 /** `patina.role_rates` → `patina-role-rates`, so a part's four ids are stable
  *  across a save that re-mints every uuid (N-8/FS-26). */
+/**
+ * Round-8 presentation (SQ-2201 F2): the arrangement choices show only under
+ * the settled round-8 renderer. Legacy and an unsettled renderer show nothing.
+ */
+function Round8ScopeArrangementChoices() {
+  return usePaperRenderer().renderer === "round8" ? <ScopeArrangementChoices /> : null;
+}
+
 function idsFor(partKey: string): GalleyPartIds {
   const slug = partKey.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
   return {
@@ -1645,7 +1654,7 @@ export function AgreementComposer({
             </p>
           </header>
 
-          {libraryOn && <ScopeArrangementChoices />}
+          {libraryOn && <Round8ScopeArrangementChoices />}
           <PartOutline
             parts={rows}
             openKey={openKey}

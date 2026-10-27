@@ -136,9 +136,6 @@ export interface PlanSheetPackage {
 }
 
 export interface PlanRoomBundle {
-  sheetRooms: PlanSheetRoom[];
-  sheetPackages: PlanSheetPackage[];
-  packages: ProjectPackage[];
   sheets: PlanSheet[];
   prints: PlanPrint[];
   batches: PlanPrintBatch[];
@@ -146,6 +143,13 @@ export interface PlanRoomBundle {
   issuePrints: PlanIssuePrint[];
   transmittals: PlanTransmittal[];
   tokens: PlanTransmittalTokenSafe[];
+}
+
+/** Round-8 drawing composition (00871), read apart from the native bundle. */
+export interface PlanRoomComposition {
+  sheetRooms: PlanSheetRoom[];
+  sheetPackages: PlanSheetPackage[];
+  packages: ProjectPackage[];
 }
 
 export interface FilePlanPrintsResult {
@@ -281,6 +285,9 @@ export interface ClientPlanSheet {
 export const planRoomKeys = {
   all: ["plan-room"] as const,
   room: (projectId: string) => ["plan-room", "room", projectId] as const,
+  // Nested under room, so every existing room invalidation refreshes it too.
+  composition: (projectId: string) =>
+    ["plan-room", "room", projectId, "composition"] as const,
   holdings: (projectId: string) =>
     ["plan-room", "holdings", projectId] as const,
   issuePreview: (projectId: string, sheetIds: string[] | null) =>
@@ -341,9 +348,6 @@ export function usePlanRoom(projectId: string) {
         issuePrintsResult,
         transmittalsResult,
         tokensResult,
-        sheetRooms,
-        sheetPackages,
-        packages,
       ] = await Promise.all([
         // plan_prints / plan_issue_prints carry no project_id; scope through
         // their parents, with the zero-uuid sentinel keeping an empty IN valid.
@@ -380,20 +384,6 @@ export function usePlanRoom(projectId: string) {
             "id, transmittal_id, project_id, status, expires_at, first_opened_at, view_count, last_used_at, created_at",
           )
           .eq("project_id", projectId),
-        readCompositionPages<PlanSheetRoom>(
-          supabase.from("plan_sheet_rooms").select("*").in("sheet_id",
-            sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"])
-            .order("sheet_id", { ascending: true }).order("project_room_id", { ascending: true }),
-        ),
-        readCompositionPages<PlanSheetPackage>(
-          supabase.from("plan_sheet_packages").select("*").in("sheet_id",
-            sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"])
-            .order("sheet_id", { ascending: true }).order("package_id", { ascending: true }),
-        ),
-        readCompositionPages<ProjectPackage>(
-          supabase.from("project_packages").select("*").eq("project_id", projectId)
-            .order("id", { ascending: true }),
-        ),
       ]);
       const firstError = [
         printsResult,
@@ -405,9 +395,6 @@ export function usePlanRoom(projectId: string) {
       if (firstError) throw firstError;
 
       return {
-        sheetRooms,
-        sheetPackages,
-        packages,
         sheets,
         prints: asArray<PlanPrint>(printsResult.data),
         batches: asArray<PlanPrintBatch>(batchesResult.data),
@@ -416,6 +403,47 @@ export function usePlanRoom(projectId: string) {
         transmittals: asArray<PlanTransmittal>(transmittalsResult.data),
         tokens: asArray<PlanTransmittalTokenSafe>(tokensResult.data),
       };
+    },
+  });
+}
+
+/**
+ * Round-8 composition links as their own query, so the native bundle never
+ * reads or fails on them. Only round-8 consumers enable it.
+ */
+export function usePlanRoomComposition(
+  projectId: string,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery<PlanRoomComposition>({
+    queryKey: planRoomKeys.composition(projectId),
+    enabled: Boolean(projectId) && options.enabled !== false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const supabase = getSupabase();
+      const sheetsResult = await supabase
+        .from("plan_sheets")
+        .select("id")
+        .eq("project_id", projectId);
+      if (sheetsResult.error) throw sheetsResult.error;
+      const sheetIds = asArray<{ id: string }>(sheetsResult.data).map((sheet) => sheet.id);
+      const inSheets =
+        sheetIds.length > 0 ? sheetIds : ["00000000-0000-0000-0000-000000000000"];
+      const [sheetRooms, sheetPackages, packages] = await Promise.all([
+        readCompositionPages<PlanSheetRoom>(
+          supabase.from("plan_sheet_rooms").select("*").in("sheet_id", inSheets)
+            .order("sheet_id", { ascending: true }).order("project_room_id", { ascending: true }),
+        ),
+        readCompositionPages<PlanSheetPackage>(
+          supabase.from("plan_sheet_packages").select("*").in("sheet_id", inSheets)
+            .order("sheet_id", { ascending: true }).order("package_id", { ascending: true }),
+        ),
+        readCompositionPages<ProjectPackage>(
+          supabase.from("project_packages").select("*").eq("project_id", projectId)
+            .order("id", { ascending: true }),
+        ),
+      ]);
+      return { sheetRooms, sheetPackages, packages };
     },
   });
 }

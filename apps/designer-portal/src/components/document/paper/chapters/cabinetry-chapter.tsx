@@ -4,6 +4,7 @@ import {
   useCoordinationItems,
   useExternalFulfilmentReadings,
   usePlanRoom,
+  usePlanRoomComposition,
   useProjectRooms,
   useProjectRoster,
 } from "@patina/supabase";
@@ -21,7 +22,13 @@ export interface CabinetryChapterProps {
  */
 export function CabinetryChapter({ projectId }: CabinetryChapterProps) {
   const readings = useExternalFulfilmentReadings(projectId);
-  const plans = usePlanRoom(projectId);
+  const native = usePlanRoom(projectId);
+  const composition = usePlanRoomComposition(projectId);
+  // Package reading joins the native bundle with its composition; either failing reads as unread.
+  const plans = {
+    data: native.data && composition.data ? { ...native.data, packages: composition.data.packages } : undefined,
+    isError: native.isError || composition.isError,
+  };
   const roster = useProjectRoster(projectId);
   const decisions = useCoordinationItems(projectId);
   const rooms = useProjectRooms(projectId);

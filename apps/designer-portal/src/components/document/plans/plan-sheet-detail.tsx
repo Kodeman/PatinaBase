@@ -13,7 +13,12 @@
  */
 
 import { useRef, useState } from 'react';
-import { useSetPlanSheetState, type Database, type PlanRoomBundle } from '@patina/supabase';
+import {
+  useSetPlanSheetState,
+  type Database,
+  type PlanRoomBundle,
+  type PlanRoomComposition,
+} from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 import { planRoomEvents } from '@/lib/analytics/plan-room-events';
 import { DocumentAction, DocumentActionGroup, DocumentActionRow } from '../document-action';
@@ -28,6 +33,8 @@ export interface PlanSheetDetailProps {
   bundle: PlanRoomBundle;
   sheetId: string;
   rooms?: Pick<Database['public']['Tables']['project_rooms']['Row'], 'id' | 'name'>[];
+  /** Round-8 only; absent under the legacy renderer, which shows no composition. */
+  composition?: PlanRoomComposition;
   onBack: () => void;
   onIssue: () => void;
 }
@@ -37,6 +44,7 @@ export function PlanSheetDetail({
   bundle,
   sheetId,
   rooms,
+  composition,
   onBack,
   onIssue,
 }: PlanSheetDetailProps) {
@@ -129,7 +137,9 @@ export function PlanSheetDetail({
           {currentPrint ? ` · current since ${fmtDay(currentPrint.created_at)}` : ''}
         </p>
 
-        <PlanSheetComposition bundle={bundle} sheetId={sheet.id} rooms={rooms} />
+        {composition && (
+          <PlanSheetComposition composition={composition} sheetId={sheet.id} rooms={rooms} />
+        )}
         <DocumentActionGroup
           surfaceKey="plan-room"
           regionKey="sheet-actions"

@@ -9,6 +9,7 @@ import {
   useScanContextCaptures,
   useRoomConceptRenderRecord,
   usePlanRoom,
+  usePlanRoomComposition,
   useRoomScanCovers,
   type Database,
   type RoomScan,
@@ -232,6 +233,7 @@ function ProjectPrints({
   rooms: ProjectRoom[];
 }) {
   const plans = usePlanRoom(projectId);
+  const composition = usePlanRoomComposition(projectId);
   return (
     <section
       aria-label="Project drawings"
@@ -242,7 +244,8 @@ function ProjectPrints({
         Room and package links use exact saved identities. Names do not assign drawings.
       </p>
       <ReadNotice label="Project drawings" query={plans} />
-      {!plans.isError && plans.data && (
+      <ReadNotice label="Drawing rooms and packages" query={composition} />
+      {!plans.isError && plans.data && !composition.isError && composition.data && (
         <>
           {plans.data.sheets.length === 0 ? (
             <p className="t-body-sm mt-3">No project drawings filed yet.</p>
@@ -254,7 +257,7 @@ function ProjectPrints({
                 { id: 'unavailable-room', name: 'Drawings with an unavailable room' },
               ].map((group) => {
                 const sheets = plans.data.sheets.filter((sheet) => {
-                  const links = (plans.data.sheetRooms ?? []).filter((link) => link.sheet_id === sheet.id);
+                  const links = composition.data.sheetRooms.filter((link) => link.sheet_id === sheet.id);
                   if (group.id === 'whole-job') return links.length === 0;
                   if (group.id === 'unavailable-room') return links.some((link) => !rooms.some((room) => room.id === link.project_room_id));
                   return links.some((link) => link.project_room_id === group.id);
@@ -276,7 +279,7 @@ function ProjectPrints({
                               {sheet.state === "shared" ? " · Client-shared current" : " · Studio only"}
                             </span>
                             {current && <PlanPrintProvenance print={current} projectId={projectId} />}
-                            <PlanSheetComposition bundle={plans.data} sheetId={sheet.id} rooms={rooms} />
+                            <PlanSheetComposition composition={composition.data} sheetId={sheet.id} rooms={rooms} />
                           </li>
                         );
                       })}

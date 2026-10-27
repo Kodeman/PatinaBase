@@ -17,6 +17,11 @@ jest.mock('@patina/supabase', () => ({
     error: null,
     refetch: jest.fn(),
   }),
+  usePlanRoomComposition: () => ({ data: undefined, isError: false }),
+}));
+
+jest.mock('@/hooks/use-paper-renderer', () => ({
+  usePaperRenderer: () => ({ renderer: 'legacy' }),
 }));
 
 jest.mock('@/hooks/use-document-state', () => ({

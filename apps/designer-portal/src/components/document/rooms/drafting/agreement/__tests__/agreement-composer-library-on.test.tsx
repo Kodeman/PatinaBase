@@ -128,6 +128,11 @@ jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: () => ({ value: true, isLoading: false }),
 }));
 
+let mockRenderer: "pending" | "legacy" | "round8" = "legacy";
+jest.mock("@/hooks/use-paper-renderer", () => ({
+  usePaperRenderer: () => ({ renderer: mockRenderer }),
+}));
+
 jest.mock("@patina/supabase", () => ({
   // Wave 3 reads these; the room never renders a turnkey surface with the
   // flag off, but the hooks still run, so the mock has to answer them.
@@ -318,6 +323,43 @@ beforeEach(() => {
   // whether this reader may edit that studio's Library.
   mockStudioContext.mockReturnValue({
     data: { studioId: "studio-1", canManage: true },
+  });
+});
+
+// SQ-2201 F2 — the Library flag alone never reaches the round-8 arrangements.
+describe("service arrangement choices follow the round-8 renderer", () => {
+  afterEach(() => {
+    mockRenderer = "legacy";
+  });
+
+  it.each(["legacy", "pending"] as const)(
+    "shows no arrangement choices under the %s renderer with the Library on",
+    (renderer) => {
+      mockRenderer = renderer;
+      renderRoom();
+      expect(
+        screen.queryByRole("heading", { name: "Service arrangements" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("radio", { name: "Cabinetry-focused commission" }),
+      ).not.toBeInTheDocument();
+      // The Library itself is unchanged.
+      openOutline();
+      expect(
+        screen.getByRole("button", { name: "Start from a template…" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("shows the arrangement choices under the round-8 renderer", () => {
+    mockRenderer = "round8";
+    renderRoom();
+    expect(
+      screen.getByRole("heading", { name: "Service arrangements" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: "Cabinetry-focused commission" }),
+    ).toBeDisabled();
   });
 });
 
