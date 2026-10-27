@@ -3,9 +3,11 @@ import {
   derivePurchaseGroups,
   purchaseRow,
   PurchaseLens,
+  type PurchaseContext,
   type PurchaseLensLine,
 } from "../purchase-lens";
 import { BuildRoomShell, type BuildRoomShellProps } from "../build-room-shell";
+import { buildInstrumentIndex } from "@/lib/document/authorization-derivation";
 import { emptyRoomCounts } from "@/lib/document/pieces/room-counts";
 import {
   REMOVED_PLACE,
@@ -19,10 +21,23 @@ const mockPurchases = {
   isPending: false,
   refetch: jest.fn(),
 };
+function settledRead(data: unknown) {
+  return { data, isPending: false, isError: false, refetch: jest.fn() };
+}
+const mockAuthority = settledRead(null);
+const mockAgreement = settledRead({ state: "missing", evidence: null });
+const mockInstruments = settledRead([]);
 
 jest.mock("@patina/supabase", () => ({
   useProjectFFEItems: () => mockLines,
   useStudioPurchases: () => mockPurchases,
+}));
+jest.mock("@/hooks/use-commercial-documents", () => ({
+  useProjectBillingAuthority: () => mockAuthority,
+  useProjectInstruments: () => mockInstruments,
+}));
+jest.mock("@/hooks/use-project-purchasing-agreement", () => ({
+  useProjectPurchasingAgreement: () => mockAgreement,
 }));
 jest.mock("@/hooks/use-document-rooms", () => ({
   useDocumentRooms: () => ({
@@ -50,6 +65,7 @@ function line(id: string, extra: Partial<PurchaseLensLine> = {}): PurchaseLensLi
     assignment_scope: "room",
     project_room_id: "living",
     quantity: 1,
+    vendor_id: "vendor-1",
     vendor_name: "Maker Co",
     item_type: "fixed",
     unit_price_cents: 120_000,
@@ -60,7 +76,12 @@ function line(id: string, extra: Partial<PurchaseLensLine> = {}): PurchaseLensLi
 }
 
 const READY = line("ready");
-const WAITING = line("waiting", { vendor_name: null, unit_price_cents: null, line_total_cents: null });
+const WAITING = line("waiting", {
+  vendor_id: null,
+  vendor_name: null,
+  unit_price_cents: null,
+  line_total_cents: null,
+});
 const ORDERED = line("ordered", {
   status: "ordered",
   ffe_line_authorization: "executed",
@@ -84,30 +105,107 @@ const ROOMS = [
 ];
 const ALL = [READY, WAITING, ORDERED, BOUGHT, EXTERNAL, LABOR, REMOVED, THROUGHOUT];
 
+// A job with no agreement behind it: authorization warns, never blocks.
+const STUDIO_JOB: PurchaseContext = { isCommercialOrigin: false, instruments: new Map() };
+// A job with an executed agreement behind it, holding no instrument yet.
+const COMMERCIAL_JOB: PurchaseContext = { isCommercialOrigin: true, instruments: new Map() };
+function authorizedOn(lineId: string, depositPaid: boolean): PurchaseContext {
+  return {
+    isCommercialOrigin: true,
+    instruments: buildInstrumentIndex([
+      {
+        state: "executed",
+        number: 2,
+        depositPaid,
+        items: [{ sourceFfeItemId: lineId, clientLineTotalCents: 120_000 }],
+      },
+    ] as Parameters<typeof buildInstrumentIndex>[0]),
+  };
+}
+
 describe("purchaseRow — where a line stands", () => {
   it("reads each standing from the line's own facts", () => {
-    expect(purchaseRow(READY).standing).toBe("ready");
-    expect(purchaseRow(WAITING).standing).toBe("waiting");
-    expect(purchaseRow(ORDERED).standing).toBe("ordered");
-    expect(purchaseRow(ORDERED).next).toEqual({ kind: "send" });
-    expect(purchaseRow(BOUGHT).standing).toBe("bought");
+    expect(purchaseRow(READY, STUDIO_JOB).standing).toBe("ready");
+    expect(purchaseRow(READY, STUDIO_JOB).next).toEqual({ kind: "order" });
+    expect(purchaseRow(READY, STUDIO_JOB).reasons).toEqual([]);
+    expect(purchaseRow(WAITING, STUDIO_JOB).standing).toBe("waiting");
+    expect(purchaseRow(ORDERED, STUDIO_JOB).standing).toBe("ordered");
+    expect(purchaseRow(ORDERED, STUDIO_JOB).next).toEqual({ kind: "send" });
+    expect(purchaseRow(BOUGHT, STUDIO_JOB).standing).toBe("bought");
   });
 
   it("external fulfilment is external responsibility with no next act, even when it looks ready", () => {
-    const external = purchaseRow({ ...EXTERNAL, unit_price_cents: 100 });
+    const external = purchaseRow({ ...EXTERNAL, unit_price_cents: 100 }, STUDIO_JOB);
     expect(external.standing).toBe("external");
     expect(external.next).toBeNull();
   });
 
   it("a cancelled order no longer counts as an order", () => {
-    const row = purchaseRow(line("c", { purchase_order: { status: "cancelled", sent_at: null } }));
+    const row = purchaseRow(
+      line("c", { purchase_order: { status: "cancelled", sent_at: null } }),
+      STUDIO_JOB,
+    );
     expect(row.standing).toBe("ready");
+  });
+});
+
+describe("purchaseRow — the one readiness rule, never the visual stage", () => {
+  const cases: [string, PurchaseLensLine, PurchaseContext, string][] = [
+    [
+      "a maker named but not linked",
+      line("maker", { vendor_id: null, vendor_name: "Maker Co" }),
+      STUDIO_JOB,
+      "Needs a maker",
+    ],
+    [
+      "a candidate not yet selected",
+      line("candidate", { design_disposition: "candidate" }),
+      STUDIO_JOB,
+      "Not selected yet",
+    ],
+    [
+      "a commercial job without the authorization",
+      line("unauthorized"),
+      COMMERCIAL_JOB,
+      "Waiting on the authorization",
+    ],
+    [
+      "a commercial job authorized with the deposit unpaid",
+      line("deposit"),
+      authorizedOn("deposit", false),
+      "Waiting on the deposit (A2)",
+    ],
+  ];
+
+  it.each(cases)("%s is not ready to order and says why", (_name, subject, context, reason) => {
+    const row = purchaseRow(subject, context);
+    expect(row.standing).toBe("waiting");
+    expect(row.next).toBeNull();
+    expect(row.reasons).toEqual([reason]);
+  });
+
+  it("a commercial job authorized with the deposit clear is ready", () => {
+    const row = purchaseRow(line("cleared"), authorizedOn("cleared", true));
+    expect(row.standing).toBe("ready");
+    expect(row.next).toEqual({ kind: "order" });
+  });
+
+  it("a blocked line never sits under Ready to order and shows its reason", () => {
+    mockLines.data = [line("maker", { vendor_id: null, vendor_name: "Maker Co" })];
+    render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    const row = document.querySelector('[data-purchase-row="maker"]') as HTMLElement;
+    expect(row).toHaveAttribute("data-purchase-standing", "waiting");
+    expect(within(row).getByText("Not ready to order")).toBeInTheDocument();
+    expect(within(row).getByText("Needs a maker")).toBeInTheDocument();
+    expect(within(row).queryByText(/Prepare a PO/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Show purchasing lines"), { target: { value: "ready" } });
+    expect(document.querySelector('[data-purchase-row="maker"]')).toBeNull();
   });
 });
 
 describe("derivePurchaseGroups", () => {
   it("groups pieces by room, then Throughout; drops labor and removed lines", () => {
-    const groups = derivePurchaseGroups(ALL, ROOMS, null, "all");
+    const groups = derivePurchaseGroups(ALL, ROOMS, null, "all", STUDIO_JOB);
     expect(groups.map((g) => g.name)).toEqual(["Living Room", "Kitchen", "Throughout"]);
     const ids = groups.flatMap((g) => g.rows.map((r) => r.line.id));
     expect(ids).not.toContain("labor");
@@ -117,13 +215,13 @@ describe("derivePurchaseGroups", () => {
 
   it("narrows to one place and one filter", () => {
     expect(
-      derivePurchaseGroups(ALL, ROOMS, THROUGHOUT_PLACE, "all").flatMap((g) => g.rows.map((r) => r.line.id)),
+      derivePurchaseGroups(ALL, ROOMS, THROUGHOUT_PLACE, "all", STUDIO_JOB).flatMap((g) => g.rows.map((r) => r.line.id)),
     ).toEqual(["throughout"]);
     expect(
-      derivePurchaseGroups(ALL, ROOMS, "living", "ordered").flatMap((g) => g.rows.map((r) => r.line.id)),
+      derivePurchaseGroups(ALL, ROOMS, "living", "ordered", STUDIO_JOB).flatMap((g) => g.rows.map((r) => r.line.id)),
     ).toEqual(["ordered", "bought"]);
     expect(
-      derivePurchaseGroups(ALL, ROOMS, null, "external").flatMap((g) => g.rows.map((r) => r.line.id)),
+      derivePurchaseGroups(ALL, ROOMS, null, "external", STUDIO_JOB).flatMap((g) => g.rows.map((r) => r.line.id)),
     ).toEqual(["external"]);
   });
 });
@@ -152,6 +250,9 @@ describe("PurchaseLens", () => {
     const external = table.querySelector('[data-purchase-row="external"]') as HTMLElement;
     expect(external).toHaveAttribute("data-purchase-standing", "external");
     expect(within(external).getByText("External responsibility")).toBeInTheDocument();
+    // C5 fulfilments start planned: the copy names whose it is, never that it is bought.
+    expect(within(external).getByText("Buying and payment sit outside the studio.")).toBeInTheDocument();
+    expect(within(external).queryByText(/bought|paid/i)).not.toBeInTheDocument();
     expect(within(external).getByText("Not priced by the studio")).toBeInTheDocument();
     expect(within(external).queryByText(/\$/)).not.toBeInTheDocument();
     expect(within(external).queryByText(/Prepare a PO/)).not.toBeInTheDocument();
@@ -206,6 +307,22 @@ describe("PurchaseLens", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("could not be read");
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(mockPurchases.refetch).toHaveBeenCalled();
+  });
+
+  it("an unread purchasing authority shows no line as ready, says so and retries", () => {
+    mockAuthority.isError = true;
+    try {
+      render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+      expect(document.querySelector("[data-purchase-row]")).toBeNull();
+      expect(screen.queryByText("Next: Prepare a PO")).not.toBeInTheDocument();
+      const alert = screen.getAllByRole("alert")[0];
+      expect(alert).toHaveTextContent("purchasing authority could not be read");
+      fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+      expect(mockAuthority.refetch).toHaveBeenCalled();
+      expect(mockInstruments.refetch).not.toHaveBeenCalled();
+    } finally {
+      mockAuthority.isError = false;
+    }
   });
 
   it("removed lines are not purchased", () => {

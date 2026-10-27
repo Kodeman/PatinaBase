@@ -24,7 +24,18 @@ import {
   type StudioPurchaseRow,
 } from "@patina/supabase";
 import { PurchaseRecordForm } from "@/components/document/purchases/purchase-record-form";
+import {
+  useProjectBillingAuthority,
+  useProjectInstruments,
+} from "@/hooks/use-commercial-documents";
 import { useDocumentRooms } from "@/hooks/use-document-rooms";
+import { useProjectPurchasingAgreement } from "@/hooks/use-project-purchasing-agreement";
+import {
+  buildInstrumentIndex,
+  deriveLineAuthorization,
+  deriveOrderReadiness,
+  type InstrumentIndex,
+} from "@/lib/document/authorization-derivation";
 import { fmtDay } from "@/lib/document/format";
 import {
   REMOVED_PLACE,
@@ -47,6 +58,8 @@ import { deriveNextAct, type NextAct } from "../line-unfold/next-act";
 /** A `useProjectFFEItems` row, as much of it as the Purchase lens reads. */
 export interface PurchaseLensLine extends ReleaseLensLine {
   external_fulfilment_id?: string | null;
+  removed_at?: string | null;
+  purchase_order_id?: string | null;
   studio_purchases?: { status: string }[] | null;
   purchase_order?:
     | (NonNullable<ReleaseLensLine["purchase_order"]> & {
@@ -78,6 +91,18 @@ export interface PurchaseRow {
   standing: PurchaseStanding;
   stageWord: string;
   next: NextAct | null;
+  /** Why a waiting line cannot be ordered: the canonical readiness reasons. */
+  reasons: readonly string[];
+}
+
+/**
+ * What the line's own purchasing gate reads besides the line (`FFESection` →
+ * `LineUnfold`): whether the job has an executed agreement behind it, and
+ * each line's authorization with its deposit.
+ */
+export interface PurchaseContext {
+  isCommercialOrigin: boolean;
+  instruments: InstrumentIndex;
 }
 
 export interface PurchaseGroup {
@@ -113,12 +138,18 @@ export function authorityWord(line: PurchaseLensLine): string {
   return AUTHORITY_WORD[line.ffe_line_authorization ?? ""] ?? "Not yet authorized";
 }
 
-/** Where one line stands on the way to being bought. */
-export function purchaseRow(line: PurchaseLensLine): PurchaseRow {
-  const stage = pieceLineStage(line);
-  const stageWord = lineStampLabel(stage.kind);
+/**
+ * Where one line stands on the way to being bought. The stage word is the
+ * visual stage; whether it can be ordered is the one readiness rule
+ * (`deriveOrderReadiness`), read exactly as the line's own gate reads it.
+ */
+export function purchaseRow(
+  line: PurchaseLensLine,
+  context: PurchaseContext,
+): PurchaseRow {
+  const stageWord = lineStampLabel(pieceLineStage(line).kind);
   if (line.external_fulfilment_id != null) {
-    return { line, standing: "external", stageWord, next: null };
+    return { line, standing: "external", stageWord, next: null, reasons: [] };
   }
   const po =
     line.purchase_order && line.purchase_order.status !== "cancelled"
@@ -127,13 +158,15 @@ export function purchaseRow(line: PurchaseLensLine): PurchaseRow {
   const purchase = (line.studio_purchases ?? []).find(
     (p) => p.status === "recorded" || p.status === "billed",
   );
-  const ready =
-    stage.lock === null && (stage.stage === "ready" || stage.stage === "released");
+  const readiness = deriveOrderReadiness(line, {
+    isCommercialOrigin: context.isCommercialOrigin,
+    lineAuth: deriveLineAuthorization(line, context.instruments),
+  });
   const next = deriveNextAct({
     itemStatus: line.status ?? "",
     po,
     purchase,
-    ready,
+    ready: readiness.ready,
     inspected: line.received_quantity != null,
     hasOpenClaim: (line.item_claims ?? []).some(
       (claim) => claim.state === "drafted" || claim.state === "vendor_notified",
@@ -146,7 +179,8 @@ export function purchaseRow(line: PurchaseLensLine): PurchaseRow {
       : next?.kind === "order"
         ? "ready"
         : "waiting";
-  return { line, standing, stageWord, next };
+  const reasons = standing === "waiting" ? readiness.reasons : [];
+  return { line, standing, stageWord, next, reasons };
 }
 
 function matches(filter: PurchaseFilter, standing: PurchaseStanding): boolean {
@@ -185,6 +219,7 @@ export function derivePurchaseGroups(
   rooms: readonly { id: string; name: string }[],
   place: BuildRoomPlace,
   filter: PurchaseFilter,
+  context: PurchaseContext,
 ): PurchaseGroup[] {
   const roomIds = new Set(rooms.map((r) => r.id));
   const wanted = placeKey(place);
@@ -193,7 +228,7 @@ export function derivePurchaseGroups(
     if (!countsAsPiece(line)) continue;
     const key = groupKey(line, roomIds);
     if (wanted != null && key !== wanted) continue;
-    const row = purchaseRow(line);
+    const row = purchaseRow(line, context);
     if (!matches(filter, row.standing)) continue;
     byKey.set(key, [...(byKey.get(key) ?? []), row]);
   }
@@ -237,15 +272,40 @@ export function PurchaseLens({
     () => (roomRows ?? []).map((r) => ({ id: r.id, name: r.name })),
     [roomRows],
   );
+  // The job's purchasing context, read the way the FF&E section reads it for
+  // the line's own gate: one project read each, shared with the paper.
+  const authority = useProjectBillingAuthority(projectId);
+  const agreement = useProjectPurchasingAgreement(projectId);
+  const instruments = useProjectInstruments(projectId);
+  const contextReads = [authority, agreement, instruments];
+  const contextFailed = contextReads.some((read) => read.isError);
+  const context = useMemo<PurchaseContext | null>(() => {
+    if (authority.isPending || agreement.isPending || instruments.isPending) return null;
+    return {
+      isCommercialOrigin:
+        Boolean(authority.data) || agreement.data?.state === "external_recorded",
+      instruments: buildInstrumentIndex(instruments.data),
+    };
+  }, [
+    authority.isPending,
+    authority.data,
+    agreement.isPending,
+    agreement.data,
+    instruments.isPending,
+    instruments.data,
+  ]);
   const groups = useMemo(
     () =>
-      derivePurchaseGroups(
-        (rawLines ?? []) as unknown as PurchaseLensLine[],
-        rooms,
-        room,
-        filter,
-      ),
-    [rawLines, rooms, room, filter],
+      context && !contextFailed
+        ? derivePurchaseGroups(
+            (rawLines ?? []) as unknown as PurchaseLensLine[],
+            rooms,
+            room,
+            filter,
+            context,
+          )
+        : [],
+    [rawLines, rooms, room, filter, context, contextFailed],
   );
 
   if (room === REMOVED_PLACE) {
@@ -302,9 +362,26 @@ export function PurchaseLens({
             <tbody>
               <tr>
                 <td colSpan={columns.length} className={CELL}>
-                  {rawLines
-                    ? "No lines match this view. Change the room or the purchasing filter."
-                    : "Reading the schedule…"}
+                  {contextFailed ? (
+                    <span role="alert">
+                      The job’s purchasing authority could not be read, so no line is shown as ready to order.{" "}
+                      <button
+                        type="button"
+                        className={ACT_CLS}
+                        onClick={() => {
+                          for (const read of contextReads) {
+                            if (read.isError) void read.refetch();
+                          }
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </span>
+                  ) : rawLines && context ? (
+                    "No lines match this view. Change the room or the purchasing filter."
+                  ) : (
+                    "Reading the schedule…"
+                  )}
                 </td>
               </tr>
             </tbody>
@@ -390,7 +467,7 @@ function OrderReading({ row }: { row: PurchaseRow }) {
     return (
       <>
         External responsibility
-        <span className={SUB}>Bought and paid outside the studio.</span>
+        <span className={SUB}>Buying and payment sit outside the studio.</span>
       </>
     );
   }
@@ -422,6 +499,7 @@ function OrderReading({ row }: { row: PurchaseRow }) {
   return (
     <>
       Not ready to order
+      {row.reasons.length > 0 && <span className={SUB}>{row.reasons.join(" · ")}</span>}
       {nextWord && <span className={SUB}>Next: {nextWord}</span>}
     </>
   );

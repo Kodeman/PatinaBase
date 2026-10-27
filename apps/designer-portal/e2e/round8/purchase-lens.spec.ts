@@ -49,12 +49,16 @@ test.describe('Purchase lens', () => {
     // Draft-first (V22): no send or order act lives on this lens.
     await expect(lens.getByRole('button', { name: /send|prepare|release/i })).toHaveCount(0);
 
-    // Lens changes stay on the unfold's address, and Back returns to Purchasing.
+    // A lens change re-addresses the unfold in place (replaceState,
+    // unfold-instrument.tsx `navigate`): no new history entry, so Back leaves
+    // the sheet rather than returning to Purchasing.
+    const depth = await page.evaluate(() => window.history.length);
     await lensBand(page).filter({ hasText: /^Pricing$/ }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get('lens')).toBe('price');
+    expect(await page.evaluate(() => window.history.length)).toBe(depth);
     await page.goBack();
-    await expect.poll(() => new URL(page.url()).searchParams.get('lens')).toBe('purchase');
-    await expect(sheet.getByTestId('purchase-lens')).toBeVisible();
+    await expect.poll(() => new URL(page.url()).searchParams.get('lens')).not.toBe('purchase');
+    await expect(page.getByTestId('purchase-lens')).toHaveCount(0);
   });
 
   test('legacy route: lens=purchase reads as the default lens, with no sixth tab @renderer-off', async ({ authenticatedPage: page }) => {
