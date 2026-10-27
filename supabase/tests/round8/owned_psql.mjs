@@ -8,13 +8,13 @@ const inputRoot = '/tmp/round8-input/';
 const controls = ['old-reader.sql', 'deleted-bindings.sql', 'deleted-receipts.sql'];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
-export function assertOwnedContainer(inspect, owner) {
+export function assertOwnedContainer(inspect, owner, ticket) {
   const c = inspect?.[0];
   const h = c?.HostConfig;
   const tmpfs = target => c?.Mounts?.some(m => m.Type === 'tmpfs' && m.Destination === target)
     || Object.hasOwn(h?.Tmpfs ?? {}, target);
   const pgdata = c?.Config?.Env?.find(value => value.startsWith('PGDATA='))?.slice(7);
-  if (!owner || c?.Config?.Labels?.['sidequest.ticket'] !== 'SQ-2170'
+  if (!owner || !ticket || c?.Config?.Labels?.['sidequest.ticket'] !== ticket
     || c?.Config?.Labels?.['sidequest.owner'] !== owner
     || c?.Image !== 'sha256:178f0976b54a39237096bfa310c1a352dbc82fb1b08dda45cdb8acb5d40c1426'
     || !Array.isArray(c?.Mounts) || c.Mounts.some(m => m.Type !== 'tmpfs')
@@ -109,7 +109,7 @@ export function main(env = process.env, argv = process.argv, run = spawnSync) {
     if (result.error || result.status !== 0) throw new Error('owned input command failed: ' + binary + ' ' + args[0]);
     return result.stdout;
   };
-  assertOwnedContainer(JSON.parse(checkedRun('docker', ['inspect', '--type', 'container', id]).toString()), env.ROUND8_OWNED_OWNER);
+  assertOwnedContainer(JSON.parse(checkedRun('docker', ['inspect', '--type', 'container', id]).toString()), env.ROUND8_OWNED_OWNER, env.ROUND8_OWNED_TICKET);
   const commit = checkedRun('git', ['rev-parse', 'HEAD'], { cwd: root }).toString().trim();
   if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error('committed candidate required');
   const bytes = new Map();
