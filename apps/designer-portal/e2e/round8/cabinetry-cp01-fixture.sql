@@ -78,7 +78,7 @@ SELECT pg_temp.cp(851),pg_temp.cp(201),pg_temp.cp(801),'fabrication_instruction'
  jsonb_build_array(
   jsonb_build_object('kind','plan_issue','id',pg_temp.cp(822),'version',2,'sha256',repeat('2',64)),
   jsonb_build_object('kind','coordination_item_revision','id',pg_temp.cp(701),'rev',1,'sha256',repeat('7',64))),
- repeat('c',64),'f0180000-0000-4000-8000-000000000002','cp01-manifest','fixture';
+ repeat('c',64),'f0180000-0000-4000-8000-000000000002','cp01-manifest',repeat('d',64);
 INSERT INTO public.evidence_manifest_members(manifest_id,plan_issue_id) VALUES (pg_temp.cp(851),pg_temp.cp(822));
 INSERT INTO public.evidence_manifest_members(manifest_id,coordination_item_revision_id) VALUES (pg_temp.cp(851),pg_temp.cp(701));
 INSERT INTO public.project_external_fulfilment_events(id,fulfilment_id,event_kind,evidence,plan_issue_id,recorded_by,event_seq,client_request_id,request_hash) VALUES
