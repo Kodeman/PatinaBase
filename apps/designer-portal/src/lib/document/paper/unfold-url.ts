@@ -6,7 +6,8 @@
  * replaying a write.
  *
  * `lens` and `room` read through `parseBuildRoomSearch` unchanged, so the
- * unfolded sheet and the `/doc/[id]/pieces` route agree on every lens rule.
+ * unfolded sheet and the `/doc/[id]/pieces` route agree on every lens rule
+ * but one: the unfold is the round-8 sheet, so it alone reads `purchase`.
  */
 
 import type { Landing } from "@/lib/arrival/types";
@@ -64,7 +65,10 @@ export function parseUnfoldSearch(
   const rawKind = params?.get("unfold") ?? null;
   const kind = UNFOLD_KINDS.find((candidate) => candidate === rawKind);
   if (!kind) return null;
-  const { lens, room } = parseBuildRoomSearch(params, { canSeeMoney });
+  const { lens, room } = parseBuildRoomSearch(params, {
+    canSeeMoney,
+    round8: true,
+  });
   const rawLine = params?.get("line")?.trim() ?? "";
   return { kind, lens, room, line: isUuid(rawLine) ? rawLine : null };
 }

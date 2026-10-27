@@ -144,8 +144,9 @@ function EmbeddedBuildRoom({
 }) {
   const canSeeMoney = useCanSeeMargin();
   // The route's rule (`parseBuildRoomSearch`): Price for a seat without money
-  // reads as Rough in, and the address is left as it is.
-  const lens = availableLenses(canSeeMoney).includes(address.lens)
+  // reads as Rough in, and the address is left as it is. This is the round-8
+  // sheet, so Purchase is one of its lenses.
+  const lens = availableLenses(canSeeMoney, true).includes(address.lens)
     ? address.lens
     : 'rough';
   const hostRef = useRef<HTMLDivElement>(null);
