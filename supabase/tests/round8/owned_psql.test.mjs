@@ -183,8 +183,8 @@ test('deleted-block controls remove only their named native block', () => {
   assert.ok(!receipt.includes('receipts body') && receipt.includes('bindings body'));
 });
 
-const nativeReaderPath = 'supabase/migrations/00884_round8_external_package_reading.sql';
-const nativeReader = readFileSync(new URL('../../migrations/00884_round8_external_package_reading.sql', import.meta.url), 'utf8');
+const nativeReaderPath = 'supabase/migrations/00887_round8_external_reading_grant_binding.sql';
+const nativeReader = readFileSync(new URL('../../migrations/00887_round8_external_reading_grant_binding.sql', import.meta.url), 'utf8');
 const coverageDeletions = [
   ['n1a', ' AND r.id::text=revision_id'],
   ['n1b', " AND (c->>'unit')=ANY(b.units)"],

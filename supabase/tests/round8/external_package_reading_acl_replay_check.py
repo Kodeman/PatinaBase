@@ -1,4 +1,4 @@
-"""Check 00884 with the native legacy-grants extractor, without editing seed ACLs."""
+"""Check 00884 and 00887 with the native legacy-grants extractor, without editing seed ACLs."""
 import importlib.util
 from pathlib import Path
 import re
@@ -31,4 +31,11 @@ def check(path):
 
 
 if __name__ == "__main__":
-    check(Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "supabase/migrations/00884_round8_external_package_reading.sql")
+    # 00887 redefines the 00884 reader with the identical ACL pair; check both by default.
+    paths = [Path(arg) for arg in sys.argv[1:]] or [
+        ROOT / "supabase/migrations/00884_round8_external_package_reading.sql",
+        ROOT / "supabase/migrations/00887_round8_external_reading_grant_binding.sql",
+    ]
+    for path in paths:
+        print(f"-- {path.name}")
+        check(path)

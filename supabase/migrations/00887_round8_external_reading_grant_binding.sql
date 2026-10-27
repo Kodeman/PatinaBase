@@ -1,0 +1,148 @@
+-- 00887 — External package reading validates a retained fabrication instruction
+-- against its grant-time binding (SQ-2201 F1). Inactive writers are unchanged.
+-- Lineage: get_project_external_fulfilments 00875 → 00884 → 00887; retained
+-- evidence 00877/00879; grant binding 00878. Body copied verbatim from 00884.
+-- Only the authority conjunct changes: 00884 compared the seat's CURRENT
+-- project_parties.project_id. 00878 freezes the grant-time project in
+-- fabrication_grant_request (stamped under the seat lock on every INSERT) and
+-- lets a seat move once its grant is revoked or lapsed, which made the old
+-- project's whole ledger refuse. The seat join stays only as the existing
+-- missing-reference check. Every other check is unchanged and in the same
+-- order; the STABLE SECURITY DEFINER body, pinned search_path, access check and
+-- REVOKE/GRANT pair match 00884.
+-- Rejected: making historical seats permanently immovable. That would replace
+-- 00878's revoke-first reassignment with a new seat policy, and it is not simpler.
+-- Census 00875–00885: no other reader or guard compares a seat's location with
+-- a historical event. 00879 assert_fabrication_instruction_authority and 00875
+-- create_external_fulfilment check the current seat for a new write, and their
+-- exact replays return before that check. 00878 party_holds_fabrication_authority
+-- and guard_fabrication_seat_identity guard live authority.
+-- Preserve every header field and the existing access/EXECUTE contract. All
+-- projections and linkage checks share one statement snapshot. A broken required
+-- reference refuses the entire read; it must never become false-empty evidence.
+CREATE OR REPLACE FUNCTION public.get_project_external_fulfilments(p_project_id uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp AS $$
+DECLARE result jsonb; valid boolean;
+BEGIN
+ PERFORM public._external_assert_access(p_project_id);
+ WITH fulfilments AS MATERIALIZED (
+  SELECT f.*,p.id AS reading_package_id FROM public.project_external_fulfilments f
+  LEFT JOIN public.project_packages p ON p.project_id=f.project_id AND p.package_key=f.package_key
+  WHERE f.project_id=p_project_id
+ ), events AS MATERIALIZED (
+  SELECT e.* FROM public.project_external_fulfilment_events e
+  JOIN fulfilments f ON f.id=e.fulfilment_id
+ ), bindings AS MATERIALIZED (
+  SELECT b.* FROM public.project_external_fulfilment_evidence_bindings b
+  JOIN fulfilments f ON f.id=b.fulfilment_id
+ ), receipts AS MATERIALIZED (
+  SELECT v.* FROM public.project_external_fulfilment_verifications v
+  WHERE EXISTS(SELECT 1 FROM fulfilments f WHERE f.id=v.fulfilment_id)
+     OR EXISTS(SELECT 1 FROM events e WHERE e.id=v.event_id)
+ ), manifests AS MATERIALIZED (
+  SELECT m.* FROM public.evidence_manifests m
+  WHERE EXISTS(SELECT 1 FROM events e WHERE e.manifest_id=m.id)
+ )
+ SELECT COALESCE((SELECT jsonb_agg(
+  (to_jsonb(f)-'reading_package_id')||jsonb_build_object('reading',jsonb_build_object(
+   'package_id',f.reading_package_id,
+   'events',COALESCE((SELECT jsonb_agg(to_jsonb(e)-ARRAY['client_request_id','request_hash'] ORDER BY e.event_seq,e.id)
+    FROM events e WHERE e.fulfilment_id=f.id),'[]'::jsonb),
+   'bindings',COALESCE((SELECT jsonb_agg(to_jsonb(b)-ARRAY['client_request_id','request_hash'] ORDER BY b.decision_id,b.id)
+    FROM bindings b WHERE b.fulfilment_id=f.id),'[]'::jsonb),
+   'verifications',COALESCE((SELECT jsonb_agg(jsonb_build_object('event_id',v.event_id,
+    'fulfilment_id',v.fulfilment_id,'verified_by',v.verified_by) ORDER BY e.verification_seq,v.event_id)
+    FROM receipts v JOIN events e ON e.id=v.event_id WHERE v.fulfilment_id=f.id),'[]'::jsonb),
+   'manifests',COALESCE((SELECT jsonb_agg(
+    (to_jsonb(m)-ARRAY['idempotency_key','request_hash'])||jsonb_build_object('typed_members',
+     COALESCE((SELECT jsonb_agg(to_jsonb(mm) ORDER BY
+      (SELECT ord FROM jsonb_array_elements(m.members) WITH ORDINALITY frozen(member,ord)
+       WHERE to_jsonb(mm)->>((member->>'kind')||'_id')=member->>'id'),mm.id)
+      FROM public.evidence_manifest_members mm
+      WHERE mm.manifest_id=m.id),'[]'::jsonb)) ORDER BY m.created_at,m.id)
+    FROM manifests m WHERE EXISTS(SELECT 1 FROM events e WHERE e.fulfilment_id=f.id AND e.manifest_id=m.id)),'[]'::jsonb)
+  )) ORDER BY f.created_at,f.id) FROM fulfilments f),'[]'::jsonb),
+  NOT EXISTS(
+   SELECT 1 FROM events e JOIN fulfilments f ON f.id=e.fulfilment_id
+   LEFT JOIN manifests m ON m.id=e.manifest_id
+   LEFT JOIN public.plan_issues i ON i.id=e.plan_issue_id
+   LEFT JOIN events h ON h.id=e.releases_event_id
+   LEFT JOIN receipts v ON v.event_id=e.id
+   LEFT JOIN public.project_party_authority a ON a.id=e.authority_id
+   LEFT JOIN public.project_parties seat ON seat.id=a.engagement_id
+   WHERE (e.authority_id IS NOT NULL AND (seat.id IS NULL
+     OR a.fabrication_grant_request->'project_id' IS DISTINCT FROM to_jsonb(f.project_id)))
+    OR (e.manifest_id IS NOT NULL AND (m.id IS NULL OR m.project_id IS DISTINCT FROM f.project_id
+     OR m.package_id IS DISTINCT FROM f.reading_package_id OR f.reading_package_id IS NULL
+     OR m.manifest_hash IS DISTINCT FROM e.manifest_hash OR m.purpose IS DISTINCT FROM 'fabrication_instruction'
+     OR e.evidence->>'manifestId' IS DISTINCT FROM e.manifest_id::text))
+    OR (e.affected_units IS NOT NULL AND NOT e.affected_units<@f.units)
+    OR (e.event_kind='fabrication_instruction' AND (jsonb_array_length(e.coverage)<>cardinality(e.affected_units)
+     OR (SELECT count(DISTINCT unit->>'unit') FROM jsonb_array_elements(e.coverage) unit)<>cardinality(e.affected_units)))
+    OR (e.plan_issue_id IS NOT NULL AND (i.id IS NULL OR i.project_id IS DISTINCT FROM f.project_id))
+    OR (e.releases_event_id IS NOT NULL AND (h.id IS NULL OR h.fulfilment_id IS DISTINCT FROM f.id
+     OR h.event_kind IS DISTINCT FROM 'hold' OR h.event_seq>=e.event_seq))
+    OR (e.evidence_level='verified' AND (v.event_id IS NULL OR v.fulfilment_id IS DISTINCT FROM f.id
+     OR v.verified_by IS DISTINCT FROM e.verified_by OR e.verified_by IS NULL OR e.verified_at IS NULL
+     OR e.verification_seq IS NULL OR e.verified_by=e.recorded_by))
+    OR (e.evidence_level<>'verified' AND (v.event_id IS NOT NULL OR e.verified_by IS NOT NULL
+     OR e.verified_at IS NOT NULL OR e.verification_seq IS NOT NULL))
+  ) AND NOT EXISTS(
+   SELECT 1 FROM events e CROSS JOIN LATERAL jsonb_array_elements(e.coverage) c
+   WHERE e.event_kind='fabrication_instruction' AND (
+    NOT ((c->>'unit')=ANY(e.affected_units))
+    OR CASE WHEN jsonb_typeof(c->'revisionIds') IS DISTINCT FROM 'array' THEN true
+     ELSE jsonb_array_length(c->'revisionIds')=0
+      OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(c->'revisionIds') revision_id
+       WHERE NOT EXISTS(SELECT 1 FROM public.evidence_manifest_members mm
+        JOIN public.coordination_item_revisions r ON r.id=mm.coordination_item_revision_id
+        JOIN bindings b ON b.decision_id=r.decision_id AND b.fulfilment_id=e.fulfilment_id
+        JOIN fulfilments f ON f.id=e.fulfilment_id
+        JOIN manifests m ON m.id=e.manifest_id
+        WHERE mm.manifest_id=e.manifest_id AND r.id::text=revision_id AND (c->>'unit')=ANY(b.units)
+         AND b.covers_plan_issue_id IS NOT DISTINCT FROM
+          (SELECT issued.plan_issue_id FROM events issued
+           WHERE issued.fulfilment_id=e.fulfilment_id AND issued.event_kind='package_issued'
+            AND issued.event_seq<e.event_seq AND f.kind='gc_cabinetry'
+           ORDER BY issued.event_seq DESC LIMIT 1)
+         AND b.covers_configuration_snapshot_hash IS NOT DISTINCT FROM
+          (SELECT pinned->>'sha256' FROM jsonb_array_elements(m.members) pinned
+           WHERE pinned->>'kind'='product_configuration' AND pinned->>'id'=f.configuration_id::text)))
+     END
+   )
+  ) AND NOT EXISTS(
+   SELECT 1 FROM bindings b JOIN fulfilments f ON f.id=b.fulfilment_id
+   LEFT JOIN public.client_decisions d ON d.id=b.decision_id
+   LEFT JOIN public.plan_issues i ON i.id=b.covers_plan_issue_id
+   WHERE d.id IS NULL OR d.project_id IS DISTINCT FROM f.project_id OR NOT b.units<@f.units
+    OR (b.covers_plan_issue_id IS NOT NULL AND (i.id IS NULL OR i.project_id IS DISTINCT FROM f.project_id))
+  ) AND NOT EXISTS(
+   SELECT 1 FROM receipts v LEFT JOIN events e ON e.id=v.event_id
+   WHERE e.id IS NULL OR e.fulfilment_id IS DISTINCT FROM v.fulfilment_id
+    OR e.evidence_level IS DISTINCT FROM 'verified' OR e.verified_by IS DISTINCT FROM v.verified_by
+  ) AND NOT EXISTS(
+   SELECT 1 FROM manifests m WHERE jsonb_typeof(m.members) IS DISTINCT FROM 'array'
+    OR jsonb_array_length(m.members)<>(SELECT count(*) FROM public.evidence_manifest_members mm WHERE mm.manifest_id=m.id)
+    OR EXISTS(SELECT 1 FROM jsonb_array_elements(m.members) member
+     WHERE NOT EXISTS(SELECT 1 FROM public.evidence_manifest_members mm WHERE mm.manifest_id=m.id
+      AND CASE member->>'kind'
+       WHEN 'plan_issue' THEN mm.plan_issue_id::text
+       WHEN 'plan_issue_print' THEN mm.plan_issue_print_id::text
+       WHEN 'plan_print' THEN mm.plan_print_id::text
+       WHEN 'product_configuration' THEN mm.product_configuration_id::text
+       WHEN 'custom_commission_revision' THEN mm.custom_commission_revision_id::text
+       WHEN 'review_item' THEN mm.review_item_id::text
+       WHEN 'approval_artifact' THEN mm.approval_artifact_id::text
+       WHEN 'po_spec_snapshot' THEN mm.po_spec_snapshot_id::text
+       WHEN 'coordination_item_revision' THEN mm.coordination_item_revision_id::text
+      END=member->>'id'))
+  ) INTO result,valid;
+ IF NOT valid THEN
+  RAISE EXCEPTION 'external_fulfilment_reading_invalid' USING ERRCODE='23514';
+ END IF;
+ RETURN result;
+END $$;
+
+REVOKE ALL ON FUNCTION public.get_project_external_fulfilments(uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.get_project_external_fulfilments(uuid) TO authenticated;
