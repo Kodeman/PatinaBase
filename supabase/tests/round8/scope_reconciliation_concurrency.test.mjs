@@ -6,7 +6,8 @@
 // Transport (shared with SQ-2170): ROUND8_PSQL_TRANSPORT=docker-exec and
 // ROUND8_OWNED_CONTAINER=<64-hex id> are required; there is no fallback to the
 // shared local Supabase stack. Each session is one `docker exec -i` psql child that
-// reads a private 0600 pgpass file at /tmp/round8-owned.pgpass inside the container.
+// reads a private 0600 pgpass file at /tmp/round8-owned.pgpass inside the container
+// and connects to the round8_clone database (schema-only restore, no env override).
 // Run: node --test --test-concurrency=1 supabase/tests/round8/scope_reconciliation_concurrency.test.mjs
 // Negative control: add SCOPE_RECONCILIATION_NEGATIVE_CONTROL=inverted. Only the
 // new retry schedule calls a session-local scratch function; public SQL is untouched.
@@ -23,7 +24,7 @@ assert.match(process.env.ROUND8_OWNED_CONTAINER ?? '', /^[0-9a-f]{64}$/, 'ROUND8
 // The docker CLI does not forward host env, so the session timeouts travel with -e.
 const psqlArgv = ['exec', '-i', '-u', 'postgres', '-e', 'PGPASSFILE=/tmp/round8-owned.pgpass',
   '-e', 'PGCONNECT_TIMEOUT=3', '-e', 'PGOPTIONS=-c statement_timeout=15000 -c lock_timeout=10000',
-  process.env.ROUND8_OWNED_CONTAINER, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', 'postgres',
+  process.env.ROUND8_OWNED_CONTAINER, 'psql', '-h', '/var/run/postgresql', '-U', 'postgres', '-d', 'round8_clone',
   '-XAtq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'];
 const actor = 'f87b0000-0000-4000-8000-000000000001';
 const literal = value => "'" + String(value).replaceAll("'", "''") + "'";
