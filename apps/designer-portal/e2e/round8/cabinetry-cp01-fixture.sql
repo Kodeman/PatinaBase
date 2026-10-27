@@ -60,8 +60,8 @@ INSERT INTO public.client_decisions(id,designer_client_id,designer_id,project_id
 INSERT INTO public.coordination_item_revisions(id,decision_id,rev_number,status,reviewed_by,reviewed_at,note) VALUES
  (pg_temp.cp(701),pg_temp.cp(601),1,'approved','f0180000-0000-4000-8000-000000000002',now(),'CP01 maker shop drawing round');
 INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by) VALUES
- (pg_temp.cp(821),pg_temp.cp(201),1,'CP01 cabinet issue A','cp01-issue-1',repeat('a',64),repeat('1',64),0,'f0180000-0000-4000-8000-000000000002'),
- (pg_temp.cp(822),pg_temp.cp(201),2,'CP01 cabinet issue B','cp01-issue-2',repeat('a',64),repeat('2',64),0,'f0180000-0000-4000-8000-000000000002');
+ (pg_temp.cp(821),pg_temp.cp(201),1,'CP01 cabinet issue A','cp01-issue-1',repeat('a',64),repeat('1',64),1,'f0180000-0000-4000-8000-000000000002'),
+ (pg_temp.cp(822),pg_temp.cp(201),2,'CP01 cabinet issue B','cp01-issue-2',repeat('a',64),repeat('2',64),1,'f0180000-0000-4000-8000-000000000002');
 INSERT INTO public.project_external_fulfilments(id,project_id,scope_edition_id,package_key,units,kind,
  buyer_party_kind,payer_party_kind,contracting_party_kind,party_engagement_id,reported_price_cents,price_visibility,
  status,created_by,client_request_id,request_hash) VALUES
