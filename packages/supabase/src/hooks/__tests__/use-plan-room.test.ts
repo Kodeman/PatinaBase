@@ -65,6 +65,10 @@ import {
   useClientPlanSet,
   type FilePlanPrintEntry,
 } from '../use-plan-room';
+import {
+  useExternalFulfilments,
+  useExternalFulfilmentReadings,
+} from '../use-external-fulfilments';
 
 type QueryConfig<T> = {
   queryKey: readonly unknown[];
@@ -457,13 +461,40 @@ describe('useCreatePlanIssue', () => {
     });
   });
 
-  it('invalidates exactly room, holdings and issue-preview prefix on success', () => {
+  it('invalidates exactly room, holdings, issue-preview and project external fulfilment prefixes on success', () => {
     config().onSuccess();
     expect(invalidateQueries.mock.calls).toEqual([
       [{ queryKey: ['plan-room', 'room', 'p1'] }],
       [{ queryKey: ['plan-room', 'holdings', 'p1'] }],
       [{ queryKey: ['plan-room', 'issue-preview', 'p1'] }],
+      [{ queryKey: ['project-external-fulfilments', 'p1'] }],
     ]);
+  });
+
+  it('marks cached external headers and readings stale only for the issued project', async () => {
+    const { QueryClient } = await vi.importActual<typeof import('@tanstack/react-query')>(
+      '@tanstack/react-query',
+    );
+    const queryClient = new QueryClient();
+    const queries = ['p1', 'p2'].flatMap((projectId) => [
+      useExternalFulfilments(projectId) as unknown as QueryConfig<unknown>,
+      useExternalFulfilmentReadings(projectId) as unknown as QueryConfig<unknown>,
+    ]);
+    try {
+      for (const query of queries) {
+        queryClient.setQueryData(query.queryKey, []);
+        expect(queryClient.getQueryState(query.queryKey)?.isInvalidated).toBe(false);
+      }
+      invalidateQueries.mockImplementation((filters) => queryClient.invalidateQueries(filters));
+
+      config().onSuccess();
+
+      for (const [index, query] of queries.entries()) {
+        expect(queryClient.getQueryState(query.queryKey)?.isInvalidated).toBe(index < 2);
+      }
+    } finally {
+      queryClient.clear();
+    }
   });
 });
 

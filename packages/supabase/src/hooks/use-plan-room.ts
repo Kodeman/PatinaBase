@@ -2,6 +2,7 @@
 // Raw transmittal tokens pass through mutation results only and are never cached or persisted.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createBrowserClient } from "../client";
+import { externalFulfilmentKeys } from "./use-external-fulfilments";
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -578,6 +579,9 @@ export function useCreatePlanIssue(projectId: string) {
       });
       void queryClient.invalidateQueries({
         queryKey: ["plan-room", "issue-preview", projectId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: externalFulfilmentKeys.project(projectId),
       });
     },
   });
