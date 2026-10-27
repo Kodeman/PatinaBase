@@ -715,9 +715,12 @@ describe('FF&E quiet body — the lens has not reached this stop', () => {
     const textLoading = visibleText(statusLine());
     // The sr-only label is present while it loads — the a11y half of the bar.
     expect(screen.getByText('Checking readiness')).toBeInTheDocument();
-    // No separate loading row exists anywhere else on the region — it is
-    // exactly one inline pulse, inside the head.
-    expect(document.querySelectorAll('[role="status"]')).toHaveLength(1);
+    // 60f9567bd deliberately added an independent canonical-schedule status.
+    // There must still be only one readiness pulse anywhere, inside the head.
+    const readinessStatuses = document.querySelectorAll('[role="status"]:not([data-line-query])');
+    expect(readinessStatuses).toHaveLength(1);
+    expect(head).toContainElement(readinessStatuses[0] as HTMLElement);
+    expect(document.querySelectorAll('[data-line-query]')).toHaveLength(1);
 
     mockReadinessLoading = false;
     rerender(

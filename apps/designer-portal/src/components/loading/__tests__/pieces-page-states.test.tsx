@@ -42,6 +42,7 @@ jest.mock("@/hooks/use-can-see-margin", () => ({
 }));
 
 jest.mock("@/components/document/pieces/build-room-shell", () => ({
+  ...jest.requireActual("@/components/document/pieces/build-room-shell"),
   BuildRoomShell: () => <div data-testid="build-room" />,
 }));
 jest.mock("@/components/document/pieces/finishes-lens", () => ({

@@ -90,6 +90,7 @@ jest.mock('@patina/supabase', () => ({
   // R5 — page.tsx runs the discovery seed for the band's rest act.
   useBeginDirection: () => ({ mutateAsync: jest.fn() }),
   useProjectFFEItems: () => ({ data: [] }),
+  useExternalFulfilmentReadings: () => ({ data: [], isError: false }),
   useProjectContextualHandoffs: () => ({ data: [], isError: false }),
   useProjectParties: () => ({ data: [] }),
   useCoordinationItems: () => ({ data: [] }),

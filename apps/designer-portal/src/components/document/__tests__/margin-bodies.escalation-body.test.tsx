@@ -7,10 +7,9 @@
  *
  * W4-C8 confines that to FIELD notes. The view emits payload.body only when
  * margin_notes.field_capture_id is set; on a TYPED desk note the key is null,
- * readFieldNotePayload falls back to row.title, and both escalations stay
- * byte-identical to their pre-wave behaviour. Both branches are pinned below —
- * the field one because it is the point of the wave, the typed one because
- * widening it is an undeclared behaviour change W4-C8 refuses.
+ * readFieldNotePayload falls back to row.title for client decisions.
+ * Amendments deliberately carry only a neutral title and note identity after
+ * the 011874993/a28b84dae privacy repair, never private body text.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
@@ -21,6 +20,7 @@ const amendmentSeed = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({}),
+  useSessionUserId: () => 'u1',
   useApplyDecisionOverride: () => ({ mutate: jest.fn(), isPending: false }),
   useDecision: () => ({ data: undefined }),
   useDecisionOverrides: () => ({ data: [] }),
@@ -85,25 +85,26 @@ describe('NoteBody escalation', () => {
     });
   });
 
-  it('seeds the amendment with the full note as its description', () => {
+  it('seeds the amendment with only the note identity and a neutral title', () => {
     render(<NoteBody row={fieldNote} projectId="project-1" />);
-    expect(amendmentSeed).toHaveBeenCalledWith(
-      expect.objectContaining({ description: LONG, noteId: 'note-1' }),
-    );
+    expect(amendmentSeed).toHaveBeenCalledWith({
+      noteId: 'note-1', title: 'Amendment from a studio note',
+    });
+    expect(amendmentSeed.mock.calls[0][0]).not.toHaveProperty('description');
   });
 
-  it('keeps the amendment title short enough to read in a heading', () => {
+  it('keeps private text and its truncated fragments out of the amendment seed', () => {
     render(<NoteBody row={fieldNote} projectId="project-1" />);
-    const seed = amendmentSeed.mock.calls[0][0] as { title: string };
+    const seed = amendmentSeed.mock.calls[0][0];
     expect(seed.title.length).toBeLessThanOrEqual(70);
-    expect(seed.title.endsWith('…')).toBe(true);
+    expect(seed.description).toBeUndefined();
+    expect(JSON.stringify(seed)).not.toContain(LONG);
+    expect(JSON.stringify(seed)).not.toContain(LONG.slice(0, 64));
   });
 });
 
-// ── W4-C8: the typed desk note is the OTHER branch, and it must not have moved.
-// The view emits a null payload.body for it, so escalating and amending both
-// carry left(body, 80) — the eighty-character title — exactly as before the
-// wave. A regression here is the view emitting `n.body` unconditionally again.
+// W4-C8 still pins the typed note's client-decision fallback to its title.
+// The amendment privacy repair must also exclude that truncated private text.
 describe('NoteBody escalation — a typed desk note (W4-C8)', () => {
   const typedNote: MarginItemRow = {
     ...fieldNote,
@@ -138,11 +139,16 @@ describe('NoteBody escalation — a typed desk note (W4-C8)', () => {
     );
   });
 
-  it('seeds the amendment from the title too', () => {
+  it('keeps the typed note title out of the neutral amendment seed too', () => {
     render(<NoteBody row={typedNote} projectId="project-1" />);
-    expect(amendmentSeed).toHaveBeenCalledWith(
-      expect.objectContaining({ description: LONG.slice(0, 80), noteId: 'note-2' }),
-    );
+    const seed = amendmentSeed.mock.calls[0][0];
+    expect(amendmentSeed).toHaveBeenCalledWith({
+      noteId: 'note-2', title: 'Amendment from a studio note',
+    });
+    expect(seed).not.toHaveProperty('description');
+    expect(JSON.stringify(seed)).not.toContain(LONG);
+    expect(JSON.stringify(seed)).not.toContain(typedNote.title);
+    expect(JSON.stringify(seed)).not.toContain(LONG.slice(0, 64));
   });
 
   it('renders no body paragraph — a typed note would print its text twice', () => {
