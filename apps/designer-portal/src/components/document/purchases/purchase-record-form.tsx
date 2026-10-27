@@ -310,7 +310,7 @@ export function PurchaseRecordForm({
               <span className={LABEL}>Line (optional)</span>
               <select disabled={Boolean(initialLine)} aria-label="Line" value={draft.ffeItemId} onChange={(e) => set('ffeItemId', e.target.value)} className={FIELD}>
                 <option value="">No line</option>
-                {(initialLine ? [initialLine] : lines).map((line) => (
+                {lines.filter((line) => !initialLine || line.id === initialLine.id).map((line) => (
                   <option key={line.id} value={line.id}>{line.name}</option>
                 ))}
               </select>

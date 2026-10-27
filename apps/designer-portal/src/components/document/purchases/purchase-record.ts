@@ -10,6 +10,7 @@ import type { StudioPurchaseKind, StudioPurchaseRequest, StudioPurchaseRow } fro
 import { formatCurrency } from '@patina/shared';
 import { fmtDay } from '@/lib/document/format';
 import { purchaseAtCostCents } from '@/lib/document/invoice-composer';
+import { isExternalResponsibility, type ResponsibilityLine } from '@/lib/document/ffe-responsibility';
 
 export const PURCHASE_KINDS: ReadonlyArray<{ kind: StudioPurchaseKind; label: string }> = [
   { kind: 'card_retail', label: 'Store buy' },
@@ -151,7 +152,7 @@ export function buildPurchaseRequest(
 /** FF&E stages a line can still be bought from (00184 ranks below ordered). */
 const BUYABLE_STAGES = new Set(['specified', 'quoted', 'approved']);
 
-interface BuyableLineInput {
+interface BuyableLineInput extends ResponsibilityLine {
   id: string;
   name: string;
   status?: string | null;
@@ -174,6 +175,7 @@ export function buyableLines<T extends BuyableLineInput>(
   );
   return items.filter(
     (it) =>
+      !isExternalResponsibility(it) &&
       !it.removed_at &&
       it.design_disposition === 'selected' &&
       !it.blocked &&

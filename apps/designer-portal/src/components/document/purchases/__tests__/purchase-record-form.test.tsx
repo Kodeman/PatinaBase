@@ -2,17 +2,33 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PurchaseRecordForm } from '../purchase-record-form';
 
 const mockRecord = jest.fn();
+const studioLine = { id: 'line-1', name: 'Oak table', status: 'approved', design_disposition: 'selected', external_fulfilment_id: null };
+const externalLine = { id: 'external-1', name: 'GC cabinetry', status: 'specified', design_disposition: 'selected', product_id: 'product-1', unit_price_cents: 0, external_fulfilment_id: 'fulfilment-1' };
+const mockItems = [studioLine, externalLine];
 jest.mock('@patina/supabase', () => ({
   useRecordStudioPurchase: () => ({ mutateAsync: mockRecord, isPending: false }),
   useProjectRecordedStudio: () => ({ data: 'studio-1' }),
   useStudioPaymentMethods: () => ({ data: [] }),
   useOrganizationMembers: () => ({ data: [] }),
   useUser: () => ({ user: null }),
-  useProjectFFEItems: () => ({ data: [] }),
+  useProjectFFEItems: () => ({ data: mockItems }),
   useStudioPurchases: () => ({ data: [] }),
 }));
 jest.mock('@/hooks/use-folio', () => ({ useUploadFolioFile: () => ({ isPending: false }) }));
 jest.mock('../../line-unfold/the-buy-cell', () => ({ MakerSearch: () => null }));
+
+it('offers only studio lines in the global purchase selector', () => {
+  render(<PurchaseRecordForm projectId="project-1" onDone={jest.fn()} />);
+  expect(screen.getByRole('option', { name: 'Oak table' })).toHaveValue('line-1');
+  expect(screen.queryByRole('option', { name: 'GC cabinetry' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Line' }), { target: { value: 'line-1' } });
+  expect(screen.getByRole('combobox', { name: 'Line' })).toHaveValue('line-1');
+});
+
+it('does not offer an external initial line outside the filtered purchase selector', () => {
+  render(<PurchaseRecordForm projectId="project-1" initialLine={externalLine} onDone={jest.fn()} />);
+  expect(screen.queryByRole('option', { name: 'GC cabinetry' })).not.toBeInTheDocument();
+});
 
 it('records the bound line as purchase history, not approval or another order', async () => {
   const done = jest.fn();

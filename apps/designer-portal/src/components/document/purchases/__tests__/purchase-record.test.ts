@@ -181,6 +181,23 @@ describe('buyableLines / purchaseForLine', () => {
     expect(buyableLines(items, purchases).map((l) => l.id)).toEqual(['ok', 'specified', 'returned']);
   });
 
+  it('excludes a product-backed external line with a zero studio price', () => {
+    const external = line('external', {
+      status: 'specified',
+      product_id: 'product-1',
+      unit_price_cents: 0,
+      external_fulfilment_id: 'fulfilment-1',
+    });
+    expect(buyableLines([external])).toEqual([]);
+  });
+
+  it('keeps only studio lines from mixed responsibility rows', () => {
+    const legacy = line('legacy');
+    const studio = line('studio', { external_fulfilment_id: null });
+    const external = line('external', { external_fulfilment_id: 'fulfilment-1' });
+    expect(buyableLines([legacy, external, studio])).toEqual([legacy, studio]);
+  });
+
   it("finds a line's live purchase first, else its latest returned one, never a void", () => {
     const purchases = [
       { id: 'a', ffe_item_id: 'l1', status: 'returned', purchased_on: '2026-09-01' },
