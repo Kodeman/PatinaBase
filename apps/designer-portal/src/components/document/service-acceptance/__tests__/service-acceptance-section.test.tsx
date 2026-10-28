@@ -352,6 +352,19 @@ test('a delivered but unfinalized last notice keeps Review and send and the open
   rerender(<ServiceAcceptanceSection projectId="job-1" />);
   expect(screen.getByRole('button', { name: 'Review and send' })).toBeInTheDocument();
   expect(within(screen.getByRole('dialog', { name: 'Ready to send' })).getByTestId('ready-to-send')).toHaveTextContent('job-1');
+  // SQ-2351 R2: a notice already sending is not waiting for review.
+  expect(screen.getByText('One signer’s notice is still being sent.')).toBeInTheDocument();
+  expect(screen.queryByText(/waiting for your review/)).toBeNull();
+});
+
+test('a draft request whose notice is sending never says nothing has been sent (SQ-2351 R2)', () => {
+  mockRead.mockReturnValue(readOf([request({ predecessorRequestId: null })]));
+  mockDrafts.mockReturnValue({ data: [notice({ status: 'sending' }), notice({ id: 'draft-3' })] });
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.getByText('One signer’s notice is still waiting for your review. One signer’s notice is still being sent.'))
+    .toBeInTheDocument();
+  expect(screen.queryByText(/Nothing has been sent/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Review and send' })).toBeInTheDocument();
 });
 
 test('closed history offers no hand-off even if a signer notice was never sent', () => {

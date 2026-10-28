@@ -1,0 +1,359 @@
+-- C4 household-card signer identity (00894, SQ-2352 / review SQ-2351 R1):
+-- the profile a household card links to NOW lists the request, reads its
+-- evidence and answers the card's slot, exactly like a profile signer. The
+-- enclosing runner owns BEGIN/ROLLBACK.
+--
+-- Actors: studio A owner 1; client 5 (profile slot "client"); 6 linked to the
+-- required "co_client" card; 8 linked to a household card that is no signer;
+-- 9 a profile the co_client card is re-pointed to; 10 the would-be user of the
+-- unlinked optional "guest" card. Reads and responses run as authenticated,
+-- with respond granted here only (the activation path); link edits run as the
+-- designer through studio_contacts RLS.
+CREATE TEMP TABLE assertion_count(n integer NOT NULL);
+INSERT INTO assertion_count VALUES (0);
+GRANT ALL ON assertion_count TO authenticated;
+CREATE FUNCTION pg_temp.assert_true(ok boolean, name text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',name; END IF;
+  UPDATE assertion_count SET n=n+1;
+  RAISE NOTICE 'PASS: %',name;
+END $$;
+CREATE FUNCTION pg_temp.expect_error(command text, state text, message text, name text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+  BEGIN EXECUTE command;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+  END;
+  PERFORM pg_temp.assert_true(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
+    name||format(' [expected %s/%s, got %s/%s]',state,message,actual_state,actual_message));
+END $$;
+-- A call that must succeed: its result, or the error it raised, so a refusal
+-- fails a named assertion instead of aborting the run.
+CREATE FUNCTION pg_temp.attempt(command text) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE result jsonb; actual_state text; actual_message text;
+BEGIN
+  EXECUTE command INTO result;
+  RETURN jsonb_build_object('ok',result);
+EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+  RETURN jsonb_build_object('error',actual_state,'message',actual_message);
+END $$;
+CREATE FUNCTION pg_temp.uid(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+  SELECT ('f8940000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.card(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+  SELECT ('f8946000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub',CASE WHEN n IS NULL THEN '' ELSE pg_temp.uid(n)::text END,true);
+  PERFORM set_config('request.jwt.claims',CASE WHEN n IS NULL THEN '' ELSE jsonb_build_object('sub',pg_temp.uid(n),
+    'role','authenticated')::text END,true);
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_true(boolean,text),pg_temp.expect_error(text,text,text,text),
+  pg_temp.attempt(text),pg_temp.actor(integer),pg_temp.uid(integer),pg_temp.card(integer) TO authenticated;
+
+-- Fixture: studio A (1 owner, 2 member), studio B (4 owner); client 5; six
+-- person cards in the client's household (co_client card linked to 6, the
+-- guest card unlinked, another member's card linked to 8).
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f8940000-%'),'fixture starts absent');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT pg_temp.uid(n),'household-identity-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated'
+FROM generate_series(1,10) n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT id,email,'Household identity fixture',true FROM auth.users WHERE id::text LIKE 'f8940000-%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+('f8941000-0000-4000-8000-000000000001','design_studio','Household A','household-identity-a','active'),
+('f8941000-0000-4000-8000-000000000002','design_studio','Household B','household-identity-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+(pg_temp.uid(1),'f8941000-0000-4000-8000-000000000001','owner','active'),
+(pg_temp.uid(2),'f8941000-0000-4000-8000-000000000001','member','active'),
+(pg_temp.uid(4),'f8941000-0000-4000-8000-000000000002','owner','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT p.id,r.id,p.id FROM public.profiles p CROSS JOIN public.roles r
+WHERE p.id::text LIKE 'f8940000-%' AND r.name='studio_owner';
+INSERT INTO public.studio_contacts(id,organization_id,entity_kind,contact_kind,full_name,profile_id) VALUES
+(pg_temp.card(1),'f8941000-0000-4000-8000-000000000001','person','client','Client',pg_temp.uid(5)),
+(pg_temp.card(2),'f8941000-0000-4000-8000-000000000001','person','client','Co-client',pg_temp.uid(6)),
+(pg_temp.card(3),'f8941000-0000-4000-8000-000000000001','person','client','Guest card',NULL),
+(pg_temp.card(4),'f8941000-0000-4000-8000-000000000001','person','client','Other member',pg_temp.uid(8)),
+(pg_temp.card(5),'f8941000-0000-4000-8000-000000000001','person','client','Spare card',NULL),
+(pg_temp.card(6),'f8941000-0000-4000-8000-000000000001','person','client','Replacement card',NULL);
+INSERT INTO public.client_households(id,organization_id,designer_id,display_name,member_person_ids) VALUES
+('f8947000-0000-4000-8000-000000000001','f8941000-0000-4000-8000-000000000001',pg_temp.uid(1),'Identity household',
+ ARRAY[pg_temp.card(1),pg_temp.card(2),pg_temp.card(3),pg_temp.card(4),pg_temp.card(5),pg_temp.card(6)]);
+INSERT INTO public.designer_clients(id,designer_id,client_id,client_name,client_email,status,source,household_id) VALUES
+('f8942000-0000-4000-8000-000000000001',pg_temp.uid(1),pg_temp.uid(5),'Identity client',
+ 'household-identity-5@test.invalid','active','direct','f8947000-0000-4000-8000-000000000001');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+
+CREATE FUNCTION pg_temp.policy() RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object('kind','acceptance_signer_policy','partKey','scope.signers','title','Signers','payload',
+  jsonb_build_object('policyRevision',1,'signers',jsonb_build_array(
+    jsonb_build_object('slot','client','required',true,'profileId',pg_temp.uid(5)),
+    jsonb_build_object('slot','co_client','required',true,'householdPersonId',pg_temp.card(2)),
+    jsonb_build_object('slot','guest','required',false,'householdPersonId',pg_temp.card(3)))));
+$$;
+CREATE FUNCTION pg_temp.parts(p uuid) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT COALESCE(jsonb_agg(jsonb_build_object('kind',kind,'variant',variant,'partKey',part_key,'title',title,
+   'payload',payload,'required',required,'clientVisible',client_visible) ORDER BY position),'[]')
+ FROM public.proposal_agreement_parts WHERE proposal_id=p;
+$$;
+CREATE FUNCTION pg_temp.draft(p uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE phase_id uuid;
+BEGIN
+ INSERT INTO public.proposals(id,designer_id,designer_client_id,client_id,title,total_amount,status,valid_until)
+ VALUES(p,pg_temp.uid(1),'f8942000-0000-4000-8000-000000000001',pg_temp.uid(5),'Identity draft',0,'draft',now()+interval '30 days');
+ INSERT INTO public.proposal_phases(proposal_id,name,phase_key,duration_days,lane,fee_cents,sort_order)
+ VALUES(p,'Design','design-development',5,'main',0,0) RETURNING id INTO phase_id;
+ PERFORM public.upsert_design_services_draft(p,jsonb_build_object('scope','Interior design services',
+   'deliverables',jsonb_build_array('Selections'),'exclusions','[]'::jsonb,'billingCeilingCents',100000,
+   'retainerAmountCents',0,'retainerActivationPolicy','immediate','billingCadence','monthly',
+   'currency','USD','terms','Signed actual hours','currentRateVersion',1),
+   jsonb_build_array(jsonb_build_object('version',1,'roleName','Designer','hourlyRateCents',12000,'sortOrder',0,'effectiveAt',now()-interval '1 day')));
+ PERFORM public.materialize_standard_parts(p);
+ PERFORM public.upsert_agreement_parts(p,pg_temp.parts(p)||jsonb_build_array(
+   jsonb_build_object('kind','scope_package','partKey','scope.kitchen','title','Kitchen','payload',
+     jsonb_build_object('packageKey','pkg.kitchen','label','Kitchen','inclusion','included',
+       'responsibilities',jsonb_build_object('design','studio','purchasing','client','payer','client',
+         'fabrication_contract','gc','installation','gc'),
+       'serviceBindings',jsonb_build_object('design',jsonb_build_array(phase_id)))),
+   pg_temp.policy()),'identity fixture');
+END $$;
+CREATE FUNCTION pg_temp.send_and_sign(p uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE snapshot jsonb;
+BEGIN
+ snapshot:=public.get_commercial_document_send_snapshot(p);
+ PERFORM public.send_commercial_document(p,snapshot->>'documentFingerprint',NULL,now()+interval '30 days');
+ PERFORM pg_temp.actor(5);
+ PERFORM public.sign_design_services_agreement(p,'Identity Client');
+ PERFORM pg_temp.actor(1);
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.send_and_sign(uuid) TO authenticated;
+CREATE TEMP TABLE sa_results(key text PRIMARY KEY,value jsonb);
+GRANT ALL ON sa_results TO authenticated;
+CREATE FUNCTION pg_temp.v(k text) RETURNS jsonb LANGUAGE sql AS $$ SELECT value FROM sa_results WHERE key=k $$;
+CREATE FUNCTION pg_temp.req(k text) RETURNS uuid LANGUAGE sql AS $$ SELECT (value->>'requestId')::uuid FROM sa_results WHERE key=k $$;
+CREATE FUNCTION pg_temp.project() RETURNS uuid LANGUAGE sql AS $$ SELECT (value->>'projectId')::uuid FROM sa_results WHERE key='origin' $$;
+-- The authenticated role holds no grant on the C4 tables (00886), so a
+-- refused table read would pass as a 42501 refusal. Actors read request hashes
+-- and active signer ids from this superuser snapshot instead.
+CREATE FUNCTION pg_temp.snap(req uuid) RETURNS void LANGUAGE sql AS $$
+  INSERT INTO sa_results SELECT 'row:'||id,jsonb_build_object('scope',scope_content_hash,'manifest',evidence_manifest_hash,
+    'revision',signer_policy_revision) FROM public.service_acceptance_requests WHERE id=req
+  ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;
+  INSERT INTO sa_results SELECT 'signer:'||request_id||':'||slot,to_jsonb(id) FROM public.service_acceptance_signers
+  WHERE request_id=req AND status='active' ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;
+$$;
+CREATE FUNCTION pg_temp.signer(req uuid, s text) RETURNS uuid LANGUAGE sql AS $$
+  SELECT (value#>>'{}')::uuid FROM sa_results WHERE key='signer:'||req||':'||s;
+$$;
+CREATE FUNCTION pg_temp.create(k text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.create_service_acceptance_request(pg_temp.project(),
+    (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active'),
+    'f8948000-0000-4000-8000-000000000001',k);
+$$;
+-- The caller's own entries for a request in the client list.
+CREATE FUNCTION pg_temp.listed(req uuid) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object('count',count(*),'entry',(array_agg(e))[1])
+  FROM jsonb_array_elements(public.get_my_service_acceptance_requests()) e WHERE e->>'requestId'=req::text;
+$$;
+CREATE FUNCTION pg_temp.respond(req uuid, response text, k text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.respond_service_acceptance(req,response,'[]'::jsonb,NULL,value->>'scope',value->>'manifest',
+    (value->>'revision')::integer,k)
+  FROM sa_results WHERE key='row:'||req;
+$$;
+-- The studio's link edit, as designer 1 through studio_contacts RLS.
+CREATE FUNCTION pg_temp.link(card uuid, profile uuid) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE n integer;
+BEGIN
+  PERFORM pg_temp.actor(1);
+  UPDATE public.studio_contacts SET profile_id=profile WHERE id=card;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END $$;
+-- V22 delivery as the service path (no JWT): claim, deliver, finalize, after-send.
+CREATE FUNCTION pg_temp.deliver(req uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE d uuid; f timestamptz; caller text := current_setting('request.jwt.claim.sub',true);
+BEGIN
+  SELECT outbound_draft_id INTO STRICT d FROM public.service_acceptance_requests WHERE id=req;
+  PERFORM pg_temp.actor(NULL);
+  PERFORM public.claim_outbound_draft_for_send(d);
+  PERFORM public.record_outbound_draft_send_attempt(d);
+  PERFORM public.record_outbound_draft_delivery(d,'msg-'||d);
+  SELECT finalizing_at INTO f FROM public.claim_outbound_draft_finalize(d);
+  PERFORM public.record_outbound_draft_after_send(d,f);
+  PERFORM public.mark_outbound_draft_sent(d,pg_temp.uid(1),'msg-'||d);
+  PERFORM set_config('request.jwt.claim.sub',COALESCE(caller,''),true);
+  PERFORM set_config('request.jwt.claims',CASE WHEN COALESCE(caller,'')='' THEN '' ELSE
+    jsonb_build_object('sub',caller,'role','authenticated')::text END,true);
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.v(text),pg_temp.req(text),pg_temp.project(),pg_temp.signer(uuid,text),
+  pg_temp.listed(uuid),pg_temp.respond(uuid,text,text),pg_temp.link(uuid,uuid) TO authenticated;
+
+-- Native origin edition and a sent request (local activation rolls back).
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SELECT pg_temp.draft('f8943000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.send_and_sign('f8943000-0000-4000-8000-000000000001');
+INSERT INTO sa_results VALUES('origin',public.countersign_design_services_agreement(
+ 'f8943000-0000-4000-8000-000000000001','Identity Designer'));
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
+('f8948000-0000-4000-8000-000000000001',pg_temp.project(),NULL,'service_acceptance','[]',repeat('a',64),repeat('1',64),'hi-1',pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('r1',pg_temp.create('hi-r1'));
+SELECT pg_temp.deliver(pg_temp.req('r1'));
+SELECT pg_temp.snap(pg_temp.req('r1'));
+SELECT pg_temp.assert_true((SELECT lifecycle='sent' AND signer_policy_revision=1 FROM public.service_acceptance_requests
+  WHERE id=pg_temp.req('r1')) AND (SELECT count(*)=3 FROM public.service_acceptance_signers WHERE request_id=pg_temp.req('r1'))
+  AND (SELECT household_person_id=pg_temp.card(2) AND profile_id IS NULL AND required
+    FROM public.service_acceptance_signers WHERE id=pg_temp.signer(pg_temp.req('r1'),'co_client')),
+  'fixture: a sent request with a required household-card slot that holds no profile');
+GRANT EXECUTE ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) TO authenticated;
+SET LOCAL ROLE authenticated;
+
+-- A profile signer is unchanged: listed once on its own slot, reads evidence.
+SELECT pg_temp.actor(5);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
+  AND pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerRole'='signer_required'
+  AND (pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId')::uuid=pg_temp.signer(pg_temp.req('r1'),'client'),
+  'profile signer lists the request once on its own slot');
+SELECT pg_temp.assert_true((public.get_my_service_acceptance_evidence(pg_temp.req('r1'))->>'requestId')::uuid=pg_temp.req('r1'),
+  'profile signer reads the evidence');
+
+-- The linked profile of an active household card lists and reads like a profile signer.
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
+  AND pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerRole'='signer_required'
+  AND (pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId')::uuid=pg_temp.signer(pg_temp.req('r1'),'co_client'),
+  'linked card profile lists the request on the card slot');
+INSERT INTO sa_results VALUES('ev-6',pg_temp.attempt(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1'))));
+SELECT pg_temp.assert_true((pg_temp.v('ev-6')->'ok'->>'requestId')::uuid=pg_temp.req('r1'),
+  'linked card profile reads the evidence '||COALESCE(pg_temp.v('ev-6')->>'error',''));
+
+-- Refused or not listed: the unlinked card's would-be user and another household member.
+SELECT pg_temp.actor(10);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=0,'unlinked card would-be user is not listed');
+SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')),'42501','insufficient_privilege',
+  'unlinked card would-be user cannot read the evidence');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-10-early')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
+  'unlinked card would-be user cannot respond');
+SELECT pg_temp.actor(8);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=0,'another household member is not listed');
+SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')),'42501','insufficient_privilege',
+  'another household member cannot read the evidence');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-8')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
+  'another household member cannot respond');
+
+-- A card linked after the request was sent qualifies through the current link.
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(3),pg_temp.uid(10))=1,'designer links the guest card after send');
+SELECT pg_temp.actor(10);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
+  AND pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerRole'='signer_optional'
+  AND (pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId')::uuid=pg_temp.signer(pg_temp.req('r1'),'guest'),
+  'card linked after send lists the request on its slot');
+SELECT pg_temp.assert_true((pg_temp.attempt(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')))
+  ->'ok'->>'requestId')::uuid=pg_temp.req('r1'),'card linked after send reads the evidence');
+INSERT INTO sa_results VALUES('guest',pg_temp.attempt(format($q$SELECT pg_temp.respond(%L,'accept','hi-guest')$q$,pg_temp.req('r1'))));
+SELECT pg_temp.assert_true(pg_temp.v('guest')->'ok'->>'aggregateOutcome'='pending',
+  'card linked after send responds '||COALESCE(pg_temp.v('guest')->>'error',''));
+
+-- Re-pointed, then unlinked before responding: only the current link qualifies.
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(9))=1,'designer re-points the co_client card');
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=0,'previous link is no longer listed');
+SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')),'42501','insufficient_privilege',
+  'previous link cannot read the evidence');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-6-old')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
+  'previous link cannot respond');
+SELECT pg_temp.actor(9);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId')::uuid
+  =pg_temp.signer(pg_temp.req('r1'),'co_client'),'current link lists the card slot');
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),NULL)=1,'designer unlinks the co_client card');
+SELECT pg_temp.actor(9);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=0,'unlinked card is no longer listed');
+SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')),'42501','insufficient_privilege',
+  'unlinked card cannot read the evidence');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-9')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
+  'card unlinked before responding is refused');
+
+-- One person, one slot: a card moved onto the client's own profile does not
+-- give the client the card's slot.
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(5))=1,'designer points the co_client card at the client');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
+  AND (pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId')::uuid=pg_temp.signer(pg_temp.req('r1'),'client'),
+  'client stays listed once, on the profile slot');
+INSERT INTO sa_results VALUES('client',pg_temp.respond(pg_temp.req('r1'),'accept','hi-client'));
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-client-card')$q$,pg_temp.req('r1')),'23505',
+  'already_responded','primary client cannot answer the card slot');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT signer_id=pg_temp.signer(pg_temp.req('r1'),'client') AND responder_profile_id=pg_temp.uid(5)
+  FROM public.service_acceptance_responses WHERE id=(pg_temp.v('client')->>'responseId')::uuid)
+  AND NOT EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE signer_id=pg_temp.signer(pg_temp.req('r1'),'co_client'))
+  AND pg_temp.v('client')->>'aggregateOutcome'='pending'
+  AND pg_temp.v('client')->'pendingRequiredSigners'->0->>'slot'='co_client',
+  'profile signer answers its own slot; the card slot stays pending');
+
+-- Relinked, the card's profile answers the card slot, attributed to the slot and to auth.uid().
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(6))=1,'designer relinks the co_client card');
+SELECT pg_temp.actor(6);
+INSERT INTO sa_results VALUES('co',pg_temp.attempt(format($q$SELECT pg_temp.respond(%L,'accept','hi-co')$q$,pg_temp.req('r1'))));
+SELECT pg_temp.assert_true(pg_temp.v('co')->'ok'->>'aggregateOutcome'='accepted',
+  'linked card profile responds and closes the request '||COALESCE(pg_temp.v('co')->>'error',''));
+INSERT INTO sa_results VALUES('co-replay',pg_temp.attempt(format($q$SELECT pg_temp.respond(%L,'accept','hi-co')$q$,pg_temp.req('r1'))));
+SELECT pg_temp.assert_true(pg_temp.v('co-replay')->'ok'->>'responseId'=pg_temp.v('co')->'ok'->>'responseId'
+  AND (pg_temp.v('co-replay')->'ok'->>'replayed')::boolean,'linked card profile replays its receipt');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT x.signer_id=s.id AND s.slot='co_client' AND s.household_person_id=pg_temp.card(2)
+    AND s.profile_id IS NULL AND x.responder_profile_id=pg_temp.uid(6) AND x.method='portal_authenticated'
+  FROM public.service_acceptance_responses x JOIN public.service_acceptance_signers s ON s.id=x.signer_id
+  WHERE x.id=(pg_temp.v('co')->'ok'->>'responseId')::uuid),
+  'response is attributed to the household slot and the responding auth.uid()');
+SELECT pg_temp.assert_true((SELECT x.signer_id=pg_temp.signer(pg_temp.req('r1'),'guest') AND x.responder_profile_id=pg_temp.uid(10)
+  FROM public.service_acceptance_responses x WHERE x.id=(pg_temp.v('guest')->'ok'->>'responseId')::uuid),
+  'guest response is attributed to its slot and its linked profile');
+
+-- Replaced slots never qualify: the retired card slot's linked profile, and
+-- the primary client once its slot moves to an unlinked card.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('r2',pg_temp.create('hi-r2'));
+SELECT pg_temp.deliver(pg_temp.req('r2'));
+SELECT pg_temp.snap(pg_temp.req('r2'));
+INSERT INTO sa_results VALUES('rp-co',public.replace_service_acceptance_signer(pg_temp.req('r2'),
+  pg_temp.signer(pg_temp.req('r2'),'co_client'),NULL,pg_temp.card(6),1,'Co-client signs on paper','hi-rp-co'));
+INSERT INTO sa_results VALUES('rp-client',public.replace_service_acceptance_signer(pg_temp.req('r2'),
+  pg_temp.signer(pg_temp.req('r2'),'client'),NULL,pg_temp.card(5),2,'Client hands over to the spare card','hi-rp-client'));
+SELECT pg_temp.assert_true((SELECT count(*)=2 FROM public.service_acceptance_signers WHERE request_id=pg_temp.req('r2')
+  AND status='replaced') AND (SELECT signer_policy_revision=3 AND lifecycle='sent' FROM public.service_acceptance_requests
+  WHERE id=pg_temp.req('r2')),'fixture: both required slots of the second request are replaced by unlinked cards');
+SELECT pg_temp.snap(pg_temp.req('r2'));
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r2'))->>'count')::int=0,'replaced card slot profile is not listed');
+SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r2')),'42501','insufficient_privilege',
+  'replaced card slot profile cannot read the evidence');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-6-replaced')$q$,pg_temp.req('r2')),'55000',
+  'signer_not_active','replaced card slot profile cannot respond');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r2'))->>'count')::int=1
+  AND pg_temp.listed(pg_temp.req('r2'))->'entry'->>'viewerRole'='observer'
+  AND pg_temp.listed(pg_temp.req('r2'))->'entry'->'viewerSignerId'='null'::jsonb,
+  'primary client is listed only as an observer of the card slots');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-5-replaced')$q$,pg_temp.req('r2')),'55000',
+  'signer_not_active','primary client cannot answer for an unlinked card slot');
+RESET ROLE;
+SELECT pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE request_id=pg_temp.req('r2')),
+  'refused responses leave no row');
+REVOKE EXECUTE ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) FROM authenticated;
+SELECT pg_temp.assert_true(NOT has_function_privilege('authenticated',
+  'public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text)','EXECUTE'),'respond stays revoked (inactive)');
+DO $$ BEGIN RAISE NOTICE 'C4 household identity: PASS % assertions', (SELECT n FROM assertion_count); END $$;

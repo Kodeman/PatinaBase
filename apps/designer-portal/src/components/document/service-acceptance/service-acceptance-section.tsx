@@ -54,11 +54,12 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
   // Each required signer has its own notice (00891); the same drafts the
   // ready-to-send sheet keeps open say which still wait for the designer. A
   // delivered notice whose send is not finalized stays open there, with its
-  // retry, so the hand-off stays too.
+  // retry, so the hand-off stays too. Each open notice's status is kept so
+  // the hand-off can say whether it waits on review or is already sending.
   const outbound = useOutboundDrafts({ projectId });
-  const awaiting = (requestId: string) => (outbound.data ?? []).filter((draft) =>
+  const openNotices = (requestId: string) => (outbound.data ?? []).filter((draft) =>
     draft.ref_type === 'service_acceptance_request' && draft.ref_id === requestId
-    && OPEN_STATUSES.has(draft.status)).length;
+    && OPEN_STATUSES.has(draft.status)).map((draft) => draft.status);
 
   return (
     <section aria-labelledby={`service-acceptance-${projectId}`} data-service-acceptance className="mt-6">
@@ -85,7 +86,7 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
             <ol className="mt-4 space-y-4" aria-label="Service acceptance requests">
               {requests.map((request) => (
                 <RequestCard key={request.requestId} projectId={projectId} request={request}
-                  awaitingDrafts={awaiting(request.requestId)} predecessor={request.predecessorRequestId ? byId.get(request.predecessorRequestId) : undefined}
+                  openNotices={openNotices(request.requestId)} predecessor={request.predecessorRequestId ? byId.get(request.predecessorRequestId) : undefined}
                   report={report} onInactive={() => setInactive(true)} />
               ))}
             </ol>
@@ -188,10 +189,10 @@ function CreateRequest({ projectId, hasOpen, report }: { projectId: string; hasO
   );
 }
 
-function RequestCard({ projectId, request, awaitingDrafts, predecessor, report, onInactive }: {
+function RequestCard({ projectId, request, openNotices, predecessor, report, onInactive }: {
   projectId: string;
   request: ServiceAcceptanceRequest;
-  awaitingDrafts: number;
+  openNotices: string[];
   predecessor?: ServiceAcceptanceRequest;
   report: Report;
   onInactive: () => void;
@@ -217,8 +218,8 @@ function RequestCard({ projectId, request, awaitingDrafts, predecessor, report, 
         </p>
       )}
       {request.sentAt && <p className="t-meta">Sent {shortDate(request.sentAt)}.</p>}
-      {waitsForSend(request, awaitingDrafts) && (
-        <ReviewAndSend projectId={projectId} request={request} awaitingDrafts={awaitingDrafts} />
+      {waitsForSend(request, openNotices.length) && (
+        <ReviewAndSend projectId={projectId} request={request} openNotices={openNotices} />
       )}
 
       <ul className="mt-3 space-y-2" aria-label={`Signers on request ${request.requestNumber}`}>
@@ -255,22 +256,27 @@ function waitsForSend(request: ServiceAcceptanceRequest, awaitingDrafts: number)
     : request.lifecycle === 'sent' && awaitingDrafts > 0;
 }
 
-function handOffCopy(request: ServiceAcceptanceRequest, awaitingDrafts: number) {
-  if (request.lifecycle === 'sent') {
-    return awaitingDrafts === 1 ? 'One signer’s notice is still waiting for your review.'
-      : `${awaitingDrafts} signers’ notices are still waiting for your review.`;
+// A 'sending' notice is no longer waiting for review: its send has started, or
+// it was delivered and its finalization is being retried in Ready to send.
+function handOffCopy(request: ServiceAcceptanceRequest, openNotices: string[]) {
+  const review = openNotices.filter((status) => status === 'awaiting_review').length;
+  const sending = openNotices.length - review;
+  if (request.lifecycle === 'draft' && sending === 0) {
+    return review > 1 ? `Drafted for ${review} signers, for your review. Nothing has been sent.`
+      : 'Drafted for your review. Nothing has been sent.';
   }
-  return awaitingDrafts > 1 ? `Drafted for ${awaitingDrafts} signers, for your review. Nothing has been sent.`
-    : 'Drafted for your review. Nothing has been sent.';
+  const notices = (count: number) => (count === 1 ? 'One signer’s notice is' : `${count} signers’ notices are`);
+  return [review > 0 ? `${notices(review)} still waiting for your review.` : null,
+    sending > 0 ? `${notices(sending)} still being sent.` : null].filter(Boolean).join(' ');
 }
 
-function ReviewAndSend({ projectId, request, awaitingDrafts }: {
-  projectId: string; request: ServiceAcceptanceRequest; awaitingDrafts: number;
+function ReviewAndSend({ projectId, request, openNotices }: {
+  projectId: string; request: ServiceAcceptanceRequest; openNotices: string[];
 }) {
   const [reviewOpen, setReviewOpen] = useState(false);
   return (
     <div className="mt-2">
-      <p className="t-body-sm">{handOffCopy(request, awaitingDrafts)}</p>
+      <p className="t-body-sm">{handOffCopy(request, openNotices)}</p>
       <DocumentActionRow surfaceKey="service-acceptance" regionKey="hand-off">
         <DocumentAction actionKey="open-acceptance-draft" data-outbound-draft-id={request.outboundDraftId}
           onClick={() => setReviewOpen(true)}>
