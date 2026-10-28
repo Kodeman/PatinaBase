@@ -19,7 +19,8 @@ jest.mock('@patina/supabase', () => ({
   useStudioIdentity: () => ({}),
   useClientEditionSourceUrls: () => ({}),
 }));
-jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => ({ value: true }) }));
+jest.mock('@/hooks/use-feature-flag', () => ({
+  ...jest.requireActual('@/hooks/use-feature-flag'), useFeatureFlag: () => ({ value: true }) }));
 jest.mock('@/lib/document/client-editions', () => ({
   currentEdition: () => null,
   pendingEdition: () => null,
