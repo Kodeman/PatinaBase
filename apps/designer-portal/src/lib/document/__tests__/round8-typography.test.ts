@@ -53,14 +53,21 @@ describe('Round-8 typography (18px root)', () => {
     expect(sheet.toString()).toContain('--r8-type-min: 12px');
   });
 
-  it('leaves aria-hidden decorative tick stamps out of the inherited utility floor', () => {
+  it('excludes only aria-hidden 13px square tick stamps from the inherited utility floor', () => {
     const floors: string[] = [];
     sheet.walkDecls('font-size', (decl) => {
       if (decl.value !== 'var(--r8-type-min)' || decl.parent?.type !== 'rule') return;
       floors.push(decl.parent.selector);
-      expect(decl.parent.selector).toContain('):not([aria-hidden])');
+      expect(decl.parent.selector).toContain('):not([aria-hidden][class~="h-[13px]"][class~="w-[13px]"])');
+      expect(decl.parent.selector).not.toContain(':not([aria-hidden])');
     });
     expect(floors).toHaveLength(1);
+
+    const stamps = sources.flatMap((source) => [...source.matchAll(/<span\s+aria-hidden\b[^>]*className="([^"]*h-\[13px\][^"]*text-\[(?:8|9)px\][^"]*)"/g)]);
+    expect(stamps).toHaveLength(6);
+    for (const [, classes] of stamps) {
+      expect(classes.split(' ')).toContain('w-[13px]');
+    }
   });
 
   it('uses sentence-case body type for paper metadata without changing drafting stock', () => {

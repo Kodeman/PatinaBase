@@ -79,7 +79,7 @@
   [class~="text-[0.4rem]"], [class~="text-[0.42rem]"], [class~="text-[0.44rem]"],
   [class~="text-[0.58rem]"], [class~="text-[0.62rem]"],
   [class~="text-[0.64rem]"], [class~="text-[0.66rem]"]
-):not([aria-hidden]) {
+):not([aria-hidden][class~="h-[13px]"][class~="w-[13px]"]) {
   font-size: var(--r8-type-min);
 }
 
