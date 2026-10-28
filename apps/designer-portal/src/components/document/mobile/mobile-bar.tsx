@@ -346,13 +346,10 @@ export function MobileBar() {
           ? `${primaryAction.label}…`
           : undefined,
         // The act is shortened at its source, never clipped here: the label
-        // wraps inside the 44px control rather than losing its last word.
-        // RC-4 D1 — the band's Next plate is a short verb phrase and never
-        // breaks mid-label ("Send / reminder" at 390): it holds one line and
-        // its slot keeps the plate's width (below), taking it from the door.
-        className: `min-h-11 w-full min-w-0 ${
-          bandsNext ? '[&_.da-label]:whitespace-nowrap' : '[&_.da-label]:whitespace-normal'
-        } [&_.da-label]:text-center [&_.da-label]:leading-[15px]`,
+        // wraps at word boundaries inside the 44px control rather than losing
+        // its last word.
+        className:
+          'min-h-11 w-full min-w-0 [&_.da-label]:whitespace-normal [&_.da-label]:text-center [&_.da-label]:leading-[15px]',
         children: primaryAction.label,
       }
     : null;
@@ -383,16 +380,20 @@ export function MobileBar() {
           aria-label={
             stopLabel ? `Open project contents, at ${stopLabel}` : 'Open project contents'
           }
-          className="flex min-h-11 min-w-0 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
+          className="flex min-h-11 min-w-11 flex-[1_1_0] items-center gap-2 rounded-[4px] px-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clay-ink)]"
         >
           {STRATA}
-          <span className="min-w-0">
-            <span className="block font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)]">
+          {/* RC-4 F1 — when the band's Next leaves the door less room than
+              its longest word ("SECTIONS"), the words step out and the door
+              is its strata mark alone; its aria-label still says where. They
+              never run on beneath the plate. */}
+          <span className="min-w-0 flex-1 [container-type:inline-size]">
+            <span className="hidden font-mono text-[12px] uppercase tracking-[0.08em] text-[var(--text-subtle)] [@container(min-width:72px)]:block">
               Project file sections
             </span>
             {household && (
               <span
-                className="block break-words font-heading text-[14px] font-medium text-[var(--text-primary)]"
+                className="hidden break-words font-heading text-[14px] font-medium text-[var(--text-primary)] [@container(min-width:72px)]:block"
               >
                 {household}
               </span>
@@ -410,7 +411,7 @@ export function MobileBar() {
               aria-hidden={stopLabel ? undefined : true}
               // Below 600 the stop holds to one line: at 320 a wrap broke the
               // last word into an orphan line. The door's name keeps it whole.
-              className={`block break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] max-[599px]:truncate ${
+              className={`hidden break-words font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] max-[599px]:truncate [@container(min-width:72px)]:block ${
                 stopLabel ? '' : 'invisible'
               }`}
             >
@@ -436,9 +437,12 @@ export function MobileBar() {
       {/* SQ-856 — with no act the slot collapses, so the section label keeps
           the width the Tester mark and the worded More now take. From 600
           the band's Next is the band's, so its slot collapses the same way. */}
+      {/* RC-4 D1 — the band's Next plate asks for its one-line width and
+          gives it back word by word when the dock is short; the door keeps
+          the rest, never less than its 44px target. */}
       <div
-        className={`flex flex-[1.15_1_0] items-center justify-center empty:hidden ${
-          bandsNext ? 'min-w-fit min-[600px]:hidden' : 'min-w-0'
+        className={`flex min-w-0 items-center justify-center empty:hidden ${
+          bandsNext ? 'flex-[0_1_auto] min-[600px]:hidden' : 'flex-[1.15_1_0]'
         }`}
       >
         {primaryAction && primaryShared ? (
