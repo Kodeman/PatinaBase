@@ -14,12 +14,19 @@ import Foundation
 enum ServiceAcceptanceFixture {
     /// One client-shaped row, as `_service_acceptance_request_json(id, false)`
     /// plus `viewerRole` / `viewerSignerId` serve it (00886:651-688, :1243-1254).
+    /// `signers` replaces the whole signers value (`"null"` for null); pass
+    /// `omitSigners` to drop the key. `viewerSignerId` nil serves JSON null.
     static func row(
         viewerRole: String? = "signer_required",
         lifecycle: String = "sent",
         aggregateOutcome: String = "pending",
         viewerResponse: String? = nil,
-        method: String = "portal_authenticated"
+        method: String = "portal_authenticated",
+        requestId: String = "req-1",
+        scopeContentHash: String = "sha-scope-1",
+        signers: String? = nil,
+        omitSigners: Bool = false,
+        viewerSignerId: String? = "s-me"
     ) -> String {
         let role = viewerRole.map { "\"viewerRole\": \"\($0)\"," } ?? ""
         let response = viewerResponse.map {
@@ -28,19 +35,24 @@ enum ServiceAcceptanceFixture {
              "method": "\(method)", "respondedAt": "2026-10-27T10:00:00Z"}
             """
         } ?? "null"
+        let signerList = signers ?? """
+        [
+            {"signerId": "s-me", "slot": "client", "required": true, "response": \(response)},
+            {"signerId": "s-partner", "slot": "household_partner", "required": false, "response": null}
+          ]
+        """
+        let signerKey = omitSigners ? "" : "\"signers\": \(signerList),"
+        let viewer = viewerSignerId.map { "\"\($0)\"" } ?? "null"
         return """
         {
-          "requestId": "req-1", "projectId": "proj-1", "requestNumber": 2,
-          "scopeEditionId": "ed-1", "scopeContentHash": "sha-scope-1",
+          "requestId": "\(requestId)", "projectId": "proj-1", "requestNumber": 2,
+          "scopeEditionId": "ed-1", "scopeContentHash": "\(scopeContentHash)",
           "evidenceManifestHash": "sha-evidence-1", "lifecycle": "\(lifecycle)",
           "aggregateOutcome": "\(aggregateOutcome)", "closedAt": null,
           "signerPolicyRevision": 3, "sentAt": "2026-10-26T09:00:00Z",
-          "signers": [
-            {"signerId": "s-me", "slot": "client", "required": true, "response": \(response)},
-            {"signerId": "s-partner", "slot": "household_partner", "required": false, "response": null}
-          ],
+          \(signerKey)
           \(role)
-          "viewerSignerId": "s-me"
+          "viewerSignerId": \(viewer)
         }
         """
     }

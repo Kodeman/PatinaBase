@@ -49,12 +49,13 @@ struct ServiceAcceptanceRenderTests {
         let request = try ServiceAcceptanceFixture.request(json)
         let model = ServiceAcceptanceModel(service: StubService(rows: [request], failure: failure))
         await model.load()
+        model.presentedRequestId = request.requestId
         return model
     }
 
     private static func shoot(_ model: ServiceAcceptanceModel, _ name: String,
                               _ style: UIUserInterfaceStyle) -> Int {
-        let view = ServiceAcceptanceDetailContent(model: model, requestId: "req-1")
+        let view = ServiceAcceptanceDetailContent(model: model)
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(PatinaColors.Background.primary)
@@ -93,9 +94,19 @@ struct ServiceAcceptanceRenderTests {
                                          viewerResponse: "accept", method: "ios_authenticated")
         )
 
+        let overLimit = try await Self.model(ServiceAcceptanceFixture.row())
+        overLimit.choose(.returnToStudio)
+        overLimit.returnReason = String(repeating: "a", count: 2001)
+        #expect(overLimit.draftIssue == .reasonTooLong)
+        let recorded = try await Self.model(ServiceAcceptanceFixture.row())
+        recorded.choose(.accept)
+        if let request = recorded.request(id: "req-1") { await recorded.submit(for: request) }
+        #expect(recorded.settled["req-1"]?.answer == .accept)
+
         let states: [(String, ServiceAcceptanceModel)] = [
             ("01-required-signer", required), ("02-accept-with-conditions", conditions),
-            ("03-unknown-role-observer", observer), ("04-paused", paused), ("05-closed-accepted", closed)
+            ("03-unknown-role-observer", observer), ("04-paused", paused), ("05-closed-accepted", closed),
+            ("06-return-over-limit", overLimit), ("07-recorded-awaiting-reload", recorded)
         ]
         for style in PatinaContrast.appearances {
             for (name, model) in states {

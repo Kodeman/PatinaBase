@@ -15,9 +15,40 @@ enum ServiceAcceptanceCopy {
     static let detailTitle = "The agreed services"
     static let intro = "Your studio asked you to confirm the services in your agreed scope."
 
-    /// The statement a required signer accepts. Exact wording, per WP-10C-d.
-    static let acceptStatement = "You confirm the studio delivered the service described in this agreed scope."
+    /// The statement a required signer accepts. WP-10C-d's wording, naming
+    /// the exact scope edition the request binds.
+    static func acceptStatement(_ request: RemoteServiceAcceptanceRequest) -> String {
+        "You confirm the studio delivered the service described in this agreed scope (edition \(request.scopeEditionId))."
+    }
     static let returnStatement = "Your studio gets your reason and prepares a new request. Nothing is accepted."
+
+    // The exact references the request binds, as the web client shows them.
+    static func referencesTitle(_ request: RemoteServiceAcceptanceRequest) -> String {
+        request.viewerRole == .signerRequired ? "What you’re accepting" : "Agreed scope and evidence"
+    }
+    static let scopeEditionLabel = "Agreed scope edition"
+    static func scopeReference(_ hash: String) -> String { "Scope reference · \(shortReference(hash))" }
+    static func evidenceReference(_ hash: String) -> String { "Evidence reference · \(shortReference(hash))" }
+    static let referencesNote =
+        "These references identify the agreed scope and evidence. Their contents aren’t available in the app yet."
+    /// The web client's short form: the first twelve characters.
+    static func shortReference(_ hash: String) -> String { String(hash.prefix(12)) }
+
+    static func issue(_ issue: ServiceAcceptanceAnswerIssue) -> String? {
+        switch issue {
+        case .missingCondition, .missingReason: return nil
+        case .tooManyConditions: return "Use no more than 20 conditions."
+        case .conditionTooLong(let row): return "Condition \(row) is over 2,000 characters. Shorten it to send."
+        case .reasonTooLong: return "Your reason is over 2,000 characters. Shorten it to send."
+        }
+    }
+
+    static let recorded = "Your response is recorded."
+    static let settledNoAnswer = "Reload to see where this request stands."
+    static let refreshFailed = "Couldn’t refresh the agreed services."
+    static let loading = "Loading the agreed services…"
+    static let pastRequests = "Past requests"
+    static let unavailable = "This request isn’t available to this account."
 
     static let conditionsLabel = "Your conditions"
     static let conditionPlaceholder = "A condition your studio needs to meet"
@@ -59,10 +90,11 @@ enum ServiceAcceptanceCopy {
     }
 
     /// One line on the entry card and at the head of the detail.
-    static func status(_ request: RemoteServiceAcceptanceRequest) -> String {
+    static func status(_ request: RemoteServiceAcceptanceRequest, settled: ServiceAcceptanceSettled? = nil) -> String {
         if let line = lifecycleStatus(request.lifecycle) ?? outcomeStatus(request.aggregateOutcome) {
             return line
         }
+        if let settled { return settled.answer == nil ? settledNoAnswer : recorded }
         if request.canRespond { return "Waiting on your response." }
         if request.viewerResponse != nil { return "Your response is recorded. Waiting on the others." }
         switch request.viewerRole {
@@ -100,7 +132,10 @@ enum ServiceAcceptanceCopy {
         switch request.viewerRole {
         case .observer: return "You can follow this request. Someone else on the project was asked to respond."
         case .signerOptional: return "You’re listed on this request, but your response isn’t needed."
-        case .signerRequired: return nil
+        case .signerRequired:
+            // A required role whose own signer entry is missing or
+            // inconsistent: malformed, so read-only.
+            return request.viewerSigner == nil ? readOnly : nil
         }
     }
 
@@ -136,6 +171,9 @@ enum ServiceAcceptanceCopy {
         case .requestNotOpen: return "This request is closed. Its final state is shown here."
         case .paused: return "Responses are paused for now. Nothing you’ve seen is lost."
         case .notYours: return "This request is no longer yours to answer."
+        case .invalid:
+            return "Your response is outside the limits: 1–20 conditions, each up to 2,000 characters, "
+                + "or a reason up to 2,000 characters. Edit it to send."
         case .failed: return "That didn’t go through. Try again."
         }
     }

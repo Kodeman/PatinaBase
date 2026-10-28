@@ -162,6 +162,9 @@ nonisolated struct RemoteServiceAcceptanceRequest: Decodable, Sendable, Identifi
     let signerPolicyRevision: Int
     let sentAt: String?
     let signers: [RemoteServiceAcceptanceSigner]
+    /// False when the row carried no `signers` array (absent or null). Such a
+    /// row is malformed: nobody on it is offered an act.
+    let signersPresent: Bool
     let viewerRole: ServiceAcceptanceViewerRole
     let viewerSignerId: String?
 
@@ -186,25 +189,39 @@ nonisolated struct RemoteServiceAcceptanceRequest: Decodable, Sendable, Identifi
         closedAt = try keys.decodeIfPresent(String.self, forKey: .closedAt)
         signerPolicyRevision = try keys.decode(Int.self, forKey: .signerPolicyRevision)
         sentAt = try keys.decodeIfPresent(String.self, forKey: .sentAt)
-        signers = try keys.decodeIfPresent([RemoteServiceAcceptanceSigner].self, forKey: .signers) ?? []
+        let signerList = try keys.decodeIfPresent([RemoteServiceAcceptanceSigner].self, forKey: .signers)
+        signers = signerList ?? []
+        signersPresent = signerList != nil
         // Absent is unknown, and unknown is observer.
         viewerRole = try keys.decodeIfPresent(ServiceAcceptanceViewerRole.self, forKey: .viewerRole) ?? .observer
         viewerSignerId = try keys.decodeIfPresent(String.self, forKey: .viewerSignerId)
     }
 
-    /// The caller's own answer, when she is a signer and has given one.
-    var viewerResponse: RemoteServiceAcceptanceResponse? {
-        guard let viewerSignerId else { return nil }
-        return signers.first { $0.signerId == viewerSignerId }?.response
+    /// The caller's own signer entry, only when the row is consistent: a
+    /// signers array was served, `viewerSignerId` matches exactly one entry
+    /// in it, and that entry's `required` flag agrees with `viewerRole`.
+    /// Absent, null, unmatched or contradictory data gives nil: malformed,
+    /// never "no response yet".
+    var viewerSigner: RemoteServiceAcceptanceSigner? {
+        guard signersPresent, viewerRole != .observer, let viewerSignerId else { return nil }
+        let matches = signers.filter { $0.signerId == viewerSignerId }
+        guard matches.count == 1, let signer = matches.first,
+              signer.required == (viewerRole == .signerRequired) else { return nil }
+        return signer
     }
+
+    /// The caller's own answer, when she is a signer and has given one.
+    var viewerResponse: RemoteServiceAcceptanceResponse? { viewerSigner?.response }
 
     /// Still in front of its signers: sent, and no outcome derived yet.
     var isOpen: Bool { lifecycle == .sent && aggregateOutcome == .pending }
 
     /// The three acts are offered only to a required signer, on an open
-    /// request, who has not answered. Every unknown value fails this.
+    /// request, whose own well-formed signer entry has no answer. Every
+    /// unknown or malformed value fails this.
     var canRespond: Bool {
-        viewerRole == .signerRequired && viewerSignerId != nil && isOpen && viewerResponse == nil
+        guard viewerRole == .signerRequired, isOpen, let signer = viewerSigner else { return false }
+        return signer.response == nil
     }
 }
 
@@ -217,13 +234,16 @@ nonisolated enum ServiceAcceptanceAnswer: Equatable, Sendable {
     case acceptWithConditions([String])
     case returned(reason: String)
 
-    var wireResponse: String {
+    /// The kind the record will carry once this answer is accepted.
+    var recordedKind: ServiceAcceptanceResponseKind {
         switch self {
-        case .accept: return ServiceAcceptanceResponseKind.accept.rawValue
-        case .acceptWithConditions: return ServiceAcceptanceResponseKind.acceptWithConditions.rawValue
-        case .returned: return ServiceAcceptanceResponseKind.return.rawValue
+        case .accept: return .accept
+        case .acceptWithConditions: return .acceptWithConditions
+        case .returned: return .return
         }
     }
+
+    var wireResponse: String { recordedKind.rawValue }
 
     var conditionTexts: [String] {
         guard case .acceptWithConditions(let list) = self else { return [] }
@@ -236,12 +256,50 @@ nonisolated enum ServiceAcceptanceAnswer: Equatable, Sendable {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// Conditions need at least one line; a return needs its reason.
-    var isComplete: Bool {
+    /// Server bounds (00886 `_service_acceptance_conditions`): 1–20
+    /// conditions, each 1–2000 characters; a return reason 1–2000 characters.
+    static let maxConditions = 20
+    static let maxTextLength = 2000
+
+    /// What stops this answer going to the server, or nil when it can go.
+    /// Lengths count Unicode scalars, as Postgres `length()` counts them.
+    var issue: ServiceAcceptanceAnswerIssue? {
         switch self {
-        case .accept: return true
-        case .acceptWithConditions: return !conditionTexts.isEmpty
-        case .returned: return returnReason != nil
+        case .accept:
+            return nil
+        case .acceptWithConditions(let list):
+            for (index, raw) in list.enumerated()
+            where raw.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.count > Self.maxTextLength {
+                return .conditionTooLong(row: index + 1)
+            }
+            let count = conditionTexts.count
+            if count == 0 { return .missingCondition }
+            return count > Self.maxConditions ? .tooManyConditions : nil
+        case .returned:
+            guard let reason = returnReason else { return .missingReason }
+            return reason.unicodeScalars.count > Self.maxTextLength ? .reasonTooLong : nil
+        }
+    }
+
+    /// Within the server's bounds and ready to send.
+    var isComplete: Bool { issue == nil }
+}
+
+/// Why a composed answer cannot be sent yet. The first two are the ordinary
+/// unfinished states; the rest are over the server's limits and get a local
+/// error, since sending them unchanged could never succeed.
+nonisolated enum ServiceAcceptanceAnswerIssue: Equatable, Sendable {
+    case missingCondition
+    case missingReason
+    case tooManyConditions
+    /// 1-based row in the composer.
+    case conditionTooLong(row: Int)
+    case reasonTooLong
+
+    var isOverLimit: Bool {
+        switch self {
+        case .missingCondition, .missingReason: return false
+        case .tooManyConditions, .conditionTooLong, .reasonTooLong: return true
         }
     }
 }
@@ -298,6 +356,9 @@ nonisolated enum ServiceAcceptanceRefusal: Equatable, Sendable {
     case paused
     /// She is no longer an active signer on this request.
     case notYours
+    /// `service_acceptance_response_invalid`: the answer is outside the
+    /// server's bounds. Sending it unchanged cannot succeed; she edits it.
+    case invalid
     /// Anything else, including the network. A retry keeps the same key.
     case failed
 
@@ -324,6 +385,8 @@ nonisolated enum ServiceAcceptanceRefusal: Equatable, Sendable {
             self = .paused
         case "insufficient_privilege", "signer_not_active":
             self = .notYours
+        case "service_acceptance_response_invalid":
+            self = .invalid
         default:
             // An ungranted function is PostgREST's 42501 "permission denied
             // for function respond_service_acceptance" — the shipped-inactive

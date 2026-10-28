@@ -55,7 +55,7 @@ private let refusalCases: [RefusalCase] = [
     RefusalCase(code: "42501", message: "permission denied for function respond_service_acceptance", expected: .paused),
     RefusalCase(code: "42501", message: "insufficient_privilege", expected: .notYours),
     RefusalCase(code: "55000", message: "signer_not_active", expected: .notYours),
-    RefusalCase(code: "23514", message: "service_acceptance_response_invalid", expected: .failed)
+    RefusalCase(code: "23514", message: "service_acceptance_response_invalid", expected: .invalid)
 ]
 
 @MainActor
@@ -149,6 +149,7 @@ struct ServiceAcceptanceRespondTests {
         )
         let model = ServiceAcceptanceModel(service: fake)
         await model.load()
+        model.presentedRequestId = request.requestId
         model.choose(.accept)
 
         await model.submit(for: request)
@@ -170,6 +171,7 @@ struct ServiceAcceptanceRespondTests {
         let fake = FakeServiceAcceptanceService(rows: [request], failures: [URLError(.timedOut)])
         let model = ServiceAcceptanceModel(service: fake)
         await model.load()
+        model.presentedRequestId = request.requestId
         model.choose(.accept)
         await model.submit(for: request)
         model.choose(.returnToStudio)
@@ -214,6 +216,7 @@ struct ServiceAcceptanceRespondTests {
         let fake = FakeServiceAcceptanceService(rows: [request], failures: [refusalBody("40001", "stale_scope")])
         let model = ServiceAcceptanceModel(service: fake)
         await model.load()
+        model.presentedRequestId = request.requestId
         model.choose(.accept)
         await model.submit(for: request)
         #expect(model.refusal == .stale)
@@ -232,6 +235,7 @@ struct ServiceAcceptanceRespondTests {
             let fake = FakeServiceAcceptanceService(rows: [request], failures: [refusalBody("55000", message)])
             let model = ServiceAcceptanceModel(service: fake)
             await model.load()
+            model.presentedRequestId = request.requestId
             model.choose(.accept)
             await model.submit(for: request)
             #expect(await fake.fetches == 2, "\(message) did not re-read")
@@ -261,7 +265,7 @@ struct ServiceAcceptanceRespondTests {
             }
         }
         #expect(walked > 20, "the literal walk found only \(walked) literals")
-        #expect(ServiceAcceptanceCopy.acceptStatement
-                == "You confirm the studio delivered the service described in this agreed scope.")
+        #expect(ServiceAcceptanceCopy.acceptStatement(try openRequest())
+                == "You confirm the studio delivered the service described in this agreed scope (edition ed-1).")
     }
 }

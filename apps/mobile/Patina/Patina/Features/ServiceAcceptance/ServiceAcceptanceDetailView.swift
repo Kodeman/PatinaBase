@@ -12,14 +12,11 @@ import SwiftUI
 
 struct ServiceAcceptanceDetailView: View {
     @Bindable var model: ServiceAcceptanceModel
-    let requestId: String
     @Environment(\.dismiss) private var dismiss
-
-    private var request: RemoteServiceAcceptanceRequest? { model.request(id: requestId) }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            ServiceAcceptanceDetailContent(model: model, requestId: requestId)
+            ServiceAcceptanceDetailContent(model: model)
                 .padding(24)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -37,7 +34,7 @@ struct ServiceAcceptanceDetailView: View {
     @ViewBuilder
     private var footer: some View {
         VStack(spacing: 12) {
-            if let request, request.canRespond, let choice = model.choice {
+            if let request = model.presentedRequest, model.canRespond(request), let choice = model.choice {
                 PatinaButton(
                     model.refusal == .failed
                         ? ServiceAcceptanceCopy.tryAgain : ServiceAcceptanceCopy.submitLabel(choice),
@@ -66,29 +63,29 @@ struct ServiceAcceptanceDetailView: View {
 /// The scrolling body of the sheet, split out so it renders on its own.
 struct ServiceAcceptanceDetailContent: View {
     @Bindable var model: ServiceAcceptanceModel
-    let requestId: String
-
-    private var request: RemoteServiceAcceptanceRequest? { model.request(id: requestId) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if let request {
-                header(request)
-                if let note = ServiceAcceptanceCopy.roleNote(request) {
+            if let request = model.presentedRequest {
+                let settled = model.settled[request.requestId]
+                header(request, settled: settled)
+                references(request)
+                if settled == nil, let note = ServiceAcceptanceCopy.roleNote(request) {
                     Text(note)
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("serviceAcceptance.roleNote")
                 }
+                if let settled { settledSection(settled) }
                 responses(request)
-                if request.canRespond { respondSection(request) }
-            } else if model.loadFailed {
-                Text(ServiceAcceptanceCopy.loadFailed)
+                if model.canRespond(request) { respondSection(request) }
+            } else if model.isLoading || model.isFirstLoad {
+                PatinaLoadingState()
+            } else {
+                Text(model.loadFailed ? ServiceAcceptanceCopy.loadFailed : ServiceAcceptanceCopy.unavailable)
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.secondary)
-            } else {
-                PatinaLoadingState()
             }
             refusalLine
         }
@@ -96,7 +93,7 @@ struct ServiceAcceptanceDetailContent: View {
 
     // MARK: - Read
 
-    private func header(_ request: RemoteServiceAcceptanceRequest) -> some View {
+    private func header(_ request: RemoteServiceAcceptanceRequest, settled: ServiceAcceptanceSettled?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             MonoLabel(text: "\(ServiceAcceptanceCopy.eyebrow) · \(ServiceAcceptanceCopy.requestNumber(request.requestNumber))")
                 .tracking(2)
@@ -112,12 +109,73 @@ struct ServiceAcceptanceDetailContent: View {
                     .font(PatinaTypography.captionSmall)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
-            Text(ServiceAcceptanceCopy.status(request))
+            Text(ServiceAcceptanceCopy.status(request, settled: settled))
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.top, 4)
                 .accessibilityIdentifier("serviceAcceptance.status")
         }
+    }
+
+    /// F1: the exact references the request binds, drawn before any act.
+    private func references(_ request: RemoteServiceAcceptanceRequest) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MonoLabel(text: ServiceAcceptanceCopy.referencesTitle(request))
+            reference(ServiceAcceptanceCopy.scopeEditionLabel, request.scopeEditionId)
+            reference(ServiceAcceptanceCopy.scopeReference(request.scopeContentHash), request.scopeContentHash)
+            reference(ServiceAcceptanceCopy.evidenceReference(request.evidenceManifestHash),
+                      request.evidenceManifestHash)
+            help(ServiceAcceptanceCopy.referencesNote)
+        }
+        .accessibilityIdentifier("serviceAcceptance.references")
+    }
+
+    private func reference(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.primary)
+            Text(value)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// F4: acknowledged by the server, or settled by a refusal, and not yet
+    /// reconciled by a good read. Read-only, with a way to reload.
+    private func settledSection(_ settled: ServiceAcceptanceSettled) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let answer = settled.answer {
+                MonoLabel(text: ServiceAcceptanceCopy.recorded)
+                Text(ServiceAcceptanceCopy.response(answer.recordedKind))
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                ForEach(Array(answer.conditionTexts.enumerated()), id: \.offset) { _, text in
+                    Text("• \(text)")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let reason = answer.returnReason {
+                    Text(reason)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if model.loadFailed {
+                help(ServiceAcceptanceCopy.refreshFailed)
+            }
+            Button(ServiceAcceptanceCopy.reload) { Task { await model.reload() } }
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .disabled(model.isLoading)
+                .accessibilityIdentifier("serviceAcceptance.settled.reload")
+        }
+        .accessibilityIdentifier("serviceAcceptance.settled")
     }
 
     private func responses(_ request: RemoteServiceAcceptanceRequest) -> some View {
@@ -179,13 +237,20 @@ struct ServiceAcceptanceDetailContent: View {
                 MonoLabel(text: ServiceAcceptanceCopy.choiceLabel(choice))
                 switch choice {
                 case .accept:
-                    statement(ServiceAcceptanceCopy.acceptStatement)
+                    statement(ServiceAcceptanceCopy.acceptStatement(request))
                 case .acceptWithConditions:
                     conditionsComposer
-                    statement(ServiceAcceptanceCopy.acceptStatement)
+                    statement(ServiceAcceptanceCopy.acceptStatement(request))
                 case .returnToStudio:
                     returnComposer
                     statement(ServiceAcceptanceCopy.returnStatement)
+                }
+                if let issue = model.draftIssue, let line = ServiceAcceptanceCopy.issue(issue) {
+                    Text(line)
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.error)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("serviceAcceptance.issue")
                 }
             }
         } else {

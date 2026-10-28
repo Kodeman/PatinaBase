@@ -11,6 +11,7 @@ struct DecisionListView: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel = DecisionsListViewModel()
+    @State private var serviceAcceptance = ServiceAcceptanceModel()
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -18,7 +19,7 @@ struct DecisionListView: View {
                 header
                 // US-52 WP-10C-d: agreed-services requests, beside the list
                 // and never in it — they read their own projection.
-                ServiceAcceptanceEntry()
+                ServiceAcceptanceEntry(model: serviceAcceptance)
                 content
             }
             .padding(.bottom, MoneyScreenMetrics.bottomClearance)
@@ -28,7 +29,10 @@ struct DecisionListView: View {
         // the title, so the chrome adds only the back chevron.
         .patinaScreen(title: nil)
         .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
+        .refreshable {
+            await viewModel.load()
+            await serviceAcceptance.load()
+        }
     }
 
     private var header: some View {
