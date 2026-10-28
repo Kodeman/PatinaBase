@@ -45,6 +45,10 @@ struct ServiceAcceptanceDraft: Equatable, Sendable {
     var choice: ServiceAcceptanceChoice?
     var conditions: [String] = [""]
     var returnReason = ""
+    /// The signer policy revision on screen when she picked her act. The
+    /// answer goes only under this revision (C4 §2.9); a read showing another
+    /// keeps her words but asks her to review again.
+    var presentedRevision: Int?
 
     var answer: ServiceAcceptanceAnswer? {
         switch choice {
@@ -56,12 +60,42 @@ struct ServiceAcceptanceDraft: Equatable, Sendable {
     }
 }
 
-/// A request the server has settled for this caller since the last good read:
+/// The signer slot an act was made from: the request, her signer entry and
+/// the policy revision that held it. A studio replacement gives a new signer
+/// id and revision (00886 `replace_service_acceptance_signer`), so a new slot
+/// is a different binding.
+struct ServiceAcceptanceBinding: Hashable, Sendable {
+    let requestId: String
+    let signerId: String?
+    let signerPolicyRevision: Int
+
+    init(_ request: RemoteServiceAcceptanceRequest) {
+        requestId = request.requestId
+        signerId = request.viewerSignerId
+        signerPolicyRevision = request.signerPolicyRevision
+    }
+}
+
+/// A binding the server has settled for this caller since the last good read:
 /// her answer was acknowledged (`answer` set), or a refusal said no act can
-/// succeed (`answer` nil). It stays read-only until a successful read shows
-/// the request no longer waiting on her.
+/// succeed (`answer` nil). That binding stays read-only until a successful
+/// read shows it no longer waiting on her; a new slot for her is not settled.
 struct ServiceAcceptanceSettled: Equatable, Sendable {
+    let binding: ServiceAcceptanceBinding
     let answer: ServiceAcceptanceAnswer?
+}
+
+/// What the entry above the decision list draws.
+enum ServiceAcceptanceEntryState: Equatable, Sendable {
+    /// No read has finished yet.
+    case loading
+    /// No read has ever succeeded and the last one failed.
+    case firstLoadFailed
+    /// A read has succeeded; `refreshFailed` when the latest one did not,
+    /// however many rows are cached.
+    case loaded(refreshFailed: Bool)
+    /// The latest read succeeded and found nothing.
+    case empty
 }
 
 @Observable
@@ -92,6 +126,10 @@ final class ServiceAcceptanceModel {
     static let maxConditions = ServiceAcceptanceAnswer.maxConditions
 
     private let service: ServiceAcceptanceService
+    /// Bumped by every read that starts and by every settled act. A read
+    /// publishes only while it is still the latest, so a slow read begun
+    /// before an act can never write over what the act settled.
+    private var readGeneration = 0
 
     init(service: ServiceAcceptanceService = DecisionsAPIClient.shared) {
         self.service = service
@@ -108,6 +146,13 @@ final class ServiceAcceptanceModel {
     /// Nothing read yet and nothing failed: the first read is in flight.
     var isFirstLoad: Bool { !hasLoaded && !loadFailed }
 
+    var entryState: ServiceAcceptanceEntryState {
+        if isFirstLoad || (isLoading && !hasLoaded) { return .loading }
+        if !hasLoaded { return .firstLoadFailed }
+        if loadFailed || !requests.isEmpty { return .loaded(refreshFailed: loadFailed) }
+        return .empty
+    }
+
     func request(id: String) -> RemoteServiceAcceptanceRequest? {
         requests.first { $0.requestId == id }
     }
@@ -115,17 +160,27 @@ final class ServiceAcceptanceModel {
     var presentedRequest: RemoteServiceAcceptanceRequest? { presentedRequestId.flatMap(request(id:)) }
 
     func load() async {
+        readGeneration += 1
+        let generation = readGeneration
         isLoading = true
-        defer { isLoading = false }
         do {
             let fresh = try await service.fetchMyServiceAcceptanceRequests()
+            // A later read, or an act settled meanwhile, owns the screen now.
+            guard generation == readGeneration else { return }
+            isLoading = false
             requests = fresh
             hasLoaded = true
             loadFailed = false
-            // A good read that no longer offers her an act reconciles a
-            // settled request; one that still does keeps it read-only.
-            settled = settled.filter { id, _ in fresh.first { $0.requestId == id }?.canRespond == true }
+            // A good read that still offers her an act from the same binding
+            // keeps it read-only; anything else (answered, closed, or a new
+            // slot for her) reconciles it.
+            settled = settled.filter { id, entry in
+                guard let row = fresh.first(where: { $0.requestId == id }) else { return false }
+                return row.canRespond && ServiceAcceptanceBinding(row) == entry.binding
+            }
         } catch {
+            guard generation == readGeneration else { return }
+            isLoading = false
             // A failed read keeps whatever was already on screen.
             loadFailed = true
             #if DEBUG
@@ -134,9 +189,14 @@ final class ServiceAcceptanceModel {
         }
     }
 
-    /// The server offers her an act and nothing here has settled it since.
+    /// What has settled this request's current binding, if anything.
+    func settlement(for request: RemoteServiceAcceptanceRequest) -> ServiceAcceptanceSettled? {
+        settled[request.requestId].flatMap { $0.binding == ServiceAcceptanceBinding(request) ? $0 : nil }
+    }
+
+    /// The server offers her an act and nothing here has settled that slot since.
     func canRespond(_ request: RemoteServiceAcceptanceRequest) -> Bool {
-        request.canRespond && settled[request.requestId] == nil
+        request.canRespond && settlement(for: request) == nil
     }
 
     // MARK: - Compose (the presented request's draft)
@@ -161,8 +221,10 @@ final class ServiceAcceptanceModel {
         set { draft.returnReason = newValue }
     }
 
+    /// Picking an act binds the draft to the signer policy revision on screen.
     func choose(_ choice: ServiceAcceptanceChoice?) {
         draft.choice = choice
+        draft.presentedRevision = choice == nil ? nil : presentedRequest?.signerPolicyRevision
         refusal = nil
     }
 
@@ -172,8 +234,24 @@ final class ServiceAcceptanceModel {
     /// What stops the composed answer going, if anything.
     var draftIssue: ServiceAcceptanceAnswerIssue? { draftAnswer?.issue }
 
+    /// The signers changed after she picked her act: a read brought another
+    /// policy revision. Her words stay; Submit waits until she reviews again.
+    var signersChanged: Bool {
+        guard let request = presentedRequest, draft.choice != nil else { return false }
+        return draft.presentedRevision != request.signerPolicyRevision
+    }
+
+    /// Re-read the request, then ask her to pick her act again under what is
+    /// now shown. Her conditions and reason are kept.
+    func reviewAgain() async {
+        await reload()
+        guard !loadFailed else { return }
+        draft.choice = nil
+        draft.presentedRevision = nil
+    }
+
     var canSubmit: Bool {
-        guard !isSubmitting, let request = presentedRequest, canRespond(request),
+        guard !isSubmitting, let request = presentedRequest, canRespond(request), !signersChanged,
               let answer = draftAnswer, answer.isComplete else { return false }
         // The server already called this exact answer invalid; she edits it.
         return !(refusal == .invalid && pendingSubmission?.answer == answer)
@@ -193,8 +271,10 @@ final class ServiceAcceptanceModel {
     /// `client_request_id`, so the server replays rather than records twice.
     func submit(for request: RemoteServiceAcceptanceRequest) async {
         let key = ServiceAcceptanceDraftKey(request)
-        guard canRespond(request), !isSubmitting,
-              let answer = drafts[key]?.answer, answer.isComplete else { return }
+        // Only under the revision she was shown; never stamped with a newer one.
+        guard canRespond(request), !isSubmitting, let draft = drafts[key],
+              draft.presentedRevision == request.signerPolicyRevision,
+              let answer = draft.answer, answer.isComplete else { return }
         let submission: ServiceAcceptanceSubmission
         if let pending = pendingSubmission, pending.requestId == request.requestId,
            pending.answer == answer,
@@ -247,6 +327,9 @@ final class ServiceAcceptanceModel {
                         answer: ServiceAcceptanceAnswer?) {
         pendingSubmission = nil
         drafts[key] = nil
-        settled[request.requestId] = ServiceAcceptanceSettled(answer: answer)
+        settled[request.requestId] = ServiceAcceptanceSettled(binding: ServiceAcceptanceBinding(request),
+                                                              answer: answer)
+        // Any read already in flight began before this act; it never publishes.
+        readGeneration += 1
     }
 }

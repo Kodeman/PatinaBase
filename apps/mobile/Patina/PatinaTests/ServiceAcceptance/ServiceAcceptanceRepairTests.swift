@@ -298,13 +298,14 @@ struct ServiceAcceptanceRepairTests {
         #expect(model.isFirstLoad == false)
         #expect(model.loadFailed)
         #expect(model.hasLoaded == false, "a failed first read reads as loaded and empty")
+        #expect(model.entryState == .firstLoadFailed)
         await model.load()
         #expect(model.hasLoaded)
         #expect(model.loadFailed == false)
         #expect(model.openRequests.map(\.requestId) == ["req-1"])
 
         let entry = try SourcePin.readCode("Patina/Features/ServiceAcceptance/ServiceAcceptanceEntry.swift")
-        #expect(entry.contains("model.loadFailed && !model.hasLoaded"), "the entry hides a failed first read")
+        #expect(entry.contains("case .firstLoadFailed:"), "the entry hides a failed first read")
         #expect(entry.contains("ServiceAcceptanceCopy.tryAgain"))
     }
 

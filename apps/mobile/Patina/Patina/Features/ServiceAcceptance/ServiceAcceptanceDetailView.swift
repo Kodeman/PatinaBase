@@ -67,7 +67,7 @@ struct ServiceAcceptanceDetailContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if let request = model.presentedRequest {
-                let settled = model.settled[request.requestId]
+                let settled = model.settlement(for: request)
                 header(request, settled: settled)
                 references(request)
                 if settled == nil, let note = ServiceAcceptanceCopy.roleNote(request) {
@@ -252,6 +252,7 @@ struct ServiceAcceptanceDetailContent: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("serviceAcceptance.issue")
                 }
+                if model.signersChanged { signersChangedNotice }
             }
         } else {
             // P-16: three doors, one weight.
@@ -268,6 +269,23 @@ struct ServiceAcceptanceDetailContent: View {
                 }
             }
         }
+    }
+
+    /// R3: a read brought another signer policy revision after she picked her
+    /// act. Her words are kept; Submit stays off until she reviews again.
+    private var signersChangedNotice: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(ServiceAcceptanceCopy.signersChanged)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.error)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(ServiceAcceptanceCopy.reviewAgain) { Task { await model.reviewAgain() } }
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.interactive)
+                .disabled(model.isLoading)
+                .accessibilityIdentifier("serviceAcceptance.reviewAgain")
+        }
+        .accessibilityIdentifier("serviceAcceptance.signersChanged")
     }
 
     private func statement(_ text: String) -> some View {

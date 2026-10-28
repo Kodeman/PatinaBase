@@ -30,7 +30,8 @@ struct ServiceAcceptanceEntry: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.isFirstLoad || (model.isLoading && !model.hasLoaded) {
+        switch model.entryState {
+        case .loading:
             HStack(spacing: 10) {
                 ProgressView()
                 Text(ServiceAcceptanceCopy.loading)
@@ -41,13 +42,15 @@ struct ServiceAcceptanceEntry: View {
             .padding(.top, 12)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("serviceAcceptance.entry.loading")
-        } else if model.loadFailed && !model.hasLoaded {
+        case .firstLoadFailed:
             failure(ServiceAcceptanceCopy.loadFailed)
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
-        } else if !model.requests.isEmpty {
+        case .empty:
+            EmptyView()
+        case .loaded(let refreshFailed):
             VStack(alignment: .leading, spacing: 12) {
-                if model.loadFailed { failure(ServiceAcceptanceCopy.refreshFailed) }
+                if refreshFailed { failure(ServiceAcceptanceCopy.refreshFailed) }
                 ForEach(model.openRequests) { request in
                     cardButton(request)
                 }
@@ -111,7 +114,7 @@ struct ServiceAcceptanceEntry: View {
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
-            Text(ServiceAcceptanceCopy.status(request, settled: model.settled[request.requestId]))
+            Text(ServiceAcceptanceCopy.status(request, settled: model.settlement(for: request)))
                 .font(PatinaTypography.captionSmall)
                 .foregroundStyle(
                     model.canRespond(request) ? PatinaColors.Text.primary : PatinaColors.Text.muted

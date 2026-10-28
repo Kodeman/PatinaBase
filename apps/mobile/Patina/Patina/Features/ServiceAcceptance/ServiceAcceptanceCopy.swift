@@ -45,6 +45,9 @@ enum ServiceAcceptanceCopy {
 
     static let recorded = "Your response is recorded."
     static let settledNoAnswer = "Reload to see where this request stands."
+    static let signersChanged = "The signers on this request changed. Reload and review it again before you send. "
+        + "Your words are kept."
+    static let reviewAgain = "Reload and review again"
     static let refreshFailed = "Couldn’t refresh the agreed services."
     static let loading = "Loading the agreed services…"
     static let pastRequests = "Past requests"

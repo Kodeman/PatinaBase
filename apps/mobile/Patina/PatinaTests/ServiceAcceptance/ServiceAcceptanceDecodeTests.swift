@@ -26,7 +26,8 @@ enum ServiceAcceptanceFixture {
         scopeContentHash: String = "sha-scope-1",
         signers: String? = nil,
         omitSigners: Bool = false,
-        viewerSignerId: String? = "s-me"
+        viewerSignerId: String? = "s-me",
+        signerPolicyRevision: Int = 3
     ) -> String {
         let role = viewerRole.map { "\"viewerRole\": \"\($0)\"," } ?? ""
         let response = viewerResponse.map {
@@ -49,7 +50,7 @@ enum ServiceAcceptanceFixture {
           "scopeEditionId": "ed-1", "scopeContentHash": "\(scopeContentHash)",
           "evidenceManifestHash": "sha-evidence-1", "lifecycle": "\(lifecycle)",
           "aggregateOutcome": "\(aggregateOutcome)", "closedAt": null,
-          "signerPolicyRevision": 3, "sentAt": "2026-10-26T09:00:00Z",
+          "signerPolicyRevision": \(signerPolicyRevision), "sentAt": "2026-10-26T09:00:00Z",
           \(signerKey)
           \(role)
           "viewerSignerId": \(viewer)
