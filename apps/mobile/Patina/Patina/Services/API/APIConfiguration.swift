@@ -50,10 +50,23 @@ public enum APIConfiguration {
             // that breaks the old AppConfiguration ↔ APIConfiguration cycle.
             return URL(string: "https://bkvcixdmuyejfzcijpdg.supabase.co")!
         case .local:
-            // Local Supabase CLI stack (Kong/PostgREST on 54321), NOT the
-            // old self-hosted docker Kong (:8000).
+            return localSupabaseURL
+        }
+    }
+
+    // Local-only override for owned-stack verification walks.
+    private static var localSupabaseURL: URL {
+        guard let raw = UserDefaults.standard.string(forKey: "LocalSupabaseURL"),
+              let components = URLComponents(string: raw),
+              components.scheme == "http" || components.scheme == "https",
+              components.host == "127.0.0.1" || components.host == "localhost",
+              components.user == nil, components.password == nil,
+              components.path.isEmpty || components.path == "/",
+              components.query == nil, components.fragment == nil,
+              let url = components.url else {
             return URL(string: "http://127.0.0.1:54321")!
         }
+        return url
     }
 
     /// Portal URL (Next.js web app)
@@ -77,7 +90,10 @@ public enum APIConfiguration {
         case .cloud:
             return URL(string: "wss://bkvcixdmuyejfzcijpdg.supabase.co/realtime/v1/websocket")!
         case .local:
-            return URL(string: "ws://127.0.0.1:54321/realtime/v1/websocket")!
+            var components = URLComponents(url: localSupabaseURL, resolvingAgainstBaseURL: false)!
+            components.scheme = components.scheme == "https" ? "wss" : "ws"
+            components.path = "/realtime/v1/websocket"
+            return components.url!
         }
     }
 
