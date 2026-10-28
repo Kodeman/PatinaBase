@@ -105,13 +105,13 @@ export function useMyServiceAcceptanceRequests() {
 export interface RespondServiceAcceptanceInput {
   request: Pick<MyServiceAcceptanceRequest, 'requestId' | 'scopeContentHash' | 'evidenceManifestHash' | 'signerPolicyRevision'>;
   response: ServiceAcceptanceAnswer;
-  conditions: ServiceAcceptanceCondition[];
+  conditions: Pick<ServiceAcceptanceCondition, 'text'>[];
   returnReason: string;
 }
 export interface MyServiceAcceptanceReceipt {
   responseId: string;
   aggregateOutcome: ServiceAcceptanceOutcome;
-  pendingRequiredSigners: number;
+  pendingRequiredSigners: { signerId: string; slot: string }[];
   signerPolicyRevision: number;
   replayed: boolean;
 }
@@ -125,7 +125,7 @@ export function useRespondServiceAcceptance() {
     mutationFn: async (input: RespondServiceAcceptanceInput): Promise<MyServiceAcceptanceReceipt> => {
       const args = {
         p_request_id: input.request.requestId, p_response: input.response,
-        p_conditions: input.conditions.map((c) => ({ conditionId: c.conditionId, text: c.text })),
+        p_conditions: input.conditions.map((c) => ({ text: c.text.trim() })),
         p_return_reason: input.returnReason, p_scope_content_hash: input.request.scopeContentHash,
         p_evidence_manifest_hash: input.request.evidenceManifestHash,
         p_signer_policy_revision: input.request.signerPolicyRevision, p_method: 'portal_authenticated',
@@ -141,7 +141,7 @@ export function useRespondServiceAcceptance() {
       return {
         responseId: text(row.responseId),
         aggregateOutcome: choice(row.aggregateOutcome, ['pending', 'accepted', 'accepted_with_conditions', 'returned'] as const),
-        pendingRequiredSigners: integer(row.pendingRequiredSigners, 0),
+        pendingRequiredSigners: list(row.pendingRequiredSigners).map((s) => ({ signerId: text(s.signerId), slot: text(s.slot) })),
         signerPolicyRevision: integer(row.signerPolicyRevision), replayed: row.replayed,
       };
     },
