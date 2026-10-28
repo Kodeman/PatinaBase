@@ -650,12 +650,11 @@ describe("P02 round-8 plate (Kody 2026-10-23)", () => {
     return selector === `${ROUND8_SCOPE} [class~="[&_.da-act]:text-[11px]"] .da-act` && !!size && Number(size[1]) >= 12;
   }
 
-  it("raises compact action labels to 12px without changing legacy's 11px emission", () => {
+  it("raises compact action labels to 12px at every width, including fractional zoom, without changing legacy's 11px emission", () => {
     const floors = round8Rules.filter(isCompactActionFloor);
     expect(floors).toHaveLength(1);
     postcss.parse(round8Css).walkRules(`${ROUND8_SCOPE} [class~="[&_.da-act]:text-[11px]"] .da-act`, (rule) => {
-      expect(rule.parent?.type).toBe("atrule");
-      expect(rule.parent).toMatchObject({ name: "media", params: "(max-width: 1179px)" });
+      expect(rule.parent?.type).toBe("root");
     });
     const legacy = actionRegion(letterhead, "letterhead-actions");
     expect(legacy).toContain("[&_.da-act]:text-[11px] min-[1180px]:[&_.da-act]:text-[12px]");

@@ -70,6 +70,17 @@ describe('Round-8 typography (18px root)', () => {
     }
   });
 
+  it('keeps the milestone name beside its diamond with a shrinkable 12rem basis', () => {
+    const milestone = readFileSync(join(src, 'components/document/schedule/milestone-row.tsx'), 'utf8');
+    expect(milestone).toMatch(/<span\s+className=\{`min-w-0 truncate[^]*?\{milestone\.name\}\s*<\/span>/);
+    const names: string[] = [];
+    sheet.walkRules(`${scope} [data-schedule-milestone] > .truncate`, (rule) => {
+      expect(rule.parent?.type).toBe('root');
+      rule.walkDecls('flex', (decl) => { names.push(decl.value); });
+    });
+    expect(names).toEqual(['1 1 12rem']);
+  });
+
   it('uses sentence-case body type for paper metadata without changing drafting stock', () => {
     let found = false;
     sheet.walkRules((rule) => {

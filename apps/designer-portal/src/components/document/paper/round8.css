@@ -99,6 +99,10 @@
   flex-wrap: wrap;
 }
 
+[data-paper-renderer="round8"] [data-schedule-milestone] > .truncate {
+  flex: 1 1 12rem;
+}
+
 [data-paper-renderer="round8"] [data-schedule-milestone] > span:last-child {
   max-width: 100%;
   white-space: normal;
@@ -140,10 +144,8 @@
 }
 
 /* ── compact action type · US-52 W6 D4 12px floor ──────────────────────── */
-@media (max-width: 1179px) {
-  [data-paper-renderer="round8"] [class~="[&_.da-act]:text-[11px]"] .da-act {
-    font-size: 12px;
-  }
+[data-paper-renderer="round8"] [class~="[&_.da-act]:text-[11px]"] .da-act {
+  font-size: 12px;
 }
 /* end compact action type */
 
