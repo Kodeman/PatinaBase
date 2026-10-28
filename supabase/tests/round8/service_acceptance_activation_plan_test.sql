@@ -39,7 +39,8 @@ BEGIN
    WHERE a.grantee=0 AND a.privilege_type='EXECUTE'),'C4 no PUBLIC execute: '||f.oid::regprocedure);
   FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
    expected:=(r='authenticated' AND f.oid IN ('public.get_project_service_acceptance(uuid)'::regprocedure,
-    'public.get_my_service_acceptance_requests()'::regprocedure,'public._can_access_service_acceptance_paper_object(text)'::regprocedure))
+    'public.get_my_service_acceptance_requests()'::regprocedure,'public._can_access_service_acceptance_paper_object(text)'::regprocedure,
+    'public.get_my_service_acceptance_evidence(uuid)'::regprocedure,'public._can_read_service_acceptance_evidence_object(text)'::regprocedure))
     OR (active AND EXISTS(SELECT 1 FROM activation_allowlist a WHERE a.signature=f.oid AND a.role_name=r));
    PERFORM pg_temp.assert_true(has_function_privilege(r,f.oid,'EXECUTE')=expected,
     'C4 ACL active='||active||' '||r||' '||f.oid::regprocedure);

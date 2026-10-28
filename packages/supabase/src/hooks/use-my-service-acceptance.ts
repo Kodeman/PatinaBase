@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { serviceAcceptanceKeys } from '../query-keys/service-acceptance';
 import { scopeRecord } from './use-agreement-parts';
+import type { ScopePackagePayload, ScopePartyKind, ScopeServiceSlot } from '@patina/types';
 import type {
   ServiceAcceptanceAnswer, ServiceAcceptanceCondition, ServiceAcceptanceLifecycle,
   ServiceAcceptanceMethod, ServiceAcceptanceOutcome,
@@ -99,6 +100,141 @@ export function useMyServiceAcceptanceRequests() {
       const { data, error } = await createBrowserClient().rpc('get_my_service_acceptance_requests');
       if (error) throw error;
       return readMyServiceAcceptanceRequests(data);
+    },
+  });
+}
+
+// The kinds 00889 admits and projects; po_spec_snapshot and
+// coordination_item_revision are refused at admission, so never read here.
+const evidenceKinds = ['plan_issue', 'plan_issue_print', 'plan_print', 'product_configuration',
+  'custom_commission_revision', 'review_item', 'approval_artifact'] as const;
+const parties = ['studio', 'client', 'gc', 'other', 'none'] as const;
+export type ServiceAcceptanceEvidenceKind = typeof evidenceKinds[number];
+export type ServiceAcceptanceEvidenceFacts = Record<string, string | number | boolean>;
+/** A member's client-safe content: allowlisted facts, nested facts, and lists of facts. */
+export type MyServiceAcceptanceEvidenceContent =
+  Record<string, string | number | boolean | ServiceAcceptanceEvidenceFacts | ServiceAcceptanceEvidenceFacts[]>;
+// The C4 §2.2 allowlist per kind, as 00889 _service_acceptance_client_member
+// projects it. Plan kinds have no content (their documents are the content).
+const contentAllowlist: Partial<Record<ServiceAcceptanceEvidenceKind,
+  { facts: readonly string[]; objects?: Record<string, readonly string[]>; lists?: Record<string, readonly string[]> }>> = {
+  product_configuration: {
+    facts: ['productName', 'leadTimeWeeks'],
+    objects: {
+      dimensions: ['width', 'depth', 'height', 'length', 'diameter', 'seatHeight', 'armHeight', 'unit'],
+      fabric: ['fabricName', 'pattern'],
+    },
+    lists: { selections: ['groupName', 'valueLabel'], components: ['name', 'quantity', 'handedness'] },
+  },
+  custom_commission_revision: {
+    facts: ['summary', 'intent', 'siteConditions', 'requirements', 'materials', 'finish', 'targetDate', 'revision'],
+    lists: { measurements: ['label', 'value', 'unit'], drawings: ['name', 'revision'] },
+  },
+  review_item: {
+    facts: ['docCode', 'category', 'quantity', 'room'],
+    objects: { details: ['description', 'dimensions', 'finish', 'material', 'color', 'leadTime', 'care'] },
+  },
+  approval_artifact: { facts: ['source', 'question'] },
+};
+function evidenceFacts(value: unknown, keys: readonly string[]): ServiceAcceptanceEvidenceFacts {
+  const row = scopeRecord(value);
+  const facts: ServiceAcceptanceEvidenceFacts = {};
+  for (const key of keys) {
+    const fact = row[key];
+    if (fact === undefined) continue;
+    if (typeof fact === 'number' && !Number.isFinite(fact)) throw new Error('Malformed acceptance evidence');
+    if (typeof fact !== 'number' && typeof fact !== 'boolean') text(fact);
+    facts[key] = fact as string | number | boolean;
+  }
+  return facts;
+}
+function readEvidenceContent(kind: ServiceAcceptanceEvidenceKind, value: unknown): MyServiceAcceptanceEvidenceContent | null {
+  const allow = contentAllowlist[kind];
+  if (!allow) {
+    if (value != null) throw new Error('Malformed acceptance evidence');
+    return null;
+  }
+  const row = scopeRecord(value);
+  const content: MyServiceAcceptanceEvidenceContent = evidenceFacts(row, allow.facts);
+  for (const [key, keys] of Object.entries(allow.objects ?? {})) {
+    if (row[key] != null) content[key] = evidenceFacts(row[key], keys);
+  }
+  for (const [key, keys] of Object.entries(allow.lists ?? {})) {
+    if (row[key] != null) content[key] = list(row[key]).map((item) => evidenceFacts(item, keys));
+  }
+  return content;
+}
+export interface MyServiceAcceptanceScopePackage {
+  key: string;
+  label: string;
+  inclusion: ScopePackagePayload['inclusion'];
+  conditionText: string | null;
+  responsibilities: Record<'design' | 'purchasing' | 'installation', ScopePartyKind>;
+  phases: { name: string; service: ScopeServiceSlot }[];
+}
+export interface MyServiceAcceptanceEvidenceDocument { bucket: 'project-documents'; path: string; title: string }
+export interface MyServiceAcceptanceEvidenceMember {
+  kind: ServiceAcceptanceEvidenceKind;
+  title: string;
+  issuedAt: string | null;
+  content: MyServiceAcceptanceEvidenceContent | null;
+  documents: MyServiceAcceptanceEvidenceDocument[];
+}
+/** What a signer accepts (A20): the content behind the request's frozen hashes. */
+export interface MyServiceAcceptanceEvidence {
+  requestId: string;
+  requestNumber: number;
+  scope: { editionId: string; contentHash: string; packages: MyServiceAcceptanceScopePackage[] };
+  evidence: { manifestId: string; manifestHash: string; members: MyServiceAcceptanceEvidenceMember[] };
+}
+function readScopePackage(row: Record<string, unknown>): MyServiceAcceptanceScopePackage {
+  const inclusion = choice(row.inclusion, ['included', 'excluded', 'conditional'] as const);
+  const conditionText = row.conditionText == null ? null : text(row.conditionText);
+  if (inclusion === 'conditional' && conditionText === null) throw new Error('Malformed acceptance condition');
+  const responsibilities = scopeRecord(row.responsibilities);
+  return {
+    key: text(row.key), label: text(row.label), inclusion, conditionText,
+    responsibilities: {
+      design: choice(responsibilities.design, parties), purchasing: choice(responsibilities.purchasing, parties),
+      installation: choice(responsibilities.installation, parties),
+    },
+    phases: list(row.phases).map((p) => ({ name: text(p.name), service: choice(p.service, ['design', 'installation'] as const) })),
+  };
+}
+export function readMyServiceAcceptanceEvidence(value: unknown): MyServiceAcceptanceEvidence {
+  const row = scopeRecord(value);
+  const scope = scopeRecord(row.scope);
+  const evidence = scopeRecord(row.evidence);
+  return {
+    requestId: text(row.requestId), requestNumber: integer(row.requestNumber),
+    scope: { editionId: text(scope.editionId), contentHash: text(scope.contentHash), packages: list(scope.packages).map(readScopePackage) },
+    evidence: {
+      manifestId: text(evidence.manifestId), manifestHash: text(evidence.manifestHash),
+      members: list(evidence.members).map((m) => {
+        const kind = choice(m.kind, evidenceKinds);
+        return {
+          kind, title: text(m.title), issuedAt: m.issuedAt == null ? null : text(m.issuedAt),
+          content: readEvidenceContent(kind, m.content),
+          documents: list(m.documents).map((d) => ({
+            bucket: choice(d.bucket, ['project-documents'] as const), path: text(d.path), title: text(d.title),
+          })),
+        };
+      }),
+    },
+  };
+}
+export function useMyServiceAcceptanceEvidence(requestId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...myRequestsKey, 'evidence', requestId ?? null] as const,
+    enabled: !!requestId,
+    queryFn: async () => {
+      const { data, error } = await createBrowserClient().rpc('get_my_service_acceptance_evidence', {
+        p_request_id: requestId as string,
+      });
+      if (error) throw error;
+      const read = readMyServiceAcceptanceEvidence(data);
+      if (read.requestId !== requestId) throw new Error('Acceptance evidence mismatch');
+      return read;
     },
   });
 }
