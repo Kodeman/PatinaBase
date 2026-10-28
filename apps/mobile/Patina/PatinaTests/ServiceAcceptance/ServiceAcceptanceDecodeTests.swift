@@ -178,6 +178,19 @@ struct ServiceAcceptanceDecodeTests {
         }
     }
 
+    @Test("a recorded response reads back its server-minted {conditionId, text} conditions")
+    func recordedConditionsDecode() throws {
+        let row = ServiceAcceptanceFixture.row(viewerResponse: "accept_with_conditions").replacingOccurrences(
+            of: #""conditions": []"#,
+            with: #""conditions": [{"conditionId": "c-1", "text": "Touch up the hall"}]"#
+        )
+        let request = try ServiceAcceptanceFixture.request(row)
+        let response = try #require(request.viewerResponse)
+        #expect(response.response == .acceptWithConditions)
+        #expect(response.conditions.map(\.conditionId) == ["c-1"])
+        #expect(response.conditions.map(\.text) == ["Touch up the hall"])
+    }
+
     @Test("X08: the approvals path never reads the service projection, and the service path never reads approvals")
     func readsStayOnTheirOwnRPCs() throws {
         let approvalsClient = try SourcePin.readCode("Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift")

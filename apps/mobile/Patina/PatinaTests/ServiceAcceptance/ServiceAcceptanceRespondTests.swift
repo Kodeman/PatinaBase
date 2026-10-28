@@ -106,6 +106,30 @@ struct ServiceAcceptanceRespondTests {
         #expect((returned["p_conditions"] as? [[String: String]])?.isEmpty == true)
     }
 
+    @Test("each condition sent carries only a text key: 00886 refuses a client conditionId")
+    func conditionsCarryTextOnly() throws {
+        let body = ServiceAcceptanceSubmission(
+            request: try openRequest(), answer: .acceptWithConditions(["Touch up the hall", "Rehang the lamp"])
+        ).rpcBody
+        let items = try #require(body["p_conditions"] as? [[String: Any]])
+        #expect(items.count == 2)
+        for item in items {
+            #expect(Set(item.keys) == ["text"])
+        }
+        let wire = try #require(String(bytes: try JSONSerialization.data(withJSONObject: body), encoding: .utf8))
+        #expect(!wire.contains("conditionId"))
+    }
+
+    @Test("the respond receipt is never decoded, so its pendingRequiredSigners array cannot fail a recorded answer")
+    func receiptIsNotDecoded() throws {
+        let client = try SourcePin.readCode("Patina/Core/Network/DecisionsAPIClient+ServiceAcceptance.swift")
+        let start = try #require(client.range(of: "func respondToServiceAcceptance("))
+        let respond = String(client[start.lowerBound...])
+        #expect(respond.contains("_ = try await callRPC(\"respond_service_acceptance\""))
+        #expect(!respond.contains("decode"))
+        #expect(!client.contains("pendingRequiredSigners"))
+    }
+
     @Test("conditions need at least one line and a return needs a reason")
     func answerCompleteness() {
         #expect(ServiceAcceptanceAnswer.accept.isComplete)
