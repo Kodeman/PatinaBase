@@ -868,7 +868,9 @@ UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
 -- ---------------------------------------------------------------------------
 -- The send pins what it serves (SQ-2281 F2): a served object missing at send
 -- refuses the send, which writes nothing; once the object is back, the send
--- pins it, the signer reads it, and it is frozen.
+-- pins it, the signer reads it, and it is frozen. pg_temp.send records the
+-- delivery and the after-send in one UPDATE; the native two-step V22 boundary
+-- (delivered, then refused at finalization) is driven at the end of this file.
 -- ---------------------------------------------------------------------------
 SET LOCAL session_replication_role=replica;
 UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
@@ -898,6 +900,224 @@ SELECT pg_temp.actor(1);
 SELECT pg_temp.expect_error(format($q$UPDATE storage.objects SET metadata=metadata||'{"eTag":"late"}'
   WHERE bucket_id='project-documents' AND name=%L$q$,pg_temp.doc_path(3)),'23514','bound by a sent request',
  'after the send the studio cannot overwrite the pinned object');
+RESET ROLE;
+
+-- ---------------------------------------------------------------------------
+-- Completeness (SQ-2287 F1): a file-bearing member is snapshotted with every
+-- file its immutable authority requires, or the send refuses
+-- service_acceptance_evidence_file_unresolved. Fixtures: issue 2 (two prints),
+-- an approval artifact over it, and print 724 (document 5) for the V22 boundary.
+-- ---------------------------------------------------------------------------
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.project_documents(id,project_id,title,storage_path,client_visible,uploaded_by) VALUES
+(pg_temp.uid(705),pg_temp.project(),'Kitchen lighting reissue',pg_temp.doc_path(5),false,pg_temp.uid(1));
+INSERT INTO storage.objects(bucket_id,name,owner_id,metadata) VALUES
+('project-documents',pg_temp.doc_path(5),pg_temp.uid(1)::text,'{"mimetype":"application/pdf"}');
+INSERT INTO public.plan_prints(id,sheet_id,batch_id,print_number,rev_letter,project_document_id,sha256,source,created_by) VALUES
+(pg_temp.uid(724),pg_temp.uid(713),pg_temp.uid(731),2,'B',pg_temp.uid(705),repeat('6',64),'upload',pg_temp.uid(1));
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,issued_at,created_by) VALUES
+(pg_temp.uid(742),pg_temp.project(),2,'Spec book issue 2','client-evidence-issue-2',repeat('8',64),repeat('b',64),2,now(),pg_temp.uid(1));
+INSERT INTO public.plan_issue_prints(id,issue_id,sheet_id,print_id,sheet_number,sheet_title,rev_letter,sha256) VALUES
+(pg_temp.uid(752),pg_temp.uid(742),pg_temp.uid(711),pg_temp.uid(721),'A-101','Kitchen plan','A',repeat('c',64)),
+(pg_temp.uid(753),pg_temp.uid(742),pg_temp.uid(712),pg_temp.uid(722),'A-201','Kitchen elevations','B',repeat('e',64));
+INSERT INTO public.client_decisions(id,designer_client_id,title,designer_id,project_id,approval_contract,decision_type,decision_kind,coordination_kind,court,phase_id,blocking_status,blocks_kind) VALUES
+(pg_temp.uid(764),'f8892000-0000-4000-8000-000000000001','Approve the kitchen set',pg_temp.uid(1),pg_temp.project(),'project_artifact_v1','approval','approval','signoff','client',pg_temp.uid(765),'blocks_phase','phase');
+INSERT INTO public.project_approval_artifacts(id,decision_id,project_id,source_kind,source_id,source_version,artifact_hash,
+  artifact_title,question,context,due_at,phase_id,cost_cents_delta,schedule_days_delta,lead_time_days_delta,source_snapshot)
+VALUES (pg_temp.uid(774),pg_temp.uid(764),pg_temp.project(),'plan_issue',pg_temp.uid(742),2,repeat('b',64),'Kitchen set approval',
+  'Approve the kitchen set?','Issued set',now()+interval '7 days',pg_temp.uid(765),0,0,0,'{}');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+INSERT INTO ev_results SELECT key,public.create_evidence_manifest(pg_temp.project(),NULL,'service_acceptance',members,'client-evidence-'||key)
+FROM (VALUES
+ ('complete',jsonb_build_array(
+   jsonb_build_object('kind','plan_issue','id',pg_temp.uid(742),'sha256',repeat('b',64),'version',2),
+   jsonb_build_object('kind','plan_issue_print','id',pg_temp.uid(751),'sha256',repeat('c',64),'rev','A'),
+   jsonb_build_object('kind','plan_print','id',pg_temp.uid(722),'sha256',repeat('e',64),'rev','B'),
+   jsonb_build_object('kind','approval_artifact','id',pg_temp.uid(774),'sha256',repeat('b',64),'version',2),
+   jsonb_build_object('kind','approval_artifact','id',pg_temp.uid(771),'sha256',repeat('d',64),'version',1))),
+ ('only-plan-print',jsonb_build_array(jsonb_build_object('kind','plan_print','id',pg_temp.uid(722),'sha256',repeat('e',64),'rev','B'))),
+ ('only-plan-issue-print',jsonb_build_array(jsonb_build_object('kind','plan_issue_print','id',pg_temp.uid(751),'sha256',repeat('c',64),'rev','A'))),
+ ('only-plan-issue',jsonb_build_array(jsonb_build_object('kind','plan_issue','id',pg_temp.uid(742),'sha256',repeat('b',64),'version',2))),
+ ('only-issue-artifact',jsonb_build_array(jsonb_build_object('kind','approval_artifact','id',pg_temp.uid(774),'sha256',repeat('b',64),'version',2))),
+ ('only-spec-book-artifact',jsonb_build_array(jsonb_build_object('kind','approval_artifact','id',pg_temp.uid(771),'sha256',repeat('d',64),'version',1))),
+ ('one-print',jsonb_build_array(jsonb_build_object('kind','plan_print','id',pg_temp.uid(724),'sha256',repeat('6',64),'rev','B')))) x(key,members);
+-- The project's open request is superseded so a new draft may take its place.
+CREATE FUNCTION pg_temp.next_request(n integer, manifest_key text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ SET LOCAL session_replication_role=replica;
+ UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
+  WHERE project_id=pg_temp.project() AND lifecycle IN ('draft','sent');
+ PERFORM pg_temp.fixture_request(n,manifest_key);
+ SET LOCAL session_replication_role=origin;
+END $$;
+
+-- The spec book's Folio row moves to project B while the request is a draft:
+-- the send still snapshots the approval artifact with its file, taken from the
+-- ready spec book artifact, and the signer reads it (never documents: []).
+SELECT pg_temp.next_request(7,'manifest');
+UPDATE public.project_documents SET project_id=pg_temp.uid(901) WHERE id=pg_temp.uid(704);
+SELECT pg_temp.send(7);
+SELECT pg_temp.assert_sql($q$SELECT (SELECT array_agg(o.object_name||'@'||(o.object_id=l.id AND o.object_version IS NOT DISTINCT FROM l.version))
+  FROM public.service_acceptance_evidence_snapshots s
+  JOIN public.service_acceptance_evidence_snapshot_objects o ON o.request_id=s.request_id AND o.ordinal=s.ordinal
+  LEFT JOIN storage.objects l ON l.bucket_id=o.bucket_id AND l.name=o.object_name
+  WHERE s.request_id=pg_temp.uid(107) AND s.member_kind='approval_artifact' AND s.member_id=pg_temp.uid(771))
+  =ARRAY[pg_temp.doc_path(4)||'@true']$q$,
+ 'Folio moved before the send: approval artifact 771 still pins its spec book file at the live identity');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((SELECT m->'documents' FROM jsonb_array_elements(public.get_my_service_acceptance_evidence(pg_temp.uid(107))
+  ->'evidence'->'members') m WHERE m->>'kind'='approval_artifact')
+  =jsonb_build_array(jsonb_build_object('bucket','project-documents','path',pg_temp.doc_path(4),'title','Renamed care pack')),
+ 'Folio moved before the send: the signer reads the approval artifact with its spec book file');
+RESET ROLE;
+UPDATE public.project_documents SET project_id=pg_temp.project() WHERE id=pg_temp.uid(704);
+
+-- Every file-bearing kind, member by member: each pins exactly the files its
+-- authority requires, at the live identity, and the signer reads all seven.
+SELECT pg_temp.next_request(8,'complete');
+SELECT pg_temp.send(8);
+SELECT pg_temp.assert_sql($q$WITH got AS (
+  SELECT s.member_kind||':'||s.member_id||':'||o.object_name AS k,
+   o.object_id=l.id AND o.object_version IS NOT DISTINCT FROM l.version AS live
+  FROM public.service_acceptance_evidence_snapshots s
+  JOIN public.service_acceptance_evidence_snapshot_objects o ON o.request_id=s.request_id AND o.ordinal=s.ordinal
+  LEFT JOIN storage.objects l ON l.bucket_id=o.bucket_id AND l.name=o.object_name
+  WHERE s.request_id=pg_temp.uid(108)
+ ), want AS (
+  SELECT w.kind||':'||pg_temp.uid(w.id)||':'||pg_temp.doc_path(w.doc) AS k FROM (VALUES
+   ('plan_issue',742,1),('plan_issue',742,2),('plan_issue_print',751,1),('plan_print',722,2),
+   ('approval_artifact',774,1),('approval_artifact',774,2),('approval_artifact',771,4)) w(kind,id,doc)
+ )
+ SELECT (SELECT array_agg(k ORDER BY k) FROM got)=(SELECT array_agg(k ORDER BY k) FROM want)
+  AND (SELECT bool_and(live) FROM got)
+  AND (SELECT count(*)=5 FROM public.service_acceptance_evidence_snapshots WHERE request_id=pg_temp.uid(108))$q$,
+ 'each file-bearing member (issue, issued sheet, print, issue artifact, spec book artifact) pins every file it requires');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((SELECT sum(jsonb_array_length(m->'documents'))=7 AND bool_and(jsonb_array_length(m->'documents')>0)
+  FROM jsonb_array_elements(public.get_my_service_acceptance_evidence(pg_temp.uid(108))->'evidence'->'members') m),
+ 'the signer reads every file-bearing member with all seven of its files');
+RESET ROLE;
+
+-- Each file-bearing kind fails closed when a file its authority requires does
+-- not resolve on the project (only a trigger-skipping session can move a
+-- print's Folio row or unready a spec book artifact): the send refuses, writes
+-- nothing, and leaves an unsent draft.
+CREATE FUNCTION pg_temp.refuses_unresolved(n integer, manifest_key text, break text, mend text, what text)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM pg_temp.next_request(n,manifest_key);
+ SET LOCAL session_replication_role=replica;
+ EXECUTE break;
+ SET LOCAL session_replication_role=origin;
+ PERFORM pg_temp.expect_error(format('SELECT pg_temp.send(%s)',n),'23514','service_acceptance_evidence_file_unresolved',
+  'send refuses '||what);
+ PERFORM pg_temp.assert_sql(format($q$SELECT (SELECT lifecycle='draft' AND sent_at IS NULL FROM public.service_acceptance_requests
+   WHERE id=%1$L) AND NOT EXISTS(SELECT 1 FROM public.service_acceptance_evidence_snapshots WHERE request_id=%1$L)
+  AND NOT EXISTS(SELECT 1 FROM public.service_acceptance_evidence_snapshot_objects WHERE request_id=%1$L)
+  AND (SELECT after_send_done_at IS NULL FROM public.outbound_drafts WHERE id=%2$L)$q$,pg_temp.uid(100+n),pg_temp.uid(200+n)),
+  'the refused send leaves an unsent draft with no snapshot: '||what);
+ SET LOCAL session_replication_role=replica;
+ EXECUTE mend;
+ SET LOCAL session_replication_role=origin;
+END $$;
+SELECT pg_temp.refuses_unresolved(x.n,x.k,
+  format('UPDATE public.project_documents SET project_id=%L WHERE id=%L',pg_temp.uid(901),pg_temp.uid(x.doc)),
+  format('UPDATE public.project_documents SET project_id=%L WHERE id=%L',pg_temp.project(),pg_temp.uid(x.doc)),x.what)
+FROM (VALUES(9,'only-plan-print',702,'a plan print whose file is off the project'),
+ (10,'only-plan-issue-print',701,'an issued sheet whose print file is off the project'),
+ (11,'only-plan-issue',702,'an issued set with one of its two print files off the project'),
+ (12,'only-issue-artifact',701,'an approval artifact over an issued set with a print file off the project')) x(n,k,doc,what)
+ORDER BY x.n;
+SELECT pg_temp.refuses_unresolved(13,'only-spec-book-artifact',
+  format('UPDATE public.spec_book_artifacts SET status=%L WHERE id=%L','failed',pg_temp.uid(772)),
+  format('UPDATE public.spec_book_artifacts SET status=%L WHERE id=%L','ready',pg_temp.uid(772)),
+  'a spec book approval artifact whose spec book artifact is not ready');
+
+-- ---------------------------------------------------------------------------
+-- The real two-step V22 boundary (SQ-2287 F2), as the delivery worker drives
+-- it (service_role, no user): step 1 records the provider's acceptance, step 2
+-- finalization runs the after-send hook, which refuses. The request is then
+-- delivered but unfinalized: not sent, no snapshot, unreadable. A retry never
+-- reaches the provider again; once the evidence is repaired, finalization
+-- succeeds on the first delivery.
+-- ---------------------------------------------------------------------------
+GRANT EXECUTE ON FUNCTION pg_temp.actor(integer),pg_temp.assert_sql(text,text) TO service_role;
+SELECT pg_temp.next_request(14,'one-print');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(1);
+SELECT pg_temp.assert_sql($q$WITH d AS (DELETE FROM storage.objects WHERE bucket_id='project-documents'
+  AND name=pg_temp.doc_path(5) RETURNING 1) SELECT count(*)=1 FROM d$q$,
+ 'the studio deletes the reissued lighting print while the request is a draft');
+RESET ROLE;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE d public.outbound_drafts%ROWTYPE; BEGIN
+ PERFORM pg_temp.actor(NULL);
+ d:=public.claim_outbound_draft_for_send(pg_temp.uid(214));
+ PERFORM public.record_outbound_draft_send_attempt(d.id);
+ d:=public.record_outbound_draft_delivery(d.id,'provider-message-14');
+ PERFORM pg_temp.assert_true(d.status='sending' AND d.delivered_at IS NOT NULL,'step 1: the provider''s acceptance is recorded');
+ d:=public.claim_outbound_draft_finalize(d.id);
+ PERFORM pg_temp.expect_error(format('SELECT public.record_outbound_draft_after_send(%L,%L)',d.id,d.finalizing_at),'23514',
+  'service_acceptance_evidence_object_missing','step 2: finalization refuses a served object that is missing');
+ PERFORM pg_temp.assert_true(public.release_outbound_draft_finalize(d.id,d.finalizing_at),'the refused finalizer hands its claim back');
+END $$;
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT status='sending' AND delivered_at IS NOT NULL AND delivery_message_id='provider-message-14'
+  AND send_attempted_at IS NOT NULL AND after_send_done_at IS NULL AND finalizing_at IS NULL AND sent_at IS NULL
+  FROM public.outbound_drafts WHERE id=pg_temp.uid(214)),
+ 'delivered but unfinalized: the client link went out and the draft stays sending, unfinalized');
+SELECT pg_temp.assert_sql($q$SELECT (SELECT lifecycle='draft' AND sent_at IS NULL FROM public.service_acceptance_requests
+   WHERE id=pg_temp.uid(114))
+  AND NOT EXISTS(SELECT 1 FROM public.service_acceptance_evidence_snapshots WHERE request_id=pg_temp.uid(114))
+  AND NOT EXISTS(SELECT 1 FROM public.service_acceptance_evidence_snapshot_objects WHERE request_id=pg_temp.uid(114))$q$,
+ 'delivered but unfinalized: the request is not sent and has no snapshot');
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE n integer; BEGIN
+ FOREACH n IN ARRAY ARRAY[5,6,7] LOOP
+  PERFORM pg_temp.actor(n);
+  PERFORM pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.uid(114)),'42501',NULL,
+   'delivered but unfinalized: the reader refuses actor '||n);
+ END LOOP;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT pg_temp.actor(NULL);
+SELECT pg_temp.expect_error(format('SELECT public.claim_outbound_draft_for_send(%L)',pg_temp.uid(214)),'23514',
+ 'already delivered; finalize it','a retry of the delivered draft is routed to finalization, never to the provider');
+SELECT pg_temp.expect_error(format('SELECT public.record_outbound_draft_send_attempt(%L)',pg_temp.uid(214)),'23514',
+ 'cannot start a provider attempt','no second provider attempt can be recorded');
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(1);
+SELECT pg_temp.assert_sql($q$WITH i AS (INSERT INTO storage.objects(bucket_id,name,owner_id,metadata)
+  VALUES('project-documents',pg_temp.doc_path(5),pg_temp.uid(1)::text,'{"eTag":"reissue"}') RETURNING 1) SELECT count(*)=1 FROM i$q$,
+ 'repair: the studio uploads the reissued lighting print again');
+RESET ROLE;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE d public.outbound_drafts%ROWTYPE; BEGIN
+ PERFORM pg_temp.actor(NULL);
+ d:=public.claim_outbound_draft_finalize(pg_temp.uid(214));
+ d:=public.record_outbound_draft_after_send(d.id,d.finalizing_at);
+ d:=public.mark_outbound_draft_sent(d.id,NULL,d.delivery_message_id);
+ PERFORM pg_temp.assert_true(d.status='sent' AND d.message_id='provider-message-14' AND d.delivery_message_id='provider-message-14'
+  AND d.after_send_done_at IS NOT NULL,'retry: finalization marks the draft sent on the first delivery''s message id');
+END $$;
+RESET ROLE;
+SELECT pg_temp.assert_sql($q$SELECT (SELECT r.lifecycle='sent' AND r.sent_at=d.delivered_at FROM public.service_acceptance_requests r
+   JOIN public.outbound_drafts d ON d.id=r.outbound_draft_id WHERE r.id=pg_temp.uid(114))
+  AND (SELECT array_agg(o.object_name||'@'||(o.object_id=l.id AND o.object_version IS NOT DISTINCT FROM l.version))
+   FROM public.service_acceptance_evidence_snapshot_objects o LEFT JOIN storage.objects l ON l.bucket_id=o.bucket_id
+   AND l.name=o.object_name WHERE o.request_id=pg_temp.uid(114))=ARRAY[pg_temp.doc_path(5)||'@true']$q$,
+ 'retry: the request is sent at its delivery time and pins the repaired object');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((SELECT jsonb_agg(doc->>'path') FROM jsonb_array_elements(public.get_my_service_acceptance_evidence(
+  pg_temp.uid(114))->'evidence'->'members') m, jsonb_array_elements(m->'documents') doc)=jsonb_build_array(pg_temp.doc_path(5))
+  AND public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(5)),
+ 'retry: the signer reads the request and opens the repaired file');
 RESET ROLE;
 SELECT pg_temp.assert_true((SELECT NOT enabled FROM public.server_capabilities WHERE key='scope_editions'),'capability still off after reads');
 DO $$ BEGIN RAISE NOTICE 'C4 client evidence: PASS % assertions', (SELECT n FROM assertion_count); END $$;

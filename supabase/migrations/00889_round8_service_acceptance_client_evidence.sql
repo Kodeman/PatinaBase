@@ -45,6 +45,18 @@
 -- applied outside local stacks, so no request was sent before the snapshot
 -- existed and nothing is backfilled.
 --
+-- Completeness (SQ-2287, answers SQ-2285 F1 and SQ-2286 F1): a file-bearing
+-- member is snapshotted with every file its immutable authority requires, or
+-- the send refuses 23514 service_acceptance_evidence_file_unresolved. Each
+-- required file comes from a row that cannot move once a manifest pins its
+-- member: a plan print's own Folio row (00429 freezes its path, project and
+-- status) or a ready spec book artifact's path (00380), owned through its
+-- approval artifact's project (00877 pins the artifact), never through the
+-- spec book's mutable Folio row. Under V22 the provider has already accepted
+-- the message when the hook runs, so a refused send is delivered but
+-- unfinalized: the request stays an unsent draft with no snapshot, unreadable,
+-- until the evidence is repaired and finalization is retried (C4 §2.7).
+--
 -- Per-kind decision (SQ-2272 F1, C4 §2.2): plan_issue, plan_issue_print,
 -- plan_print, product_configuration, custom_commission_revision, review_item
 -- and approval_artifact are read through allowlists. po_spec_snapshot (the
@@ -80,10 +92,14 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, p
         WHERE s.request_id = r.id AND s.status = 'active' AND s.profile_id = auth.uid())));
 $$;
 
--- The project-documents objects behind a manifest's members: a plan print, an
--- issued sheet's print, every print of an issued set (directly or under an
--- approval artifact), or a ready spec book approval artifact's file. Only
--- documents on the manifest's own project. Read once, by the send transition.
+-- The project-documents files a manifest's file-bearing members require, one
+-- row per required file: a plan print, an issued sheet's print, every print of
+-- an issued set (directly or under an approval artifact), or a ready spec book
+-- approval artifact's file. Every row comes from immutable authority, and its
+-- path is NULL when that file does not resolve on the manifest's project, so
+-- the send refuses instead of serving fewer files (SQ-2287 F1). Review items,
+-- configurations and commission revisions serve no file. Read once, by the
+-- send transition.
 CREATE OR REPLACE FUNCTION public._service_acceptance_evidence_documents(p_manifest_id uuid)
 RETURNS TABLE(member_kind text, member_id uuid, document_id uuid, path text, title text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -101,24 +117,27 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     JOIN public.plan_issue_prints ip ON ip.issue_id = member.id WHERE member.kind = 'plan_issue'
     UNION ALL
     SELECT member.project_id, member.kind, member.id, ip.print_id FROM member
-    JOIN public.project_approval_artifacts a ON a.id = member.id AND a.project_id = member.project_id
-      AND a.source_kind = 'plan_issue'
+    JOIN public.project_approval_artifacts a ON a.id = member.id AND a.source_kind = 'plan_issue'
     JOIN public.plan_issue_prints ip ON ip.issue_id = a.source_id WHERE member.kind = 'approval_artifact'
   )
+  -- A print's file is its own Folio row, which 00429 freezes once the print
+  -- owns it (path, project, status; no delete).
   SELECT DISTINCT print.kind, print.id, d.id, d.storage_path, d.title
   FROM print
   JOIN public.plan_prints pr ON pr.id = print.print_id
-  JOIN public.project_documents d ON d.id = pr.project_document_id AND d.project_id = print.project_id
-  WHERE btrim(COALESCE(d.storage_path, '')) <> ''
+  LEFT JOIN public.project_documents d ON d.id = pr.project_document_id AND d.project_id = print.project_id
+    AND btrim(COALESCE(d.storage_path, '')) <> ''
   UNION
   -- An approval artifact over a spec book: the ready artifact's own path, which
-  -- 00380 freezes (its Folio row is not frozen, so the path never comes from it).
-  SELECT member.kind, member.id, d.id, s.storage_path, d.title FROM member
-  JOIN public.project_approval_artifacts a ON a.id = member.id AND a.project_id = member.project_id
-    AND a.source_kind = 'spec_book_artifact'
-  JOIN public.spec_book_artifacts s ON s.id = a.source_id AND s.status = 'ready' AND s.storage_bucket = 'project-documents'
-  JOIN public.project_documents d ON d.id = s.project_document_id AND d.project_id = member.project_id
-  WHERE member.kind = 'approval_artifact' AND btrim(COALESCE(s.storage_path, '')) <> '';
+  -- 00380 freezes, owned through the approval artifact's project (00877 pins the
+  -- artifact once a manifest names it). The spec book's Folio row is not frozen,
+  -- so it supplies at most the title, and only while it is on this project.
+  SELECT member.kind, member.id, s.project_document_id, s.storage_path, COALESCE(d.title, a.artifact_title) FROM member
+  JOIN public.project_approval_artifacts a ON a.id = member.id AND a.source_kind = 'spec_book_artifact'
+  LEFT JOIN public.spec_book_artifacts s ON s.id = a.source_id AND a.project_id = member.project_id
+    AND s.status = 'ready' AND s.storage_bucket = 'project-documents' AND btrim(COALESCE(s.storage_path, '')) <> ''
+  LEFT JOIN public.project_documents d ON d.id = s.project_document_id AND d.project_id = member.project_id
+  WHERE member.kind = 'approval_artifact';
 $$;
 
 -- The allowlist projection: of an object, the listed keys whose values are
@@ -267,7 +286,7 @@ CREATE TRIGGER immutable_service_acceptance_evidence_snapshot_object BEFORE UPDA
 CREATE OR REPLACE FUNCTION public._service_acceptance_after_send()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE previous_marker text := current_setting('app.service_acceptance_request_id', true);
-  v_missing integer;
+  v_unresolved integer; v_missing integer;
 BEGIN
   PERFORM 1 FROM public.service_acceptance_requests
   WHERE id = NEW.ref_id AND outbound_draft_id = NEW.id AND lifecycle = 'draft' AND sent_at IS NULL FOR UPDATE;
@@ -289,8 +308,9 @@ BEGIN
     WHERE r.id = NEW.ref_id;
     -- Pin every served object under FOR SHARE: an in-flight writer commits
     -- first (the pin takes its committed row) and a later one waits for this
-    -- transaction, then meets the freeze trigger. A served object that is
-    -- missing (or renamed away) by then refuses the send.
+    -- transaction, then meets the freeze trigger. A required file that does not
+    -- resolve (SQ-2287 F1), or a served object that is missing (or renamed
+    -- away) by then, refuses the send.
     WITH document AS (
       SELECT d.* FROM public.service_acceptance_requests r
       CROSS JOIN LATERAL public._service_acceptance_evidence_documents(r.evidence_manifest_id) d
@@ -299,7 +319,7 @@ BEGIN
       SELECT s.ordinal, document.path, min(document.title) AS title
       FROM public.service_acceptance_evidence_snapshots s
       JOIN document ON document.member_kind = s.member_kind AND document.member_id = s.member_id
-      WHERE s.request_id = NEW.ref_id
+      WHERE s.request_id = NEW.ref_id AND document.path IS NOT NULL
       GROUP BY s.ordinal, document.path
     ), live AS (
       SELECT o.id, o.name, o.version FROM storage.objects o
@@ -313,7 +333,12 @@ BEGIN
       FROM served JOIN live ON live.name = served.path
       RETURNING 1
     )
-    SELECT count(*) INTO v_missing FROM served WHERE NOT EXISTS (SELECT 1 FROM live WHERE live.name = served.path);
+    SELECT (SELECT count(*) FROM document WHERE document.path IS NULL),
+      (SELECT count(*) FROM served WHERE NOT EXISTS (SELECT 1 FROM live WHERE live.name = served.path))
+    INTO v_unresolved, v_missing;
+    IF v_unresolved > 0 THEN
+      RAISE EXCEPTION 'service_acceptance_evidence_file_unresolved' USING ERRCODE = 'check_violation';
+    END IF;
     IF v_missing > 0 THEN
       RAISE EXCEPTION 'service_acceptance_evidence_object_missing' USING ERRCODE = 'check_violation';
     END IF;
