@@ -735,6 +735,9 @@ verify_jwt = true
 [functions.board-web-match]
 verify_jwt = true
 
+[functions.service-acceptance-paper-hash]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

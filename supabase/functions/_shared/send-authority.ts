@@ -19,6 +19,7 @@ export type OutboundKind =
   | "decision_overdue"
   | "client_digest"
   | "review_request"
+  | "service_acceptance_request"
   | "trade_site_digest"
   | "trade_day_of"
   | "delivery_confirm"
