@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { serviceAcceptanceKeys } from '../query-keys/service-acceptance';
 import { scopeRecord } from './use-agreement-parts';
+import { outboundDraftKeys } from './use-outbound-drafts';
 
 // C4 (00886) ships inactive: every mutation is revoked until a reviewed
 // activation migration. The studio's read is get_project_service_acceptance;
@@ -281,6 +282,9 @@ function useServiceAcceptanceAct<Args, Result>(
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: serviceAcceptanceKeys.project(projectId) });
+      // Create, replace, withdrawal and a closing paper confirmation write or
+      // discard the signer notices (00891, 00893) that Ready to send reads.
+      void queryClient.invalidateQueries({ queryKey: outboundDraftKeys.list(projectId) });
     },
   });
 }
@@ -288,6 +292,8 @@ function useServiceAcceptanceAct<Args, Result>(
 export interface CreateServiceAcceptanceArgs { scopeEditionId: string; evidenceManifestId: string }
 export interface ServiceAcceptanceCreateReceipt {
   requestId: string; lifecycle: ServiceAcceptanceLifecycle; outboundDraftId: string | null;
+  /** 00891: one notice draft per active required signer; outboundDraftId is the first. */
+  outboundDraftIds: string[];
   signerPolicyRevision: number; replayed: boolean;
 }
 
@@ -314,7 +320,11 @@ export interface ReplaceServiceAcceptanceSignerArgs {
 }
 
 export function useReplaceServiceAcceptanceSigner(projectId: string) {
-  return useServiceAcceptanceAct<ReplaceServiceAcceptanceSignerArgs, { signerId: string; signerPolicyRevision: number }>(
+  return useServiceAcceptanceAct<ReplaceServiceAcceptanceSignerArgs, {
+    signerId: string; signerPolicyRevision: number;
+    /** 00893: the replacement's own notice draft; null when the replacement is optional. */
+    outboundDraftId: string | null;
+  }>(
     projectId, 'replace-signer', (args, key) => createBrowserClient().rpc('replace_service_acceptance_signer', {
       p_request_id: args.requestId, p_signer_id: args.signerId,
       p_new_profile_id: args.newProfileId as string, p_new_household_person_id: args.newHouseholdPersonId as string,

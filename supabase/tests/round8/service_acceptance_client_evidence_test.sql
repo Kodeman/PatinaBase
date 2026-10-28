@@ -885,6 +885,301 @@ DO $$ DECLARE c record; r jsonb; got text; BEGIN
   PERFORM pg_temp.assert_true(got=pg_temp.uid(5)||'|'||COALESCE(c.expected,'<null>'),c.name||' ['||COALESCE(got,'')||']');
  END LOOP;
 END $$;
+
+-- 00891 (SQ-2328): create writes one V22 draft per required signer (K4), each
+-- addressed to that signer, and nothing is sent until the designer sends it.
+-- The fixture policy is client uid5 and partner uid6 (required) and the
+-- household card (optional). Every probe rolls back.
+CREATE FUNCTION pg_temp.sa_create(k text) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.create_service_acceptance_request(pg_temp.project(),
+   (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active'),
+   (SELECT (value->>'manifestId')::uuid FROM ev_results WHERE key='manifest2'),'client-evidence-signers-'||k);
+$$;
+-- client|contact|address of each draft of a request, in slot order.
+CREATE FUNCTION pg_temp.signer_drafts(req uuid) RETURNS text LANGUAGE sql AS $$
+ SELECT string_agg(COALESCE(d.to_client_id::text,'-')||'|'||COALESCE(d.to_contact_id::text,'-')||'|'
+   ||COALESCE(d.to_address,'<null>'),';' ORDER BY d.dedupe_key)
+ FROM public.outbound_drafts d WHERE d.ref_type='service_acceptance_request' AND d.ref_id=req;
+$$;
+CREATE FUNCTION pg_temp.draft_states(req uuid) RETURNS text LANGUAGE sql AS $$
+ SELECT string_agg(d.status,',' ORDER BY d.dedupe_key) FROM public.outbound_drafts d
+ WHERE d.ref_type='service_acceptance_request' AND d.ref_id=req;
+$$;
+-- The native V22 chain (claim, attempt, delivery, finalize, after-send, sent).
+CREATE FUNCTION pg_temp.deliver_draft(d uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE f timestamptz; caller text := current_setting('request.jwt.claim.sub',true);
+BEGIN
+ PERFORM pg_temp.actor(NULL);
+ PERFORM public.claim_outbound_draft_for_send(d);
+ PERFORM public.record_outbound_draft_send_attempt(d);
+ PERFORM public.record_outbound_draft_delivery(d,'msg-'||d);
+ SELECT finalizing_at INTO f FROM public.claim_outbound_draft_finalize(d);
+ PERFORM public.record_outbound_draft_after_send(d,f);
+ PERFORM public.mark_outbound_draft_sent(d,pg_temp.uid(1),'msg-'||d);
+ PERFORM set_config('request.jwt.claim.sub',COALESCE(caller,''),true);
+ PERFORM set_config('request.jwt.claims',CASE WHEN COALESCE(caller,'')='' THEN '' ELSE
+   jsonb_build_object('sub',caller,'role','authenticated')::text END,true);
+END $$;
+-- Run setup statements, create under key k, evaluate result with the receipt as
+-- $1, and roll everything back. An error is returned as the result.
+CREATE FUNCTION pg_temp.signer_probe(setup text[], k text, result text) RETURNS text LANGUAGE plpgsql AS $$
+DECLARE r jsonb; got text; s text;
+BEGIN
+ BEGIN
+  FOREACH s IN ARRAY COALESCE(setup,'{}') LOOP EXECUTE s; END LOOP;
+  r:=pg_temp.sa_create(k);
+  EXECUTE result INTO got USING r;
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+ END;
+ RETURN got;
+END $$;
+DO $$ DECLARE c record; got text; BEGIN
+ FOR c IN SELECT * FROM (VALUES
+   (NULL::text[],'each','SELECT pg_temp.signer_drafts(($1->>''requestId'')::uuid)',
+    pg_temp.uid(5)||'|-|client-evidence-5@test.invalid;'||pg_temp.uid(6)||'|-|client-evidence-6@test.invalid',
+    'create composes one draft per required signer, each to that signer''s address; the optional signer gets none'),
+   (ARRAY['SET LOCAL session_replication_role=replica',
+      format('DELETE FROM public.project_scope_edition_signers WHERE slot=''client'' AND edition_id=%L',
+        (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active')),
+      'SET LOCAL session_replication_role=origin'],'observer',
+    'SELECT pg_temp.signer_drafts(($1->>''requestId'')::uuid)||''/''||(SELECT count(*) FROM public.outbound_drafts
+       WHERE ref_id=($1->>''requestId'')::uuid AND to_client_id=pg_temp.uid(5))',
+    pg_temp.uid(6)||'|-|client-evidence-6@test.invalid/0',
+    'an observer project client gets no draft; the required partner does'),
+   (ARRAY[format('UPDATE public.profiles SET email=NULL WHERE id=%L',pg_temp.uid(6))],'no-email',
+    'SELECT pg_temp.signer_drafts(($1->>''requestId'')::uuid)',
+    pg_temp.uid(5)||'|-|client-evidence-5@test.invalid;'||pg_temp.uid(6)||'|-|<null>',
+    'a required signer with no email still gets a draft, unaddressed (the Ready-to-send hold)'),
+   (ARRAY[format('UPDATE public.profiles SET email=''  a@b.co  '' WHERE id=%L',pg_temp.uid(6))],'padded',
+    'SELECT pg_temp.signer_drafts(($1->>''requestId'')::uuid)',
+    pg_temp.uid(5)||'|-|client-evidence-5@test.invalid;'||pg_temp.uid(6)||'|-|a@b.co',
+    'a padded signer email is trimmed'),
+   (ARRAY['SET LOCAL session_replication_role=replica',
+      format('UPDATE public.project_scope_edition_signers SET required=true WHERE slot=''household'' AND edition_id=%L',
+        (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active')),
+      'SET LOCAL session_replication_role=origin'],'card',
+    'SELECT pg_temp.signer_drafts(($1->>''requestId'')::uuid)',
+    pg_temp.uid(5)||'|-|client-evidence-5@test.invalid;-|f8896000-0000-4000-8000-000000000003|<null>;'
+      ||pg_temp.uid(6)||'|-|client-evidence-6@test.invalid',
+    'a required household-card signer gets a draft to the card, unaddressed without a profile'),
+   (NULL,'state',$q$SELECT (SELECT count(*)=2 AND bool_and(d.status='awaiting_review' AND d.sent_at IS NULL AND d.sent_by IS NULL
+       AND d.claimed_at IS NULL AND d.delivered_at IS NULL AND d.send_attempted_at IS NULL AND d.after_send_done_at IS NULL
+       AND d.message_id IS NULL AND d.kind='service_acceptance_request' AND d.channel='email' AND d.recipient_kind='client'
+       AND d.organization_id='f8891000-0000-4000-8000-000000000001' AND d.project_id=pg_temp.project()
+       AND d.composed_by=pg_temp.uid(1)::text AND d.subject='Review the agreed services' AND d.due_at IS NULL
+       AND d.expires_at IS NULL AND d.to_party_id IS NULL AND d.payload=jsonb_build_object('requestId',$1->>'requestId',
+         'projectId',pg_temp.project(),'requestNumber',r.request_number,'scopeEditionId',r.scope_edition_id))
+       AND array_agg(d.dedupe_key ORDER BY d.dedupe_key)=ARRAY['service_acceptance_request:'||r.id||':client',
+         'service_acceptance_request:'||r.id||':partner']
+       AND r.lifecycle='draft' AND r.sent_at IS NULL
+     FROM public.outbound_drafts d JOIN public.service_acceptance_requests r ON r.id=d.ref_id
+     WHERE d.ref_id=($1->>'requestId')::uuid GROUP BY r.id,r.request_number,r.scope_edition_id,r.lifecycle,r.sent_at)::text$q$,
+    'true','every signer draft lands awaiting_review with the compose columns and a per-slot key; nothing is sent'),
+   (NULL,'receipt',$q$SELECT (pg_temp.keys($1)=ARRAY['lifecycle','outboundDraftId','outboundDraftIds','replayed','requestId',
+       'signerPolicyRevision','signers'] AND jsonb_array_length($1->'outboundDraftIds')=2
+       AND $1->'outboundDraftIds'->>0=$1->>'outboundDraftId'
+       AND (SELECT outbound_draft_id::text FROM public.service_acceptance_requests WHERE id=($1->>'requestId')::uuid)=$1->>'outboundDraftId'
+       AND (SELECT to_client_id FROM public.outbound_drafts WHERE id=($1->>'outboundDraftId')::uuid)=pg_temp.uid(5)
+       AND (SELECT to_client_id FROM public.outbound_drafts WHERE id=($1->'outboundDraftIds'->>1)::uuid)=pg_temp.uid(6))::text$q$,
+    'true','the receipt keeps outboundDraftId (the first signer''s draft, recorded on the request) and adds outboundDraftIds'),
+   (NULL,'retry',$q$SELECT ((SELECT (x->>'replayed')::boolean AND x->'outboundDraftIds'=$1->'outboundDraftIds'
+       AND x->>'outboundDraftId'=$1->>'outboundDraftId' FROM pg_temp.sa_create('retry') x)
+       AND (SELECT count(*)=2 FROM public.outbound_drafts WHERE ref_id=($1->>'requestId')::uuid))::text$q$,
+    'true','a retried create replays its receipt and never duplicates a signer''s draft'),
+   (NULL,'projection',$q$SELECT (SELECT pg_temp.keys(j)=(SELECT array_agg(k ORDER BY k) FROM unnest(ARRAY['aggregateOutcome','closedAt','closedReason','createdAt',
+       'evidenceManifestHash','evidenceManifestId','lifecycle','outboundDraftId','paperIntakes','predecessorRequestId',
+       'projectId','requestId','requestNumber','scopeContentHash','scopeEditionId','sentAt','signerPolicyRevision',
+       'signers','supersededAt','supersededReason','withdrawReason','withdrawnAt']) k) AND j->>'outboundDraftId'=$1->>'outboundDraftId'
+     FROM jsonb_array_elements(public.get_project_service_acceptance(pg_temp.project())->'requests') j
+     WHERE j->>'requestId'=$1->>'requestId')::text$q$,
+    'true','the studio projection is unchanged: same keys, outboundDraftId is the recorded draft')
+ ) v(setup,k,result,expected,name) LOOP
+  got:=pg_temp.signer_probe(c.setup,c.k,c.result);
+  PERFORM pg_temp.assert_true(got=c.expected,c.name||' ['||COALESCE(got,'<null>')||']');
+ END LOOP;
+END $$;
+-- A successor request, a withdrawal and a scope-edition supersession each
+-- discard every awaiting_review signer draft of the request they end.
+DO $$ DECLARE r1 jsonb; r2 jsonb; r3 jsonb; got text; BEGIN
+ BEGIN
+  r1:=pg_temp.sa_create('end-1');
+  r2:=pg_temp.sa_create('end-2');
+  got:=pg_temp.draft_states((r1->>'requestId')::uuid)||'|'||pg_temp.draft_states((r2->>'requestId')::uuid);
+  PERFORM public.withdraw_service_acceptance_request((r2->>'requestId')::uuid,'Scope is changing','client-evidence-signers-wd');
+  got:=got||'|'||pg_temp.draft_states((r2->>'requestId')::uuid);
+  r3:=pg_temp.sa_create('end-3');
+  PERFORM public._supersede_service_acceptance_requests((SELECT scope_edition_id FROM public.service_acceptance_requests
+    WHERE id=(r3->>'requestId')::uuid),'scope_edition_superseded');
+  got:=got||'|'||pg_temp.draft_states((r3->>'requestId')::uuid);
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+ END;
+ PERFORM pg_temp.assert_true(got='discarded,discarded|awaiting_review,awaiting_review|discarded,discarded|discarded,discarded',
+  'successor, withdrawal and edition supersession discard every signer draft of the ended request ['||COALESCE(got,'')||']');
+END $$;
+-- Send order: whichever signer's draft is delivered first marks the request
+-- sent (and pins the evidence) once; the other sibling's later delivery is a
+-- no-op that neither errors nor moves sent_at. Both orders, native V22 chain.
+DO $$ DECLARE c record; r jsonb; req uuid; first_d uuid; second_d uuid; got text; at timestamptz; pinned bigint; BEGIN
+ FOR c IN SELECT * FROM (VALUES (1,0,'partner (signer 2) first, then client (signer 1)'),
+                                (0,1,'client (signer 1) first, then partner (signer 2)')) v(a,b,name) LOOP
+  BEGIN
+   r:=pg_temp.sa_create('order-'||c.a);
+   req:=(r->>'requestId')::uuid;
+   first_d:=(r->'outboundDraftIds'->>c.a)::uuid;
+   second_d:=(r->'outboundDraftIds'->>c.b)::uuid;
+   PERFORM pg_temp.deliver_draft(first_d);
+   SELECT sent_at INTO at FROM public.service_acceptance_requests WHERE id=req;
+   SELECT count(*) INTO pinned FROM public.service_acceptance_evidence_snapshots WHERE request_id=req;
+   got:=(SELECT (r2.lifecycle='sent' AND r2.sent_at=d.delivered_at)::text FROM public.service_acceptance_requests r2
+     JOIN public.outbound_drafts d ON d.id=first_d WHERE r2.id=req)
+     ||'|'||pg_temp.draft_states(req)||'|'||(pinned>0)::text;
+   PERFORM pg_temp.actor(6);
+   got:=got||'|'||(SELECT string_agg(e->>'viewerRole',',') FROM jsonb_array_elements(public.get_my_service_acceptance_requests()) e
+     WHERE e->>'requestId'=req::text);
+   PERFORM pg_temp.actor(1);
+   PERFORM pg_temp.deliver_draft(second_d);
+   got:=got||'|'||(SELECT (lifecycle='sent' AND sent_at=at)::text FROM public.service_acceptance_requests WHERE id=req)
+     ||'|'||pg_temp.draft_states(req)
+     ||'|'||(SELECT count(*)=pinned FROM public.service_acceptance_evidence_snapshots WHERE request_id=req)::text;
+   RAISE EXCEPTION 'probe rolled back';
+  EXCEPTION WHEN OTHERS THEN
+   IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+  END;
+  PERFORM pg_temp.assert_true(got=format('true|%s|true|signer_required|true|sent,sent|true',
+    CASE c.a WHEN 1 THEN 'awaiting_review,sent' ELSE 'sent,awaiting_review' END),
+   'send order '||c.name||': the first delivery marks the request sent, the second is a no-op ['||COALESCE(got,'')||']');
+ END LOOP;
+END $$;
+-- 00893 (SQ-2349; SQ-2348 F1): a request that closes discards every signer
+-- notice still awaiting review. A sending or sent notice is left as it is.
+CREATE FUNCTION pg_temp.answer(req uuid, n integer, response text, k text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM pg_temp.actor(n);
+ PERFORM public.respond_service_acceptance(r.id,response,'[]'::jsonb,
+   CASE WHEN response='return' THEN 'Not this scope' END,r.scope_content_hash,r.evidence_manifest_hash,
+   r.signer_policy_revision,k)
+ FROM public.service_acceptance_requests r WHERE r.id=req;
+ PERFORM pg_temp.actor(1);
+END $$;
+CREATE FUNCTION pg_temp.request_state(req uuid) RETURNS text LANGUAGE sql AS $$
+ SELECT r.lifecycle||'/'||r.aggregate_outcome||'|'||pg_temp.draft_states(req)
+ FROM public.service_acceptance_requests r WHERE r.id=req;
+$$;
+DO $$ DECLARE c record; r jsonb; req uuid; got text; BEGIN
+ FOR c IN SELECT * FROM (VALUES
+   ('return',false,'closed/returned|sent,discarded',
+    'the first required return closes the request and discards the unsent sibling notice; the sent notice stays sent'),
+   ('return',true,'closed/returned|sent,sending',
+    'a sibling notice already sending is left as it is when the request closes'),
+   ('accept',false,'sent/pending|sent,awaiting_review>closed/accepted|sent,discarded',
+    'the sibling notice waits while an answer is pending, and is discarded once every required signer has answered')
+ ) v(answer,claim_sibling,expected,name) LOOP
+  BEGIN
+   r:=pg_temp.sa_create('close-'||c.answer||'-'||c.claim_sibling);
+   req:=(r->>'requestId')::uuid;
+   PERFORM pg_temp.deliver_draft((r->'outboundDraftIds'->>0)::uuid);
+   IF c.claim_sibling THEN
+    PERFORM pg_temp.actor(NULL);
+    PERFORM public.claim_outbound_draft_for_send((r->'outboundDraftIds'->>1)::uuid);
+    PERFORM pg_temp.actor(1);
+   END IF;
+   PERFORM pg_temp.answer(req,5,c.answer,'client-evidence-close-5-'||c.answer||'-'||c.claim_sibling);
+   got:=pg_temp.request_state(req);
+   IF c.answer='accept' THEN
+    PERFORM pg_temp.answer(req,6,'accept','client-evidence-close-6');
+    got:=got||'>'||pg_temp.request_state(req);
+   END IF;
+   RAISE EXCEPTION 'probe rolled back';
+  EXCEPTION WHEN OTHERS THEN
+   IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+  END;
+  PERFORM pg_temp.assert_true(got=c.expected,c.name||' ['||COALESCE(got,'<null>')||']');
+ END LOOP;
+END $$;
+-- 00893 (SQ-2349; SQ-2348 F2): replacing a signer moves the notice. The
+-- retired signer's unsent notice is discarded; a required replacement gets
+-- exactly one awaiting_review notice, bound to the request, the project and
+-- the new signer, keyed per signer; a replay writes nothing.
+CREATE FUNCTION pg_temp.drop_policy_slot(s text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ SET LOCAL session_replication_role=replica;
+ DELETE FROM public.project_scope_edition_signers WHERE slot=s
+  AND edition_id=(SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active');
+ SET LOCAL session_replication_role=origin;
+END $$;
+CREATE FUNCTION pg_temp.replace_slot(req uuid, s text, profile uuid, card uuid, k text) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.replace_service_acceptance_signer(req,
+   (SELECT id FROM public.service_acceptance_signers WHERE request_id=req AND slot=s AND status='active'),
+   profile,card,(SELECT signer_policy_revision FROM public.service_acceptance_requests WHERE id=req),'Moved out',k);
+$$;
+DO $$ DECLARE r jsonb; x jsonb; y jsonb; req uuid; retired uuid; got text; BEGIN
+ -- The sole required signer (partner) is replaced by the client before Send.
+ BEGIN
+  PERFORM pg_temp.drop_policy_slot('client');
+  r:=pg_temp.sa_create('replace-sole');
+  req:=(r->>'requestId')::uuid;
+  retired:=(SELECT id FROM public.service_acceptance_signers WHERE request_id=req AND slot='partner');
+  x:=pg_temp.replace_slot(req,'partner',pg_temp.uid(5),NULL,'client-evidence-replace-sole');
+  y:=public.replace_service_acceptance_signer(req,retired,pg_temp.uid(5),NULL,1,'Moved out','client-evidence-replace-sole');
+  got:=pg_temp.draft_states(req)||'|'||pg_temp.signer_drafts(req)
+   ||'|'||(SELECT (count(*)=1 AND min(d.id::text)=x->>'outboundDraftId' AND bool_and(d.kind='service_acceptance_request'
+       AND d.ref_type='service_acceptance_request' AND d.project_id=pg_temp.project() AND d.to_contact_id IS NULL
+       AND d.channel='email' AND d.recipient_kind='client' AND d.composed_by=pg_temp.uid(1)::text
+       AND d.organization_id='f8891000-0000-4000-8000-000000000001' AND d.subject='Review the agreed services'
+       AND d.dedupe_key='service_acceptance_request:'||req||':partner:'||(x->>'signerId')
+       AND d.payload=jsonb_build_object('requestId',req,'projectId',pg_temp.project(),'requestNumber',q.request_number,
+         'scopeEditionId',q.scope_edition_id)))::text
+     FROM public.outbound_drafts d JOIN public.service_acceptance_requests q ON q.id=d.ref_id
+     WHERE d.ref_id=req AND d.status='awaiting_review' AND d.to_client_id=pg_temp.uid(5))
+   ||'|'||((y->>'replayed')::boolean AND y->>'outboundDraftId'=x->>'outboundDraftId'
+       AND (SELECT count(*)=2 FROM public.outbound_drafts WHERE ref_id=req))::text;
+  PERFORM pg_temp.deliver_draft((x->>'outboundDraftId')::uuid);
+  got:=got||'|'||pg_temp.request_state(req);
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+ END;
+ PERFORM pg_temp.assert_true(got='discarded,awaiting_review|'||pg_temp.uid(6)||'|-|client-evidence-6@test.invalid;'
+   ||pg_temp.uid(5)||'|-|client-evidence-5@test.invalid|true|true|sent/pending|discarded,sent',
+  'replacing the sole required signer before Send discards their notice, drafts one bound notice for the replacement '
+  ||'(a replay adds none), and the request can be sent again ['||COALESCE(got,'<null>')||']');
+ -- A sibling: the partner is replaced by the household card; the client keeps their notice.
+ BEGIN
+  PERFORM pg_temp.drop_policy_slot('household');
+  r:=pg_temp.sa_create('replace-sibling');
+  req:=(r->>'requestId')::uuid;
+  x:=pg_temp.replace_slot(req,'partner',NULL,'f8896000-0000-4000-8000-000000000003','client-evidence-replace-sibling');
+  got:=pg_temp.draft_states(req)||'|'||pg_temp.signer_drafts(req)||'|'||((x->>'outboundDraftId')=(SELECT id::text
+    FROM public.outbound_drafts WHERE ref_id=req AND to_contact_id='f8896000-0000-4000-8000-000000000003'))::text;
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+ END;
+ PERFORM pg_temp.assert_true(got='awaiting_review,discarded,awaiting_review|'||pg_temp.uid(5)||'|-|client-evidence-5@test.invalid;'
+   ||pg_temp.uid(6)||'|-|client-evidence-6@test.invalid;-|f8896000-0000-4000-8000-000000000003|<null>|true',
+  'replacing one of two required signers keeps the other''s notice and drafts one for the household card ['
+  ||COALESCE(got,'<null>')||']');
+ -- After Send: the retired signer's delivered notice stays sent.
+ BEGIN
+  PERFORM pg_temp.drop_policy_slot('client');
+  r:=pg_temp.sa_create('replace-sent');
+  req:=(r->>'requestId')::uuid;
+  PERFORM pg_temp.deliver_draft((r->>'outboundDraftId')::uuid);
+  x:=pg_temp.replace_slot(req,'partner',pg_temp.uid(5),NULL,'client-evidence-replace-sent');
+  got:=pg_temp.request_state(req)||'|'||pg_temp.signer_drafts(req);
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+ END;
+ PERFORM pg_temp.assert_true(got='sent/pending|sent,awaiting_review|'||pg_temp.uid(6)||'|-|client-evidence-6@test.invalid;'
+   ||pg_temp.uid(5)||'|-|client-evidence-5@test.invalid',
+  'replacing a signer after Send leaves their delivered notice sent and drafts one for the replacement ['
+  ||COALESCE(got,'<null>')||']');
+END $$;
 UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
 
 -- ---------------------------------------------------------------------------

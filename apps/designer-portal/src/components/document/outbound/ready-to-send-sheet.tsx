@@ -38,7 +38,7 @@ import {
   type OutboundSendResult,
 } from './outbound-draft-review';
 
-const OPEN_STATUSES = new Set(['awaiting_review', 'sending']);
+export const OPEN_STATUSES = new Set(['awaiting_review', 'sending']);
 
 const GROUPS = [
   { key: 'client', title: 'Clients' },
