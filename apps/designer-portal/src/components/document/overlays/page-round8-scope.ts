@@ -10,7 +10,9 @@ export const PAGE_ROUND8_SCOPE_CHANGE = 'patina:page-round8-scope-change';
 export function useAnnouncePageRound8Scope(active = true) {
   useEffect(() => {
     if (!active) return;
-    const announce = () => document.dispatchEvent(new Event(PAGE_ROUND8_SCOPE_CHANGE));
+    const announce = () => {
+      document.dispatchEvent(new Event(PAGE_ROUND8_SCOPE_CHANGE));
+    };
     announce();
     return announce;
   }, [active]);
