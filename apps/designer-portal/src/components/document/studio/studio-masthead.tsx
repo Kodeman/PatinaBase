@@ -10,7 +10,7 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
-import { STUDIO_LEDGERS, STUDIO_ROOMS, type StudioSurface } from '@/lib/document/registry';
+import { HOST_SURFACES, STUDIO_LEDGERS, STUDIO_ROOMS, type StudioSurface } from '@/lib/document/registry';
 import { openCommandBar, openLedger } from '@/components/document/command-bar';
 import { openPost } from '@/components/document/overlays/post-sheet';
 import { openAccount } from '@/components/document/account/account-sheet';
@@ -24,6 +24,7 @@ const MASTHEAD_DOORS: ReadonlyArray<{ key: string; word: string }> = [
   { key: 'the-post', word: 'Correspondence' },
 ];
 
+const STUDIO_HOST = HOST_SURFACES.find((surface) => surface.key === 'desk-host');
 const SURFACES: readonly StudioSurface[] = [...STUDIO_ROOMS, ...STUDIO_LEDGERS];
 
 /** A door whose registry entry is gone, or no longer global, is not printed. */
@@ -75,9 +76,21 @@ export function StudioMasthead({
         )}
         <nav
           aria-label="Studio"
-          className="ml-auto hidden min-[1180px]:block"
+          className="order-last w-full min-w-0 border-t border-[var(--hairline-strong)] pt-2 min-[1180px]:order-none min-[1180px]:ml-auto min-[1180px]:w-auto min-[1180px]:border-0 min-[1180px]:pt-0"
         >
-          <ul className="flex flex-wrap items-center gap-x-6">
+          <ul className="flex flex-wrap items-center gap-x-6 gap-y-1 max-[599px]:gap-x-4">
+            {STUDIO_HOST && (
+              <li>
+                <Link
+                  href="/desk"
+                  aria-current="page"
+                  data-studio-door={STUDIO_HOST.key}
+                  className={`t-body-sm inline-flex min-h-11 min-w-11 items-center border-b-2 border-[var(--ink)] font-medium ${FOCUS}`}
+                >
+                  Studio
+                </Link>
+              </li>
+            )}
             {STUDIO_DOORS.map((door) => (
               <li key={door.key}>
                 <button
@@ -85,7 +98,7 @@ export function StudioMasthead({
                   id={`studio-door-${door.key}`}
                   data-studio-door={door.key}
                   onClick={() => openDoor(door.key)}
-                  className={`t-body-sm inline-flex min-h-11 items-center border-b-2 border-transparent text-[var(--ink)] transition-colors hover:border-[var(--hairline-strong)] motion-reduce:transition-none ${FOCUS}`}
+                  className={`t-body-sm inline-flex min-h-11 min-w-11 items-center border-b-2 border-transparent text-[var(--ink)] transition-colors hover:border-[var(--hairline-strong)] motion-reduce:transition-none ${FOCUS}`}
                 >
                   {door.word}
                 </button>

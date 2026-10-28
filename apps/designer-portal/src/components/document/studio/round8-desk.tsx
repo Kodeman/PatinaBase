@@ -62,8 +62,6 @@ export function Round8Desk(props: Round8DeskProps) {
     deskRead,
     deskRoot,
     notePress,
-    firstName,
-    greetingWord,
     isError,
     refetch,
     recorded,
@@ -194,15 +192,14 @@ export function Round8Desk(props: Round8DeskProps) {
     >
       <StudioMasthead studioName={studioName} viewerName={viewerName} dateLabel={dateLabel ?? ''} />
       <div className="mx-auto w-full max-w-[var(--r8-studio-measure)] px-[4%] pt-8 max-[599px]:px-4 min-[1440px]:pt-12">
-        <h1 data-tour-anchor="desk-greeting" className="r8-d1 pb-6">
-          {firstName ? (
-            <>
-              {greetingWord}, <span className="italic text-[var(--ink-faint)]">{firstName}</span>
-            </>
-          ) : (
-            <>{greetingWord}.</>
-          )}
-        </h1>
+        <div className="pb-8">
+          <h1 data-tour-anchor="desk-greeting" className="r8-d1">
+            The studio, in hand.
+          </h1>
+          <p className="t-body-sm mt-4 max-w-[640px] text-[var(--ink-faint)]">
+            Your jobs, resources and next conversations, kept close to the work.
+          </p>
+        </div>
         {isError ? (
           // I64 — one coherent error surface, as on the legacy Desk.
           <div role="alert" data-testid="desk-error-state" className="mt-8 max-w-[440px]">

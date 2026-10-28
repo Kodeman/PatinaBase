@@ -36,6 +36,9 @@ it('keeps Record an inquiry and Create a project file operable in an empty studi
     captureOpen: false, openProjectOpen: false, setCaptureOpen, setOpenProjectOpen, setRecorded: jest.fn(),
   } as Round8DeskProps;
   const view = render(<Round8Desk {...props} />);
+  expect(screen.getByRole('heading', { level: 1, name: 'The studio, in hand.' })).toBeInTheDocument();
+  expect(screen.getByText('Your jobs, resources and next conversations, kept close to the work.')).toBeInTheDocument();
+  expect(screen.queryByText(/Good morning/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Record an inquiry' }));
   expect(setCaptureOpen).toHaveBeenCalledWith(true);
   fireEvent.click(screen.getByRole('button', { name: 'Create a project file' }));
