@@ -200,7 +200,19 @@ const readings = [
   { lens: 'finishes', button: 'Finish schedule', title: 'Room finishes' },
 ] as const;
 
-test('four specialized lenses retain the room and native instruments', async ({ authenticatedPage: page }, info) => {
+// The round-8 head, in BUILD_ROOM_LENSES order: Purchasing is the sixth lens,
+// last (Purchase lens ruling, 2026-10-27; SQ-1990). Its own walk is
+// purchase-lens.spec.ts.
+const head = [
+  'Preliminary selections',
+  'Specifications',
+  'Pricing',
+  'Purchasing authorization',
+  'Finish schedule',
+  'Purchasing',
+] as const;
+
+test('the six-lens head ends on Purchasing; four specialized lenses retain the room and native instruments', async ({ authenticatedPage: page }, info) => {
   test.setTimeout(240_000);
   expect(psqlScalar(`SELECT count(*) FROM public.project_ffe_items WHERE project_id='${JOB}' AND removed_at IS NULL`)).toBe('80');
   expect(psqlScalar(`SELECT count(*) FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND removed_at IS NULL`)).toBe('36');
@@ -211,7 +223,7 @@ test('four specialized lenses retain the room and native instruments', async ({ 
   const sheet = page.locator('[data-build-room-embedded="true"]');
   await expect(sheet).toBeVisible();
   const views = sheet.getByRole('group', { name: 'Schedule view' });
-  await expect(views.getByRole('button')).toHaveCount(5);
+  await expect(views.getByRole('button')).toHaveText([...head]);
   const shell = await page.locator('[data-document-shell]').elementHandle();
 
   for (const reading of readings) {
