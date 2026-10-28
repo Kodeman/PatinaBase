@@ -1,3 +1,4 @@
+export * from './use-service-completion';
 export * from './use-studio-buying';
 export * from './use-my-service-acceptance';
 export {
