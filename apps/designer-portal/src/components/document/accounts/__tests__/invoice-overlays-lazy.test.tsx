@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { InvoiceOverlays, openInvoiceComposer, openInvoiceFolio } from '../invoice-overlays';
 
 type ComposerProps = ComponentProps<typeof import('../invoice-composer').InvoiceComposer>;
@@ -96,7 +97,13 @@ it('keeps cold composer context in the eager dismissible sheet, discards cancell
 it('contains a rejected composer import in the mounted sheet and retries with a fresh lazy identity', async () => {
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 0; });
   jest.spyOn(console, 'error').mockImplementation(() => {});
-  render(<><main data-testid="paper"><input aria-label="Job draft" defaultValue="Kept words" /></main><button>Draw invoice</button><InvoiceOverlays /></>);
+  render(
+    <ErrorBoundary fallback={<p>Document unavailable</p>}>
+      <main data-testid="paper"><input aria-label="Job draft" defaultValue="Kept words" /></main>
+      <button>Draw invoice</button>
+      <InvoiceOverlays />
+    </ErrorBoundary>,
+  );
   const paper = screen.getByTestId('paper');
   const draft = screen.getByRole('textbox', { name: 'Job draft' });
   const opener = screen.getByRole('button', { name: 'Draw invoice' });
