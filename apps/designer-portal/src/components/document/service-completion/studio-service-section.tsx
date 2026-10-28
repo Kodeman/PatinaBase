@@ -13,8 +13,7 @@ import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from
 import type { ScopeEdition } from '@patina/types';
 import {
   citedReferences,
-  serviceCompletionRefusal,
-  STALE_SERVICE_COMPLETION_REFUSALS,
+  staleReadingMark,
   useCompleteStudioService,
   useOrganizations,
   useProjectV2,
@@ -90,20 +89,18 @@ export function StudioServiceSection({ projectId }: { projectId: string }) {
         !failed && <p role="status" className="t-body-sm mt-3">Reading the studio service…</p>
       ) : (
         <StudioServiceBody projectId={projectId} reading={reading} current={current} earlier={earlier}
-          resolutions={record.data.resolutions} report={report}
-          readAt={obligations.dataUpdatedAt} readFailed={obligations.isError} />
+          resolutions={record.data.resolutions} report={report} readFailed={obligations.isError} />
       )}
     </section>
   );
 }
 
-/** When the reading on screen was read, and whether its last refresh failed. */
+/** Whether the last refresh of the reading on screen failed. */
 interface ReadState {
-  readAt: number;
   readFailed: boolean;
 }
 
-function StudioServiceBody({ projectId, reading, current, earlier, resolutions, report, readAt, readFailed }: {
+function StudioServiceBody({ projectId, reading, current, earlier, resolutions, report, readFailed }: {
   projectId: string;
   reading: StudioServiceObligations;
   current: StudioServiceCompletion | null;
@@ -120,7 +117,7 @@ function StudioServiceBody({ projectId, reading, current, earlier, resolutions, 
         <CompletionRecord projectId={projectId} completion={current} edition={edition} report={report} />
       ) : (
         <Obligations projectId={projectId} reading={reading} edition={edition} report={report}
-          readAt={readAt} readFailed={readFailed} />
+          readFailed={readFailed} />
       )}
       <FinancialHold reading={reading} />
       {requestId && (
@@ -144,7 +141,7 @@ function byPackage(items: StudioServiceObligationItem[]): [string | null, Studio
   return [...groups.entries()];
 }
 
-function Obligations({ projectId, reading, edition, report, readAt, readFailed }: {
+function Obligations({ projectId, reading, edition, report, readFailed }: {
   projectId: string; reading: StudioServiceObligations; edition: ScopeEdition | null; report: Report;
 } & ReadState) {
   // While switched off the server holds the service with one inactive blocker;
@@ -180,35 +177,34 @@ function Obligations({ projectId, reading, edition, report, readAt, readFailed }
         </>
       )}
       <CompleteService projectId={projectId} reading={reading} edition={edition} report={report}
-        readAt={readAt} readFailed={readFailed} />
+        readFailed={readFailed} />
     </div>
   );
 }
 
-function CompleteService({ projectId, reading, edition, report, readAt, readFailed }: {
+function CompleteService({ projectId, reading, edition, report, readFailed }: {
   projectId: string; reading: StudioServiceObligations; edition: ScopeEdition | null; report: Report;
 } & ReadState) {
   const id = useId();
   const complete = useCompleteStudioService(projectId);
   const [error, setError] = useState<string | null>(null);
-  // A stale refusal retires the reading it was read at: Complete waits until a
-  // refetch succeeds and the updated list is on screen, and a failed read
-  // (the section's calm error with Retry) keeps it held.
-  const [retiredAt, setRetiredAt] = useState<number | null>(null);
+  // A stale refusal retires every reading begun before it, a background read
+  // that answered after the click included: Complete waits for a read begun
+  // after the refusal to succeed and be on screen, and a failed read (the
+  // section's calm error with Retry) keeps it held.
+  const retiredThrough = staleReadingMark(projectId);
   const requestId = reading.acceptance.requestId;
   // Zero blockers, the inactive one included: the server refuses any.
   const ready = reading.blockers.length === 0 && requestId != null;
-  const held = !ready || complete.isPending || readFailed || (retiredAt != null && readAt <= retiredAt);
+  const held = !ready || complete.isPending || readFailed
+    || (retiredThrough != null && reading.readNumber <= retiredThrough);
   const onComplete = async () => {
     if (held) return;
-    const shownAt = readAt;
     setError(null);
     try {
       // The hash of the list on screen: a changed list refuses as stale.
       await complete.mutateAsync({ acceptanceRequestId: requestId, obligationHash: reading.obligationHash });
     } catch (failure) {
-      const token = serviceCompletionRefusal(failure);
-      if (token && STALE_SERVICE_COMPLETION_REFUSALS.has(token)) setRetiredAt(shownAt);
       setError(report(failure));
     }
   };
@@ -392,18 +388,12 @@ function Citations({ projectId, evidence }: { projectId: string; evidence: Servi
 }
 
 /** A citation is point-in-time (C6 §2.2), checked on its own: one that is
- *  positively gone reads "no longer available"; one that could not be checked
- *  says so with Retry. Neither is an error, and neither reopens the condition. */
+ *  positively gone reads "no longer available"; one whose latest check failed
+ *  says so with Retry, even over an earlier answer still cached, which is no
+ *  longer current. Neither is an error, and neither reopens the condition. */
 function Citation({ projectId, kind, id }: { projectId: string; kind: ServiceConditionEvidenceKind; id: string }) {
   const citation = useServiceConditionCitation(projectId, kind, id);
   const reference = `${kind}:${id}`;
-  if (citation.data) {
-    return (
-      <p className="t-meta" data-citation={reference} data-citation-state={citation.data.available ? 'available' : 'gone'}>
-        Cited: {citation.data.available ? citation.data.label : 'no longer available'}
-      </p>
-    );
-  }
   if (citation.isError) {
     return (
       <div data-citation={reference} data-citation-state="unchecked">
@@ -414,6 +404,13 @@ function Citation({ projectId, kind, id }: { projectId: string; kind: ServiceCon
           </DocumentAction>
         </DocumentActionRow>
       </div>
+    );
+  }
+  if (citation.data) {
+    return (
+      <p className="t-meta" data-citation={reference} data-citation-state={citation.data.available ? 'available' : 'gone'}>
+        Cited: {citation.data.available ? citation.data.label : 'no longer available'}
+      </p>
     );
   }
   return <p className="t-meta" data-citation={reference} data-citation-state="reading">Cited: reading…</p>;

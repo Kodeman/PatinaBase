@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(), from: vi.fn(), list: vi.fn(), bucket: vi.fn(), invalidateQueries: vi.fn(),
+  // fetchQuery answers from its own queryFn, as a cold cache does.
+  fetchQuery: vi.fn((options: { queryFn: () => unknown }) => options.queryFn()),
 }));
 vi.mock('../use-agreement-parts', async (original) => original());
 vi.mock('../../client', () => ({
@@ -12,8 +14,9 @@ vi.mock('../../client', () => ({
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
+  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries, fetchQuery: mocks.fetchQuery }),
 }));
+import * as completionHooks from '../use-service-completion';
 import {
   citedReferences, readStudioServiceCompletion, readStudioServiceObligations, serviceCompletionKeys,
   serviceCompletionRefusal, useCompleteStudioService, useResolveServiceAcceptanceCondition,
@@ -22,14 +25,31 @@ import {
 } from '../use-service-completion';
 
 type Act<A> = { mutationFn: (args: A) => Promise<unknown>; onSuccess: () => void; onError: (error: unknown) => void };
-type Read<T> = { queryKey: unknown; enabled: boolean; meta?: unknown; queryFn: () => Promise<T> };
+type Read<T> = {
+  queryKey: unknown; enabled: boolean; meta?: unknown; queryFn: () => Promise<T>; select?: (data: unknown) => unknown;
+};
+
+/** A read's answer as useQuery hands it on: its data through `select`. */
+async function answer(read: Read<unknown>): Promise<unknown> {
+  const data = await read.queryFn();
+  return read.select ? read.select(data) : data;
+}
 
 type Entry = { id: string | null; name: string };
+const storage = { inFlight: 0, peak: 0 };
 /** A storage tree keyed `bucket:prefix`; `list` pages it by offset and limit
- *  and lists an unknown prefix as empty, as the storage API does. */
+ *  and lists an unknown prefix as empty, as the storage API does. Each list
+ *  answers on a later tick, and the peak of lists in flight is kept. */
 function storageTree(tree: Record<string, Entry[]>, failAt?: string) {
+  storage.inFlight = 0;
+  storage.peak = 0;
   mocks.list.mockImplementation(async (prefix: string, options: { limit: number; offset?: number }) => {
+    // Read synchronously: `from(bucket).list(...)` is one expression.
     const bucket = mocks.bucket.mock.calls.at(-1)?.[0];
+    storage.inFlight += 1;
+    storage.peak = Math.max(storage.peak, storage.inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    storage.inFlight -= 1;
     if (`${bucket}:${prefix}` === failAt) return { data: null, error: { message: 'storage unavailable' } };
     const offset = options.offset ?? 0;
     return { data: (tree[`${bucket}:${prefix}`] ?? []).slice(offset, offset + options.limit), error: null };
@@ -159,6 +179,35 @@ describe('service completion acts', () => {
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: serviceCompletionKeys.project('job-1') });
   });
 
+  it('R1: numbers reads as they start and marks a stale refusal before its refresh read begins', async () => {
+    type Reading = { obligationHash: string; readNumber: number };
+    const derive = useStudioServiceObligations('job-r1') as unknown as Read<Reading>;
+    // A background read is in flight when the server refuses.
+    let settle: (value: unknown) => void = () => undefined;
+    mocks.rpc.mockImplementationOnce(() => new Promise((resolve) => { settle = resolve; }));
+    const background = derive.queryFn();
+    // The refusal's refresh starts its read at once.
+    let refreshed: Promise<Reading> = Promise.reject(new Error('no refresh'));
+    refreshed.catch(() => undefined);
+    mocks.invalidateQueries.mockImplementationOnce(() => {
+      mocks.rpc.mockResolvedValueOnce({ data: obligations({ projectId: 'job-r1', obligationHash: 'hash-2' }), error: null });
+      refreshed = derive.queryFn();
+      return refreshed;
+    });
+    (useCompleteStudioService('job-r1') as unknown as Act<unknown>).onError({ code: '40001', message: 'stale_obligations' });
+    // The background read answers after the refusal, with the refused hash.
+    settle({ data: obligations({ projectId: 'job-r1' }), error: null });
+    const [before, after] = await Promise.all([background, refreshed]);
+    expect(before.obligationHash).toBe('hash-1');
+    expect(after.readNumber - before.readNumber).toBe(1);
+    const mark = completionHooks.staleReadingMark?.('job-r1');
+    expect(mark).toBe(before.readNumber);
+    expect(after.readNumber).toBeGreaterThan(mark as number);
+    // An inactive denial is not stale and leaves the mark where it was.
+    (useCompleteStudioService('job-r1') as unknown as Act<unknown>).onError({ message: 'permission denied for function x' });
+    expect(completionHooks.staleReadingMark?.('job-r1')).toBe(mark);
+  });
+
   it('resolves a condition with its text and one evidence reference', async () => {
     mocks.rpc.mockResolvedValueOnce({ data: { resolutionId: 'r', replayed: false }, error: null });
     const act = useResolveServiceAcceptanceCondition('job-1') as unknown as Act<unknown>;
@@ -254,7 +303,7 @@ describe('recorded citations, each checked on its own (C6 §2.2)', () => {
       'field-media:project/job-1/visits': [...files(100), { id: OBJECT, name: 'hall.jpg' }],
     });
     const read = useServiceConditionCitation('job-1', 'storageObject', OBJECT) as unknown as Read<unknown>;
-    expect(await read.queryFn()).toEqual({ available: true, label: 'visits/hall.jpg' });
+    expect(await answer(read)).toEqual({ available: true, label: 'visits/hall.jpg' });
     expect(mocks.bucket.mock.calls.map(([bucket]) => bucket)).toEqual(expect.arrayContaining([
       'project-documents', 'project-ffe-working', 'service-acceptance-paper', 'field-media',
     ]));
@@ -267,14 +316,67 @@ describe('recorded citations, each checked on its own (C6 §2.2)', () => {
       'site-requests:site-1': [{ id: 'other', name: 'photo.jpg' }],
     });
     const read = useServiceConditionCitation('job-1', 'storageObject', OBJECT) as unknown as Read<unknown>;
-    expect(await read.queryFn()).toEqual({ available: false });
+    expect(await answer(read)).toEqual({ available: false });
     expect(mocks.list).toHaveBeenCalledWith('site-1', expect.anything());
     expect(new Set(mocks.bucket.mock.calls.map(([bucket]) => bucket))).toEqual(new Set([
       'project-documents', 'project-ffe-working', 'service-acceptance-paper', 'field-media', 'site-requests',
     ]));
     // A walk that could not finish is not an answer: the check fails, never "gone".
     storageTree({}, 'project-ffe-working:job-1');
-    await expect(read.queryFn()).rejects.toMatchObject({ message: 'storage unavailable' });
+    await expect(answer(read)).rejects.toMatchObject({ message: 'storage unavailable' });
+  });
+
+  // The reviewer's fixture (SQ-2277 R3): 20 folders of 101 documents, 5 site
+  // requests, and 20 distinct cited objects, two of them gone.
+  const FOLDERS = Array.from({ length: 20 }, (_, index) => `folder-${String(index).padStart(2, '0')}`);
+  const CITED_IDS = [...FOLDERS.slice(0, 18).map((folder) => `${folder}-7`), 'gone-1', 'gone-2'];
+  const SITE_REQUESTS = Array.from({ length: 5 }, (_, index) => ({ id: `site-${index}` }));
+  const fixture = () => Object.fromEntries([
+    ['project-documents:job-1', FOLDERS.map((name) => ({ id: null, name }))],
+    ...FOLDERS.map((folder) => [`project-documents:job-1/${folder}`, files(101, folder)]),
+  ]) as Record<string, Entry[]>;
+
+  /** The citations as TanStack runs them: one fetch per distinct query key,
+   *  each citation's answer through its own `select`; a failed fetch reads
+   *  'failed' for every citation on that key. */
+  async function checkAll(ids: string[]): Promise<unknown[]> {
+    const fetches = new Map<string, Promise<unknown>>();
+    return Promise.all(ids.map((id) => {
+      const read = useServiceConditionCitation('job-1', 'storageObject', id) as unknown as Read<unknown>;
+      const key = JSON.stringify(read.queryKey);
+      if (!fetches.has(key)) fetches.set(key, read.queryFn());
+      return (fetches.get(key) as Promise<unknown>)
+        .then((data) => (read.select ? read.select(data) : data), () => 'failed');
+    }));
+  }
+
+  it('R3: twenty stored citations share one inventory walk, at most four folders listed at once', async () => {
+    tables({ site_requests: SITE_REQUESTS });
+    storageTree(fixture());
+    const results = await checkAll(CITED_IDS);
+    // One walk: the job's root (1) and 20 folders of two pages (40) in
+    // project-documents, three empty roots (3), and five site requests (5).
+    expect(mocks.list).toHaveBeenCalledTimes(49);
+    expect(storage.peak).toBeLessThanOrEqual(4);
+    expect(results.slice(0, 18)).toEqual(FOLDERS.slice(0, 18).map((folder) => ({
+      available: true, label: `${folder}/${folder}-007.pdf`,
+    })));
+    expect(results.slice(18)).toEqual([{ available: false }, { available: false }]);
+  });
+
+  it('R3: an inventory that fails part way reads every stored citation as failed, never gone', async () => {
+    tables({ site_requests: SITE_REQUESTS });
+    storageTree(fixture(), 'project-documents:job-1/folder-07');
+    const results = await checkAll(CITED_IDS);
+    expect(results).toEqual(CITED_IDS.map(() => 'failed'));
+  });
+
+  it('R3: the evidence picker reads the same inventory query as the citations', async () => {
+    tables({});
+    storageTree({ 'project-documents:job-1': [{ id: 'object-1', name: 'walkthrough.pdf' }] });
+    await (useServiceConditionEvidenceOptions('job-1', true) as unknown as Read<unknown>).queryFn();
+    const citation = useServiceConditionCitation('job-1', 'storageObject', 'object-1') as unknown as Read<unknown>;
+    expect(mocks.fetchQuery).toHaveBeenCalledWith(expect.objectContaining({ queryKey: citation.queryKey }));
   });
 
   it('every read opts out of the global toast through meta.errorSurface', () => {

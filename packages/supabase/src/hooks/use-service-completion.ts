@@ -23,6 +23,8 @@ export const serviceCompletionKeys = {
     ['service-completion', 'project', projectId ?? null, 'evidence'] as const,
   citation: (projectId: string, kind: ServiceConditionEvidenceKind, id: string) =>
     ['service-completion', 'project', projectId, 'citation', kind, id] as const,
+  /** The job's storage inventory: one per job, shared by the picker and every stored citation. */
+  storage: (projectId: string) => ['service-completion', 'project', projectId, 'storage'] as const,
 };
 
 // These reads print their own calm read error with Retry, so a failure never
@@ -68,6 +70,8 @@ export interface StudioServiceObligations {
   acceptance: { requestId: string | null; outcome: ServiceAcceptanceOutcome | null; pendingRequiredSigners: number };
   /** As of read, beside the hash and never in it: it holds closure, not service. */
   financialHold: StudioServiceFinancialHold;
+  /** Reads are numbered as they start (see staleReadingMark). */
+  readNumber: number;
 }
 
 export interface ServiceConditionEvidence {
@@ -154,7 +158,9 @@ function evidence(value: unknown): ServiceConditionEvidence {
   return out;
 }
 
-export function readStudioServiceObligations(value: unknown, projectId: string): StudioServiceObligations {
+export function readStudioServiceObligations(
+  value: unknown, projectId: string,
+): Omit<StudioServiceObligations, 'readNumber'> {
   const bundle = scopeRecord(value);
   if (bundle.projectId !== projectId) throw new Error('Service obligations project mismatch');
   const acceptance = scopeRecord(bundle.acceptance);
@@ -211,6 +217,19 @@ export function readStudioServiceCompletion(value: unknown, projectId: string): 
   };
 }
 
+// Every obligations read takes the next number as it starts. A stale refusal
+// records the last number begun before it (before its refresh starts), so only
+// a reading numbered above that mark began after the refusal: a read already in
+// flight when the server refused can never re-enable Complete.
+let obligationReadsStarted = 0;
+const staleMarks = new Map<string, number>();
+
+/** The last obligations read begun before this job's latest stale refusal, or
+ *  null when none was refused. A reading at or below it is retired. */
+export function staleReadingMark(projectId: string): number | null {
+  return staleMarks.get(projectId) ?? null;
+}
+
 /** derive_studio_service_obligations: the blockers, informational items, open
  *  conditions and financial hold the studio reads before completing. */
 export function useStudioServiceObligations(projectId: string | null | undefined) {
@@ -218,12 +237,14 @@ export function useStudioServiceObligations(projectId: string | null | undefined
     queryKey: serviceCompletionKeys.obligations(projectId),
     enabled: !!projectId,
     meta: SILENT,
-    queryFn: async () => {
+    queryFn: async (): Promise<StudioServiceObligations> => {
+      obligationReadsStarted += 1;
+      const readNumber = obligationReadsStarted;
       const { data, error } = await createBrowserClient().rpc('derive_studio_service_obligations', {
         p_project_id: projectId as string,
       });
       if (error) throw error;
-      return readStudioServiceObligations(data, projectId as string);
+      return { ...readStudioServiceObligations(data, projectId as string), readNumber };
     },
   });
 }
@@ -298,7 +319,10 @@ function useServiceCompletionAct<Args, Result>(
     },
     onError: (error: unknown) => {
       const token = serviceCompletionRefusal(error);
-      if (token && STALE_SERVICE_COMPLETION_REFUSALS.has(token)) void refresh();
+      if (!token || !STALE_SERVICE_COMPLETION_REFUSALS.has(token)) return;
+      // Marked before the refresh starts its read, which numbers above it.
+      staleMarks.set(projectId, obligationReadsStarted);
+      void refresh();
     },
   });
 }
@@ -363,6 +387,8 @@ type Client = ReturnType<typeof createBrowserClient>;
 
 const STORAGE_PAGE = 100;
 const ROW_PAGE = 1000;
+/** Folders listed at once by one inventory walk. */
+const STORAGE_WALK_PARALLELISM = 4;
 
 function issueLabel(row: { issue_number: number; name: string }): string {
   return `Issue ${row.issue_number} · ${row.name}`;
@@ -370,31 +396,6 @@ function issueLabel(row: { issue_number: number; name: string }): string {
 
 function siteRequestLabel(row: { note: string | null; assignee_name_snapshot: string | null }): string {
   return row.note?.trim() || (row.assignee_name_snapshot ? `Site request to ${row.assignee_name_snapshot}` : 'Site request');
-}
-
-/**
- * Every object under `root` the signed-in user can read (storage RLS), nested
- * folders included, page by page. `visit` gets each object's id and its path
- * below `root`; returning true stops the walk, and the walk then returns true.
- */
-async function walkStorage(
-  client: Client, bucket: string, root: string, visit: (id: string, path: string) => boolean, folder = '',
-): Promise<boolean> {
-  const prefix = folder ? `${root}/${folder}` : root;
-  for (let offset = 0; ; offset += STORAGE_PAGE) {
-    const { data, error } = await client.storage.from(bucket).list(prefix, {
-      limit: STORAGE_PAGE, offset, sortBy: { column: 'name', order: 'asc' },
-    });
-    if (error) throw error;
-    const page = data ?? [];
-    for (const entry of page) {
-      const path = folder ? `${folder}/${entry.name}` : entry.name;
-      // A folder lists with no id.
-      const stop = entry.id ? visit(entry.id, path) : await walkStorage(client, bucket, root, visit, path);
-      if (stop) return true;
-    }
-    if (page.length < STORAGE_PAGE) return false;
-  }
 }
 
 /** The job's site request ids the user can read, every page of them. */
@@ -409,34 +410,124 @@ async function siteRequestIds(client: Client, projectId: string): Promise<string
   }
 }
 
+/** A stored object the signed-in user can read, by its path below its root. */
+export interface StoredObject {
+  bucket: string;
+  path: string;
+}
+
+/** Every stored object of the job the signed-in user can read, by id. */
+export interface StoredObjectInventory {
+  objects: Record<string, StoredObject>;
+}
+
+interface Folder {
+  bucket: string;
+  root: string;
+  folder: string;
+}
+
+/** Every page of one folder: objects into `objects`, subfolders returned. */
+async function listFolder(client: Client, { bucket, root, folder }: Folder, objects: Record<string, StoredObject>) {
+  const subfolders: Folder[] = [];
+  const prefix = folder ? `${root}/${folder}` : root;
+  for (let offset = 0; ; offset += STORAGE_PAGE) {
+    const { data, error } = await client.storage.from(bucket).list(prefix, {
+      limit: STORAGE_PAGE, offset, sortBy: { column: 'name', order: 'asc' },
+    });
+    if (error) throw error;
+    const page = data ?? [];
+    for (const entry of page) {
+      const path = folder ? `${folder}/${entry.name}` : entry.name;
+      // A folder lists with no id.
+      if (entry.id) objects[entry.id] = { bucket, path };
+      else subfolders.push({ bucket, root, folder: path });
+    }
+    if (page.length < STORAGE_PAGE) return subfolders;
+  }
+}
+
+/**
+ * Where 00888 accepts a cited storage object for this job (C6 §2.2), walked
+ * once, every folder and page, at most STORAGE_WALK_PARALLELISM folders at a
+ * time: the first folder is the job in `project-documents`,
+ * `project-ffe-working` and `service-acceptance-paper`; `field-media` paths
+ * start `project/<job>/`; `site-requests` objects sit under one of the job's
+ * site requests. Any failed list fails the whole walk: a partial inventory is
+ * never an answer.
+ */
+async function storageInventory(client: Client, projectId: string): Promise<StoredObjectInventory> {
+  const roots: [string, string][] = [
+    ['project-documents', projectId], ['project-ffe-working', projectId], ['service-acceptance-paper', projectId],
+    ['field-media', `project/${projectId}`],
+    ...(await siteRequestIds(client, projectId)).map((id): [string, string] => ['site-requests', id]),
+  ];
+  const objects: Record<string, StoredObject> = {};
+  const queue: Folder[] = roots.map(([bucket, root]) => ({ bucket, root, folder: '' }));
+  await new Promise<void>((resolve, reject) => {
+    let active = 0;
+    let failed = false;
+    const pump = () => {
+      if (failed) return;
+      if (queue.length === 0 && active === 0) { resolve(); return; }
+      while (active < STORAGE_WALK_PARALLELISM && queue.length > 0) {
+        active += 1;
+        listFolder(client, queue.shift() as Folder, objects).then((subfolders) => {
+          active -= 1;
+          queue.push(...subfolders);
+          pump();
+        }, (error: unknown) => {
+          failed = true;
+          reject(error);
+        });
+      }
+    };
+    pump();
+  });
+  return { objects };
+}
+
+/**
+ * The job's storage inventory, one query per job under the signed-in user's
+ * read (the designer's QueryClient is per signed-in subject): the evidence
+ * picker and every stored-object citation read it, so the job is walked once.
+ */
+function storageInventoryQuery(projectId: string) {
+  return {
+    queryKey: serviceCompletionKeys.storage(projectId),
+    queryFn: () => storageInventory(createBrowserClient(), projectId),
+  };
+}
+
 /**
  * What a resolution can cite, as the signed-in user can read it: the job's
  * drawing-set issues, site requests and stored documents (`project-documents`,
- * every file under `<projectId>/`, nested folders and every page included).
- * The picker only; a recorded citation is checked on its own
+ * every file under `<projectId>/`, from the job's storage inventory). The
+ * picker only; a recorded citation is checked on its own
  * (useServiceConditionCitation).
  */
 export function useServiceConditionEvidenceOptions(projectId: string | null | undefined, enabled = true) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: serviceCompletionKeys.evidence(projectId),
     enabled: enabled && !!projectId,
     meta: SILENT,
     queryFn: async (): Promise<ServiceConditionEvidenceOption[]> => {
       const supabase = createBrowserClient();
-      const files: ServiceConditionEvidenceOption[] = [];
-      const [issues, requests] = await Promise.all([
+      const [issues, requests, inventory] = await Promise.all([
         supabase.from('plan_issues').select('id, issue_number, name').eq('project_id', projectId as string)
           .order('issue_number', { ascending: false }),
         supabase.from('site_requests').select('id, note, assignee_name_snapshot, created_at')
           .eq('project_id', projectId as string).order('created_at', { ascending: false }),
-        walkStorage(supabase, 'project-documents', projectId as string, (id, path) => {
-          // The storage API's empty-folder marker is not a document.
-          if (!path.endsWith('.emptyFolderPlaceholder')) files.push({ kind: 'storageObject', id, label: path });
-          return false;
-        }),
+        queryClient.fetchQuery({ ...storageInventoryQuery(projectId as string), meta: SILENT }),
       ]);
       if (issues.error) throw issues.error;
       if (requests.error) throw requests.error;
+      const files = Object.entries(inventory.objects)
+        // The storage API's empty-folder marker is not a document.
+        .filter(([, object]) => object.bucket === 'project-documents' && !object.path.endsWith('.emptyFolderPlaceholder'))
+        .map(([id, object]) => ({ kind: 'storageObject' as const, id, label: object.path }))
+        .sort((a, b) => a.label.localeCompare(b.label));
       return [
         ...(issues.data ?? []).map((row) => ({ kind: 'issue' as const, id: row.id, label: issueLabel(row) })),
         ...(requests.data ?? []).map((row) => ({ kind: 'siteRequest' as const, id: row.id, label: siteRequestLabel(row) })),
@@ -459,34 +550,9 @@ export function citedReferences(evidence: ServiceConditionEvidence): { kind: Ser
   return keys.flatMap(([kind, key]) => (evidence[key] ? [{ kind, id: evidence[key] as string }] : []));
 }
 
-/**
- * Where 00888 accepts a cited storage object for this job (C6 §2.2): the first
- * folder is the job in `project-documents`, `project-ffe-working` and
- * `service-acceptance-paper`; `field-media` paths start `project/<job>/`.
- * `site-requests` objects sit under one of the job's site requests, read last.
- */
-async function findStorageObject(client: Client, projectId: string, id: string): Promise<string | null> {
-  let found: string | null = null;
-  const match = (objectId: string, path: string) => {
-    if (objectId !== id) return false;
-    found = path;
-    return true;
-  };
-  const roots: [string, string][] = [
-    ['project-documents', projectId], ['project-ffe-working', projectId], ['service-acceptance-paper', projectId],
-    ['field-media', `project/${projectId}`],
-  ];
-  for (const [bucket, root] of roots) {
-    if (await walkStorage(client, bucket, root, match)) return found;
-  }
-  for (const siteRequestId of await siteRequestIds(client, projectId)) {
-    if (await walkStorage(client, 'site-requests', siteRequestId, match)) return found;
-  }
-  return null;
-}
-
-async function checkCitation(
-  client: Client, projectId: string, kind: ServiceConditionEvidenceKind, id: string,
+/** An issue or site request, checked directly by id on this job. */
+async function checkRow(
+  client: Client, projectId: string, kind: 'issue' | 'siteRequest', id: string,
 ): Promise<ServiceConditionCitation> {
   if (kind === 'issue') {
     const { data, error } = await client.from('plan_issues').select('id, issue_number, name').eq('id', id)
@@ -494,26 +560,32 @@ async function checkCitation(
     if (error) throw error;
     return data ? { available: true, label: issueLabel(data) } : GONE;
   }
-  if (kind === 'siteRequest') {
-    const { data, error } = await client.from('site_requests').select('id, note, assignee_name_snapshot').eq('id', id)
-      .eq('project_id', projectId).maybeSingle();
-    if (error) throw error;
-    return data ? { available: true, label: siteRequestLabel(data) } : GONE;
-  }
-  const path = await findStorageObject(client, projectId, id);
-  return path == null ? GONE : { available: true, label: path };
+  const { data, error } = await client.from('site_requests').select('id, note, assignee_name_snapshot').eq('id', id)
+    .eq('project_id', projectId).maybeSingle();
+  if (error) throw error;
+  return data ? { available: true, label: siteRequestLabel(data) } : GONE;
+}
+
+/** A cited stored object, read from a completed inventory: absent there is gone. */
+export function citeStoredObject(inventory: StoredObjectInventory, id: string): ServiceConditionCitation {
+  const object = inventory.objects[id];
+  return object ? { available: true, label: object.path } : GONE;
 }
 
 /**
- * One recorded citation, checked on its own under the signed-in user's read
- * authority (C6 §2.2 point-in-time). Gone only when the check completes
- * without finding it; a failed check throws, and the reader says it could not
- * check, never that the reference is gone or the resolution reopened.
+ * One recorded citation, checked under the signed-in user's read authority
+ * (C6 §2.2 point-in-time). An issue or site request is read directly by id; a
+ * stored object is looked up in the job's shared storage inventory. Gone only
+ * when the check completes without finding it; a failed check (or a failed
+ * inventory) is an error, and the reader says it could not check, never that
+ * the reference is gone or the resolution reopened.
  */
 export function useServiceConditionCitation(projectId: string, kind: ServiceConditionEvidenceKind, id: string) {
-  return useQuery({
-    queryKey: serviceCompletionKeys.citation(projectId, kind, id),
-    meta: SILENT,
-    queryFn: () => checkCitation(createBrowserClient(), projectId, kind, id),
-  });
+  return useQuery<StoredObjectInventory | ServiceConditionCitation, Error, ServiceConditionCitation, readonly unknown[]>(
+    kind === 'storageObject'
+      ? { ...storageInventoryQuery(projectId), meta: SILENT,
+        select: (inventory) => citeStoredObject(inventory as StoredObjectInventory, id) }
+      : { queryKey: serviceCompletionKeys.citation(projectId, kind, id), meta: SILENT,
+        queryFn: () => checkRow(createBrowserClient(), projectId, kind, id) },
+  );
 }

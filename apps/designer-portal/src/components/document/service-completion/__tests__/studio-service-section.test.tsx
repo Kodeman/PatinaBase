@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StudioServiceSection } from '../studio-service-section';
-import { HOLD_NOTE, INACTIVE_NOTE, STALE_NOTE } from '../copy';
+import { CITATION_UNCHECKED, HOLD_NOTE, INACTIVE_NOTE, STALE_NOTE } from '../copy';
 
 // Mocked hooks: the DB-backed walk is W6. RPC arguments and the refusal token
 // contract are proven in the @patina/supabase vitest suite.
@@ -15,6 +15,8 @@ const mockOpener = jest.fn();
 const mockRole = { value: 'owner' as string };
 const mockOpenerFor = jest.fn();
 const mockStale = new Set(['stale_obligations', 'service_obligations_open', 'service_acceptance_condition_resolved']);
+// staleReadingMark: the hook records it when a stale refusal lands (vitest suite).
+const mockMark = { value: null as number | null };
 jest.mock('@patina/supabase', () => ({
   useStudioServiceObligations: () => mockObligations(),
   useStudioServiceCompletion: () => mockCompletion(),
@@ -49,6 +51,7 @@ jest.mock('@patina/supabase', () => ({
   isServiceAcceptanceInactive: (error: { message?: string }) => /permission denied for function/.test(error?.message ?? ''),
   serviceCompletionRefusal: (error: { message?: string }) => /^([a-z][a-z0-9_]*)(?::|$)/.exec(error?.message ?? '')?.[1] ?? null,
   get STALE_SERVICE_COMPLETION_REFUSALS() { return mockStale; },
+  staleReadingMark: () => mockMark.value,
 }));
 jest.mock('../../paper/unfold-bridge', () => ({ unfoldOpenerFor: (id: string) => mockOpenerFor(id) }));
 
@@ -56,10 +59,10 @@ const reading = (over: Record<string, unknown> = {}) => ({
   projectId: 'job-1', capability: 'active', scopeEditionId: 'edition-1', obligationHash: 'hash-1',
   blockers: [], informational: [], conditions: [],
   acceptance: { requestId: 'request-1', outcome: 'accepted', pendingRequiredSigners: 0 },
-  financialHold: { openInvoiceCount: 0, balanceCents: 0, uncollectedContractCents: 0 },
+  financialHold: { openInvoiceCount: 0, balanceCents: 0, uncollectedContractCents: 0 }, readNumber: 1,
   ...over,
 });
-const completion = (over: Record<string, unknown> = {}) => ({
+const completion =(over: Record<string, unknown> = {}) => ({
   completionId: 'completion-1', scopeEditionId: 'edition-1', acceptanceRequestId: 'request-1', state: 'completed',
   openConditionIds: [], obligationSnapshot: {}, obligationHash: 'hash-1', financialHold: {}, completedBy: 'owner-1',
   completedAt: '2026-10-27T10:00:00Z', conditionsClosedAt: null, revokedAt: null, revokedBy: null, revokeReason: null,
@@ -90,6 +93,7 @@ const citationRead = (kind: string, id: string) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockRole.value = 'owner';
+  mockMark.value = null;
   mockEvidence.mockReturnValue(OPTIONS);
   mockCitation.mockImplementation(citationRead);
   mockCompletion.mockReturnValue(record());
@@ -128,7 +132,10 @@ describe('studio service obligations', () => {
 
   it('a stale refusal retires the shown hash: Complete waits for a successful refetch, then sends the new hash', async () => {
     mockObligations.mockReturnValue(read(reading()));
-    mockComplete.mockRejectedValueOnce({ code: '40001', message: 'stale_obligations' });
+    mockComplete.mockImplementationOnce(async () => {
+      mockMark.value = 1;
+      throw { code: '40001', message: 'stale_obligations' };
+    });
     const { rerender } = render(<StudioServiceSection projectId="job-1" />);
     expect(screen.getByText('Nothing holds the studio\'s service.')).toBeInTheDocument();
     fireEvent.click(completeButton());
@@ -147,12 +154,39 @@ describe('studio service obligations', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry the studio service' }));
     expect(failedRead.refetch).toHaveBeenCalled();
     // A refetch succeeded and the updated list is shown: Complete sends its hash.
-    mockObligations.mockReturnValue(read(reading({ obligationHash: 'hash-2' }), { dataUpdatedAt: 2 }));
+    mockObligations.mockReturnValue(read(reading({ obligationHash: 'hash-2', readNumber: 2 }), { dataUpdatedAt: 2 }));
     mockComplete.mockResolvedValueOnce({ completionId: 'completion-1', state: 'completed' });
     rerender(<StudioServiceSection projectId="job-1" />);
     expect(completeButton()).toBeEnabled();
     fireEvent.click(completeButton());
     await waitFor(() => expect(mockComplete).toHaveBeenLastCalledWith({ acceptanceRequestId: 'request-1', obligationHash: 'hash-2' }));
+  });
+
+  it('R1: a read begun before the refusal never re-enables Complete, even one that answered after the click', async () => {
+    mockObligations.mockReturnValue(read(reading()));
+    let refuse: (reason: unknown) => void = () => undefined;
+    mockComplete.mockImplementationOnce(() => new Promise((_, reject) => { refuse = reject; }));
+    const { rerender } = render(<StudioServiceSection projectId="job-1" />);
+    fireEvent.click(completeButton());
+    expect(mockComplete).toHaveBeenCalledWith({ acceptanceRequestId: 'request-1', obligationHash: 'hash-1' });
+    // A background read succeeds between the click and the refusal, still with the old hash.
+    mockObligations.mockReturnValue(read(reading({ readNumber: 2 }), { dataUpdatedAt: 2 }));
+    rerender(<StudioServiceSection projectId="job-1" />);
+    // The server refuses: reads 1 and 2 had begun, and the refresh starts read 3.
+    mockMark.value = 2;
+    refuse({ code: '40001', message: 'stale_obligations' });
+    expect(await screen.findByRole('alert')).toHaveTextContent(STALE_NOTE);
+    expect(completeButton()).toBeDisabled();
+    fireEvent.click(completeButton());
+    expect(mockComplete).toHaveBeenCalledTimes(1);
+    // The read begun after the refusal answers with the new hash: Complete sends it.
+    mockObligations.mockReturnValue(read(reading({ obligationHash: 'hash-2', readNumber: 3 }), { dataUpdatedAt: 3 }));
+    mockComplete.mockResolvedValueOnce({ completionId: 'completion-1', state: 'completed' });
+    rerender(<StudioServiceSection projectId="job-1" />);
+    expect(completeButton()).toBeEnabled();
+    fireEvent.click(completeButton());
+    await waitFor(() => expect(mockComplete).toHaveBeenLastCalledWith({ acceptanceRequestId: 'request-1', obligationHash: 'hash-2' }));
+    expect(mockComplete).toHaveBeenCalledTimes(2);
   });
 
   it('reads a permission denial as the calm switched-off note, not an error', async () => {
@@ -273,6 +307,24 @@ describe('conditions (K3 option A)', () => {
     mockCitation.mockReturnValue({ data: undefined, isError: false, refetch: jest.fn() });
     rerender(<StudioServiceSection projectId="job-1" />);
     expect(resolved()).toHaveTextContent('Cited: reading…');
+  });
+
+  it.each([
+    ['no longer available', { available: false }],
+    ['available', { available: true, label: 'Issue 3 · Kitchen set' }],
+  ])('R2: a failed re-check reads failed with Retry over a cached "%s" answer', (_label, cached) => {
+    const failed = { data: cached, isError: true, refetch: jest.fn() };
+    mockCitation.mockReturnValue(failed);
+    mockObligations.mockReturnValue(read(reading()));
+    mockCompletion.mockReturnValue(record([completion()], [resolution()]));
+    render(<StudioServiceSection projectId="job-1" />);
+    const cited = document.querySelector('[data-citation="issue:issue-1"]') as HTMLElement;
+    expect(cited).toHaveAttribute('data-citation-state', 'unchecked');
+    expect(cited).toHaveTextContent(`Cited: ${CITATION_UNCHECKED}`);
+    expect(cited).not.toHaveTextContent('no longer available');
+    expect(cited).not.toHaveTextContent('Kitchen set');
+    fireEvent.click(within(cited).getByRole('button', { name: 'Check the reference again' }));
+    expect(failed.refetch).toHaveBeenCalled();
   });
 });
 
