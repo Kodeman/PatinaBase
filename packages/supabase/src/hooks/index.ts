@@ -2697,3 +2697,21 @@ export {
   useRecordFabricationInstruction,
 } from './use-external-fulfilments';
 export type { ExternalFulfilment, ExternalFulfilmentReading } from './use-external-fulfilments';
+
+export {
+  serviceAcceptanceCapability,
+  readProjectServiceAcceptance,
+  useServiceAcceptance,
+} from './use-service-acceptance';
+export type {
+  ProjectServiceAcceptance,
+  ServiceAcceptanceAnswer,
+  ServiceAcceptanceCondition,
+  ServiceAcceptanceLifecycle,
+  ServiceAcceptanceMethod,
+  ServiceAcceptanceOutcome,
+  ServiceAcceptancePaperIntake,
+  ServiceAcceptanceRequest,
+  ServiceAcceptanceResponse,
+  ServiceAcceptanceSigner,
+} from './use-service-acceptance';

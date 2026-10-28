@@ -25074,6 +25074,234 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.service_acceptance_requests FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.service_acceptance_signers FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.service_acceptance_paper_intakes FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.service_acceptance_responses FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_access_service_acceptance_paper_object(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_access_service_acceptance_paper_object(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._mint_scope_edition(uuid,uuid,boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._scope_after_execution(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_service_acceptance_request() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_service_acceptance_child() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_recorded_service_acceptance_paper() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_key(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_hash(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._is_service_acceptance_studio_admin(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_conditions(text,jsonb,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._validate_service_acceptance_signers(uuid,jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._lock_service_acceptance_request(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._lapse_service_acceptance_intakes(uuid,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._supersede_service_acceptance_request(uuid,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._supersede_service_acceptance_requests(uuid,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_pending_required(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._derive_service_acceptance_outcome(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_paper_object_unchanged(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_request_json(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_create_receipt(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_response_receipt(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_after_send() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_service_acceptance_request(uuid,uuid,uuid,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_service_acceptance_paper_intake(uuid,uuid,uuid,date,text,text,jsonb,text,integer,text,text,integer,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_service_acceptance_paper_hash(uuid,text,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.review_service_acceptance_paper_intake(uuid,text,text,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.replace_service_acceptance_signer(uuid,uuid,uuid,uuid,integer,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.withdraw_service_acceptance_request(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_service_acceptance(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_my_service_acceptance_requests() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_service_acceptance(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_my_service_acceptance_requests() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00887_round8_external_reading_grant_binding.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.get_project_external_fulfilments(uuid) FROM PUBLIC,anon,authenticated,service_role;
