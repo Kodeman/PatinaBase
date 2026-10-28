@@ -25,6 +25,7 @@
  */
 
 import {
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -34,6 +35,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { Round8MarginContext } from './paper/margin-layout';
 import {
   LENS_ANNOUNCE_DEDUPE_MS,
   LENS_TURN_OUT_MS,
@@ -80,6 +82,16 @@ const readDockYieldOnServer = () => false;
 const RUNG_TRIAL = 'overflow-hidden whitespace-nowrap';
 /** Wrap, never truncate. */
 const LINE_WRAP = 'whitespace-normal [overflow-wrap:anywhere]';
+/** RC-4b F3 — round 8's named task on a compact rung: one row, so the band
+ *  keeps its declared height; the live line still carries the whole sentence. */
+const NAME_CLAMP = 'truncate';
+
+/** "Task due — F01 review living-room selections" → the task's own name. The
+ *  aggregate "<n> tasks due — oldest <date>" names no task, so it stays whole
+ *  (SQ-2338 F2). */
+function taskNameOf(sentence: string): string {
+  return /^Task due\s+—\s+(.+)$/.exec(sentence)?.[1]?.trim() || sentence;
+}
 
 /** F2-1 — the eyebrow's two halves: the stage word first; the job's name,
  *  with its separator, wraps after it (US-28 S7: never ellipsised). */
@@ -194,6 +206,7 @@ export function LensBand({
    *  through its own `onAct`. */
   openActSheet?: (act: LensAct) => boolean;
 }) {
+  const round8 = useContext(Round8MarginContext);
   const { line1 } = model;
   // Slice 2 (D1, D2) — the stage word on line 1, Next and the door on line 2.
   // Off, the band is exactly the 0b band.
@@ -283,9 +296,28 @@ export function LensBand({
     : '';
   const [yielded, setYielded] = useState({ key: '', by: 0 });
   const dropped = yielded.key === rungKey ? yielded.by : 0;
-  const rung = spoken
+  const selectedRung = spoken
     ? (spoken.rungs[Math.min(dropped, spoken.rungs.length - 1)] ?? spoken)
     : null;
+  // RC-4b N2 — the compact rungs' generic short subject is "TASK", so round 8
+  // prints the task's own name there instead, or the whole "<n> tasks due"
+  // sentence when several are due. F3 — that line is clamped to one
+  // row: the band stands under its declared --doc-band-height, which the
+  // schedule glance and every landing are set below. The whole sentence stays
+  // in the live line for assistive technology.
+  const taskName =
+    round8 &&
+    spoken?.next &&
+    selectedRung &&
+    selectedRung.form !== 'long' &&
+    spoken.standing.some(
+      (item) => item.key === spoken.next?.rowKey && item.needKind === 'task_due',
+    )
+      ? taskNameOf(spoken.next.sentence)
+      : null;
+  const rung = taskName && selectedRung
+    ? { ...selectedRung, sentence: taskName }
+    : selectedRung;
   // US-25 fix-now 13 — the measure stops on the last sentence rung (the phone
   // form, wrapped if it must) rather than giving the reason up for the act
   // alone: below 600 the act is the dock's (US-43 R6), so an act-only rung
@@ -483,7 +515,7 @@ export function LensBand({
             // wrapped plate's 32px paint (6px past its inset 19.5px line)
             // clear of the sentence row above it.
             className={`flex items-center gap-x-2 gap-y-[10px] text-[15px] leading-[1.3] ${
-              dropped < lastRung ? 'flex-nowrap' : 'flex-wrap'
+              dropped < lastRung || taskName ? 'flex-nowrap' : 'flex-wrap'
             } ${
               nextIsException
                 ? 'text-[var(--color-terracotta-ink)]'
@@ -509,8 +541,9 @@ export function LensBand({
                   ? spoken.next.sentence
                   : undefined
               }
+              aria-hidden={taskName ? true : undefined}
               className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${
-                dropped < lastRung ? RUNG_TRIAL : LINE_WRAP
+                dropped < lastRung ? RUNG_TRIAL : taskName ? NAME_CLAMP : LINE_WRAP
               } ${
                 voiceTurning
                   ? 'opacity-0 duration-[90ms]'
@@ -519,6 +552,9 @@ export function LensBand({
             >
               {rung.sentence}
             </span>
+            {taskName && spoken.next && (
+              <span data-lens-full-sentence className="sr-only">{spoken.next.sentence}</span>
+            )}
             {spoken.next && (
               <DocumentAction
                 ref={actRef}

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useAnnouncePageRound8Scope } from "../../overlays/page-round8-scope";
 import { RoomShell } from "../room-shell";
 import "../../paper/round8.css";
 
@@ -13,6 +14,7 @@ export default function Round8LibraryEditorial({
   action: ReactNode;
   count?: string;
 }) {
+  useAnnouncePageRound8Scope();
   return (
     <div data-paper-renderer="round8" data-library-room>
       <RoomShell

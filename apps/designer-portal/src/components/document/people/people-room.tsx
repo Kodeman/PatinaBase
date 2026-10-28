@@ -65,6 +65,7 @@ import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { useMobilePrimaryAction } from "../mobile/mobile-shell";
 import { usePaperRenderer } from "@/hooks/use-paper-renderer";
+import { useAnnouncePageRound8Scope } from "../overlays/page-round8-scope";
 import { rememberPaperOrigin } from "@/lib/document/paper/paper-origin";
 
 const PEOPLE_MEANINGS = [
@@ -87,6 +88,7 @@ export function PeopleRoom() {
   const router = useRouter();
   const { renderer } = usePaperRenderer();
   const round8 = renderer === "round8";
+  useAnnouncePageRound8Scope(round8);
   // US-28 — the Room opens on the view its address names (a sub-room walked
   // to from More or ⌘K), so the address writer below never sees a stale
   // "directory" on the first commit and strips `?view=` before it is read.

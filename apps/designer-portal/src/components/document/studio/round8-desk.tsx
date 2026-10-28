@@ -17,6 +17,7 @@ import { DocumentAction, DocumentActionGroup } from '@/components/document/docum
 import { EmptyState } from '@/components/document/empty-state';
 import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
 import { OpenProjectSheet } from '@/components/document/overlays/open-project-sheet';
+import { useAnnouncePageRound8Scope } from '@/components/document/overlays/page-round8-scope';
 import type { DeskFrameSlots } from '@/components/document/frame/frame-slots';
 import type { DeskRoster as DeskRosterRead } from '@/lib/document/desk-roster-derivation';
 import type { DocumentStateRow } from '@/lib/document/desk-derivation';
@@ -76,6 +77,7 @@ export function Round8Desk(props: Round8DeskProps) {
     live,
     holdPlace,
   } = props;
+  useAnnouncePageRound8Scope();
 
   const kindOf = useMemo(
     () => new Map(live.map((row) => [row.engagement_id, row.engagement_kind])),
