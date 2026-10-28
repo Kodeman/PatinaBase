@@ -55,13 +55,18 @@ test.afterAll(() => {
   console.log('[H02 cleanup] project|invoice|payment=0|0|0');
 });
 
-async function openBook(page: Page) {
+async function openBook(page: Page, how: 'keyboard' | 'click' = 'keyboard') {
   await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
   await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
   let opener = page.locator('[data-studio-door="accounts"]');
-  if (await opener.isVisible()) {
-    // Keyboard-open, so the sheet has an invoker to give focus back to: WebKit
-    // does not focus a button on a mouse click (SQ-2302 shows this door on phones).
+  if (how === 'click') {
+    // A real mouse/tap open: WebKit leaves the door unfocused (SQ-2325), so the
+    // sheet must still find its way back to it.
+    await expect(opener).toBeVisible();
+    await opener.click();
+  } else if (await opener.isVisible()) {
+    // Keyboard-open (focus + Enter): the door holds focus when the sheet opens
+    // (SQ-2302 shows this door on phones).
     await opener.focus();
     await page.keyboard.press('Enter');
   } else {
@@ -121,4 +126,13 @@ test('an invoice read failure refuses the book instead of printing zero; retry r
     release();
     await page.unroute(matcher);
   }
+});
+
+test('a click-opened book puts focus back on the masthead door, as the keyboard open does', async ({ authenticatedPage: page }) => {
+  test.setTimeout(180_000);
+  const { book, opener } = await openBook(page, 'click');
+  await expect(book.locator('[data-accounts-front-matter]')).toContainText('$240.00 issued; $50.00 received; $190.00 due.');
+  await page.keyboard.press('Escape');
+  await expect(book).not.toBeVisible();
+  await expect(opener).toBeFocused();
 });

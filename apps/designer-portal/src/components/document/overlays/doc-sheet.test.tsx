@@ -115,6 +115,41 @@ function NestedSheetHarness() {
   );
 }
 
+/** SQ-2325 — WebKit does not focus a clicked button, so the sheet opens with
+ *  BODY active. `explicitReturn` mirrors a caller that names its own target. */
+function ClickOpenedHarness({ explicitReturn = false }: { explicitReturn?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [returnTo, setReturnTo] = useState<HTMLElement | null>(null);
+
+  return (
+    <>
+      <button type="button" ref={setReturnTo}>
+        Named return
+      </button>
+      <button type="button" onClick={() => setOpen(true)}>
+        <span>Open accounts</span>
+      </button>
+      <DocSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Studio accounts"
+        returnFocusTo={explicitReturn ? returnTo : undefined}
+      >
+        <button type="button">First account action</button>
+      </DocSheet>
+    </>
+  );
+}
+
+/** Opens like a WebKit mouse click: the press lands on the button's label,
+ *  nothing takes focus, then the click opens the sheet. */
+function clickWithoutFocus(button: HTMLElement) {
+  (document.activeElement as HTMLElement | null)?.blur();
+  fireEvent.pointerDown(button.firstElementChild ?? button);
+  expect(document.activeElement).toBe(document.body);
+  fireEvent.click(button);
+}
+
 describe('DocSheet', () => {
   it('does not steal focus from a field focused before the deferred open frame', () => {
     let flushFocusFrame: FrameRequestCallback | undefined;
@@ -405,6 +440,37 @@ describe('DocSheet', () => {
     );
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Studio books' })).toHaveFocus(),
+    );
+  });
+
+  it('SQ-2325 — a click-opened sheet (WebKit: no focus on click) returns focus to the pressed control', async () => {
+    render(<ClickOpenedHarness />);
+    const opener = screen.getByRole('button', { name: 'Open accounts' });
+    clickWithoutFocus(opener);
+
+    const dialog = screen.getByRole('dialog', { name: 'Studio accounts' });
+    await waitFor(() => expect(dialog).toHaveFocus());
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('SQ-2325 — an explicit returnFocusTo still wins over the pressed control', async () => {
+    render(<ClickOpenedHarness explicitReturn />);
+    clickWithoutFocus(screen.getByRole('button', { name: 'Open accounts' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Studio accounts' });
+    await waitFor(() => expect(dialog).toHaveFocus());
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Named return' })).toHaveFocus(),
     );
   });
 });
