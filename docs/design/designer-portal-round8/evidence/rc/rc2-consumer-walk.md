@@ -201,14 +201,14 @@ SQ-2337 repairs the RC-2b harness against review SQ-2334 (F1–F3). The legs, ta
 - The journey files were renamed `*.spec.ts` → `*.journey.ts`, so the default configs' `testMatch` does not discover them. Only the consumer-journey configs match them. Type-check covers them.
 - Runner: `node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --evidence <dir> [--runs 2]`. It uses Node built-ins only. For each run it:
   1. Checks that at least 9 GiB of disk is free. It refuses if the project's containers already exist or ports 57321/57322/3200/3202 are in use.
-  2. Copies `supabase/` into a scratch workdir. It copies only the five version/storage-migration pins from `supabase/.temp`, never the project-ref, linked-project or pooler-url pins.
+  2. Creates an exclusively owned scratch child with `mkdtemp` (under an existing `--workdir <parent>` when supplied) and copies `supabase/` there. It refuses root, home, the repo and git checkout roots, resolving symlinks before checking. It copies only the five version/storage-migration pins from `supabase/.temp`, never the project-ref, linked-project or pooler-url pins.
   3. Offsets every port by +3000.
   4. Writes `functions/.env` with `EMAIL_DEV_MODE=dry_run` only.
   5. Runs `supabase start` without studio, mailpit, logflare, vector, imgproxy or postgres-meta. Edge-runtime stays up for V22 Send.
   6. Proves ownership as described above.
   7. Records `stack-receipt.json` (names and ids only, never keys). It includes the edge-runtime functions env: `EMAIL_DEV_MODE=dry_run`, and no name matching RESEND/SMTP/SENDGRID/POSTMARK/MAILGUN/SES_/TWILIO.
   8. Runs the five legs in order against that one stack. F01 is set up once, by `@rc2-send`'s `beforeAll`, before the designer signs in. No leg tears anything down.
-  9. Finally runs `supabase stop --no-backup`. It records the containers and volumes left (both must be 0) and removes the workdir.
+  9. Finally runs `supabase stop --no-backup`. A non-zero stop exit, a failed resource check, or any remaining container or volume makes the result FAIL. Only a complete teardown (stop exit 0 and both counts 0) removes the owned child; incomplete teardown retains it and prints its recovery path. Preparation failure before startup removes only that owned child. The caller's parent is never removed. `--keep-stack` intentionally retains the stack and child and prints the recovery path.
 
 ### F3: what each leg now proves
 

@@ -4,7 +4,7 @@
  * five-leg designer/client journey (A20–A23, X08):
  *
  *   node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --evidence <dir> [--runs 2]
- *       [--workdir <scratch>] [--pins-from <dir with the .temp version pins>] [--keep-stack]
+ *       [--workdir <existing scratch parent>] [--pins-from <dir with the .temp version pins>] [--keep-stack]
  *   node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --refusal-check <db url> --evidence <dir>
  *
  * Journey mode starts ONE owned Supabase stack (project patina-rc2-journey,
@@ -259,6 +259,39 @@ function runLeg(evidence, label, side, tag, legEnv) {
     status: result.status ?? result.signal, logPath, lines };
 }
 
+function createOwnedWorkdir(parent = os.tmpdir()) {
+  const target = fs.realpathSync(parent);
+  if (target === path.parse(target).root || target === fs.realpathSync(os.homedir())
+    || target === fs.realpathSync(ROOT) || fs.existsSync(path.join(target, '.git'))) {
+    throw new Error(`unsafe workdir parent ${target}; use an existing scratch directory outside checkout roots`);
+  }
+  return fs.mkdtempSync(path.join(target, 'patina-rc2-journey-'));
+}
+
+function cleanupWorkdir(workdir, started, keepStack, evidence) {
+  if (keepStack) {
+    log(evidence, `stack kept by request; recovery workdir: ${workdir}`);
+    return true;
+  }
+  try {
+    if (started) {
+      const stop = run('supabase', ['stop', '--workdir', workdir, '--no-backup'], { timeout: 10 * 60 * 1000 });
+      const left = containers(`com.supabase.cli.project=${PROJECT}`);
+      const volumes = must('docker', ['volume', 'ls', '--filter', `label=com.supabase.cli.project=${PROJECT}`, '-q'])
+        .split('\n').filter(Boolean);
+      log(evidence, `teardown: supabase stop --no-backup exit=${stop.status}; containers left ${left.length}; volumes left ${volumes.length}`);
+      if (stop.status !== 0 || left.length !== 0 || volumes.length !== 0) {
+        throw new Error('owned stack teardown is incomplete');
+      }
+    }
+    fs.rmSync(workdir, { recursive: true, force: true });
+    return true;
+  } catch (error) {
+    log(evidence, `teardown FAILED: ${error.message}; recovery workdir: ${workdir}`);
+    return false;
+  }
+}
+
 async function journey(args) {
   const { evidence } = args;
   requireDisk(evidence);
@@ -267,8 +300,9 @@ async function journey(args) {
   for (const port of [OWNED.api, OWNED.db, '3200', '3202']) {
     if (await portInUse(port)) throw new Error(`port ${port} is already in use`);
   }
-  const workdir = args.workdir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'patina-rc2-journey-'));
+  const workdir = createOwnedWorkdir(args.workdir);
   let started = false;
+  let cleaned = false;
   let passed = 0;
   try {
     prepareWorkdir(workdir, args.pinsFrom ?? defaultPins());
@@ -310,16 +344,9 @@ async function journey(args) {
       passed += 1;
     }
   } finally {
-    if (started && !args.keepStack) {
-      const stop = run('supabase', ['stop', '--workdir', workdir, '--no-backup'], { timeout: 10 * 60 * 1000 });
-      const left = containers(`com.supabase.cli.project=${PROJECT}`);
-      const volumes = must('docker', ['volume', 'ls', '--filter', `label=com.supabase.cli.project=${PROJECT}`, '-q'])
-        .split('\n').filter(Boolean);
-      log(evidence, `teardown: supabase stop --no-backup exit=${stop.status}; containers left ${left.length}; volumes left ${volumes.length}`);
-    }
-    if (!args.keepStack) fs.rmSync(workdir, { recursive: true, force: true });
+    cleaned = cleanupWorkdir(workdir, started, args.keepStack, evidence);
   }
-  return passed === args.runs;
+  return passed === args.runs && cleaned;
 }
 
 function refusalCheck(args) {
