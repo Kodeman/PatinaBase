@@ -32,12 +32,14 @@ GRANT EXECUTE ON FUNCTION pg_temp.assert_true(boolean,text),pg_temp.expect_error
 -- END shared assertion helpers
 
 -- Shipped inactive: no mutation or helper is executable by PUBLIC, anon,
--- authenticated or service_role; only the two reads reach authenticated.
+-- authenticated or service_role; only the reads and 00889's client evidence
+-- storage predicate reach authenticated.
 DO $$ DECLARE f record; r text; BEGIN
   FOR f IN SELECT p.oid::regprocedure signature, p.proname FROM pg_proc p
     WHERE p.pronamespace='public'::regnamespace AND (p.proname LIKE '%service_acceptance%')
       AND p.proname NOT IN ('_can_access_service_acceptance_paper_object') LOOP
-    IF f.proname IN ('get_project_service_acceptance','get_my_service_acceptance_requests') THEN
+    IF f.proname IN ('get_project_service_acceptance','get_my_service_acceptance_requests',
+      'get_my_service_acceptance_evidence','_can_read_service_acceptance_evidence_object') THEN
       PERFORM pg_temp.assert_true(has_function_privilege('authenticated',f.signature,'EXECUTE')
         AND NOT has_function_privilege('anon',f.signature,'EXECUTE'),'read granted to authenticated only '||f.signature);
       CONTINUE;

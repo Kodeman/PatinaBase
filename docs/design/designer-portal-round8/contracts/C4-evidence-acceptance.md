@@ -17,6 +17,8 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 
 **Revision 2026-10-27 (SQ-2217).** Answers the SQ-2215 frontier review of the 00886 candidate: the paper content binding is a hash of the stored bytes, stamped by the service path, never object metadata (F1; §2.1, §2.2); client reads keep each response's method (F2; §2.2); the review decision vocabulary is `confirmed`/`rejected` (F4; §2.2); and the activation plan names its one storage-policy predicate exception and the stamp's `service_role` grant (F5; §2.8).
 
+**Revision 2026-10-27 (SQ-2240).** Adds the client evidence reader `get_my_service_acceptance_evidence` (00889), so a signer can read what they accept (A20) and not only its hashes (§2.2). It adds a second storage-policy predicate, `_can_read_service_acceptance_evidence_object(text)`, keyed to the client read predicate (§2.7). Both are reads, both stay granted through activation and deactivation, and activation now requires the reader (§2.8).
+
 ## 1. Why this cannot be a new approval kind
 
 | Fact | Evidence |
@@ -139,6 +141,7 @@ Whether paper intake counts at all is K5 (**OPEN**). The fields above are the sa
 | `withdraw_service_acceptance_request` | Studio | `p_request_id, p_reason, p_client_request_id` | `{requestId, lifecycle:'withdrawn', withdrawnAt, replayed}`. `lifecycle='withdrawn'`, only from `draft` or `sent`. Responses stay readable as history. Receipt below (SQ-1857 T6) |
 | `get_project_service_acceptance` | Studio read | `p_project_id` | Requests, signers, responses, intakes and the derived outcome |
 | `get_my_service_acceptance_requests` | Client read | none | Only requests where the caller is an **active** signer or the project's client. Each row carries a `viewerRole` of `signer_required`, `signer_optional` or `observer`. This is a new vocabulary on a new projection, so no old parser sees it. Each active signer's response keeps its `method`, so a confirmed paper response reads `paper_intake`, distinct from an authenticated click-through; it withholds the response id, the paper object, its hash and who recorded or reviewed it (Revision 2026-10-27, SQ-2217) |
+| `get_my_service_acceptance_evidence` | Client read (00889, Revision 2026-10-27, SQ-2240) | `p_request_id` | `{requestId, requestNumber, scope:{editionId, contentHash, packages:[{key, label, inclusion, conditionText, responsibilities:{design, purchasing, installation}, phases:[{name, service}]}]}, evidence:{manifestId, manifestHash, members:[{kind, title, issuedAt, documents:[{bucket:'project-documents', path, title}]}]}}`. Same predicate as the row above, on a sent request. Any other caller, and a missing request, gets `insufficient_privilege`. `scope` is read from the bound edition's `content`, which hashes to `contentHash`. `evidence` is read from the bound manifest's `members`, which hash to `manifestHash` (C1 §4), one entry per member in order. It withholds room ids, provenance, owed-since counters, payer, fabrication contract, signer identities, fees, prices, costs, notes, snapshots and member hashes. `documents` lists the `project-documents` objects behind plan members (`plan_issue`, `plan_issue_print`, `plan_print`); other kinds return `[]` |
 
 **`create_service_acceptance_request` refuses (SQ-1817 F9)** when the signer set would be missing, empty, duplicated or unbound. An empty set must never accept vacuously:
 - the edition is not `active`, or `scope_editions` is inactive (C2 §2.8);
@@ -248,10 +251,11 @@ The four C4 tables are C6 *contributing* tables (C6 §2.5, F7): a write to any o
 
 ### 2.7 RLS and grants
 
-- **RLS and tables:** all four tables have RLS enabled. `REVOKE ALL FROM PUBLIC, anon, authenticated`. Nothing grants direct SELECT. Reads go through the two definer read RPCs.
+- **RLS and tables:** all four tables have RLS enabled. `REVOKE ALL FROM PUBLIC, anon, authenticated`. Nothing grants direct SELECT. Reads go through the definer read RPCs: the two in 00886, and the client evidence reader in 00889 (SQ-2240).
 - **Studio read predicate:** `is_studio_comember(designer_id)` plus the tenant leg (`00632` header).
 - **Client read predicate:** the caller is an active signer `profile_id`, or `projects.client_id`. Another household's job, a revoked signer, a GC, a maker and anon all get nothing (X02).
 - **Storage:** the bucket is private, following `00835`'s bucket and policy boundary. The client sees only their own request's evidence manifest, never paper scans of other signers unless the request is shared to them as part of the evidence.
+- **Evidence documents (Revision 2026-10-27, SQ-2240).** Plan prints are stored in the private `project-documents` bucket. Its native client policy admits only `projects.client_id`, and only `client_visible` documents, so a partner or optional signer could not open the drawings they accept. 00889 adds one permissive `SELECT` policy for `authenticated`, `service_acceptance_evidence_client_read`, through `_can_read_service_acceptance_evidence_object(name)`. It admits exactly the documents that `get_my_service_acceptance_evidence` returns, on a sent request, to exactly the callers of the client read predicate above. It does not admit any other project document, and it never admits a paper scan.
 
 ### 2.8 Activation and deactivation (deny-by-default)
 
@@ -273,6 +277,7 @@ The four C4 tables are C6 *contributing* tables (C6 §2.5, F7): a write to any o
   - WP-10C ships the client-portal and iOS consumers, whose sign-off follows activation (above).
   - 00886 has no C6 interlock. WP-10B adds the contributing-table trigger on the four C4 tables (§2.3), and the activation review records whether activation waits for it.
   - `scope_editions` stays the runtime pause switch. Every mutation re-checks it at entry.
+  - The client evidence reader `get_my_service_acceptance_evidence` (00889, SQ-2240) is shipped, so a signer can read the scope and evidence behind the hashes they present (A20). The consumers that show it (SQ-2232 client, SQ-2233 iOS) are part of the WP-10C sign-off.
 - **The activation migration grants exactly these six functions to `authenticated`, with signatures as in 00886:**
 
 ```sql
@@ -293,13 +298,14 @@ The four C4 tables are C6 *contributing* tables (C6 §2.5, F7): a write to any o
 - **It never grants:**
   - anything to `PUBLIC` or `anon`;
   - anything to `service_role` except the stamp above, and never the stamp to `authenticated`;
-  - any table privilege on the four C4 tables (reads stay the two definer RPCs);
+  - any table privilege on the four C4 tables (reads stay the definer read RPCs);
   - any internal helper, guard or trigger function (`_service_acceptance_*`, including `_service_acceptance_paper_object_unchanged`, `_lock_service_acceptance_request`, `_derive_service_acceptance_outcome`, `_supersede_service_acceptance_request(s)`, `_lapse_service_acceptance_intakes`, `_validate_service_acceptance_signers`, `_guard_*service_acceptance*`).
-- **The one predicate exception (Revision 2026-10-27, SQ-2217; answers SQ-2215 F5).** `_can_access_service_acceptance_paper_object(text)` is already granted to `authenticated` by 00886, because the paper bucket's storage policies call it in the caller's role. It is a read-only boolean predicate (`STABLE`, no writes) and the only helper any API role can execute. The activation migration does not change it and grants no other helper.
+- **The one predicate exception (Revision 2026-10-27, SQ-2217; answers SQ-2215 F5).** `_can_access_service_acceptance_paper_object(text)` is already granted to `authenticated` by 00886, because the paper bucket's storage policies call it in the caller's role. It is a read-only boolean predicate (`STABLE`, no writes). The activation migration does not change it and grants no other helper.
+- **The second predicate exception (Revision 2026-10-27, SQ-2240).** 00889 grants `_can_read_service_acceptance_evidence_object(text)` to `authenticated`, because the `service_acceptance_evidence_client_read` storage policy calls it in the caller's role (§2.7). It is also a read-only `STABLE` boolean predicate. These two predicates are the only helpers any API role can execute. 00889 also grants its reader, `get_my_service_acceptance_evidence(uuid)`, to `authenticated`, like the two 00886 reads. The activation migration changes neither.
 - **Storage:** the paper bucket's policies already exist in 00886. They let a studio composer upload a PDF under `<projectId>/<objectId>.pdf`. Recording it as evidence still needs the activated intake RPC.
 - **In the same change:** regenerate `supabase/seed/00-legacy-grants.sql`. `database.types.ts` does not change, because grants are not typed.
-- **Gate:** a SQL suite asserting `has_function_privilege` is true for `authenticated` on the six functions and false for `anon` and `service_role`; true for `service_role` on the stamp and false for `anon` and `authenticated`; true for `authenticated` on `_can_access_service_acceptance_paper_object(text)` and false for `anon` and `service_role`. Every other helper stays false for all three, and `PUBLIC` holds no EXECUTE. The 00886 oracle (`supabase/tests/round8/service_acceptance_*`) still passes.
-- **Deactivation** is the inverse: `REVOKE EXECUTE … FROM authenticated` on the same six functions and `REVOKE EXECUTE … FROM service_role` on the stamp. Reads and the storage predicate stay granted.
+- **Gate:** a SQL suite asserting `has_function_privilege` is true for `authenticated` on the six functions and false for `anon` and `service_role`; true for `service_role` on the stamp and false for `anon` and `authenticated`; true for `authenticated` on `_can_access_service_acceptance_paper_object(text)`, `_can_read_service_acceptance_evidence_object(text)` and the three reads, and false for `anon` and `service_role`. Every other helper stays false for all three, and `PUBLIC` holds no EXECUTE. The 00886 oracle (`supabase/tests/round8/service_acceptance_*`) still passes.
+- **Deactivation** is the inverse: `REVOKE EXECUTE … FROM authenticated` on the same six functions and `REVOKE EXECUTE … FROM service_role` on the stamp. The three reads and both storage predicates stay granted.
 
 ### 2.9 Audit
 
