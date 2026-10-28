@@ -82,3 +82,17 @@ A20–A23/X08 are BLOCKED by the service-acceptance draft address defect: `creat
 ## Verification
 
 Pinned verifier: `test -s docs/design/designer-portal-round8/evidence/rc/rc2-consumer-walk.md`.
+
+## 2026-10-28 continuation attempt after 00890
+
+This continuation did not complete the consumer walk. The owned stack was restarted for read-only checks; startup replayed migrations from `00001` through `00889` and the configured local seeds. On that resulting owned DB at `127.0.0.1:56322`, project `5e665f87-6dde-4840-9420-8ded50e7f71c` and the `RC2`-named project were absent, the fixture profile `8eef5bee-15af-4cc8-8ca1-6c2959663399` was absent, and `service_acceptance_requests` contained zero rows. Therefore this DB could not provide readback for the earlier fixture or confirm the manually applied `00890` state. No reset or manual lifecycle-row creation was performed in this continuation. The stack was stopped afterward with backup enabled.
+
+The browser extension disconnected during the designer UI attempt. No UI request, send, client response, paper intake, condition resolution, completion/revocation, care return, client-portal, or iOS leg was completed. No external message was sent.
+
+- A20: **BLOCKED** — no request was sent; the current owned DB had no RC2 project or acceptance request, so scope edition and required signers could not be read back for this attempt.
+- A21: **BLOCKED** — no service-completion journey was performed; the absent project/request prevents confirming service completion independently from GC, finance, or project closure.
+- A22: **BLOCKED** — no send or response occurred; silence/opening/delivery behavior was not exercised.
+- A23: **BLOCKED** — no completion or care-return journey occurred; care records were not tested.
+- X08: **BLOCKED** — no current RC2 records were available to exercise compatibility across old and new consumers.
+
+The earlier sections remain historical observations from their captures; this continuation does not supersede their recorded rows or establish that the repaired journey passes. The local evidence needed for a true re-walk must be restored, and the browser automation connection must be available.
