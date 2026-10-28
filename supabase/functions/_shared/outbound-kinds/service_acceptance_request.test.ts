@@ -27,6 +27,15 @@ const draft: OutboundDraft = {
   status: "awaiting_review",
   sent_by: null,
 };
+function signer(overrides: Record<string, unknown>) {
+  return {
+    profile_id: null,
+    household_person_id: null,
+    status: "active",
+    required: true,
+    ...overrides,
+  };
+}
 function admin(
   overrides: Record<string, unknown> = {},
   error: unknown = null,
@@ -45,7 +54,11 @@ function admin(
             data: table === "projects" ? { name: "Oak & <House>" } : {
               id: "request",
               project_id: "project",
-              outbound_draft_id: "draft",
+              service_acceptance_signers: [
+                signer({ profile_id: "client" }),
+                signer({ profile_id: "partner" }),
+                signer({ household_person_id: "card" }),
+              ],
               ...overrides,
             },
             error,
@@ -92,7 +105,12 @@ Deno.test("registered service acceptance renderer links the bound request, escap
 });
 Deno.test("service acceptance renderer refuses inconsistent request/draft/project binding", async () => {
   for (
-    const overrides of [{ project_id: "other" }, { outbound_draft_id: "other" }]
+    const overrides of [
+      { project_id: "other" },
+      { id: "other" },
+      { service_acceptance_signers: [] },
+      { service_acceptance_signers: null },
+    ]
   ) {
     await assertRejects(
       () => renderEmail({ admin: admin(overrides), draft }),
@@ -114,4 +132,66 @@ Deno.test("service acceptance renderer refuses inconsistent request/draft/projec
     Error,
     "read failed",
   );
+});
+Deno.test("service acceptance renderer sends each active required signer's sibling draft (00891)", async () => {
+  const partner = await renderEmail({
+    admin: admin(),
+    draft: { ...draft, id: "sibling", to_client_id: "partner" },
+  });
+  assertEquals(partner.userId, "partner");
+  assertStringIncludes(partner.text!, "/acceptance/request");
+  const card = await renderEmail({
+    admin: admin(),
+    draft: {
+      ...draft,
+      id: "card-draft",
+      to_contact_id: "card",
+      to_client_id: null,
+    },
+  });
+  assertEquals(card.userId, undefined);
+  // A household card linked to a portal profile carries both recipients.
+  const linkedCard = await renderEmail({
+    admin: admin(),
+    draft: { ...draft, to_contact_id: "card", to_client_id: "card-profile" },
+  });
+  assertEquals(linkedCard.userId, "card-profile");
+});
+Deno.test("service acceptance renderer refuses a foreign draft on the request (draft binding differs)", async () => {
+  const foreign: {
+    draft?: OutboundDraft;
+    overrides?: Record<string, unknown>;
+  }[] = [
+    // Not a signer of this request.
+    { draft: { ...draft, to_client_id: "stranger" } },
+    { draft: { ...draft, to_client_id: null } },
+    { draft: { ...draft, to_contact_id: "other-card", to_client_id: null } },
+    // A profile signer's id does not cover a draft addressed to another card.
+    { draft: { ...draft, to_contact_id: "other-card" } },
+    // Same request and recipient, but another kind or project.
+    { draft: { ...draft, kind: "review_request" } },
+    { draft: { ...draft, project_id: "other" } },
+    // The recipient was a signer, but is replaced or optional.
+    {
+      overrides: {
+        service_acceptance_signers: [
+          signer({ profile_id: "client", status: "replaced" }),
+        ],
+      },
+    },
+    {
+      overrides: {
+        service_acceptance_signers: [
+          signer({ profile_id: "client", required: false }),
+        ],
+      },
+    },
+  ];
+  for (const { draft: candidate = draft, overrides = {} } of foreign) {
+    await assertRejects(
+      () => renderEmail({ admin: admin(overrides), draft: candidate }),
+      Error,
+      "draft binding differs",
+    );
+  }
 });

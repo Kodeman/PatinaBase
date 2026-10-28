@@ -288,6 +288,8 @@ function useServiceAcceptanceAct<Args, Result>(
 export interface CreateServiceAcceptanceArgs { scopeEditionId: string; evidenceManifestId: string }
 export interface ServiceAcceptanceCreateReceipt {
   requestId: string; lifecycle: ServiceAcceptanceLifecycle; outboundDraftId: string | null;
+  /** 00891: one notice draft per active required signer; outboundDraftId is the first. */
+  outboundDraftIds: string[];
   signerPolicyRevision: number; replayed: boolean;
 }
 

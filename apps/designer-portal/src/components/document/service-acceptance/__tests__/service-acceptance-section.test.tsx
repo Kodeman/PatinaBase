@@ -11,9 +11,11 @@ const mockRecord = jest.fn();
 const mockEditions = jest.fn();
 const mockManifests = jest.fn();
 const mockPaper = jest.fn();
+const mockDrafts = jest.fn();
 const mockUser = { id: 'owner-1' };
 jest.mock('@patina/supabase', () => ({
   useServiceAcceptance: () => mockRead(),
+  useOutboundDrafts: (options: unknown) => mockDrafts(options),
   useScopeEditions: () => mockEditions(),
   useServiceAcceptanceManifests: () => mockManifests(),
   useCreateServiceAcceptanceRequest: () => ({ mutateAsync: mockCreate, isPending: false }),
@@ -76,6 +78,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockUser.id = 'owner-1';
   mockEditions.mockReturnValue(settled([{ id: 'edition-1', status: 'active', editionNumber: 2 }]));
+  mockDrafts.mockReturnValue({ data: undefined });
   mockManifests.mockReturnValue(settled([{ id: 'manifest-1', manifestHash: 'abcdef0123', createdAt: '2026-10-27T10:00:00Z' }]));
   mockPaper.mockImplementation((_intake: unknown, enabled: boolean) => (enabled
     ? settled({ url: 'http://127.0.0.1:54321/storage/v1/object/sign/paper', sha256: STAMP, matchesStamp: true })
@@ -300,6 +303,44 @@ test('a failed scope or evidence read is offered as a retry, not reported as abs
   expect(screen.queryByText(/No service acceptance evidence set/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Retry the evidence sets' }));
   expect(refetchEvidence).toHaveBeenCalled();
+});
+
+// 00891: each required signer has its own notice draft on the request.
+const notice = (over: Record<string, unknown> = {}) => ({
+  id: 'draft-2', project_id: 'job-1', kind: 'service_acceptance_request', ref_type: 'service_acceptance_request',
+  ref_id: 'request-2', status: 'awaiting_review', ...over,
+});
+
+test('a draft request names every signer notice waiting for review, read from the project drafts', () => {
+  mockRead.mockReturnValue(readOf([request({ predecessorRequestId: null })]));
+  mockDrafts.mockReturnValue({ data: [notice(), notice({ id: 'draft-3' }),
+    notice({ id: 'other', ref_id: 'request-9' }), notice({ id: 'note', ref_type: 'site_request' })] });
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(mockDrafts).toHaveBeenCalledWith({ projectId: 'job-1' });
+  expect(screen.getByText('Drafted for 2 signers, for your review. Nothing has been sent.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+  expect(within(screen.getByRole('dialog', { name: 'Ready to send' })).getByTestId('ready-to-send')).toHaveTextContent('job-1');
+});
+
+test('a sent request keeps Review and send while another signer notice still waits, and drops it once all are sent', () => {
+  mockRead.mockReturnValue(readOf([sentRequest({ predecessorRequestId: null })]));
+  mockDrafts.mockReturnValue({ data: [notice({ status: 'sent' }), notice({ id: 'draft-3' })] });
+  const { rerender } = render(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.getByText('One signer’s notice is still waiting for your review.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+  expect(screen.getByRole('dialog', { name: 'Ready to send' })).toBeInTheDocument();
+
+  mockDrafts.mockReturnValue({ data: [notice({ status: 'sent' }), notice({ id: 'draft-3', status: 'sent' })] });
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.queryByRole('button', { name: 'Review and send' })).toBeNull();
+  expect(screen.queryByText(/still waiting for your review/)).toBeNull();
+});
+
+test('closed history offers no hand-off even if a signer notice was never sent', () => {
+  mockRead.mockReturnValue(readOf([request({ lifecycle: 'closed', aggregateOutcome: 'accepted' })]));
+  mockDrafts.mockReturnValue({ data: [notice()] });
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.queryByRole('button', { name: 'Review and send' })).toBeNull();
 });
 
 test('superseded and withdrawn history stays readable beside the current request', () => {

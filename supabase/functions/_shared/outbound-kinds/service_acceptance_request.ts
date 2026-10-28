@@ -6,7 +6,39 @@ import {
   portalBaseFor,
   renderBrandedShell,
 } from "../branded-email.ts";
+import type { OutboundDraft } from "../outbound-send.ts";
 import type { OutboundEmailRender, OutboundKindContext } from "./types.ts";
+
+interface SignerRow {
+  profile_id: string | null;
+  household_person_id: string | null;
+  status: string;
+  required: boolean;
+}
+interface RequestRow {
+  id: string;
+  project_id: string;
+  service_acceptance_signers: SignerRow[] | null;
+}
+
+// 00891: each active required signer has its own draft, so a draft binds to
+// its request through its recipient, not through request.outbound_draft_id.
+function bindsDraft(request: RequestRow | null, draft: OutboundDraft) {
+  return request !== null && request.id === draft.ref_id &&
+    request.project_id === draft.project_id &&
+    (request.service_acceptance_signers ?? []).some((signer) =>
+      addressesSigner(signer, draft)
+    );
+}
+
+function addressesSigner(signer: SignerRow, draft: OutboundDraft) {
+  if (signer.status !== "active" || !signer.required) return false;
+  if (signer.household_person_id) {
+    return signer.household_person_id === draft.to_contact_id;
+  }
+  return signer.profile_id === draft.to_client_id &&
+    draft.to_contact_id === null;
+}
 
 export async function renderEmail(
   { admin, draft }: Pick<OutboundKindContext, "admin" | "draft">,
@@ -17,11 +49,12 @@ export async function renderEmail(
   const { data: request, error } = await admin.from(
     "service_acceptance_requests",
   )
-    .select("id,project_id,outbound_draft_id").eq("id", draft.ref_id).single();
+    .select(
+      "id,project_id,service_acceptance_signers(profile_id,household_person_id,status,required)",
+    ).eq("id", draft.ref_id).single();
   if (error) throw error;
   if (
-    !request || request.project_id !== draft.project_id ||
-    request.outbound_draft_id !== draft.id
+    draft.kind !== "service_acceptance_request" || !bindsDraft(request, draft)
   ) {
     throw new Error("service_acceptance_request draft binding differs");
   }

@@ -13,6 +13,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { Send } from 'lucide-react';
 import {
   useCreateServiceAcceptanceRequest,
+  useOutboundDrafts,
   useProjectHousehold,
   useReplaceServiceAcceptanceSigner,
   useReviewServiceAcceptancePaperIntake,
@@ -50,6 +51,12 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
   };
   const requests = [...(read.data?.requests ?? [])].sort((a, b) => b.requestNumber - a.requestNumber);
   const byId = new Map(requests.map((request) => [request.requestId, request]));
+  // Each required signer has its own notice (00891); the same drafts the
+  // ready-to-send sheet lists say which still wait for the designer.
+  const outbound = useOutboundDrafts({ projectId });
+  const awaiting = (requestId: string) => (outbound.data ?? []).filter((draft) =>
+    draft.ref_type === 'service_acceptance_request' && draft.ref_id === requestId
+    && draft.status === 'awaiting_review').length;
 
   return (
     <section aria-labelledby={`service-acceptance-${projectId}`} data-service-acceptance className="mt-6">
@@ -76,7 +83,7 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
             <ol className="mt-4 space-y-4" aria-label="Service acceptance requests">
               {requests.map((request) => (
                 <RequestCard key={request.requestId} projectId={projectId} request={request}
-                  predecessor={request.predecessorRequestId ? byId.get(request.predecessorRequestId) : undefined}
+                  awaitingDrafts={awaiting(request.requestId)} predecessor={request.predecessorRequestId ? byId.get(request.predecessorRequestId) : undefined}
                   report={report} onInactive={() => setInactive(true)} />
               ))}
             </ol>
@@ -179,14 +186,14 @@ function CreateRequest({ projectId, hasOpen, report }: { projectId: string; hasO
   );
 }
 
-function RequestCard({ projectId, request, predecessor, report, onInactive }: {
+function RequestCard({ projectId, request, awaitingDrafts, predecessor, report, onInactive }: {
   projectId: string;
   request: ServiceAcceptanceRequest;
+  awaitingDrafts: number;
   predecessor?: ServiceAcceptanceRequest;
   report: Report;
   onInactive: () => void;
 }) {
-  const [reviewOpen, setReviewOpen] = useState(false);
   const open = isOpen(request);
   const active = request.signers.filter((signer) => signer.status === 'active');
   const replaced = request.signers.filter((signer) => signer.status === 'replaced');
@@ -208,20 +215,8 @@ function RequestCard({ projectId, request, predecessor, report, onInactive }: {
         </p>
       )}
       {request.sentAt && <p className="t-meta">Sent {shortDate(request.sentAt)}.</p>}
-      {request.lifecycle === 'draft' && request.outboundDraftId && (
-        <div className="mt-2">
-          <p className="t-body-sm">Drafted for your review. Nothing has been sent.</p>
-          <DocumentActionRow surfaceKey="service-acceptance" regionKey="hand-off">
-            <DocumentAction actionKey="open-acceptance-draft" data-outbound-draft-id={request.outboundDraftId}
-              onClick={() => setReviewOpen(true)}>
-              Review and send
-            </DocumentAction>
-          </DocumentActionRow>
-          <DocSheet open={reviewOpen} onClose={() => setReviewOpen(false)} title="Ready to send" icon={Send}
-            kind="service-acceptance-review">
-            <ReadyToSendSheet projectId={projectId} />
-          </DocSheet>
-        </div>
+      {waitsForSend(request, awaitingDrafts) && (
+        <ReviewAndSend projectId={projectId} request={request} awaitingDrafts={awaitingDrafts} />
       )}
 
       <ul className="mt-3 space-y-2" aria-label={`Signers on request ${request.requestNumber}`}>
@@ -248,6 +243,43 @@ function RequestCard({ projectId, request, predecessor, report, onInactive }: {
 
       {open && <WithdrawRequest projectId={projectId} request={request} report={report} />}
     </li>
+  );
+}
+
+// A draft request waits on its own notice; a sent one while another signer's
+// notice is still unsent (00891: one notice per required signer).
+function waitsForSend(request: ServiceAcceptanceRequest, awaitingDrafts: number) {
+  return request.lifecycle === 'draft' ? Boolean(request.outboundDraftId)
+    : request.lifecycle === 'sent' && awaitingDrafts > 0;
+}
+
+function handOffCopy(request: ServiceAcceptanceRequest, awaitingDrafts: number) {
+  if (request.lifecycle === 'sent') {
+    return awaitingDrafts === 1 ? 'One signer’s notice is still waiting for your review.'
+      : `${awaitingDrafts} signers’ notices are still waiting for your review.`;
+  }
+  return awaitingDrafts > 1 ? `Drafted for ${awaitingDrafts} signers, for your review. Nothing has been sent.`
+    : 'Drafted for your review. Nothing has been sent.';
+}
+
+function ReviewAndSend({ projectId, request, awaitingDrafts }: {
+  projectId: string; request: ServiceAcceptanceRequest; awaitingDrafts: number;
+}) {
+  const [reviewOpen, setReviewOpen] = useState(false);
+  return (
+    <div className="mt-2">
+      <p className="t-body-sm">{handOffCopy(request, awaitingDrafts)}</p>
+      <DocumentActionRow surfaceKey="service-acceptance" regionKey="hand-off">
+        <DocumentAction actionKey="open-acceptance-draft" data-outbound-draft-id={request.outboundDraftId}
+          onClick={() => setReviewOpen(true)}>
+          Review and send
+        </DocumentAction>
+      </DocumentActionRow>
+      <DocSheet open={reviewOpen} onClose={() => setReviewOpen(false)} title="Ready to send" icon={Send}
+        kind="service-acceptance-review">
+        <ReadyToSendSheet projectId={projectId} />
+      </DocSheet>
+    </div>
   );
 }
 
