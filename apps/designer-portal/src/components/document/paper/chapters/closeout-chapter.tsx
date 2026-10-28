@@ -2,11 +2,16 @@
 
 import { lazy, Suspense, type ReactNode } from "react";
 
-// Loaded on its own so the round-8 frame chunk does not carry the acceptance
-// instrument until the Closeout chapter prints.
+// Loaded on their own so the round-8 frame chunk does not carry the acceptance
+// and completion instruments until the Closeout chapter prints.
 const ServiceAcceptanceSection = lazy(() =>
   import("../../service-acceptance/service-acceptance-section").then((module) => ({
     default: module.ServiceAcceptanceSection,
+  })),
+);
+const StudioServiceSection = lazy(() =>
+  import("../../service-completion/studio-service-section").then((module) => ({
+    default: module.StudioServiceSection,
   })),
 );
 
@@ -18,8 +23,8 @@ export interface CloseoutChapterProps {
 
 /**
  * 09 Closeout — the stage's closeout pieces, then C4 service acceptance
- * (WP-10C). The single mount point for the chapter's acceptance and
- * completion instruments.
+ * (WP-10C) and, beside it, C6 studio service completion (WP-10B). The single
+ * mount point for the chapter's acceptance and completion instruments.
  */
 export function CloseoutChapter({ projectId, children }: CloseoutChapterProps) {
   return (
@@ -28,6 +33,7 @@ export function CloseoutChapter({ projectId, children }: CloseoutChapterProps) {
       {projectId && (
         <Suspense fallback={null}>
           <ServiceAcceptanceSection projectId={projectId} />
+          <StudioServiceSection projectId={projectId} />
         </Suspense>
       )}
     </>
