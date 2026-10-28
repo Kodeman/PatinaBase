@@ -347,8 +347,12 @@ export function MobileBar() {
           : undefined,
         // The act is shortened at its source, never clipped here: the label
         // wraps inside the 44px control rather than losing its last word.
-        className:
-          'min-h-11 w-full min-w-0 [&_.da-label]:whitespace-normal [&_.da-label]:text-center [&_.da-label]:leading-[15px]',
+        // RC-4 D1 — the band's Next plate is a short verb phrase and never
+        // breaks mid-label ("Send / reminder" at 390): it holds one line and
+        // its slot keeps the plate's width (below), taking it from the door.
+        className: `min-h-11 w-full min-w-0 ${
+          bandsNext ? '[&_.da-label]:whitespace-nowrap' : '[&_.da-label]:whitespace-normal'
+        } [&_.da-label]:text-center [&_.da-label]:leading-[15px]`,
         children: primaryAction.label,
       }
     : null;
@@ -433,8 +437,8 @@ export function MobileBar() {
           the width the Tester mark and the worded More now take. From 600
           the band's Next is the band's, so its slot collapses the same way. */}
       <div
-        className={`flex min-w-0 flex-[1.15_1_0] items-center justify-center empty:hidden ${
-          bandsNext ? 'min-[600px]:hidden' : ''
+        className={`flex flex-[1.15_1_0] items-center justify-center empty:hidden ${
+          bandsNext ? 'min-w-fit min-[600px]:hidden' : 'min-w-0'
         }`}
       >
         {primaryAction && primaryShared ? (

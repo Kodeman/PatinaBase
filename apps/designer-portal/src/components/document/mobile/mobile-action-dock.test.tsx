@@ -136,6 +136,39 @@ describe('unified mobile edge owner', () => {
     expect(press).toHaveBeenCalledTimes(1);
   });
 
+  it('RC-4 D1 — holds the band’s Next plate on one line and keeps its slot as wide as the plate', () => {
+    const renderBar = (regionKey: string, label: string) =>
+      render(
+        <MobileShellProvider>
+          <Registration
+            action={{
+              actionKey: `act-${regionKey}`,
+              surfaceKey: 'open-document',
+              regionKey,
+              label,
+              target: { kind: 'press', onPress: jest.fn() },
+            }}
+          />
+          <MobileBar />
+        </MobileShellProvider>,
+      );
+
+    const band = renderBar('lens-band', 'Send reminder');
+    const plate = screen.getByRole('button', { name: 'Send reminder' });
+    expect(plate).toHaveClass('da-plate', '[&_.da-label]:whitespace-nowrap');
+    expect(plate).not.toHaveClass('[&_.da-label]:whitespace-normal');
+    expect(plate.parentElement).toHaveClass('min-w-fit');
+    expect(plate.parentElement).not.toHaveClass('min-w-0');
+    band.unmount();
+
+    // any other centre act keeps wrapping inside its 44px control
+    renderBar('desk-head', 'Capture a lead');
+    const scored = screen.getByRole('button', { name: 'Capture a lead' });
+    expect(scored).toHaveClass('[&_.da-label]:whitespace-normal');
+    expect(scored.parentElement).toHaveClass('min-w-0');
+    expect(scored.parentElement).not.toHaveClass('min-w-fit');
+  });
+
   it('keeps the signed-proposal activation action above fallback guide messaging', () => {
     const activate = jest.fn();
     const guideActivate = jest.fn();
