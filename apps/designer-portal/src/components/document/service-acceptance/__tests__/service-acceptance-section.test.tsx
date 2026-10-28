@@ -7,19 +7,26 @@ import { ServiceAcceptanceSection } from '../service-acceptance-section';
 const mockRead = jest.fn();
 const mockCreate = jest.fn();
 const mockReview = jest.fn();
+const mockRecord = jest.fn();
+const mockEditions = jest.fn();
+const mockManifests = jest.fn();
+const mockPaper = jest.fn();
 const mockUser = { id: 'owner-1' };
 jest.mock('@patina/supabase', () => ({
   useServiceAcceptance: () => mockRead(),
-  useScopeEditions: () => ({ data: [{ id: 'edition-1', status: 'active', editionNumber: 2 }], isPending: false }),
-  useServiceAcceptanceManifests: () => ({
-    data: [{ id: 'manifest-1', manifestHash: 'abcdef0123', createdAt: '2026-10-27T10:00:00Z' }], isPending: false,
-  }),
+  useScopeEditions: () => mockEditions(),
+  useServiceAcceptanceManifests: () => mockManifests(),
   useCreateServiceAcceptanceRequest: () => ({ mutateAsync: mockCreate, isPending: false }),
   useWithdrawServiceAcceptanceRequest: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useReplaceServiceAcceptanceSigner: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useRecordServiceAcceptancePaperIntake: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRecordServiceAcceptancePaperIntake: () => ({ mutateAsync: mockRecord, isPending: false }),
   useReviewServiceAcceptancePaperIntake: () => ({ mutateAsync: mockReview, isPending: false }),
   useStampServiceAcceptancePaper: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useServiceAcceptancePaperDocument: (_projectId: string, intake: unknown, enabled: boolean) => mockPaper(intake, enabled),
+  normalizePaperCode: (value: string) => {
+    const code = value.replace(/\s+/g, '').toLowerCase();
+    return /^[0-9a-f]{64}$/.test(code) ? code : null;
+  },
   useProjectHousehold: () => ({ data: { household: { member_person_ids: [] } } }),
   useStudioContact: (id: string | null) => ({ data: id ? { full_name: 'Sam Rivera' } : undefined }),
   isServiceAcceptanceInactive: (error: { code?: string; message?: string }) =>
@@ -57,9 +64,22 @@ const readOf = (requests: unknown[]) => ({
   data: { projectId: 'job-1', capability: 'inactive', requests }, isPending: false, isError: false, refetch: jest.fn(),
 });
 
+const SCOPE = 'a'.repeat(64);
+const EVIDENCE = 'b'.repeat(64);
+const STAMP = 'abcdef0123456789'.repeat(4);
+const sentRequest = (over: Record<string, unknown> = {}) => request({
+  lifecycle: 'sent', sentAt: '2026-10-27T11:00:00Z', scopeContentHash: SCOPE, evidenceManifestHash: EVIDENCE, ...over,
+});
+const settled = (data: unknown) => ({ data, isPending: false, isError: false, refetch: jest.fn() });
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.id = 'owner-1';
+  mockEditions.mockReturnValue(settled([{ id: 'edition-1', status: 'active', editionNumber: 2 }]));
+  mockManifests.mockReturnValue(settled([{ id: 'manifest-1', manifestHash: 'abcdef0123', createdAt: '2026-10-27T10:00:00Z' }]));
+  mockPaper.mockImplementation((_intake: unknown, enabled: boolean) => (enabled
+    ? settled({ url: 'http://127.0.0.1:54321/storage/v1/object/sign/paper', sha256: STAMP, matchesStamp: true })
+    : { data: undefined, isPending: true, isError: false, refetch: jest.fn() }));
 });
 
 test('create drafts a request and hands it to the existing ready-to-send sheet, never sending here', async () => {
@@ -114,22 +134,172 @@ test('the recorder of paper waits for a second reviewer and is not offered confi
 
 test('another owner sees the stamped hash prefix, and confirm stays disabled while unstamped', () => {
   mockUser.id = 'admin-2';
-  mockRead.mockReturnValue(readOf([request({ lifecycle: 'sent', paperIntakes: [
-    intake(), intake({ intakeId: 'intake-2', documentSha256: 'abcdef0123456789'.repeat(4) }),
+  mockRead.mockReturnValue(readOf([sentRequest({ paperIntakes: [
+    intake(), intake({ intakeId: 'intake-2', documentSha256: STAMP }),
   ] })]));
   render(<ServiceAcceptanceSection projectId="job-1" />);
   const unstamped = document.querySelector('[data-paper-intake="intake-1"]') as HTMLElement;
   expect(within(unstamped).getByText('The stored PDF is not stamped yet.')).toBeInTheDocument();
+  fireEvent.click(within(unstamped).getByRole('button', { name: 'View the stored paper' }));
   expect(within(unstamped).getByRole('button', { name: 'Confirm paper' })).toBeDisabled();
   expect(within(unstamped).getByRole('button', { name: 'Reject paper' })).toBeEnabled();
   const stamped = document.querySelector('[data-paper-intake="intake-2"]') as HTMLElement;
   expect(within(stamped).getByText('Stored PDF stamped sha256 abcdef012345…')).toBeInTheDocument();
+  fireEvent.click(within(stamped).getByRole('button', { name: 'View the stored paper' }));
   const confirm = within(stamped).getByRole('button', { name: 'Confirm paper' });
   expect(confirm).toBeEnabled();
   fireEvent.click(confirm);
   expect(mockReview).toHaveBeenCalledWith({
-    intakeId: 'intake-2', decision: 'confirmed', expectedDocumentSha256: 'abcdef0123456789'.repeat(4), note: null,
+    intakeId: 'intake-2', decision: 'confirmed', expectedDocumentSha256: STAMP, note: null,
   });
+});
+
+test('the reviewer sees the exact stored PDF beside the transcription before Confirm opens', () => {
+  mockUser.id = 'admin-2';
+  mockRead.mockReturnValue(readOf([sentRequest({ paperIntakes: [intake({ signerId: 'signer-1', documentSha256: STAMP })] })]));
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const row = document.querySelector('[data-paper-intake="intake-1"]') as HTMLElement;
+  const binding = within(row).getByLabelText('Recorded as printed on the paper');
+  expect(binding).toHaveTextContent(SCOPE);
+  expect(binding).toHaveTextContent(EVIDENCE);
+  // Stamped, but the paper is not in front of the reviewer yet.
+  expect(within(row).getByRole('button', { name: 'Confirm paper' })).toBeDisabled();
+  expect(row.querySelector('iframe')).toBeNull();
+  expect(mockPaper).toHaveBeenLastCalledWith(expect.objectContaining({ storageObjectId: 'object-1' }), false);
+  fireEvent.click(within(row).getByRole('button', { name: 'View the stored paper' }));
+  expect(mockPaper).toHaveBeenLastCalledWith(expect.objectContaining({ storageObjectId: 'object-1' }), true);
+  const frame = within(row).getByTitle('Stored paper for Client');
+  expect(frame).toHaveAttribute('src', 'http://127.0.0.1:54321/storage/v1/object/sign/paper');
+  expect(within(row).getByRole('button', { name: 'Confirm paper' })).toBeEnabled();
+});
+
+test('a stored file that no longer matches its stamp keeps Confirm closed', () => {
+  mockUser.id = 'admin-2';
+  mockPaper.mockReturnValue(settled({ url: 'u', sha256: 'f'.repeat(64), matchesStamp: false }));
+  mockRead.mockReturnValue(readOf([sentRequest({ paperIntakes: [intake({ documentSha256: STAMP })] })]));
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const row = document.querySelector('[data-paper-intake="intake-1"]') as HTMLElement;
+  fireEvent.click(within(row).getByRole('button', { name: 'View the stored paper' }));
+  expect(within(row).getByRole('alert')).toHaveTextContent('The stored file does not match its stamp.');
+  expect(row.querySelector('iframe')).toBeNull();
+  expect(within(row).getByRole('button', { name: 'Confirm paper' })).toBeDisabled();
+});
+
+test('reject needs a note, and a server review refusal is explained as that validation', async () => {
+  mockUser.id = 'admin-2';
+  mockRead.mockReturnValue(readOf([sentRequest({ paperIntakes: [intake()] })]));
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const row = document.querySelector('[data-paper-intake="intake-1"]') as HTMLElement;
+  expect(within(row).getByLabelText('Review note (required to reject)')).toBeInTheDocument();
+  fireEvent.click(within(row).getByRole('button', { name: 'Reject paper' }));
+  expect(within(row).getByRole('alert')).toHaveTextContent('Say why the paper is rejected');
+  expect(mockReview).not.toHaveBeenCalled();
+  mockReview.mockRejectedValueOnce({ code: '23514', message: 'service_acceptance_review_invalid' });
+  fireEvent.change(within(row).getByLabelText('Review note (required to reject)'), { target: { value: 'Wrong version' } });
+  fireEvent.click(within(row).getByRole('button', { name: 'Reject paper' }));
+  await waitFor(() => expect(mockReview).toHaveBeenCalledWith({
+    intakeId: 'intake-1', decision: 'rejected', expectedDocumentSha256: null, note: 'Wrong version',
+  }));
+  const alert = await within(row).findByRole('alert');
+  expect(alert).toHaveTextContent('A rejection needs a note saying why');
+  expect(alert).not.toHaveTextContent(/cannot be reviewed by you/);
+});
+
+test('paper is recorded with the binding typed from the paper, never the request on screen', async () => {
+  mockRead.mockReturnValue(readOf([sentRequest()]));
+  mockRecord.mockRejectedValueOnce({ code: '40001', message: 'stale_scope' });
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Record paper' }));
+  const form = screen.getByRole('form', { name: 'Record paper for Client' });
+  const scope = within(form).getByLabelText('Scope code (full)');
+  const evidence = within(form).getByLabelText('Evidence code (full)');
+  const number = within(form).getByLabelText('Request number');
+  const revision = within(form).getByLabelText('Signer revision');
+  // Nothing is prefilled from the request.
+  for (const input of [scope, evidence, number, revision]) expect(input).toHaveValue('');
+  const file = new File(['%PDF-1.7'], 'paper.pdf', { type: 'application/pdf' });
+  fireEvent.change(within(form).getByLabelText('PDF of the paper (up to 20 MiB)'), { target: { files: [file] } });
+  fireEvent.change(within(form).getByLabelText('Date on the paper'), { target: { value: '2026-10-26' } });
+  fireEvent.change(within(form).getByLabelText('Name written on the paper'), { target: { value: 'Sam Rivera' } });
+  fireEvent.change(number, { target: { value: '1' } });
+  fireEvent.change(revision, { target: { value: '1' } });
+  fireEvent.change(scope, { target: { value: 'abcdef01' } });
+  fireEvent.change(evidence, { target: { value: EVIDENCE } });
+  fireEvent.click(within(form).getByRole('button', { name: 'Record paper' }));
+  expect(within(form).getByRole('alert')).toHaveTextContent('not the short form');
+  expect(mockRecord).not.toHaveBeenCalled();
+  const older = 'C'.repeat(64);
+  fireEvent.change(scope, { target: { value: older } });
+  fireEvent.click(within(form).getByRole('button', { name: 'Record paper' }));
+  await waitFor(() => expect(mockRecord).toHaveBeenCalledTimes(1));
+  expect(mockRecord).toHaveBeenCalledWith(expect.objectContaining({
+    requestId: 'request-2', signerId: 'signer-1', file,
+    presented: { requestNumber: 1, scopeContentHash: older.toLowerCase(), evidenceManifestHash: EVIDENCE,
+      signerPolicyRevision: 1 },
+  }));
+  expect(await within(form).findByRole('alert')).toHaveTextContent(
+    "The paper doesn't match this request. Check the request number and codes printed on it.");
+});
+
+test('a draft offers no paper intake, but its signers can still be replaced', () => {
+  mockRead.mockReturnValue(readOf([request()]));
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const card = screen.getByText(/Request 2 · Drafted, not sent/).closest('li')!;
+  expect(within(card).queryByRole('button', { name: 'Record paper' })).toBeNull();
+  expect(within(card).getByRole('button', { name: 'Replace this person' })).toBeInTheDocument();
+});
+
+test('a signer who has answered an open request can still be replaced, but takes no more paper', () => {
+  const answered = { responseId: 'r-1', response: 'accept', conditions: [], returnReason: null,
+    method: 'portal_authenticated', respondedAt: '2026-10-27T12:00:00Z' };
+  mockRead.mockReturnValue(readOf([sentRequest({ signers: [
+    signer({ response: answered }),
+    signer({ signerId: 'signer-2', slot: 'partner', profileId: null, householdPersonId: 'card-1' }),
+  ] })]));
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const rows = screen.getAllByRole('listitem').filter((row) => row.getAttribute('data-signer-status') === 'active');
+  const [client, partner] = rows;
+  expect(within(client).getByText('Accepted online')).toBeInTheDocument();
+  expect(within(client).getByRole('button', { name: 'Replace this person' })).toBeInTheDocument();
+  expect(within(client).queryByRole('button', { name: 'Record paper' })).toBeNull();
+  expect(within(partner).getByRole('button', { name: 'Record paper' })).toBeInTheDocument();
+  expect(within(partner).getByRole('button', { name: 'Replace this person' })).toBeInTheDocument();
+});
+
+test('a failed refresh keeps the cards and the work typed into them, with a retry beside them', () => {
+  const read = readOf([sentRequest()]);
+  mockRead.mockReturnValue(read);
+  const { rerender } = render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Replace this person' }));
+  fireEvent.change(screen.getByLabelText('Reason for the change'), { target: { value: 'Partner travelling' } });
+  const refetch = jest.fn();
+  mockRead.mockReturnValue({ ...read, isError: true, refetch });
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.getByLabelText('Reason for the change')).toHaveValue('Partner travelling');
+  expect(screen.getByText(/Request 2 · Sent to the client/)).toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('could not be refreshed');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry service acceptance' }));
+  expect(refetch).toHaveBeenCalled();
+});
+
+test('a failed scope or evidence read is offered as a retry, not reported as absent', () => {
+  mockRead.mockReturnValue(readOf([]));
+  const refetchScope = jest.fn();
+  mockEditions.mockReturnValue({ data: undefined, isPending: false, isError: true, refetch: refetchScope });
+  const { rerender } = render(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('The agreed scope could not be read.');
+  expect(screen.queryByText(/No agreed scope edition is active/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry the agreed scope' }));
+  expect(refetchScope).toHaveBeenCalled();
+
+  mockEditions.mockReturnValue(settled([{ id: 'edition-1', status: 'active', editionNumber: 2 }]));
+  const refetchEvidence = jest.fn();
+  mockManifests.mockReturnValue({ data: undefined, isPending: false, isError: true, refetch: refetchEvidence });
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('The evidence sets could not be read.');
+  expect(screen.queryByText(/No service acceptance evidence set/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry the evidence sets' }));
+  expect(refetchEvidence).toHaveBeenCalled();
 });
 
 test('superseded and withdrawn history stays readable beside the current request', () => {

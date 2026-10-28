@@ -9,7 +9,7 @@
  * act is denied; that reads as one calm note and the record stays readable.
  */
 
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Send } from 'lucide-react';
 import {
   useCreateServiceAcceptanceRequest,
@@ -19,6 +19,7 @@ import {
   useScopeEditions,
   useServiceAcceptance,
   useServiceAcceptanceManifests,
+  useServiceAcceptancePaperDocument,
   useStampServiceAcceptancePaper,
   useStudioContact,
   useWithdrawServiceAcceptanceRequest,
@@ -57,16 +58,16 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
       {inactive && (
         <p role="status" data-service-acceptance-inactive className="t-body-sm mt-3">{INACTIVE_NOTE}</p>
       )}
-      {read.isError ? (
-        <div role="alert" className="t-body-sm mt-3">
-          <p>Service acceptance could not be read. Your place is kept.</p>
-          <DocumentActionRow surfaceKey="service-acceptance" regionKey="read-retry">
-            <DocumentAction actionKey="retry-service-acceptance" variant="secondary" onClick={() => void read.refetch()}>
-              Retry service acceptance
-            </DocumentAction>
-          </DocumentActionRow>
-        </div>
-      ) : read.isPending ? (
+      {/* A failed background refresh keeps the cards and their open forms
+          mounted; only a first read with nothing cached replaces them. */}
+      {read.isError && (
+        <ReadFailure regionKey="read-retry" actionKey="retry-service-acceptance" onRetry={() => void read.refetch()}
+          message={read.data ? 'Service acceptance could not be refreshed. What you have entered is kept.'
+            : 'Service acceptance could not be read.'}>
+          Retry service acceptance
+        </ReadFailure>
+      )}
+      {read.isError && !read.data ? null : read.isPending ? (
         <p role="status" className="t-body-sm mt-3">Reading service acceptance…</p>
       ) : (
         <>
@@ -86,6 +87,19 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
   );
 }
 
+function ReadFailure({ message, regionKey, actionKey, onRetry, children }: {
+  message: string; regionKey: string; actionKey: string; onRetry: () => void; children: ReactNode;
+}) {
+  return (
+    <div role="alert" className="t-body-sm mt-3">
+      <p>{message}</p>
+      <DocumentActionRow surfaceKey="service-acceptance" regionKey={regionKey}>
+        <DocumentAction actionKey={actionKey} variant="secondary" onClick={onRetry}>{children}</DocumentAction>
+      </DocumentActionRow>
+    </div>
+  );
+}
+
 function isOpen(request: ServiceAcceptanceRequest) {
   return request.lifecycle === 'draft' || request.lifecycle === 'sent';
 }
@@ -102,11 +116,28 @@ function CreateRequest({ projectId, hasOpen, report }: { projectId: string; hasO
   const options = manifests.data ?? [];
   const chosen = manifestId || options[0]?.id || '';
 
+  // A failed read is not an absence: say so and offer the retry.
   if (!edition) {
+    if (editions.isError) {
+      return (
+        <ReadFailure regionKey="scope-retry" actionKey="retry-acceptance-scope" onRetry={() => void editions.refetch()}
+          message="The agreed scope could not be read.">
+          Retry the agreed scope
+        </ReadFailure>
+      );
+    }
     return <p className="t-body-sm mt-3">{editions.isPending ? 'Reading the agreed scope…'
       : 'No agreed scope edition is active for this job, so there is nothing to ask the client to accept yet.'}</p>;
   }
   if (options.length === 0) {
+    if (manifests.isError) {
+      return (
+        <ReadFailure regionKey="evidence-retry" actionKey="retry-acceptance-evidence"
+          onRetry={() => void manifests.refetch()} message="The evidence sets could not be read.">
+          Retry the evidence sets
+        </ReadFailure>
+      );
+    }
     return <p className="t-body-sm mt-3">{manifests.isPending ? 'Reading the evidence sets…'
       : 'No service acceptance evidence set is recorded for this job yet.'}</p>;
   }
@@ -209,7 +240,7 @@ function RequestCard({ projectId, request, predecessor, report, onInactive }: {
       {request.paperIntakes.length > 0 && (
         <ul className="mt-3 space-y-2" aria-label={`Paper recorded on request ${request.requestNumber}`}>
           {request.paperIntakes.map((intake) => (
-            <PaperIntakeRow key={intake.intakeId} projectId={projectId} intake={intake}
+            <PaperIntakeRow key={intake.intakeId} projectId={projectId} request={request} intake={intake}
               signer={request.signers.find((signer) => signer.signerId === intake.signerId)} report={report} />
           ))}
         </ul>
@@ -238,6 +269,10 @@ function SignerRow({ projectId, request, signer, open, report, onInactive }: {
   const response = signer.response;
   const pendingPaper = request.paperIntakes.some(
     (intake) => intake.signerId === signer.signerId && intake.reviewState === 'pending_review');
+  // 00886: a signer can be replaced while the request is draft or sent, even
+  // after they answered; paper is taken only on a sent request, once per signer.
+  const canReplace = open;
+  const canRecordPaper = request.lifecycle === 'sent' && !response && !pendingPaper;
   return (
     <li data-signer-status="active" className="t-body-sm">
       <SignerName signer={signer} /> · {signer.required ? 'Required' : 'Optional'} ·{' '}
@@ -250,16 +285,18 @@ function SignerRow({ projectId, request, signer, open, report, onInactive }: {
         </ul>
       )}
       {response?.returnReason && <p className="t-meta">Reason given: {response.returnReason}</p>}
-      {open && !response && act == null && (
+      {(canReplace || canRecordPaper) && act == null && (
         <DocumentActionRow surfaceKey="service-acceptance" regionKey="signer">
-          {!pendingPaper && (
+          {canRecordPaper && (
             <DocumentAction actionKey="record-signer-paper" variant="tertiary" onClick={() => setAct('paper')}>
               Record paper
             </DocumentAction>
           )}
-          <DocumentAction actionKey="replace-acceptance-signer" variant="tertiary" onClick={() => setAct('replace')}>
-            Replace this person
-          </DocumentAction>
+          {canReplace && (
+            <DocumentAction actionKey="replace-acceptance-signer" variant="tertiary" onClick={() => setAct('replace')}>
+              Replace this person
+            </DocumentAction>
+          )}
         </DocumentActionRow>
       )}
       {act === 'paper' && (
@@ -398,8 +435,9 @@ const REVIEW_STATE: Record<ServiceAcceptancePaperIntake['reviewState'], string> 
   lapsed: 'Lapsed',
 };
 
-function PaperIntakeRow({ projectId, intake, signer, report }: {
+function PaperIntakeRow({ projectId, request, intake, signer, report }: {
   projectId: string;
+  request: ServiceAcceptanceRequest;
   intake: ServiceAcceptancePaperIntake;
   signer?: ServiceAcceptanceSigner;
   report: Report;
@@ -410,12 +448,23 @@ function PaperIntakeRow({ projectId, intake, signer, report }: {
   const stamp = useStampServiceAcceptancePaper(projectId);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
   const pending = intake.reviewState === 'pending_review';
   const recorder = !!user?.id && user.id === intake.recordedBy;
+  const reviewing = pending && !recorder;
   const stamped = intake.documentSha256;
+  const paper = useServiceAcceptancePaperDocument(projectId, intake, reviewing && viewing);
+  // Confirm attests that the stored document, as hashed, shows this signer's
+  // signature, disposition, conditions and binding (C4 F11): it opens only
+  // once the reviewer has the stamped bytes in front of them.
+  const comparable = !!stamped && paper.data?.matchesStamp === true;
 
   const decide = async (decision: 'confirmed' | 'rejected') => {
     if (review.isPending) return;
+    if (decision === 'rejected' && !note.trim()) {
+      setError('Say why the paper is rejected in the review note.');
+      return;
+    }
     setError(null);
     try {
       await review.mutateAsync({
@@ -455,15 +504,23 @@ function PaperIntakeRow({ projectId, intake, signer, report }: {
         </DocumentActionRow>
       )}
       {pending && recorder && <p role="status" className="t-meta">Waiting for a second reviewer.</p>}
-      {pending && !recorder && (
+      {reviewing && (
         <div className="mt-2 space-y-2">
-          <label className="block t-body-sm" htmlFor={`${id}-note`}>Review note (optional)</label>
-          <Textarea id={`${id}-note`} rows={2} value={note} disabled={review.isPending}
+          <PresentedBinding request={request} intake={intake} />
+          <StoredPaper paper={paper} viewing={viewing} onView={() => setViewing(true)}
+            title={`Stored paper for ${signer ? slotLabel(signer.slot) : 'a signer'}`} />
+          <label className="block t-body-sm" htmlFor={`${id}-note`}>Review note (required to reject)</label>
+          <Textarea id={`${id}-note`} rows={2} maxLength={2000} value={note} disabled={review.isPending}
             onChange={(event) => setNote(event.target.value)} />
-          {!stamped && <p className="t-meta" id={`${id}-unstamped`}>Confirm opens once the stored PDF is stamped.</p>}
+          {!comparable && (
+            <p className="t-meta" id={`${id}-closed`}>
+              {stamped ? 'Confirm opens once you have the stamped paper open above to compare.'
+                : 'Confirm opens once the stored PDF is stamped.'}
+            </p>
+          )}
           <DocumentActionRow surfaceKey="service-acceptance" regionKey="paper-review">
             <DocumentAction actionKey="confirm-acceptance-paper" variant="secondary"
-              disabled={!stamped || review.isPending} aria-describedby={stamped ? undefined : `${id}-unstamped`}
+              disabled={!comparable || review.isPending} aria-describedby={comparable ? undefined : `${id}-closed`}
               onClick={() => void decide('confirmed')}>
               Confirm paper
             </DocumentAction>
@@ -476,5 +533,61 @@ function PaperIntakeRow({ projectId, intake, signer, report }: {
       )}
       {error && <p role="alert" className="t-body-sm">{error}</p>}
     </li>
+  );
+}
+
+/** What the recorder transcribed from the paper. 00886 refused the intake
+ *  unless every presented value equalled this request's, so the request's
+ *  values are the presented ones; the reviewer checks them against the PDF. */
+function PresentedBinding({ request, intake }: { request: ServiceAcceptanceRequest; intake: ServiceAcceptancePaperIntake }) {
+  return (
+    <dl className="t-meta grid grid-cols-[auto_1fr] gap-x-3" aria-label="Recorded as printed on the paper">
+      <dt>Request number</dt><dd>{request.requestNumber}</dd>
+      <dt>Scope code</dt><dd className="font-mono break-all">{request.scopeContentHash}</dd>
+      <dt>Evidence code</dt><dd className="font-mono break-all">{request.evidenceManifestHash}</dd>
+      <dt>Signer revision</dt><dd>{intake.presentedSignerPolicyRevision}</dd>
+    </dl>
+  );
+}
+
+function StoredPaper({ paper, viewing, onView, title }: {
+  paper: ReturnType<typeof useServiceAcceptancePaperDocument>;
+  viewing: boolean;
+  onView: () => void;
+  title: string;
+}) {
+  if (!viewing) {
+    return (
+      <DocumentActionRow surfaceKey="service-acceptance" regionKey="paper-view">
+        <DocumentAction actionKey="view-acceptance-paper" variant="secondary" onClick={onView}>
+          View the stored paper
+        </DocumentAction>
+      </DocumentActionRow>
+    );
+  }
+  if (paper.isError) {
+    return (
+      <ReadFailure regionKey="paper-view-retry" actionKey="retry-acceptance-paper-view"
+        onRetry={() => void paper.refetch()} message="The stored paper could not be opened.">
+        Retry opening the paper
+      </ReadFailure>
+    );
+  }
+  if (!paper.data) return <p role="status" className="t-meta">Opening the stored paper…</p>;
+  if (paper.data.matchesStamp === false) {
+    return (
+      <p role="alert" className="t-body-sm">
+        The stored file does not match its stamp. Reject it and record the paper again.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-1" data-acceptance-paper-view>
+      <iframe title={title} src={paper.data.url}
+        className="h-[60dvh] w-full border border-[var(--color-pearl)] bg-white" />
+      <a href={paper.data.url} target="_blank" rel="noopener noreferrer" className="t-meta underline">
+        Open the stored paper in a new tab
+      </a>
+    </div>
   );
 }

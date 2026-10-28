@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(), from: vi.fn(), invalidateQueries: vi.fn(), upload: vi.fn(), bucket: vi.fn(), invoke: vi.fn(),
+  list: vi.fn(), download: vi.fn(), signedUrl: vi.fn(),
 }));
 vi.mock('../use-agreement-parts', async (original) => original());
 vi.mock('../../client', () => ({
   createBrowserClient: () => ({
     rpc: mocks.rpc, from: mocks.from,
-    storage: { from: (bucket: string) => { mocks.bucket(bucket); return { upload: mocks.upload }; } },
+    storage: { from: (bucket: string) => {
+      mocks.bucket(bucket);
+      return { upload: mocks.upload, list: mocks.list, download: mocks.download, createSignedUrl: mocks.signedUrl };
+    } },
     functions: { invoke: mocks.invoke },
   }),
 }));
@@ -16,7 +20,8 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
 }));
 import {
-  isServiceAcceptanceInactive, readProjectServiceAcceptance, serviceAcceptanceCapability,
+  isServiceAcceptanceInactive, normalizePaperCode, readProjectServiceAcceptance, serviceAcceptanceCapability,
+  useServiceAcceptancePaperDocument,
   serviceAcceptanceRefusal, useCreateServiceAcceptanceRequest, useRecordServiceAcceptancePaperIntake,
   useReplaceServiceAcceptanceSigner, useReviewServiceAcceptancePaperIntake, useServiceAcceptance,
   useServiceAcceptanceManifests, useStampServiceAcceptancePaper, useWithdrawServiceAcceptanceRequest,
@@ -158,9 +163,11 @@ describe('service acceptance studio acts (WP-10C)', () => {
 
   it('uploads paper once to the private bucket path, then records the intake with the presented binding', async () => {
     const file = new File(['%PDF-1.7'], 'paper.pdf', { type: 'application/pdf' });
+    // The binding is what the recorder transcribed; the hook sends it as given.
     const args = {
-      request: { requestId: 'request-1', requestNumber: 2, scopeContentHash: 'scope-hash',
-        evidenceManifestHash: 'manifest-hash', signerPolicyRevision: 2 },
+      requestId: 'request-1',
+      presented: { requestNumber: 2, scopeContentHash: 'scope-hash', evidenceManifestHash: 'manifest-hash',
+        signerPolicyRevision: 2 },
       signerId: 'signer-3', file, paperSignedOn: '2026-10-27', signedName: 'Signed Name',
       disposition: 'accept_with_conditions' as const, conditions: ['Keep the oak floor'], returnReason: null,
     };
@@ -204,6 +211,43 @@ describe('service acceptance studio acts (WP-10C)', () => {
     expect(mocks.invoke).toHaveBeenCalledWith('service-acceptance-paper-hash', { body: { projectId: 'job-1', intakeId: 'intake-1' } });
     mocks.invoke.mockResolvedValue({ data: { intakeId: 'intake-1', documentSha256: 'nope' }, error: null });
     await expect(stamp.mutationFn({ intakeId: 'intake-1' })).rejects.toThrow('not stamped');
+  });
+
+  it('normalizes a transcribed code to the full form 00886 compares, and refuses a short form', () => {
+    const full = 'AB12'.repeat(16);
+    expect(normalizePaperCode(` ${full.slice(0, 32)} ${full.slice(32)}\n`)).toBe(full.toLowerCase());
+    expect(normalizePaperCode('ab12ab12')).toBeNull();
+    expect(normalizePaperCode('z'.repeat(64))).toBeNull();
+  });
+
+  it('opens the exact stored paper: finds its object by id, hashes the bytes and signs a short view', async () => {
+    const bytes = new TextEncoder().encode('%PDF-1.7 stamped');
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    const sha = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+    const page = Array.from({ length: 100 }, (_, n) => ({ id: `other-${n}`, name: `other-${n}.pdf` }));
+    mocks.list.mockResolvedValueOnce({ data: page, error: null })
+      .mockResolvedValueOnce({ data: [{ id: 'object-1', name: 'paper-uuid.pdf' }], error: null });
+    mocks.download.mockResolvedValue({ data: new Blob([bytes]), error: null });
+    mocks.signedUrl.mockResolvedValue({ data: { signedUrl: 'http://127.0.0.1:54321/storage/v1/object/sign/x' }, error: null });
+    const intake = { intakeId: 'intake-1', storageObjectId: 'object-1', documentSha256: sha };
+    const query = useServiceAcceptancePaperDocument('job-1', intake, true) as any;
+    expect(query.queryKey).toEqual([...serviceAcceptanceKeys.project('job-1'), 'paper', 'intake-1', 'object-1', sha]);
+    expect(query.enabled).toBe(true);
+    await expect(query.queryFn()).resolves.toEqual({
+      url: 'http://127.0.0.1:54321/storage/v1/object/sign/x', sha256: sha, matchesStamp: true,
+    });
+    expect(mocks.bucket).toHaveBeenCalledWith('service-acceptance-paper');
+    expect(mocks.list).toHaveBeenNthCalledWith(2, 'job-1', expect.objectContaining({ limit: 100, offset: 100 }));
+    expect(mocks.download).toHaveBeenCalledWith('job-1/paper-uuid.pdf');
+    expect(mocks.signedUrl).toHaveBeenCalledWith('job-1/paper-uuid.pdf', 600);
+
+    mocks.list.mockResolvedValueOnce({ data: [{ id: 'object-1', name: 'paper-uuid.pdf' }], error: null });
+    const moved = useServiceAcceptancePaperDocument('job-1', { ...intake, documentSha256: 'f'.repeat(64) }, true) as any;
+    await expect(moved.queryFn()).resolves.toMatchObject({ matchesStamp: false });
+
+    mocks.list.mockResolvedValueOnce({ data: [], error: null });
+    await expect(query.queryFn()).rejects.toThrow('could not be found');
+    expect((useServiceAcceptancePaperDocument('job-1', intake, false) as any).enabled).toBe(false);
   });
 
   it('reads only the project service_acceptance manifests under the service-acceptance key', async () => {

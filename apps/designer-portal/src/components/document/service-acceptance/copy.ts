@@ -75,10 +75,24 @@ const REFUSAL: Record<string, string> = {
     'Check the answer: conditions go with "accepted with conditions", and a return needs a reason.',
   service_acceptance_replacement_invalid: 'Choose the new person and give a reason for the change.',
   service_acceptance_withdraw_invalid: 'Give a reason for withdrawing.',
-  service_acceptance_review_invalid: 'This paper cannot be reviewed by you. Another owner or admin must review it.',
-  insufficient_privilege: 'Your seat on this job cannot do this. Reviewing paper needs a studio owner or admin.',
+  // 00886 raises this only for the decision and note (a rejection needs a
+  // note, at most 2,000 characters); reviewer eligibility is insufficient_privilege.
+  service_acceptance_review_invalid: 'A rejection needs a note saying why, up to 2,000 characters.',
+  insufficient_privilege:
+    'Your seat on this job cannot do this. Reviewing paper needs a studio owner or admin who did not record it.',
   idempotency_key_reused: 'This was already recorded with different details. Read the request again.',
 };
+
+/** Recording paper: a stale binding means the transcribed paper does not
+ *  describe this request (00886 compares every presented value). */
+export const PAPER_MISMATCH =
+  "The paper doesn't match this request. Check the request number and codes printed on it.";
+
+export function paperRefusalCopy(error: unknown): string | null {
+  const token = serviceAcceptanceRefusal(error);
+  if (token === 'stale_scope' || token === 'stale_signer_policy') return PAPER_MISMATCH;
+  return refusalCopy(error);
+}
 
 /** Null when acceptance is not switched on (the caller shows INACTIVE_NOTE). */
 export function refusalCopy(error: unknown): string | null {

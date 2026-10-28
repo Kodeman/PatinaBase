@@ -323,10 +323,27 @@ export function useReplaceServiceAcceptanceSigner(projectId: string) {
     }));
 }
 
+/** The binding printed on the paper, as the recorder transcribed it (C4 F11).
+ *  Never copied from the request on screen: 00886 compares each value with
+ *  the request and refuses a paper that describes another one. */
+export interface ServiceAcceptancePresentedBinding {
+  requestNumber: number;
+  scopeContentHash: string;
+  evidenceManifestHash: string;
+  signerPolicyRevision: number;
+}
+
+/** A printed code as 00886 compares it: full lowercase sha256 hex. Spaces and
+ *  case from transcription are dropped; anything else (a short form) is null,
+ *  because the server compares the full value exactly. */
+export function normalizePaperCode(value: string): string | null {
+  const code = value.replace(/\s+/g, '').toLowerCase();
+  return /^[0-9a-f]{64}$/.test(code) ? code : null;
+}
+
 export interface RecordServiceAcceptancePaperArgs {
-  /** The request as read: the intake presents exactly what the paper was. */
-  request: Pick<ServiceAcceptanceRequest, 'requestId' | 'requestNumber' | 'scopeContentHash'
-    | 'evidenceManifestHash' | 'signerPolicyRevision'>;
+  requestId: string;
+  presented: ServiceAcceptancePresentedBinding;
   signerId: string;
   file: File;
   paperSignedOn: string;
@@ -372,16 +389,16 @@ export function useRecordServiceAcceptancePaperIntake(projectId: string) {
         stored = { projectId, objectId: data.id };
         uploadedPaper.set(file, stored);
       }
-      const { request } = args;
+      const { presented } = args;
       return supabase.rpc('record_service_acceptance_paper_intake', {
-        p_request_id: request.requestId, p_signer_id: args.signerId, p_storage_object_id: stored.objectId,
+        p_request_id: args.requestId, p_signer_id: args.signerId, p_storage_object_id: stored.objectId,
         p_paper_signed_on: args.paperSignedOn, p_signed_name: args.signedName, p_disposition: args.disposition,
         p_conditions: args.conditions.map((text) => ({ text })),
         p_return_reason: args.returnReason as string,
-        p_presented_request_number: request.requestNumber,
-        p_presented_scope_content_hash: request.scopeContentHash,
-        p_presented_evidence_manifest_hash: request.evidenceManifestHash,
-        p_presented_signer_policy_revision: request.signerPolicyRevision,
+        p_presented_request_number: presented.requestNumber,
+        p_presented_scope_content_hash: presented.scopeContentHash,
+        p_presented_evidence_manifest_hash: presented.evidenceManifestHash,
+        p_presented_signer_policy_revision: presented.signerPolicyRevision,
         p_client_request_id: key,
       });
     }, (args) => ({ ...args, file: fileToken(args.file) }));
@@ -421,6 +438,66 @@ export function useStampServiceAcceptancePaper(projectId: string) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: serviceAcceptanceKeys.project(projectId) });
+    },
+  });
+}
+
+export interface ServiceAcceptancePaperDocument {
+  /** Short-lived signed URL of the stored object, for the portal's framed
+   *  PDF viewer. 00886 forbids updating or deleting these objects, so it
+   *  serves the same bytes that were hashed below. */
+  url: string;
+  sha256: string;
+  /** False when the bytes do not hash to the stamp; null while unstamped. */
+  matchesStamp: boolean | null;
+}
+
+type PaperBucket = ReturnType<ReturnType<typeof createBrowserClient>['storage']['from']>;
+const PAPER_LIST_PAGE = 100;
+const PAPER_VIEW_SECONDS = 600;
+
+// The projection carries only storage_object_id; the object's name is
+// `<projectId>/<uuid>.pdf`, so page the project's folder (RLS-read) for it.
+async function findPaperObjectName(bucket: PaperBucket, projectId: string, objectId: string): Promise<string> {
+  for (let offset = 0; ; offset += PAPER_LIST_PAGE) {
+    const { data, error } = await bucket.list(projectId, {
+      limit: PAPER_LIST_PAGE, offset, sortBy: { column: 'name', order: 'asc' },
+    });
+    if (error) throw error;
+    const found = data?.find((object) => object.id === objectId);
+    if (found) return `${projectId}/${found.name}`;
+    if ((data?.length ?? 0) < PAPER_LIST_PAGE) throw new Error('The stored paper could not be found.');
+  }
+}
+
+/** The exact stored PDF of one paper intake, for the reviewer to read before
+ *  confirming (C4 F11). Its bytes are hashed here so a file that no longer
+ *  matches the stamp is never presented as the stamped paper. */
+export function useServiceAcceptancePaperDocument(
+  projectId: string,
+  intake: Pick<ServiceAcceptancePaperIntake, 'intakeId' | 'storageObjectId' | 'documentSha256'>,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...serviceAcceptanceKeys.project(projectId), 'paper', intake.intakeId, intake.storageObjectId,
+      intake.documentSha256] as const,
+    enabled: enabled && !!projectId,
+    staleTime: (PAPER_VIEW_SECONDS - 60) * 1000,
+    queryFn: async (): Promise<ServiceAcceptancePaperDocument> => {
+      const bucket = createBrowserClient().storage.from(SERVICE_ACCEPTANCE_PAPER_BUCKET);
+      const name = await findPaperObjectName(bucket, projectId, intake.storageObjectId);
+      const { data: blob, error } = await bucket.download(name);
+      if (error) throw error;
+      if (!blob) throw new Error('The stored paper could not be read.');
+      const digest = await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+      const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      const signed = await bucket.createSignedUrl(name, PAPER_VIEW_SECONDS);
+      if (signed.error) throw signed.error;
+      if (!signed.data?.signedUrl) throw new Error('The stored paper could not be opened.');
+      return {
+        url: signed.data.signedUrl, sha256,
+        matchesStamp: intake.documentSha256 == null ? null : sha256 === intake.documentSha256,
+      };
     },
   });
 }

@@ -2711,10 +2711,14 @@ export {
   useRecordServiceAcceptancePaperIntake,
   useReviewServiceAcceptancePaperIntake,
   useStampServiceAcceptancePaper,
+  useServiceAcceptancePaperDocument,
   useServiceAcceptanceManifests,
+  normalizePaperCode,
 } from './use-service-acceptance';
 export type {
   CreateServiceAcceptanceArgs,
+  ServiceAcceptancePaperDocument,
+  ServiceAcceptancePresentedBinding,
   RecordServiceAcceptancePaperArgs,
   ReplaceServiceAcceptanceSignerArgs,
   ReviewServiceAcceptancePaperArgs,
