@@ -31,6 +31,13 @@ Every guard defaults to the shared stack (`127.0.0.1:54322`). Pointing a suite e
 
 `service_completion_test.sql` (C6, 00888) is the one guard that defaults to `-v expected_port=56322`, the owned +2000 stack its ticket verifier names. Pass `-v expected_port=<n>` to run it on another local stack. It enables `scope_editions` inside its own rolled-back transaction, so it needs no capability change.
 
+`service_completion_concurrency.test.mjs` (C6 §2.11 F7 races) is a window suite: it commits an `f88e` fixture built from the shared sections of `service_completion_test.sql`, removes it at the end, and needs `scope_editions` enabled on the owned stack. Set the capability back to `false` before running `service_completion_test.sql`, which asserts that the capability ships off. A completion that refuses releases its locks at the error, not at `ROLLBACK`, so the suite runs those orders without a wait:
+
+```
+ROUND8_DB_URL=postgresql://postgres:postgres@127.0.0.1:56322/postgres SERVICE_COMPLETION_DB_WINDOW=owned \
+  node --test --test-concurrency=1 supabase/tests/round8/service_completion_concurrency.test.mjs
+```
+
 ### Isolated CLI stack
 
 1. Copy `supabase/config.toml`, `migrations/`, `seed/` and `templates/` into a scratch workdir outside the repo. Copy no `.env*` file.
