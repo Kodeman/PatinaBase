@@ -21,10 +21,10 @@ public enum AestheteEngineError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .notImplemented:   return "Couldn't read this room's style. Try again."
+        case .notImplemented:   return "Couldn’t read this room’s style. Try again."
         case .transport(let e): return "Network error: \(e.localizedDescription)"
         case .decoding(let e):  return "Could not decode aesthete response: \(e.localizedDescription)"
-        case .invalidResponse:  return "Couldn't read this room's style. Try again."
+        case .invalidResponse:  return "Couldn’t read this room’s style. Try again."
         }
     }
 }

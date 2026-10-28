@@ -16,6 +16,9 @@ struct DecisionListView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
                 header
+                // US-52 WP-10C-d: agreed-services requests, beside the list
+                // and never in it — they read their own projection.
+                ServiceAcceptanceEntry()
                 content
             }
             .padding(.bottom, MoneyScreenMetrics.bottomClearance)
