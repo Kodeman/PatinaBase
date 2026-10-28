@@ -37,6 +37,7 @@ import { openUnfold } from '@/components/document/paper/unfold-instrument';
 import { registerUnfoldOpener } from '@/components/document/paper/unfold-bridge';
 import type { WorkRoom } from '@/components/document/paper/chapters/ffe-work-room';
 import { BriefAgreementChapter, type BriefAgreementChapterProps } from '@/components/document/paper/chapters/brief-agreement-chapter';
+import { CloseoutChapter } from '@/components/document/paper/chapters/closeout-chapter';
 import { FfeChapter } from '@/components/document/paper/chapters/ffe-chapter';
 import { Round8MarginContext } from '@/components/document/paper/margin-layout';
 import { JobHead } from '@/components/document/paper/job-head';
@@ -133,6 +134,7 @@ function chapterBodies(
   slots: DocumentFrameSlots,
   pieces: Round8Pieces,
   workRoom: WorkRoom,
+  projectId: string | null,
 ): Partial<Record<Round8ChapterKey, ReactNode>> {
   const stage = <T,>(project: T, install: T, care: T) =>
     pieces.section === 'install' ? install : pieces.section === 'care' ? care : project;
@@ -156,13 +158,17 @@ function chapterBodies(
         {slots.accountBand}
       </>
     ),
-    closeout: stage(
-      pieces.projectCare,
-      <>
-        {pieces.installCeremony}
-        {pieces.installCare}
-      </>,
-      pieces.careSection,
+    closeout: (
+      <CloseoutChapter projectId={projectId}>
+        {stage(
+          pieces.projectCare,
+          <>
+            {pieces.installCeremony}
+            {pieces.installCare}
+          </>,
+          pieces.careSection,
+        )}
+      </CloseoutChapter>
     ),
     record: slots.record,
   };
@@ -203,7 +209,7 @@ export default function Round8PaperFrame({
       opener,
     );
   };
-  const chapters = pieces ? chapterBodies(slots, pieces, workRoom) : {};
+  const chapters = pieces ? chapterBodies(slots, pieces, workRoom, projectId) : {};
   // Contents: the ten chapters (the margin filters them to the mounted ones),
   // each sub-labelled with the stage reading DocSpine's ladder printed; a
   // pre-work document lists its own regions.

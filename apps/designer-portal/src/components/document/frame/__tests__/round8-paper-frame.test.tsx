@@ -7,6 +7,14 @@ import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 
 import { rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-origin';
 
+// The Closeout chapter's acceptance instrument reads its own data; its
+// behaviour is proven in service-acceptance/__tests__.
+jest.mock('@/components/document/service-acceptance/service-acceptance-section', () => ({
+  ServiceAcceptanceSection: ({ projectId }: { projectId: string }) => (
+    <div data-service-acceptance-mount={projectId} />
+  ),
+}));
+
 // The page owns the data reads; a gate stands in for its read here.
 let roomFilesReady = false;
 let visitsReady = false;
@@ -176,6 +184,17 @@ describe('Round8PaperFrame', () => {
     expect(slotsIn('financials')).toEqual([...money, 'account-band']);
     expect(slotsIn('closeout')).toEqual(closeout);
     expect(slotsIn('schedule')).toEqual(['stage-line', 'schedule']);
+  });
+
+  it('mounts service acceptance after the stage pieces in the Closeout chapter', async () => {
+    const { container } = renderFrame();
+    const closeout = container.querySelector('[data-paper-chapter="closeout"]')!;
+    const mount = await within(closeout as HTMLElement).findByText(
+      (_, element) => element?.getAttribute('data-service-acceptance-mount') === 'project-1',
+    );
+    expect(closeout.querySelector('[data-slot="project-care"]')!.compareDocumentPosition(mount))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(container.querySelectorAll('[data-service-acceptance-mount]')).toHaveLength(1);
   });
 
   it("mounts Design and Site only when the page's gates find content", () => {
