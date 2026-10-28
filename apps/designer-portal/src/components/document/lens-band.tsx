@@ -86,10 +86,11 @@ const LINE_WRAP = 'whitespace-normal [overflow-wrap:anywhere]';
  *  keeps its declared height; the live line still carries the whole sentence. */
 const NAME_CLAMP = 'truncate';
 
-/** "Task due — F01 review living-room selections" → the task's own name. */
+/** "Task due — F01 review living-room selections" → the task's own name. The
+ *  aggregate "<n> tasks due — oldest <date>" names no task, so it stays whole
+ *  (SQ-2338 F2). */
 function taskNameOf(sentence: string): string {
-  const name = sentence.split(/\s+—\s+/).slice(1).join(' — ').trim();
-  return name || sentence;
+  return /^Task due\s+—\s+(.+)$/.exec(sentence)?.[1]?.trim() || sentence;
 }
 
 /** F2-1 — the eyebrow's two halves: the stage word first; the job's name,
@@ -299,7 +300,8 @@ export function LensBand({
     ? (spoken.rungs[Math.min(dropped, spoken.rungs.length - 1)] ?? spoken)
     : null;
   // RC-4b N2 — the compact rungs' generic short subject is "TASK", so round 8
-  // prints the task's own name there instead. F3 — that line is clamped to one
+  // prints the task's own name there instead, or the whole "<n> tasks due"
+  // sentence when several are due. F3 — that line is clamped to one
   // row: the band stands under its declared --doc-band-height, which the
   // schedule glance and every landing are set below. The whole sentence stays
   // in the live line for assistive technology.

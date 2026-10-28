@@ -33,6 +33,7 @@ import {
   ContentsMargin,
   type ContentsEntry,
 } from '@/components/document/paper/contents-margin';
+import { useAnnouncePageRound8Scope } from '@/components/document/overlays/page-round8-scope';
 import { openUnfold } from '@/components/document/paper/unfold-instrument';
 import { registerUnfoldOpener } from '@/components/document/paper/unfold-bridge';
 import type { WorkRoom } from '@/components/document/paper/chapters/ffe-work-room';
@@ -200,6 +201,7 @@ export default function Round8PaperFrame({
   useEffect(() => {
     onCommitted(true);
   }, [onCommitted]);
+  useAnnouncePageRound8Scope();
   // Shared legacy-path code (the margin) unfolds this paper through the bridge.
   useEffect(() => registerUnfoldOpener(docId, openUnfold), [docId]);
   const workRoom: WorkRoom = (room, lens = 'spec', opener = document.activeElement) => {

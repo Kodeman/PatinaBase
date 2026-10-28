@@ -42,6 +42,7 @@ import {
   topActiveModalDialog,
   topDismissiblePopover,
 } from './active-dialog';
+import { PAGE_ROUND8_SCOPE_CHANGE } from './page-round8-scope';
 import { lastPressedControl } from './pressed-control';
 
 const FOCUSABLE_SELECTOR = [
@@ -60,12 +61,20 @@ const PAGE_ROUND8_SCOPE =
   '[data-paper-renderer="round8"]:not([data-doc-sheet-layer])';
 
 /** RC-4b — the body portal sits outside the paper, so it takes the round-8
- *  scope from the page it lays over, read when the layer mounts at open. A
- *  route that does not render round 8 leaves the layer legacy. */
-function adoptPageRenderer(layer: HTMLDivElement | null) {
-  if (layer?.ownerDocument.querySelector(PAGE_ROUND8_SCOPE)) {
-    layer.dataset.paperRenderer = 'round8';
-  }
+ *  scope from the page it lays over. A route that does not render round 8
+ *  leaves the layer legacy. SQ-2338 F1 — an open layer outlives page changes
+ *  (the drawer's ledger across navigation, a sheet opened over the skeleton
+ *  before the frame resolves), so it re-reads the page whenever a round-8
+ *  root announces it came or went. */
+function followPageRenderer(layer: HTMLDivElement) {
+  const doc = layer.ownerDocument;
+  const adopt = () => {
+    if (doc.querySelector(PAGE_ROUND8_SCOPE)) layer.dataset.paperRenderer = 'round8';
+    else delete layer.dataset.paperRenderer;
+  };
+  adopt();
+  doc.addEventListener(PAGE_ROUND8_SCOPE_CHANGE, adopt);
+  return () => doc.removeEventListener(PAGE_ROUND8_SCOPE_CHANGE, adopt);
 }
 
 type DocSheetOrigin = 'document' | 'margin';
@@ -404,7 +413,7 @@ export function DocSheet({
 
   return createPortal(
     <div
-      ref={adoptPageRenderer}
+      ref={followPageRenderer}
       data-doc-sheet-layer
       data-doc-sheet-stack-state={isTopModal ? 'top' : 'covered'}
       aria-hidden={isTopModal ? undefined : true}

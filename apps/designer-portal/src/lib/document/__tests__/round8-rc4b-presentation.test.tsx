@@ -5,8 +5,10 @@ import postcss from 'postcss';
 import { DocSheet } from '@/components/document/overlays/doc-sheet';
 import { LensBand } from '@/components/document/lens-band';
 import { Round8MarginContext } from '@/components/document/paper/margin-layout';
+import Round8LibraryEditorial from '@/components/document/rooms/library/round8-library-editorial';
 import { deriveLensBand, type LensBandInput } from '../lens-band-derivation';
 
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), back: jest.fn() }) }));
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: true, isLoading: false }),
@@ -81,18 +83,81 @@ describe('RC-4b round-8 presentation', () => {
     });
   });
 
-  it.each(['narrow', 'mobile'] as const)('keeps the task name in the compact %s band, leaving legacy words unchanged', (tier) => {
+  describe('an open layer follows the page under it without remounting (SQ-2338 F1)', () => {
+    // A real round-8 room root, or a legacy page, beside sheets that stay open.
+    const page = (round8: boolean, sheets = ['Ledger']) => (
+      <>
+        {round8
+          ? <Round8LibraryEditorial action={null}>Library</Round8LibraryEditorial>
+          : <main>Legacy page</main>}
+        {sheets.map((title) => (
+          <DocSheet key={title} open onClose={() => {}} title={title}>{title}</DocSheet>
+        ))}
+      </>
+    );
+    const layerOf = (title: string) =>
+      screen.getByRole('dialog', { name: title, hidden: true }).closest('[data-doc-sheet-layer]');
+
+    it('drops the scope when the page leaves round 8 under an open layer', () => {
+      const view = render(page(true));
+      const layer = layerOf('Ledger');
+      expect(layer).toHaveAttribute('data-paper-renderer', 'round8');
+      view.rerender(page(false));
+      expect(layerOf('Ledger')).toBe(layer);
+      expect(layer).not.toHaveAttribute('data-paper-renderer');
+    });
+
+    it('takes the scope when a round-8 root arrives after the layer opened', () => {
+      const view = render(page(false));
+      const layer = layerOf('Ledger');
+      expect(layer).not.toHaveAttribute('data-paper-renderer');
+      view.rerender(page(true));
+      expect(layerOf('Ledger')).toBe(layer);
+      expect(layer).toHaveAttribute('data-paper-renderer', 'round8');
+    });
+
+    it('never lets one open layer vouch for another as the page changes', () => {
+      const view = render(page(true));
+      const first = layerOf('Ledger');
+      expect(first).toHaveAttribute('data-paper-renderer', 'round8');
+      // The round-8 root leaves as a second sheet stacks over the first.
+      view.rerender(page(false, ['Ledger', 'Accounts']));
+      expect(layerOf('Ledger')).toBe(first);
+      const layers = document.querySelectorAll('[data-doc-sheet-layer]');
+      expect(layers).toHaveLength(2);
+      layers.forEach((each) => expect(each).not.toHaveAttribute('data-paper-renderer'));
+    });
+  });
+
+  const compactTaskBand = (tier: 'narrow' | 'mobile', text: string) => {
     const input = {
       spreadKind: 'project', ticket: [], guide: null, tier,
       household: 'Test house', stageWord: 'Project', stageIndex: { position: 1, of: 6 },
       installDate: null, moneyFigure: null, proposalInvestment: null, sentDate: null, readingStop: null,
-      needs: [{ key: 'task-1', kind: 'task_due', text: 'Task due — F01 review living-room selections',
-        actionLabel: 'Open the task', onAct: jest.fn(), urgent: true }],
+      needs: [{ key: 'task-1', kind: 'task_due', text, actionLabel: 'Open the task', onAct: jest.fn(), urgent: true }],
     } as LensBandInput;
     const model = deriveLensBand(input);
     // Exercise the compact rung explicitly: jsdom cannot measure the band.
     model.voice!.rungs = [{ form: 'short', lead: 'Next', sentence: model.voice!.next!.shortSentence! }];
     const band = (round8: boolean) => <Round8MarginContext.Provider value={round8}><LensBand model={model} docId="p1" /></Round8MarginContext.Provider>;
+    return { model, band };
+  };
+
+  it.each([
+    ['2 tasks due — oldest 28 Oct'],
+    ['3 tasks due — oldest 27 Oct'],
+  ])('keeps the whole aggregate "%s" in the compact band, clamped to one row (SQ-2338 F2)', (text) => {
+    const { band } = compactTaskBand('mobile', text);
+    render(band(true));
+    const line = document.querySelector('[data-lens-sentence]');
+    expect(line).toHaveTextContent(new RegExp(`^${text}$`));
+    expect(line).toHaveClass('truncate');
+    expect(document.querySelector('[data-lens-line="2"]')).toHaveClass('flex-nowrap');
+    expect(document.querySelector('[data-lens-full-sentence]')).toHaveTextContent(text);
+  });
+
+  it.each(['narrow', 'mobile'] as const)('keeps the task name in the compact %s band, leaving legacy words unchanged', (tier) => {
+    const { model, band } = compactTaskBand(tier, 'Task due — F01 review living-room selections');
     const view = render(band(true));
     const named = document.querySelector('[data-lens-sentence]');
     expect(named).toHaveTextContent(/^F01 review living-room selections$/);
