@@ -14,18 +14,22 @@ import Foundation
 
 enum StudioServiceFixture {
     /// One client-projection completion (00888 `get_studio_service_completion`,
-    /// audience `client`). `state` nil drops the key.
+    /// audience `client`). `state` nil drops the key; `revokedAt` adds the
+    /// studio-projection key.
     static func completion(
+        id: String = "comp-1",
         state: String? = "completed",
         acceptanceRequestId: String = "req-1",
         conditionsClosedAt: String? = nil,
+        revokedAt: String? = nil,
         extra: String = ""
     ) -> String {
         let stateKey = state.map { "\"state\": \"\($0)\"," } ?? ""
         let closed = conditionsClosedAt.map { "\"\($0)\"" } ?? "null"
+        let revoked = revokedAt.map { "\"revokedAt\": \"\($0)\"," } ?? ""
         return """
         {
-          "completionId": "comp-1", \(stateKey)
+          "completionId": "\(id)", \(stateKey) \(revoked)
           "completedAt": "2026-10-27T15:00:00Z", "conditionsClosedAt": \(closed),
           "scopeEditionId": "ed-1", "scopeContentHash": "sha-scope-1abcdef",
           "acceptanceRequestId": "\(acceptanceRequestId)", "requestNumber": 2\(extra)
@@ -188,6 +192,41 @@ struct ServiceAcceptanceStudioServiceTests {
                 #expect(!line.lowercased().contains(word), "\"\(line)\" shows \"\(word)\"")
             }
         }
+    }
+
+    // MARK: - Revoked completions (studio audience)
+
+    /// A studio member who is also the client or a signer gets the studio
+    /// projection, which lists revoked completions with `revokedAt` set.
+    private func studioRead(_ completions: String...) throws -> RemoteStudioServiceCompletionRead {
+        try StudioServiceFixture.decode(StudioServiceFixture.payload(completions, audience: "studio",
+                                                                     capability: "active"))
+    }
+
+    @Test("studio audience: a revoked completion alone reads as not yet")
+    func revokedOnlyIsNotYet() throws {
+        let read = try studioRead(StudioServiceFixture.completion(revokedAt: "2026-10-28T10:00:00Z",
+                                                                  extra: #", "revokedBy": "user-9""#))
+        let section = try #require(try reading(read))
+        #expect(section.status == .notYet)
+        #expect(section.completedAt == nil)
+        #expect(ServiceAcceptanceCopy.acceptedScope(section) == nil)
+        #expect(ServiceAcceptanceCopy.studioServiceStatus(section.status)
+                == "The studio will confirm when its service is complete")
+    }
+
+    @Test("studio audience: a revoked and a live completion for one request read the live one")
+    func revokedThenLiveReadsLive() throws {
+        // Newest first, as served: the revoked completion precedes the live one.
+        let read = try studioRead(
+            StudioServiceFixture.completion(id: "comp-revoked", state: "completed",
+                                            revokedAt: "2026-10-28T10:00:00Z"),
+            StudioServiceFixture.completion(id: "comp-live", state: "completed_with_conditions")
+        )
+        let section = try #require(try reading(read))
+        #expect(section.status == .completeWithConditions)
+        #expect(ServiceAcceptanceCopy.studioServiceStatus(section.status)
+                == "Complete, with conditions still being resolved")
     }
 
     // MARK: - Model

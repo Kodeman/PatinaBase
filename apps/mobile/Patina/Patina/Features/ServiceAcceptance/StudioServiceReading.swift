@@ -41,7 +41,7 @@ struct StudioServiceSection: View {
 /// What the section says. C6 §2.4 gives the client no open-condition count
 /// or texts, so none is shown.
 nonisolated enum StudioServiceStatus: Equatable, Sendable {
-    /// No live completion for this request, or a state this build cannot read.
+    /// No unrevoked completion for this request, or a state this build cannot read.
     case notYet
     case complete
     /// `completed_with_conditions` whose conditions are not yet closed.
@@ -58,7 +58,7 @@ nonisolated struct StudioServiceReading: Equatable, Sendable {
     /// the request is not accepted yet, or the capability is inactive.
     init?(request: RemoteServiceAcceptanceRequest, read: RemoteStudioServiceCompletionRead) {
         guard request.showsStudioService, read.capability != "inactive" else { return nil }
-        let completion = read.completions.first { $0.acceptanceRequestId == request.requestId }
+        let completion = read.completions.first { $0.revokedAt == nil && $0.acceptanceRequestId == request.requestId }
         switch completion?.state {
         case .completed:
             status = .complete

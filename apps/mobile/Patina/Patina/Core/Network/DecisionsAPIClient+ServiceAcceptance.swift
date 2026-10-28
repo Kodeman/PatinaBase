@@ -412,10 +412,11 @@ nonisolated enum StudioServiceCompletionState: String, ServiceAcceptanceWireValu
     static var unknownValue: Self { .unknown }
 }
 
-/// One live completion as the client projection of
-/// `get_studio_service_completion` serves it: state, dates and the accepted
-/// scope reference. The studio projection carries more (the financial hold,
-/// the obligation snapshot); this type never decodes those keys.
+/// One completion from `get_studio_service_completion`: state, dates and the
+/// accepted scope reference. The client projection serves live completions
+/// only. The studio projection, served whenever the caller is also a studio
+/// member, lists revoked ones too and carries more (the financial hold, the
+/// obligation snapshot); this type never decodes those keys.
 nonisolated struct RemoteStudioServiceCompletion: Decodable, Sendable, Equatable {
     let acceptanceRequestId: String
     let state: StudioServiceCompletionState
@@ -425,9 +426,12 @@ nonisolated struct RemoteStudioServiceCompletion: Decodable, Sendable, Equatable
     let conditionsClosedAt: String?
     let scopeContentHash: String?
     let requestNumber: Int?
+    /// Set on a revoked completion (studio projection only); a revoked
+    /// completion is never the studio's confirmation.
+    let revokedAt: String?
 
     private enum CodingKeys: String, CodingKey {
-        case acceptanceRequestId, state, completedAt, conditionsClosedAt, scopeContentHash, requestNumber
+        case acceptanceRequestId, state, completedAt, conditionsClosedAt, scopeContentHash, requestNumber, revokedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -438,6 +442,7 @@ nonisolated struct RemoteStudioServiceCompletion: Decodable, Sendable, Equatable
         conditionsClosedAt = try keys.decodeIfPresent(String.self, forKey: .conditionsClosedAt)
         scopeContentHash = try keys.decodeIfPresent(String.self, forKey: .scopeContentHash)
         requestNumber = try keys.decodeIfPresent(Int.self, forKey: .requestNumber)
+        revokedAt = try keys.decodeIfPresent(String.self, forKey: .revokedAt)
     }
 }
 
