@@ -39512,6 +39512,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      _can_read_service_acceptance_evidence_object: {
+        Args: { p_name: string }
+        Returns: boolean
+      }
       _can_record_proposal_engagement: {
         Args: {
           p_event_type: string
@@ -40552,6 +40556,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: boolean
       }
+      _is_service_acceptance_client_reader: {
+        Args: { p_request_id: string }
+        Returns: boolean
+      }
       _is_service_acceptance_studio_admin: {
         Args: { p_project_id: string }
         Returns: boolean
@@ -41463,6 +41471,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _service_acceptance_client_member: {
+        Args: { p_manifest_id: string; p_member: Json }
+        Returns: Json
+      }
       _service_acceptance_conditions: {
         Args: {
           p_conditions: Json
@@ -41474,6 +41486,16 @@ export type Database = {
       _service_acceptance_create_receipt: {
         Args: { p_replayed: boolean; p_request_id: string }
         Returns: Json
+      }
+      _service_acceptance_evidence_documents: {
+        Args: { p_manifest_id: string }
+        Returns: {
+          document_id: string
+          member_id: string
+          member_kind: string
+          path: string
+          title: string
+        }[]
       }
       _service_acceptance_hash: { Args: { p_value: Json }; Returns: string }
       _service_acceptance_key: { Args: { p_key: string }; Returns: string }
@@ -45850,6 +45872,10 @@ export type Database = {
         }[]
       }
       get_my_pricing_settings: { Args: never; Returns: Json }
+      get_my_service_acceptance_evidence: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
       get_my_service_acceptance_requests: { Args: never; Returns: Json }
       get_or_create_conversation: {
         Args: { p_context?: Json; p_screen?: string; p_user_id: string }
