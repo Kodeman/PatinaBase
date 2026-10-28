@@ -106,7 +106,6 @@ jest.mock('@/hooks/use-attach-client', () => ({
 }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
-  ...jest.requireActual('@/hooks/use-feature-flag'),
   useFeatureFlag: () => mockLetterFlag,
 }));
 

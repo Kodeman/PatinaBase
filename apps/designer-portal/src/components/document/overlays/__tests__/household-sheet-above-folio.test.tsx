@@ -29,7 +29,6 @@ jest.mock('@patina/supabase', () => ({
 }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
-  ...jest.requireActual('@/hooks/use-feature-flag'),
   useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
 

@@ -431,9 +431,13 @@
   flex-shrink: 0;
 }
 
-[data-paper-renderer="round8"] input[aria-label="Name a phase"] {
-  min-width: 0;
-  width: 100%;
+/* Phone only: the 280px ghost underline would overrun a narrow gutter; wider
+   paper keeps its intrinsic underline width. */
+@media (max-width: 599px) {
+  [data-paper-renderer="round8"] input[aria-label="Name a phase"] {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 /* end Round 8 paper renderer */

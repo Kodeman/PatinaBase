@@ -18,7 +18,6 @@ jest.mock('@/components/document/destinations/use-job-places', () => ({
 }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
-  ...jest.requireActual('@/hooks/use-feature-flag'),
   useFeatureFlag: (flag: string) => ({
     value: flag === 'ask-the-paper' ? mockAskThePaper : false,
     isLoading: false,

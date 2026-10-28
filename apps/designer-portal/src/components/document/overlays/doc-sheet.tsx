@@ -42,7 +42,6 @@ import {
   topActiveModalDialog,
   topDismissiblePopover,
 } from './active-dialog';
-import { usePaperRendererSnapshot } from '@/hooks/use-paper-renderer';
 import { lastPressedControl } from './pressed-control';
 
 const FOCUSABLE_SELECTOR = [
@@ -54,6 +53,20 @@ const FOCUSABLE_SELECTOR = [
   '[contenteditable="true"]:not([tabindex="-1"])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
+
+/** A round-8 scope the page itself renders (frame, desk, room); the sheet
+ *  layers are excluded so a stacked sheet cannot vouch for the next one. */
+const PAGE_ROUND8_SCOPE =
+  '[data-paper-renderer="round8"]:not([data-doc-sheet-layer])';
+
+/** RC-4b — the body portal sits outside the paper, so it takes the round-8
+ *  scope from the page it lays over, read when the layer mounts at open. A
+ *  route that does not render round 8 leaves the layer legacy. */
+function adoptPageRenderer(layer: HTMLDivElement | null) {
+  if (layer?.ownerDocument.querySelector(PAGE_ROUND8_SCOPE)) {
+    layer.dataset.paperRenderer = 'round8';
+  }
+}
 
 type DocSheetOrigin = 'document' | 'margin';
 const DocSheetOriginContext = createContext<DocSheetOrigin>('document');
@@ -267,7 +280,6 @@ export function DocSheet({
    *  that caller sets it; every other sheet keeps the z-50 layer. */
   aboveFolio?: boolean;
 }) {
-  const { renderer } = usePaperRendererSnapshot();
   const restoreRef = useRef<HTMLElement | null>(null);
   const returnFocusRef = useRef(returnFocusTo);
 
@@ -392,8 +404,8 @@ export function DocSheet({
 
   return createPortal(
     <div
+      ref={adoptPageRenderer}
       data-doc-sheet-layer
-      data-paper-renderer={renderer === 'round8' ? 'round8' : undefined}
       data-doc-sheet-stack-state={isTopModal ? 'top' : 'covered'}
       aria-hidden={isTopModal ? undefined : true}
       inert={isTopModal ? undefined : true}

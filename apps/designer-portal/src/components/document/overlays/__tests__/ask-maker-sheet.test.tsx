@@ -47,7 +47,6 @@ jest.mock('@patina/supabase', () => {
 let mockFlag = { value: true, isLoading: false };
 let mockOneVoice = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
-  ...jest.requireActual('@/hooks/use-feature-flag'),
   useFeatureFlag: (name: string) =>
     name === 'ask-the-paper'
       ? mockFlag

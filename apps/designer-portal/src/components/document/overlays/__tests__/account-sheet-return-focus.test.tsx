@@ -18,7 +18,6 @@ jest.mock('@/hooks/use-viewer-studio', () => ({
   useAccountStudio: () => ({ studio: null }),
 }));
 jest.mock('@/hooks/use-feature-flag', () => ({
-  ...jest.requireActual('@/hooks/use-feature-flag'),
   useFeatureFlag: () => ({ value: true, isLoading: false }),
 }));
 jest.mock('@/lib/analytics/events', () => ({ authEvents: { logout: jest.fn() } }));
