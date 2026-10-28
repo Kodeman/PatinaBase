@@ -6,7 +6,10 @@ vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config, useMutation: (config: unknown) => config,
   useQueryClient: () => mocks,
 }));
-import { readMyServiceAcceptanceRequests, useMyServiceAcceptanceRequests, useRespondServiceAcceptance } from '../use-my-service-acceptance';
+import {
+  readMyServiceAcceptanceEvidence, readMyServiceAcceptanceRequests, useMyServiceAcceptanceEvidence,
+  useMyServiceAcceptanceRequests, useRespondServiceAcceptance,
+} from '../use-my-service-acceptance';
 const request = (over: Record<string, unknown> = {}) => ({
   requestId: 'request-1', projectId: 'project-1', requestNumber: 1, scopeEditionId: 'scope-1',
   scopeContentHash: 'scope-hash', evidenceManifestHash: 'evidence-hash', signerPolicyRevision: 2,
@@ -92,4 +95,116 @@ it.each([{ responseId: '' }, { aggregateOutcome: 'approved' }, { signerPolicyRev
   const mutation = useRespondServiceAcceptance() as any;
   mocks.rpc.mockResolvedValue({ data: { responseId: 'r1', aggregateOutcome: 'accepted', pendingRequiredSigners: [], signerPolicyRevision: 2, replayed: false, ...over }, error: null });
   await expect(mutation.mutationFn({ request: request(), response: 'accept', conditions: [], returnReason: '' })).rejects.toThrow();
+});
+
+const evidence = () => ({
+  requestId: 'request-1', requestNumber: 2,
+  scope: { editionId: 'edition-1', contentHash: 'scope-hash', packages: [
+    { key: 'pkg.kitchen', label: 'Kitchen', inclusion: 'included', conditionText: null,
+      responsibilities: { design: 'studio', purchasing: 'client', installation: 'studio' },
+      phases: [{ name: 'Design development', service: 'design' }, { name: 'Installation week', service: 'installation' }] },
+    { key: 'pkg.dining', label: 'Dining room', inclusion: 'conditional', conditionText: 'If the budget is approved',
+      responsibilities: { design: 'client', purchasing: 'client', installation: 'other' }, phases: [] },
+  ] },
+  evidence: { manifestId: 'manifest-1', manifestHash: 'evidence-hash', members: [
+    { kind: 'plan_issue', title: 'Issue 1', issuedAt: '2026-10-27T00:00:00Z', content: null,
+      documents: [{ bucket: 'project-documents', path: 'project-1/set.pdf', title: 'Kitchen set' }] },
+    { kind: 'review_item', title: 'Sofa', issuedAt: null, documents: [],
+      content: { docCode: 'F-12', quantity: 2, room: 'Living room', details: { finish: 'Oiled walnut' } } },
+    { kind: 'product_configuration', title: 'Dining chair', issuedAt: null, documents: [],
+      content: { productName: 'Spindle chair', leadTimeWeeks: 10, selections: [{ groupName: 'Finish', valueLabel: 'Ebonized oak' }],
+        components: [{ name: 'Seat cushion', quantity: 1 }], dimensions: { width: 20, unit: 'in' }, fabric: { fabricName: 'Linen' } } },
+    { kind: 'custom_commission_revision', title: 'Dining chair revision 2', issuedAt: null, documents: [],
+      // requirements and materials in the native CustomCommissionBrief string[] shape (SQ-2280 F1).
+      content: { summary: 'Ebonized dining chair', revision: 2,
+        requirements: ['Seat height 18 in', 'Arms flush with the table'], materials: ['Ebonized oak', 'Linen'],
+        measurements: [{ label: 'Seat height', value: 18, unit: 'in' }],
+        drawings: [{ name: 'Chair elevation', revision: 'B' }] } },
+    { kind: 'approval_artifact', title: 'Care pack', issuedAt: null,
+      content: { source: 'spec_book_artifact', question: 'Approve the care pack?' },
+      documents: [{ bucket: 'project-documents', path: 'project-1/care.pdf', title: 'Care pack folio' }] },
+  ] },
+});
+type Evidence = ReturnType<typeof evidence>;
+it('reads the evidence RPC under its own key only once a request is chosen', async () => {
+  expect((useMyServiceAcceptanceEvidence(null) as any).enabled).toBe(false);
+  const query = useMyServiceAcceptanceEvidence('request-1') as any;
+  expect(query.enabled).toBe(true);
+  expect(query.queryKey).toEqual(['service-acceptance', 'mine', 'evidence', 'request-1']);
+  mocks.rpc.mockResolvedValue({ data: evidence(), error: null });
+  await expect(query.queryFn()).resolves.toEqual(evidence());
+  expect(mocks.rpc).toHaveBeenCalledWith('get_my_service_acceptance_evidence', { p_request_id: 'request-1' });
+  mocks.rpc.mockResolvedValue({ data: null, error: { code: '42501' } });
+  await expect(query.queryFn()).rejects.toEqual({ code: '42501' });
+  mocks.rpc.mockResolvedValue({ data: { ...evidence(), requestId: 'request-2' }, error: null });
+  await expect(query.queryFn()).rejects.toThrow('Acceptance evidence mismatch');
+});
+it('keeps only client-safe evidence fields even when the server sends more', () => {
+  const leaky: any = evidence();
+  Object.assign(leaky, { profileId: 'private-profile' });
+  Object.assign(leaky.scope.packages[0], { roomIds: ['private-room'], provenance: 'private', payer: 'client' });
+  Object.assign(leaky.scope.packages[0].responsibilities, { payer: 'client', fabrication_contract: 'gc' });
+  Object.assign(leaky.evidence.members[0], { id: 'private-id', sha256: 'private-sha', costCents: 1 });
+  Object.assign(leaky.evidence.members[0].documents[0], { storageObjectId: 'private-object' });
+  Object.assign(leaky.evidence.members[1].content, { clientUnitPriceCents: 1, productId: 'private-product', media: [{ id: 'private-media' }] });
+  Object.assign(leaky.evidence.members[1].content.details, { note: 'private note' });
+  Object.assign(leaky.evidence.members[2].content, { tradePriceCents: 1, variant: { sku: 'private-sku' } });
+  Object.assign(leaky.evidence.members[2].content.selections[0], { priceDeltaCents: 1 });
+  Object.assign(leaky.evidence.members[2].content.fabric, { mill: 'private-mill', sidemark: 'private-sidemark' });
+  Object.assign(leaky.evidence.members[3].content, { budgetCents: 1, fabricatorName: 'private-maker', notes: 'private note' });
+  Object.assign(leaky.evidence.members[3].content.drawings[0], { url: 'https://private.invalid/drawing.pdf' });
+  Object.assign(leaky.evidence.members[4].content, { context: 'private context', costCentsDelta: 1 });
+  const read = readMyServiceAcceptanceEvidence(leaky);
+  expect(read).toEqual(evidence());
+  expect(JSON.stringify(read)).not.toMatch(/private|payer|fabrication|roomIds|provenance|sha256|costCents|Price|sku|mill|budgetCents|url/);
+});
+it('reads native string[] commission requirements and materials exactly, in order', () => {
+  const content = readMyServiceAcceptanceEvidence(evidence()).evidence.members[3].content;
+  expect(content?.requirements).toEqual(['Seat height 18 in', 'Arms flush with the table']);
+  expect(content?.materials).toEqual(['Ebonized oak', 'Linen']);
+  const empty: any = evidence();
+  empty.evidence.members[3].content.materials = [];
+  delete empty.evidence.members[3].content.requirements;
+  const read = readMyServiceAcceptanceEvidence(empty).evidence.members[3].content;
+  expect(read?.materials).toEqual([]);
+  expect(read).not.toHaveProperty('requirements');
+});
+it.each<[string, (e: any) => void]>([
+  ['request number', (e) => { e.requestNumber = 0; }],
+  ['scope', (e) => { e.scope = null; }],
+  ['scope hash', (e) => { e.scope.contentHash = ''; }],
+  ['packages', (e) => { e.scope.packages = {}; }],
+  ['inclusion', (e) => { e.scope.packages[0].inclusion = 'maybe'; }],
+  ['condition', (e) => { e.scope.packages[1].conditionText = null; }],
+  ['party', (e) => { e.scope.packages[0].responsibilities.design = 'maker'; }],
+  ['phase service', (e) => { e.scope.packages[0].phases[0].service = 'fabrication'; }],
+  ['manifest hash', (e) => { e.evidence.manifestHash = null; }],
+  ['member', (e) => { e.evidence.members[1] = null; }],
+  ['member kind', (e) => { e.evidence.members[0].kind = 'invoice'; }],
+  ['member title', (e) => { e.evidence.members[0].title = ' '; }],
+  ['documents', (e) => { e.evidence.members[1].documents = null; }],
+  ['bucket', (e) => { e.evidence.members[0].documents[0].bucket = 'service-acceptance-paper'; }],
+  ['path', (e) => { e.evidence.members[0].documents[0].path = ''; }],
+  ['refused po spec kind', (e) => { e.evidence.members[1].kind = 'po_spec_snapshot'; }],
+  ['refused coordination kind', (e) => { e.evidence.members[1].kind = 'coordination_item_revision'; }],
+  ['plan content', (e) => { e.evidence.members[0].content = { title: 'Kitchen set' }; }],
+  ['missing content', (e) => { e.evidence.members[1].content = null; }],
+  ['content shape', (e) => { e.evidence.members[4].content = ['Approve the care pack?']; }],
+  ['nested fact', (e) => { e.evidence.members[1].content.room = { id: 'room-1', name: 'Living room' }; }],
+  ['blank fact', (e) => { e.evidence.members[4].content.question = ' '; }],
+  ['fact number', (e) => { e.evidence.members[2].content.leadTimeWeeks = Number.NaN; }],
+  ['fact list', (e) => { e.evidence.members[2].content.selections = { groupName: 'Finish' }; }],
+  ['list fact', (e) => { e.evidence.members[3].content.measurements[0].value = [18]; }],
+  ['fact object', (e) => { e.evidence.members[1].content.details = 'Oiled walnut'; }],
+  ['scalar requirements', (e) => { e.evidence.members[3].content.requirements = 'Seat height 18 in'; }],
+  ['null requirements', (e) => { e.evidence.members[3].content.requirements = null; }],
+  ['object materials', (e) => { e.evidence.members[3].content.materials = { 0: 'Ebonized oak' }; }],
+  ['number in requirements', (e) => { e.evidence.members[3].content.requirements = ['Seat height', 18]; }],
+  ['blank material', (e) => { e.evidence.members[3].content.materials = ['Ebonized oak', ' ']; }],
+  ['nested requirement', (e) => { e.evidence.members[3].content.requirements = [['Seat height 18 in']]; }],
+  ['fact object in materials', (e) => { e.evidence.members[3].content.materials = [{ name: 'Linen' }]; }],
+])('rejects malformed evidence: %s', (_name, mutate) => {
+  const bad: Evidence = evidence();
+  mutate(bad);
+  expect(() => readMyServiceAcceptanceEvidence(bad)).toThrow();
 });
