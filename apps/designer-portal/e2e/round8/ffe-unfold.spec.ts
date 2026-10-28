@@ -20,6 +20,11 @@ async function openJob(page: Page, search = '') {
   // /doc/[id] compiles (paper-frame.spec.ts).
   await page.goto('about:blank');
   await page.goto(`/doc/${JOB}${search}`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await awaitArrival(page);
+}
+
+/** A fresh landing (goto or reload) on the paper settles before the first read or press. */
+async function awaitArrival(page: Page) {
   await expect(page.locator('[data-document-shell]')).toBeVisible({ timeout: 60_000 });
   // Story log #34 — server-rendered under the override: wait for the arrival
   // to settle before the first press.
@@ -430,6 +435,18 @@ test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
       await expect(finish).not.toHaveAttribute('aria-invalid', 'true');
       const recoveredWrites = sent;
       await page.reload({ waitUntil: 'domcontentloaded' });
+      // SQ-2259 — a reload is a fresh landing on the Spec address: the paper
+      // arrives, the unfold reopens busy ("Loading the pieces.") and lands on
+      // the named line once its reads answer. Wait on those signals, as every
+      // other landing here does, not on the default assertion timeout.
+      await awaitArrival(page);
+      await expect(instrument(page), 'reload reopens the unfold').toBeVisible({ timeout: 30_000 });
+      await expect(instrument(page).locator(`[data-line-id="${line}"] button`)).toHaveAttribute('aria-current', 'true', {
+        timeout: 30_000,
+      });
+      await expect(instrument(page).getByTestId('spec-fields-pane')).toContainText('F01 Living Room selection 10', {
+        timeout: 30_000,
+      });
       await expect(instrument(page).getByRole('textbox', { name: 'Finish' })).toHaveValue(typed);
       expect(sent, 'reload never replays the recovered write').toBe(recoveredWrites);
       return;
