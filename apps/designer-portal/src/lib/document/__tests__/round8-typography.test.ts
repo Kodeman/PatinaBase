@@ -70,15 +70,20 @@ describe('Round-8 typography (18px root)', () => {
     }
   });
 
-  it('keeps the milestone name beside its diamond with a shrinkable 12rem basis', () => {
+  it('keeps the milestone name beside its diamond without growing past its text', () => {
     const milestone = readFileSync(join(src, 'components/document/schedule/milestone-row.tsx'), 'utf8');
     expect(milestone).toMatch(/<span\s+className=\{`min-w-0 truncate[^]*?\{milestone\.name\}\s*<\/span>/);
-    const names: string[] = [];
+    const decls: Array<[string, string]> = [];
     sheet.walkRules(`${scope} [data-schedule-milestone] > .truncate`, (rule) => {
       expect(rule.parent?.type).toBe('root');
-      rule.walkDecls('flex', (decl) => { names.push(decl.value); });
+      rule.walkDecls((decl) => { decls.push([decl.prop, decl.value]); });
     });
-    expect(names).toEqual(['1 1 12rem']);
+    // Zero grow keeps an anchor chip beside the name at desktop; the width cap
+    // (row less the 7px diamond and the 0.7rem gap) holds at any row width.
+    expect(decls).toEqual([
+      ['flex', '0 1 auto'],
+      ['max-width', 'calc(100% - 7px - 0.7rem)'],
+    ]);
   });
 
   it('uses sentence-case body type for paper metadata without changing drafting stock', () => {

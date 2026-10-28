@@ -99,8 +99,11 @@
   flex-wrap: wrap;
 }
 
+/* Cap the name at the row less the 7px diamond and its gap: it never grows
+   (the anchor chip stays beside it) and never wraps below the diamond. */
 [data-paper-renderer="round8"] [data-schedule-milestone] > .truncate {
-  flex: 1 1 12rem;
+  flex: 0 1 auto;
+  max-width: calc(100% - 7px - 0.7rem);
 }
 
 [data-paper-renderer="round8"] [data-schedule-milestone] > span:last-child {
