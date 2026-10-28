@@ -25452,6 +25452,84 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.service_acceptance_evidence_snapshots FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.service_acceptance_evidence_snapshot_objects FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._is_service_acceptance_client_reader(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_evidence_documents(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_scalars(jsonb,text[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_texts(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_client_member(text,uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_service_acceptance_evidence_snapshot() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_read_service_acceptance_evidence_object(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_read_service_acceptance_evidence_object(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_service_acceptance_evidence_object() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_my_service_acceptance_evidence(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_my_service_acceptance_evidence(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
