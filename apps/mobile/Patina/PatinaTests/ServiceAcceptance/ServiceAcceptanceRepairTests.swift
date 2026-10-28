@@ -42,6 +42,10 @@ private actor ScriptedService: ServiceAcceptanceService {
         sent.append(submission)
         if !respondFailures.isEmpty { throw respondFailures.removeFirst() }
     }
+
+    func fetchStudioServiceCompletion(projectId: String) async throws -> RemoteStudioServiceCompletionRead {
+        RemoteStudioServiceCompletionRead()
+    }
 }
 
 private func row(_ json: String) throws -> RemoteServiceAcceptanceRequest {

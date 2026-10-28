@@ -167,6 +167,31 @@ enum ServiceAcceptanceCopy {
         return first.uppercased() + words.dropFirst()
     }
 
+    // MARK: Studio service (C6). The client portal's wording (SQ-2232). It
+    // never names a financial hold and never says the project is closed.
+
+    static let studioServiceTitle = "Studio service"
+
+    static func studioServiceStatus(_ status: StudioServiceStatus) -> String {
+        switch status {
+        case .complete:
+            // U+2019, as every app literal types it (AppApostropheLintTests).
+            return "The studio’s service is complete"
+        case .completeWithConditions:
+            return "Complete, with conditions still being resolved"
+        case .notYet:
+            return "The studio will confirm when its service is complete"
+        }
+    }
+
+    static func studioServiceCompleted(_ when: String) -> String { "Completed \(when)" }
+
+    static func acceptedScope(_ reading: StudioServiceReading) -> String? {
+        guard let hash = reading.scopeContentHash else { return nil }
+        let request = reading.requestNumber.map { " · \(requestNumber($0))" } ?? ""
+        return "Accepted scope\(request) · \(shortReference(hash))"
+    }
+
     static func refusal(_ refusal: ServiceAcceptanceRefusal) -> String {
         switch refusal {
         case .stale: return "Your studio updated this request since you opened it. Reload to see the current version."

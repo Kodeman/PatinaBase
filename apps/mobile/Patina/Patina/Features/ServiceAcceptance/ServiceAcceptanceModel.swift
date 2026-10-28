@@ -10,11 +10,12 @@
 
 import SwiftUI
 
-/// The two calls this feature makes. `DecisionsAPIClient` is the real one;
+/// The calls this feature makes. `DecisionsAPIClient` is the real one;
 /// tests hand in a fake.
 nonisolated protocol ServiceAcceptanceService: Sendable {
     func fetchMyServiceAcceptanceRequests() async throws -> [RemoteServiceAcceptanceRequest]
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws
+    func fetchStudioServiceCompletion(projectId: String) async throws -> RemoteStudioServiceCompletionRead
 }
 
 extension DecisionsAPIClient: ServiceAcceptanceService {}
@@ -122,6 +123,12 @@ final class ServiceAcceptanceModel {
     /// answer on the same request re-sends it, key and all.
     private(set) var pendingSubmission: ServiceAcceptanceSubmission?
 
+    /// The last `get_studio_service_completion` read per project. Absent until
+    /// one succeeds; a failed read (permission denied included) drops it, so
+    /// the section hides rather than say anything it cannot stand behind.
+    private(set) var studioServiceReads: [String: RemoteStudioServiceCompletionRead] = [:]
+    private var studioServiceGeneration: [String: Int] = [:]
+
     /// Server cap on conditions per response (00886 `_service_acceptance_conditions`).
     static let maxConditions = ServiceAcceptanceAnswer.maxConditions
 
@@ -197,6 +204,33 @@ final class ServiceAcceptanceModel {
     /// The server offers her an act and nothing here has settled that slot since.
     func canRespond(_ request: RemoteServiceAcceptanceRequest) -> Bool {
         request.canRespond && settlement(for: request) == nil
+    }
+
+    // MARK: - Studio service (C6, read-only)
+
+    /// The request's **Studio service** section, or nil while it is hidden.
+    func studioService(for request: RemoteServiceAcceptanceRequest) -> StudioServiceReading? {
+        studioServiceReads[request.projectId].flatMap { StudioServiceReading(request: request, read: $0) }
+    }
+
+    /// Read the studio's completion for an accepted request's project.
+    func loadStudioService(for request: RemoteServiceAcceptanceRequest) async {
+        guard request.showsStudioService else { return }
+        let projectId = request.projectId
+        let generation = (studioServiceGeneration[projectId] ?? 0) + 1
+        studioServiceGeneration[projectId] = generation
+        let read: RemoteStudioServiceCompletionRead?
+        do {
+            read = try await service.fetchStudioServiceCompletion(projectId: projectId)
+        } catch {
+            read = nil
+            #if DEBUG
+            PatinaLog.ui.error("[ServiceAcceptance] studio service read failed: \(error.localizedDescription)")
+            #endif
+        }
+        // A later read for this project owns the section now.
+        guard studioServiceGeneration[projectId] == generation else { return }
+        studioServiceReads[projectId] = read
     }
 
     // MARK: - Compose (the presented request's draft)
