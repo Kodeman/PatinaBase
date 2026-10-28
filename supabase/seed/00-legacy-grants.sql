@@ -25314,6 +25314,144 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_service_completions FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.service_acceptance_condition_resolutions FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_studio_service_completion() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_service_acceptance_condition_resolution() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_obligation_key(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_obligation_write_lock(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_obligation_lock_row() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_obligation_label(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_obligation_items(uuid,uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_open_conditions(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_completion_financial_hold(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._derive_studio_service_obligations(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_complete_studio_service(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_completion_receipt(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._lock_service_completion_scope(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_service_completion_read_committed() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.complete_studio_service(uuid,uuid,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_service_acceptance_condition(uuid,uuid,text,jsonb,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_studio_service_completion(uuid,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.derive_studio_service_obligations(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_studio_service_completion(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.derive_studio_service_obligations(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00888_round8_service_completion.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_studio_service_completion(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
