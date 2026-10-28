@@ -50,8 +50,8 @@ export const LEAD_CHANGED = 'Who leads this project changed since this opened, s
 const SEND_UNCONFIRMED =
   'The send could not be confirmed. Some messages may have gone; check each one before sending again.';
 
-// New typed subjects have no approved client projection yet (C7 §8).
-const CLIENT_REFS = new Set(['invoice', 'client_decision', 'project', 'client', 'field_batch', 'field_prompt']);
+// Service acceptance requests now have an approved client projection at /acceptance/[requestId].
+const CLIENT_REFS = new Set(['invoice', 'client_decision', 'project', 'client', 'field_batch', 'field_prompt', 'service_acceptance_request']);
 
 function sendHold(draft: OutboundDraftRow, result?: OutboundSendResult): string | null {
   // The existing send endpoint finalizes delivered rows without calling the provider.

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReadyToSendSheet } from '../ready-to-send-sheet';
+import { outboundKindLabel } from '../outbound-draft-review';
 
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 jest.mock('@/lib/analytics/document-events', () => ({ documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() } }));
@@ -39,6 +40,19 @@ function openDraft() {
   fireEvent.click(screen.getByRole('button', { name: /Invoice reminder/ }));
   return screen.getByTestId('outbound-draft-review');
 }
+
+it('allows the approved service-acceptance client subject, still holds unknown subjects, and labels its kind', () => {
+  mockDrafts = [draft({ id: 'acceptance', kind: 'service_acceptance_request', ref_type: 'service_acceptance_request' })];
+  const view = render(<ReadyToSendSheet projectId="project" />);
+  expect(document.querySelector('[data-outbound-row="acceptance"]')).toBeInTheDocument();
+  expect(outboundKindLabel('service_acceptance_request')).toBe('Service acceptance request');
+  fireEvent.click(screen.getByRole('button', { name: /Service acceptance request/ }));
+  expect(screen.queryByText('Client-subject outbound composition is unavailable for this subject kind.')).not.toBeInTheDocument();
+  mockDrafts = [draft({ id: 'unknown', kind: 'unknown_kind', ref_type: 'unknown_subject' })];
+  view.rerender(<ReadyToSendSheet projectId="project" />);
+  fireEvent.click(screen.getByRole('button', { name: /Message/ }));
+  expect(screen.getByText('Client-subject outbound composition is unavailable for this subject kind.')).toBeInTheDocument();
+});
 
 it('visible unsaved text survives a parent rerender and revert and saves before Send', async () => {
   const review = openDraft();
