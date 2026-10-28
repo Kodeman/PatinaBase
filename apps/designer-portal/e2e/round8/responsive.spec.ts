@@ -3,6 +3,7 @@ import { test, expect } from '../fixtures/auth';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const LIVING = 'f0180000-0000-4000-8000-000000000011';
+const LIBRARY_HEADING = 'A library with a point of view.';
 const WIDTHS = [320, 390, 599, 600, 601, 768, 1024, 1179, 1180, 1181, 1439, 1440, 1441, 1920];
 
 async function settled(page: Page, path: string, selector: string) {
@@ -125,12 +126,27 @@ async function unfoldAndReturn(page: Page, reducedMotion = false) {
 test.describe('WP-01.10 responsive studio and job paper (live F01)', () => {
   test.setTimeout(300_000);
 
+  // `next dev` floats its dev-tools badge at the bottom-left; at 320px it sits
+  // over the centre of the dock's contents door, which "uncovered" would count.
+  // Production renders no <nextjs-portal>, so hiding it hides nothing real.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      document.addEventListener('DOMContentLoaded', () => {
+        const style = document.createElement('style');
+        style.textContent = 'nextjs-portal { display: none !important; }';
+        document.head.appendChild(style);
+      });
+    });
+  });
+
+  // SQ-2302: the phone keeps the Studio doors in the masthead (wrapped under
+  // it); More and Find stay a second way in, and these tests walk that way.
   test.describe('phone compact destinations at 390px', () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
     test('keyboard opens Studio accounts through More and Ledgers', async ({ authenticatedPage: page }) => {
       await settled(page, '/desk', '[data-studio="round8"]');
-      await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeHidden();
+      await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeVisible();
       await keyboardActivate(page, page.getByRole('button', { name: 'More studio actions', exact: true }));
       await keyboardActivate(page, page.getByRole('group', { name: 'More studio actions', exact: true })
         .getByRole('button', { name: 'Ledgers', exact: true }));
@@ -141,27 +157,30 @@ test.describe('WP-01.10 responsive studio and job paper (live F01)', () => {
       await expect(page).toHaveURL(/\/desk(\?|$)/);
     });
 
-    for (const [destination, query, label, path] of [
-      ['Library', 'library', 'Resource library', '/library'],
-      ['People', 'people', 'Studio contacts', '/people'],
-      ['Measured rooms', 'measured rooms', 'Measured rooms', '/rooms'],
-      ['Correspondence', 'inbox', 'Studio inbox', '/desk'],
+    // Round-8 Library and People print their own h1 (round8-library-editorial.tsx,
+    // people-room.tsx; library-resources and people-resources specs). The legacy
+    // name shows only before the round-8 view mounts; the registry row keeps it.
+    for (const [destination, query, label, path, heading] of [
+      ['Library', 'library', 'Resource library', '/library', LIBRARY_HEADING],
+      ['People', 'people', 'Studio contacts', '/people', 'People'],
+      ['Measured rooms', 'measured rooms', 'Measured rooms', '/rooms', 'Measured rooms'],
+      ['Correspondence', 'inbox', 'Studio inbox', '/desk', 'Studio inbox'],
     ] as const) {
       test(`keyboard Find reaches ${destination} through its registry row`, async ({ authenticatedPage: page }) => {
         await settled(page, '/desk', '[data-studio="round8"]');
-        await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeHidden();
+        await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeVisible();
         await keyboardCommand(page, query, label);
         await expect(page).toHaveURL(new RegExp(`${path}(\\?|$)`), { timeout: 60_000 });
         const landmark = destination === 'Correspondence'
-          ? page.getByRole('dialog', { name: label, exact: true })
-          : page.getByRole('heading', { name: label, exact: true, level: 1 });
+          ? page.getByRole('dialog', { name: heading, exact: true })
+          : page.getByRole('heading', { name: heading, exact: true, level: 1 });
         await expect(landmark).toBeVisible({ timeout: 60_000 });
       });
     }
 
     test('touch reaches Library through More and Find', async ({ authenticatedPage: page }) => {
       await settled(page, '/desk', '[data-studio="round8"]');
-      await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeHidden();
+      await expect(page.getByRole('navigation', { name: 'Studio', exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'More studio actions', exact: true }).tap();
       await page.getByRole('group', { name: 'More studio actions', exact: true })
         .getByRole('button', { name: /^Find anything/ }).tap();
@@ -172,7 +191,7 @@ test.describe('WP-01.10 responsive studio and job paper (live F01)', () => {
       await search.getByRole('option').filter({ has: page.getByText('Resource library', { exact: true }) }).tap();
       await expect(search).toHaveCount(0);
       await expect(page).toHaveURL(/\/library(\?|$)/, { timeout: 60_000 });
-      await expect(page.getByRole('heading', { name: 'Resource library', exact: true, level: 1 }))
+      await expect(page.getByRole('heading', { name: LIBRARY_HEADING, exact: true, level: 1 }))
         .toBeVisible({ timeout: 60_000 });
     });
   });
@@ -183,13 +202,13 @@ test.describe('WP-01.10 responsive studio and job paper (live F01)', () => {
       await test.step(`${width}px studio`, async () => {
         await page.setViewportSize({ width, height: 900 });
         const nav = page.getByRole('navigation', { name: 'Studio', exact: true });
+        await expect(nav).toBeVisible();
         if (width < 1180) {
-          await expect(nav).toBeHidden();
           await page.getByRole('button', { name: 'More studio actions', exact: true }).click();
           await expect(page.getByRole('group', { name: 'More studio actions', exact: true })
             .getByRole('button', { name: 'Ledgers', exact: true })).toBeVisible();
           await page.keyboard.press('Escape');
-        } else await expect(nav).toBeVisible();
+        }
         await expect(page.locator('[data-studio-register-row]').first()).toBeVisible();
         const spread = page.locator('[data-studio-spread]');
         expect(await spread.evaluate((element) => {

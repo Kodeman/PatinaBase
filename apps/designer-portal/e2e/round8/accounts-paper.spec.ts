@@ -16,7 +16,8 @@ const IDS = [PART, UNDATED, DRAFT, VOID].map(id => `'${id}'`).join(',');
 let owned = false;
 
 test.beforeAll(() => {
-  expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toMatch(/^http:\/\/127\.0\.0\.1:54321\/?$/);
+  // Local stack only, on whichever port the run owns (an owned stack is not 54321).
+  expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname).toBe('127.0.0.1');
   expect(psqlScalar(`SELECT count(*) FROM projects WHERE id='${JOB}';`)).toBe('0');
   expect(psqlScalar(`SELECT count(*) FROM invoices WHERE studio_id='${STUDIO}';`)).toBe('0');
   psqlRun(`BEGIN;
@@ -58,8 +59,12 @@ async function openBook(page: Page) {
   await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
   await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
   let opener = page.locator('[data-studio-door="accounts"]');
-  if (await opener.isVisible()) await opener.click();
-  else {
+  if (await opener.isVisible()) {
+    // Keyboard-open, so the sheet has an invoker to give focus back to: WebKit
+    // does not focus a button on a mouse click (SQ-2302 shows this door on phones).
+    await opener.focus();
+    await page.keyboard.press('Enter');
+  } else {
     opener = page.getByRole('button', { name: 'More studio actions', exact: true });
     await opener.click();
     await page.getByRole('button', { name: 'Ledgers', exact: true }).click();
