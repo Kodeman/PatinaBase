@@ -12,6 +12,9 @@
 import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import type { ScopeEdition } from '@patina/types';
 import {
+  citedReferences,
+  serviceCompletionRefusal,
+  STALE_SERVICE_COMPLETION_REFUSALS,
   useCompleteStudioService,
   useOrganizations,
   useProjectV2,
@@ -19,6 +22,7 @@ import {
   useRevokeStudioServiceCompletion,
   useScopeEditions,
   useServiceAcceptance,
+  useServiceConditionCitation,
   useServiceConditionEvidenceOptions,
   useStudioServiceCompletion,
   useStudioServiceObligations,
@@ -34,7 +38,7 @@ import { Select, Textarea } from '@/components/ui/controls';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 import { unfoldOpenerFor } from '../paper/unfold-bridge';
 import {
-  HOLD_NOTE, INACTIVE_BLOCKER, INACTIVE_NOTE, PARTY, obligationLabel, refusalCopy, shortDate,
+  CITATION_UNCHECKED, HOLD_NOTE, INACTIVE_BLOCKER, INACTIVE_NOTE, PARTY, obligationLabel, refusalCopy, shortDate,
 } from './copy';
 
 type Report = (error: unknown) => string | null;
@@ -86,20 +90,27 @@ export function StudioServiceSection({ projectId }: { projectId: string }) {
         !failed && <p role="status" className="t-body-sm mt-3">Reading the studio service…</p>
       ) : (
         <StudioServiceBody projectId={projectId} reading={reading} current={current} earlier={earlier}
-          resolutions={record.data.resolutions} report={report} />
+          resolutions={record.data.resolutions} report={report}
+          readAt={obligations.dataUpdatedAt} readFailed={obligations.isError} />
       )}
     </section>
   );
 }
 
-function StudioServiceBody({ projectId, reading, current, earlier, resolutions, report }: {
+/** When the reading on screen was read, and whether its last refresh failed. */
+interface ReadState {
+  readAt: number;
+  readFailed: boolean;
+}
+
+function StudioServiceBody({ projectId, reading, current, earlier, resolutions, report, readAt, readFailed }: {
   projectId: string;
   reading: StudioServiceObligations;
   current: StudioServiceCompletion | null;
   earlier: StudioServiceCompletion[];
   resolutions: ServiceConditionResolution[];
   report: Report;
-}) {
+} & ReadState) {
   const editions = useScopeEditions(projectId);
   const edition = editions.data?.find((row) => row.id === (current?.scopeEditionId ?? reading.scopeEditionId)) ?? null;
   const requestId = current?.acceptanceRequestId ?? reading.acceptance.requestId;
@@ -108,7 +119,8 @@ function StudioServiceBody({ projectId, reading, current, earlier, resolutions, 
       {current ? (
         <CompletionRecord projectId={projectId} completion={current} edition={edition} report={report} />
       ) : (
-        <Obligations projectId={projectId} reading={reading} edition={edition} report={report} />
+        <Obligations projectId={projectId} reading={reading} edition={edition} report={report}
+          readAt={readAt} readFailed={readFailed} />
       )}
       <FinancialHold reading={reading} />
       {requestId && (
@@ -116,7 +128,7 @@ function StudioServiceBody({ projectId, reading, current, earlier, resolutions, 
           resolutions={resolutions.filter((row) => row.requestId === requestId)} report={report} />
       )}
       {current && <CareReferences projectId={projectId} completion={current} edition={edition} />}
-      {earlier.length > 0 && <History completions={earlier} />}
+      {earlier.length > 0 && <History projectId={projectId} completions={earlier} report={report} />}
     </>
   );
 }
@@ -132,9 +144,9 @@ function byPackage(items: StudioServiceObligationItem[]): [string | null, Studio
   return [...groups.entries()];
 }
 
-function Obligations({ projectId, reading, edition, report }: {
+function Obligations({ projectId, reading, edition, report, readAt, readFailed }: {
   projectId: string; reading: StudioServiceObligations; edition: ScopeEdition | null; report: Report;
-}) {
+} & ReadState) {
   // While switched off the server holds the service with one inactive blocker;
   // the section's note says that, so it is not listed as studio work.
   const blockers = reading.blockers.filter((item) => item.code !== INACTIVE_BLOCKER);
@@ -167,27 +179,36 @@ function Obligations({ projectId, reading, edition, report }: {
           </ul>
         </>
       )}
-      <CompleteService projectId={projectId} reading={reading} edition={edition} report={report} />
+      <CompleteService projectId={projectId} reading={reading} edition={edition} report={report}
+        readAt={readAt} readFailed={readFailed} />
     </div>
   );
 }
 
-function CompleteService({ projectId, reading, edition, report }: {
+function CompleteService({ projectId, reading, edition, report, readAt, readFailed }: {
   projectId: string; reading: StudioServiceObligations; edition: ScopeEdition | null; report: Report;
-}) {
+} & ReadState) {
   const id = useId();
   const complete = useCompleteStudioService(projectId);
   const [error, setError] = useState<string | null>(null);
+  // A stale refusal retires the reading it was read at: Complete waits until a
+  // refetch succeeds and the updated list is on screen, and a failed read
+  // (the section's calm error with Retry) keeps it held.
+  const [retiredAt, setRetiredAt] = useState<number | null>(null);
   const requestId = reading.acceptance.requestId;
   // Zero blockers, the inactive one included: the server refuses any.
   const ready = reading.blockers.length === 0 && requestId != null;
+  const held = !ready || complete.isPending || readFailed || (retiredAt != null && readAt <= retiredAt);
   const onComplete = async () => {
-    if (!ready || complete.isPending) return;
+    if (held) return;
+    const shownAt = readAt;
     setError(null);
     try {
       // The hash of the list on screen: a changed list refuses as stale.
       await complete.mutateAsync({ acceptanceRequestId: requestId, obligationHash: reading.obligationHash });
     } catch (failure) {
+      const token = serviceCompletionRefusal(failure);
+      if (token && STALE_SERVICE_COMPLETION_REFUSALS.has(token)) setRetiredAt(shownAt);
       setError(report(failure));
     }
   };
@@ -207,7 +228,7 @@ function CompleteService({ projectId, reading, edition, report }: {
       {error && <p role="alert" className="t-body-sm">{error}</p>}
       <DocumentActionRow surfaceKey="studio-service" regionKey="complete">
         <DocumentAction actionKey="complete-studio-service" variant="primary" onClick={onComplete}
-          disabled={!ready || complete.isPending} loading={complete.isPending}
+          disabled={held} loading={complete.isPending}
           aria-describedby={`${id}-consequence`}>
           Complete studio service
         </DocumentAction>
@@ -257,8 +278,10 @@ function useStudioPrincipal(projectId: string): boolean {
   return role === 'owner' || role === 'admin';
 }
 
-function RevokeCompletion({ projectId, completion, report }: {
-  projectId: string; completion: StudioServiceCompletion; report: Report;
+/** Offered on every live completion, current or earlier: 00888 lets an owner
+ *  or admin revoke any of them, and stays the authority. */
+function RevokeCompletion({ projectId, completion, report, label = 'Revoke this completion' }: {
+  projectId: string; completion: StudioServiceCompletion; report: Report; label?: string;
 }) {
   const id = useId();
   const principal = useStudioPrincipal(projectId);
@@ -271,7 +294,7 @@ function RevokeCompletion({ projectId, completion, report }: {
     return (
       <DocumentActionRow surfaceKey="studio-service" regionKey="revoke">
         <DocumentAction actionKey="revoke-studio-service" variant="tertiary" onClick={() => setOpened(true)}>
-          Revoke this completion
+          {label}
         </DocumentAction>
       </DocumentActionRow>
     );
@@ -289,7 +312,7 @@ function RevokeCompletion({ projectId, completion, report }: {
     }
   };
   return (
-    <form noValidate className="mt-2 space-y-2" aria-label="Revoke this completion" onSubmit={onSubmit}>
+    <form noValidate className="mt-2 space-y-2" aria-label={label} onSubmit={onSubmit}>
       <label className="block t-body-sm" htmlFor={`${id}-reason`}>Why it is revoked</label>
       <Textarea id={`${id}-reason`} rows={2} value={reason} disabled={revoke.isPending}
         onChange={(event) => setReason(event.target.value)} />
@@ -337,8 +360,6 @@ function Conditions({ projectId, requestId, open, resolutions, report }: {
   report: Report;
 }) {
   const texts = useConditionTexts(projectId, open);
-  // Citations are read only to say whether each still resolves (C6 §2.2).
-  const evidence = useServiceConditionEvidenceOptions(projectId, resolutions.length > 0);
   if (open.length === 0 && resolutions.length === 0) return null;
   return (
     <div data-studio-service-conditions className="mt-4">
@@ -352,7 +373,7 @@ function Conditions({ projectId, requestId, open, resolutions, report }: {
           <li key={row.resolutionId} data-resolved-condition={row.conditionId} className="t-body-sm">
             <p>{texts.get(row.conditionId) ?? 'A condition'} · Resolved {shortDate(row.resolvedAt)}</p>
             <p className="t-meta">{row.resolution}</p>
-            <p className="t-meta">Cited: {citationLabel(row.evidence, evidence.data, evidence.isSuccess)}</p>
+            <Citations projectId={projectId} evidence={row.evidence} />
           </li>
         ))}
       </ul>
@@ -360,19 +381,42 @@ function Conditions({ projectId, requestId, open, resolutions, report }: {
   );
 }
 
-/** A citation is point-in-time: one that no longer resolves reads as such,
- *  never as an error, and never reopens the condition. */
-function citationLabel(
-  cited: ServiceConditionEvidence,
-  options: { kind: ServiceConditionEvidenceKind; id: string; label: string }[] | undefined,
-  settled: boolean,
-): string {
-  const kind = (Object.keys(EVIDENCE_KEY) as ServiceConditionEvidenceKind[]).find((key) => cited[EVIDENCE_KEY[key]]);
-  if (!kind) return 'no longer available';
-  const id = cited[EVIDENCE_KEY[kind]];
-  const found = options?.find((option) => option.kind === kind && option.id === id);
-  if (found) return found.label;
-  return settled ? 'no longer available' : 'reading…';
+function Citations({ projectId, evidence }: { projectId: string; evidence: ServiceConditionEvidence }) {
+  const cited = citedReferences(evidence);
+  if (cited.length === 0) return <p className="t-meta">Cited: no longer available</p>;
+  return (
+    <>
+      {cited.map(({ kind, id }) => <Citation key={`${kind}:${id}`} projectId={projectId} kind={kind} id={id} />)}
+    </>
+  );
+}
+
+/** A citation is point-in-time (C6 §2.2), checked on its own: one that is
+ *  positively gone reads "no longer available"; one that could not be checked
+ *  says so with Retry. Neither is an error, and neither reopens the condition. */
+function Citation({ projectId, kind, id }: { projectId: string; kind: ServiceConditionEvidenceKind; id: string }) {
+  const citation = useServiceConditionCitation(projectId, kind, id);
+  const reference = `${kind}:${id}`;
+  if (citation.data) {
+    return (
+      <p className="t-meta" data-citation={reference} data-citation-state={citation.data.available ? 'available' : 'gone'}>
+        Cited: {citation.data.available ? citation.data.label : 'no longer available'}
+      </p>
+    );
+  }
+  if (citation.isError) {
+    return (
+      <div data-citation={reference} data-citation-state="unchecked">
+        <p className="t-meta">Cited: {CITATION_UNCHECKED}</p>
+        <DocumentActionRow surfaceKey="studio-service" regionKey="citation-retry">
+          <DocumentAction actionKey="retry-condition-citation" variant="tertiary" onClick={() => void citation.refetch()}>
+            Check the reference again
+          </DocumentAction>
+        </DocumentActionRow>
+      </div>
+    );
+  }
+  return <p className="t-meta" data-citation={reference} data-citation-state="reading">Cited: reading…</p>;
 }
 
 function OpenCondition({ projectId, requestId, conditionId, text, report }: {
@@ -540,7 +584,9 @@ function CareReferences({ projectId, completion, edition }: {
   );
 }
 
-function History({ completions }: { completions: StudioServiceCompletion[] }) {
+function History({ projectId, completions, report }: {
+  projectId: string; completions: StudioServiceCompletion[]; report: Report;
+}) {
   return (
     <div data-studio-service-history className="mt-4">
       <h4 className="t-body-sm font-semibold">Earlier completions</h4>
@@ -551,6 +597,10 @@ function History({ completions }: { completions: StudioServiceCompletion[] }) {
             {row.revokedAt
               ? ` · Revoked ${shortDate(row.revokedAt)}${row.revokeReason ? `: ${row.revokeReason}` : ''}`
               : ' · Against an earlier scope edition'}
+            {row.revokedAt == null && (
+              <RevokeCompletion projectId={projectId} completion={row} report={report}
+                label={`Revoke the completion of ${shortDate(row.completedAt)}`} />
+            )}
           </li>
         ))}
       </ul>

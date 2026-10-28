@@ -15,13 +15,45 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
 }));
 import {
-  readStudioServiceCompletion, readStudioServiceObligations, serviceCompletionKeys, serviceCompletionRefusal,
-  useCompleteStudioService, useResolveServiceAcceptanceCondition, useRevokeStudioServiceCompletion,
-  useServiceConditionEvidenceOptions, useStudioServiceCompletion, useStudioServiceObligations,
+  citedReferences, readStudioServiceCompletion, readStudioServiceObligations, serviceCompletionKeys,
+  serviceCompletionRefusal, useCompleteStudioService, useResolveServiceAcceptanceCondition,
+  useRevokeStudioServiceCompletion, useServiceConditionCitation, useServiceConditionEvidenceOptions,
+  useStudioServiceCompletion, useStudioServiceObligations,
 } from '../use-service-completion';
 
 type Act<A> = { mutationFn: (args: A) => Promise<unknown>; onSuccess: () => void; onError: (error: unknown) => void };
-type Read<T> = { queryKey: unknown; enabled: boolean; queryFn: () => Promise<T> };
+type Read<T> = { queryKey: unknown; enabled: boolean; meta?: unknown; queryFn: () => Promise<T> };
+
+type Entry = { id: string | null; name: string };
+/** A storage tree keyed `bucket:prefix`; `list` pages it by offset and limit
+ *  and lists an unknown prefix as empty, as the storage API does. */
+function storageTree(tree: Record<string, Entry[]>, failAt?: string) {
+  mocks.list.mockImplementation(async (prefix: string, options: { limit: number; offset?: number }) => {
+    const bucket = mocks.bucket.mock.calls.at(-1)?.[0];
+    if (`${bucket}:${prefix}` === failAt) return { data: null, error: { message: 'storage unavailable' } };
+    const offset = options.offset ?? 0;
+    return { data: (tree[`${bucket}:${prefix}`] ?? []).slice(offset, offset + options.limit), error: null };
+  });
+}
+
+/** A PostgREST builder over fixed rows per table: every filter chains, and the
+ *  chain answers as a list (await) or a single row (maybeSingle). */
+function tables(rows: Record<string, unknown[]>, single: Record<string, { data: unknown; error: unknown }> = {}) {
+  const calls: { table: string; step: string; args: unknown[] }[] = [];
+  mocks.from.mockImplementation((table: string) => {
+    const query: Record<string, unknown> = {};
+    for (const step of ['select', 'eq', 'order', 'range']) {
+      query[step] = (...args: unknown[]) => { calls.push({ table, step, args }); return query; };
+    }
+    query.maybeSingle = async () => single[table] ?? { data: null, error: null };
+    query.then = (resolve: (value: unknown) => unknown) => Promise.resolve({ data: rows[table] ?? [], error: null }).then(resolve);
+    return query;
+  });
+  return calls;
+}
+
+const files = (count: number, prefix = 'file') =>
+  Array.from({ length: count }, (_, index) => ({ id: `${prefix}-${index}`, name: `${prefix}-${String(index).padStart(3, '0')}.pdf` }));
 
 // Shape of derive_studio_service_obligations (00888 §2.3, `- 'snapshot'`).
 const obligations = (over: Record<string, unknown> = {}) => ({
@@ -158,14 +190,11 @@ describe('service completion acts', () => {
 
 describe('condition evidence options', () => {
   it('lists the job issues, site requests and stored documents the user can read', async () => {
-    const chain = (data: unknown[]) => {
-      const query = { select: () => query, eq: () => query, order: async () => ({ data, error: null }) };
-      return query;
-    };
-    mocks.from.mockImplementation((table: string) => chain(table === 'plan_issues'
-      ? [{ id: 'issue-1', issue_number: 3, name: 'Kitchen set' }]
-      : [{ id: 'site-1', note: 'Hall touch-up photos', assignee_name_snapshot: 'Ana', created_at: 'x' }]));
-    mocks.list.mockResolvedValue({ data: [{ id: 'object-1', name: 'walkthrough.pdf' }, { id: null, name: 'folder' }], error: null });
+    tables({
+      plan_issues: [{ id: 'issue-1', issue_number: 3, name: 'Kitchen set' }],
+      site_requests: [{ id: 'site-1', note: 'Hall touch-up photos', assignee_name_snapshot: 'Ana', created_at: 'x' }],
+    });
+    storageTree({ 'project-documents:job-1': [{ id: 'object-1', name: 'walkthrough.pdf' }, { id: null, name: 'folder' }] });
     const read = useServiceConditionEvidenceOptions('job-1', true) as unknown as Read<unknown>;
     expect(await read.queryFn()).toEqual([
       { kind: 'issue', id: 'issue-1', label: 'Issue 3 · Kitchen set' },
@@ -175,5 +204,85 @@ describe('condition evidence options', () => {
     expect(mocks.bucket).toHaveBeenCalledWith('project-documents');
     expect(mocks.list).toHaveBeenCalledWith('job-1', expect.objectContaining({ limit: 100 }));
     expect((useServiceConditionEvidenceOptions('job-1', false) as unknown as Read<unknown>).enabled).toBe(false);
+  });
+
+  it('reaches nested documents and more than 100 files, page by page', async () => {
+    tables({});
+    storageTree({
+      'project-documents:job-1': [{ id: null, name: 'site' }, ...files(100), { id: 'object-last', name: 'zz-last.pdf' }],
+      'project-documents:job-1/site': [{ id: null, name: '2026' }],
+      'project-documents:job-1/site/2026': [{ id: 'object-deep', name: 'walkthrough.pdf' }, { id: 'marker', name: '.emptyFolderPlaceholder' }],
+    });
+    const read = useServiceConditionEvidenceOptions('job-1', true) as unknown as Read<{ id: string; label: string }[]>;
+    const options = await read.queryFn();
+    expect(options).toHaveLength(102);
+    expect(options).toContainEqual({ kind: 'storageObject', id: 'object-last', label: 'zz-last.pdf' });
+    expect(options).toContainEqual({ kind: 'storageObject', id: 'object-deep', label: 'site/2026/walkthrough.pdf' });
+    expect(options.find((option) => option.id === 'marker')).toBeUndefined();
+    expect(mocks.list).toHaveBeenCalledWith('job-1', expect.objectContaining({ offset: 100 }));
+  });
+});
+
+describe('recorded citations, each checked on its own (C6 §2.2)', () => {
+  const ISSUE = '00000000-0000-4000-8000-000000000001';
+  const OBJECT = '00000000-0000-4000-8000-000000000002';
+
+  it('reads every cited key of a resolution as its own reference', () => {
+    expect(citedReferences({ issueId: 'a', storageObjectId: 'b' })).toEqual([
+      { kind: 'issue', id: 'a' }, { kind: 'storageObject', id: 'b' },
+    ]);
+    expect(citedReferences({})).toEqual([]);
+  });
+
+  it('checks an issue or site request directly by id on this job, under the user\'s read', async () => {
+    const calls = tables({}, { plan_issues: { data: { id: ISSUE, issue_number: 3, name: 'Kitchen set' }, error: null } });
+    const read = useServiceConditionCitation('job-1', 'issue', ISSUE) as unknown as Read<unknown>;
+    expect(read.queryKey).toEqual(serviceCompletionKeys.citation('job-1', 'issue', ISSUE));
+    expect(await read.queryFn()).toEqual({ available: true, label: 'Issue 3 · Kitchen set' });
+    expect(calls.filter((call) => call.step === 'eq').map((call) => call.args)).toEqual([['id', ISSUE], ['project_id', 'job-1']]);
+    tables({}, { site_requests: { data: null, error: null } });
+    expect(await (useServiceConditionCitation('job-1', 'siteRequest', ISSUE) as unknown as Read<unknown>).queryFn())
+      .toEqual({ available: false });
+    tables({}, { plan_issues: { data: null, error: { code: '57014', message: 'canceling statement' } } });
+    await expect(read.queryFn()).rejects.toMatchObject({ code: '57014' });
+  });
+
+  it('finds a stored object nested and past the first page in any bucket 00888 accepts', async () => {
+    tables({});
+    storageTree({
+      'field-media:project/job-1': [{ id: null, name: 'visits' }],
+      'field-media:project/job-1/visits': [...files(100), { id: OBJECT, name: 'hall.jpg' }],
+    });
+    const read = useServiceConditionCitation('job-1', 'storageObject', OBJECT) as unknown as Read<unknown>;
+    expect(await read.queryFn()).toEqual({ available: true, label: 'visits/hall.jpg' });
+    expect(mocks.bucket.mock.calls.map(([bucket]) => bucket)).toEqual(expect.arrayContaining([
+      'project-documents', 'project-ffe-working', 'service-acceptance-paper', 'field-media',
+    ]));
+  });
+
+  it('reads a stored object as gone only after every bucket and site request folder is walked', async () => {
+    tables({ site_requests: [{ id: 'site-1' }] });
+    storageTree({
+      'project-documents:job-1': files(3),
+      'site-requests:site-1': [{ id: 'other', name: 'photo.jpg' }],
+    });
+    const read = useServiceConditionCitation('job-1', 'storageObject', OBJECT) as unknown as Read<unknown>;
+    expect(await read.queryFn()).toEqual({ available: false });
+    expect(mocks.list).toHaveBeenCalledWith('site-1', expect.anything());
+    expect(new Set(mocks.bucket.mock.calls.map(([bucket]) => bucket))).toEqual(new Set([
+      'project-documents', 'project-ffe-working', 'service-acceptance-paper', 'field-media', 'site-requests',
+    ]));
+    // A walk that could not finish is not an answer: the check fails, never "gone".
+    storageTree({}, 'project-ffe-working:job-1');
+    await expect(read.queryFn()).rejects.toMatchObject({ message: 'storage unavailable' });
+  });
+
+  it('every read opts out of the global toast through meta.errorSurface', () => {
+    for (const read of [
+      useStudioServiceObligations('job-1'), useStudioServiceCompletion('job-1'),
+      useServiceConditionEvidenceOptions('job-1'), useServiceConditionCitation('job-1', 'issue', ISSUE),
+    ] as unknown as Read<unknown>[]) {
+      expect(read.meta).toEqual({ errorSurface: 'silent' });
+    }
   });
 });

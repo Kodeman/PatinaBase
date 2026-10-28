@@ -21,7 +21,13 @@ export const serviceCompletionKeys = {
     ['service-completion', 'project', projectId ?? null, 'completion'] as const,
   evidence: (projectId: string | null | undefined) =>
     ['service-completion', 'project', projectId ?? null, 'evidence'] as const,
+  citation: (projectId: string, kind: ServiceConditionEvidenceKind, id: string) =>
+    ['service-completion', 'project', projectId, 'citation', kind, id] as const,
 };
+
+// These reads print their own calm read error with Retry, so a failure never
+// reaches the designer's global toast (R83 `errorSurface` convention).
+const SILENT = { errorSurface: 'silent' as const };
 
 const STATES = ['completed', 'completed_with_conditions'] as const;
 const OUTCOMES = ['pending', 'accepted', 'accepted_with_conditions', 'returned'] as const;
@@ -211,6 +217,7 @@ export function useStudioServiceObligations(projectId: string | null | undefined
   return useQuery({
     queryKey: serviceCompletionKeys.obligations(projectId),
     enabled: !!projectId,
+    meta: SILENT,
     queryFn: async () => {
       const { data, error } = await createBrowserClient().rpc('derive_studio_service_obligations', {
         p_project_id: projectId as string,
@@ -227,6 +234,7 @@ export function useStudioServiceCompletion(projectId: string | null | undefined)
   return useQuery({
     queryKey: serviceCompletionKeys.completion(projectId),
     enabled: !!projectId,
+    meta: SILENT,
     queryFn: async () => {
       const { data, error } = await createBrowserClient().rpc('get_studio_service_completion', {
         p_project_id: projectId as string,
@@ -351,44 +359,161 @@ export interface ServiceConditionEvidenceOption {
   label: string;
 }
 
-const EVIDENCE_FILE_PAGE = 100;
+type Client = ReturnType<typeof createBrowserClient>;
+
+const STORAGE_PAGE = 100;
+const ROW_PAGE = 1000;
+
+function issueLabel(row: { issue_number: number; name: string }): string {
+  return `Issue ${row.issue_number} · ${row.name}`;
+}
+
+function siteRequestLabel(row: { note: string | null; assignee_name_snapshot: string | null }): string {
+  return row.note?.trim() || (row.assignee_name_snapshot ? `Site request to ${row.assignee_name_snapshot}` : 'Site request');
+}
+
+/**
+ * Every object under `root` the signed-in user can read (storage RLS), nested
+ * folders included, page by page. `visit` gets each object's id and its path
+ * below `root`; returning true stops the walk, and the walk then returns true.
+ */
+async function walkStorage(
+  client: Client, bucket: string, root: string, visit: (id: string, path: string) => boolean, folder = '',
+): Promise<boolean> {
+  const prefix = folder ? `${root}/${folder}` : root;
+  for (let offset = 0; ; offset += STORAGE_PAGE) {
+    const { data, error } = await client.storage.from(bucket).list(prefix, {
+      limit: STORAGE_PAGE, offset, sortBy: { column: 'name', order: 'asc' },
+    });
+    if (error) throw error;
+    const page = data ?? [];
+    for (const entry of page) {
+      const path = folder ? `${folder}/${entry.name}` : entry.name;
+      // A folder lists with no id.
+      const stop = entry.id ? visit(entry.id, path) : await walkStorage(client, bucket, root, visit, path);
+      if (stop) return true;
+    }
+    if (page.length < STORAGE_PAGE) return false;
+  }
+}
+
+/** The job's site request ids the user can read, every page of them. */
+async function siteRequestIds(client: Client, projectId: string): Promise<string[]> {
+  const ids: string[] = [];
+  for (let from = 0; ; from += ROW_PAGE) {
+    const { data, error } = await client.from('site_requests').select('id').eq('project_id', projectId)
+      .order('id').range(from, from + ROW_PAGE - 1);
+    if (error) throw error;
+    ids.push(...(data ?? []).map((row) => row.id));
+    if ((data ?? []).length < ROW_PAGE) return ids;
+  }
+}
 
 /**
  * What a resolution can cite, as the signed-in user can read it: the job's
  * drawing-set issues, site requests and stored documents (`project-documents`,
- * `<projectId>/…`). The same list tells a recorded citation that no longer
- * resolves, which reads as "no longer available" (C6 §2.2 point-in-time).
+ * every file under `<projectId>/`, nested folders and every page included).
+ * The picker only; a recorded citation is checked on its own
+ * (useServiceConditionCitation).
  */
 export function useServiceConditionEvidenceOptions(projectId: string | null | undefined, enabled = true) {
   return useQuery({
     queryKey: serviceCompletionKeys.evidence(projectId),
     enabled: enabled && !!projectId,
+    meta: SILENT,
     queryFn: async (): Promise<ServiceConditionEvidenceOption[]> => {
       const supabase = createBrowserClient();
-      const [issues, requests, files] = await Promise.all([
+      const files: ServiceConditionEvidenceOption[] = [];
+      const [issues, requests] = await Promise.all([
         supabase.from('plan_issues').select('id, issue_number, name').eq('project_id', projectId as string)
           .order('issue_number', { ascending: false }),
         supabase.from('site_requests').select('id, note, assignee_name_snapshot, created_at')
           .eq('project_id', projectId as string).order('created_at', { ascending: false }),
-        supabase.storage.from('project-documents').list(projectId as string, {
-          limit: EVIDENCE_FILE_PAGE, sortBy: { column: 'name', order: 'desc' },
+        walkStorage(supabase, 'project-documents', projectId as string, (id, path) => {
+          // The storage API's empty-folder marker is not a document.
+          if (!path.endsWith('.emptyFolderPlaceholder')) files.push({ kind: 'storageObject', id, label: path });
+          return false;
         }),
       ]);
       if (issues.error) throw issues.error;
       if (requests.error) throw requests.error;
-      if (files.error) throw files.error;
       return [
-        ...(issues.data ?? []).map((row) => ({
-          kind: 'issue' as const, id: row.id, label: `Issue ${row.issue_number} · ${row.name}`,
-        })),
-        ...(requests.data ?? []).map((row) => ({
-          kind: 'siteRequest' as const, id: row.id,
-          label: row.note?.trim() || (row.assignee_name_snapshot ? `Site request to ${row.assignee_name_snapshot}` : 'Site request'),
-        })),
-        ...(files.data ?? []).filter((file) => !!file.id).map((file) => ({
-          kind: 'storageObject' as const, id: file.id as string, label: file.name,
-        })),
+        ...(issues.data ?? []).map((row) => ({ kind: 'issue' as const, id: row.id, label: issueLabel(row) })),
+        ...(requests.data ?? []).map((row) => ({ kind: 'siteRequest' as const, id: row.id, label: siteRequestLabel(row) })),
+        ...files,
       ];
     },
+  });
+}
+
+/** A recorded citation, checked now: still readable, or positively gone. */
+export type ServiceConditionCitation = { available: true; label: string } | { available: false };
+
+const GONE: ServiceConditionCitation = { available: false };
+
+/** The references a resolution recorded, one per evidence key. */
+export function citedReferences(evidence: ServiceConditionEvidence): { kind: ServiceConditionEvidenceKind; id: string }[] {
+  const keys: [ServiceConditionEvidenceKind, keyof ServiceConditionEvidence][] = [
+    ['issue', 'issueId'], ['siteRequest', 'siteRequestId'], ['storageObject', 'storageObjectId'],
+  ];
+  return keys.flatMap(([kind, key]) => (evidence[key] ? [{ kind, id: evidence[key] as string }] : []));
+}
+
+/**
+ * Where 00888 accepts a cited storage object for this job (C6 §2.2): the first
+ * folder is the job in `project-documents`, `project-ffe-working` and
+ * `service-acceptance-paper`; `field-media` paths start `project/<job>/`.
+ * `site-requests` objects sit under one of the job's site requests, read last.
+ */
+async function findStorageObject(client: Client, projectId: string, id: string): Promise<string | null> {
+  let found: string | null = null;
+  const match = (objectId: string, path: string) => {
+    if (objectId !== id) return false;
+    found = path;
+    return true;
+  };
+  const roots: [string, string][] = [
+    ['project-documents', projectId], ['project-ffe-working', projectId], ['service-acceptance-paper', projectId],
+    ['field-media', `project/${projectId}`],
+  ];
+  for (const [bucket, root] of roots) {
+    if (await walkStorage(client, bucket, root, match)) return found;
+  }
+  for (const siteRequestId of await siteRequestIds(client, projectId)) {
+    if (await walkStorage(client, 'site-requests', siteRequestId, match)) return found;
+  }
+  return null;
+}
+
+async function checkCitation(
+  client: Client, projectId: string, kind: ServiceConditionEvidenceKind, id: string,
+): Promise<ServiceConditionCitation> {
+  if (kind === 'issue') {
+    const { data, error } = await client.from('plan_issues').select('id, issue_number, name').eq('id', id)
+      .eq('project_id', projectId).maybeSingle();
+    if (error) throw error;
+    return data ? { available: true, label: issueLabel(data) } : GONE;
+  }
+  if (kind === 'siteRequest') {
+    const { data, error } = await client.from('site_requests').select('id, note, assignee_name_snapshot').eq('id', id)
+      .eq('project_id', projectId).maybeSingle();
+    if (error) throw error;
+    return data ? { available: true, label: siteRequestLabel(data) } : GONE;
+  }
+  const path = await findStorageObject(client, projectId, id);
+  return path == null ? GONE : { available: true, label: path };
+}
+
+/**
+ * One recorded citation, checked on its own under the signed-in user's read
+ * authority (C6 §2.2 point-in-time). Gone only when the check completes
+ * without finding it; a failed check throws, and the reader says it could not
+ * check, never that the reference is gone or the resolution reopened.
+ */
+export function useServiceConditionCitation(projectId: string, kind: ServiceConditionEvidenceKind, id: string) {
+  return useQuery({
+    queryKey: serviceCompletionKeys.citation(projectId, kind, id),
+    meta: SILENT,
+    queryFn: () => checkCitation(createBrowserClient(), projectId, kind, id),
   });
 }

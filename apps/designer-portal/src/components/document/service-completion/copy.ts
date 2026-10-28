@@ -13,6 +13,10 @@ export const INACTIVE_NOTE = "Studio service completion isn't switched on for th
 /** The ticket's stale path: the server's reading moved under the studio. */
 export const STALE_NOTE = 'Something changed — review the updated list.';
 
+/** A recorded citation that could not be checked just now: recoverable, and
+ *  never a sign that the resolution reopened. */
+export const CITATION_UNCHECKED = "this reference couldn't be checked just now. The resolution stands.";
+
 /** The financial hold, on its own line: it never holds the studio's service. */
 export const HOLD_NOTE = 'Balance still open — this holds project closure, not service completion.';
 

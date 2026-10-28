@@ -7,6 +7,7 @@ import { HOLD_NOTE, INACTIVE_NOTE, STALE_NOTE } from '../copy';
 const mockObligations = jest.fn();
 const mockCompletion = jest.fn();
 const mockEvidence = jest.fn();
+const mockCitation = jest.fn();
 const mockComplete = jest.fn();
 const mockResolve = jest.fn();
 const mockRevoke = jest.fn();
@@ -18,6 +19,10 @@ jest.mock('@patina/supabase', () => ({
   useStudioServiceObligations: () => mockObligations(),
   useStudioServiceCompletion: () => mockCompletion(),
   useServiceConditionEvidenceOptions: () => mockEvidence(),
+  useServiceConditionCitation: (_projectId: string, kind: string, id: string) => mockCitation(kind, id),
+  citedReferences: (evidence: Record<string, string>) => [
+    ['issue', 'issueId'], ['siteRequest', 'siteRequestId'], ['storageObject', 'storageObjectId'],
+  ].flatMap(([kind, key]) => (evidence[key] ? [{ kind, id: evidence[key] }] : [])),
   useCompleteStudioService: () => ({ mutateAsync: mockComplete, isPending: false }),
   useResolveServiceAcceptanceCondition: () => ({ mutateAsync: mockResolve, isPending: false }),
   useRevokeStudioServiceCompletion: () => ({ mutateAsync: mockRevoke, isPending: false }),
@@ -70,13 +75,23 @@ const resolution = (over: Record<string, unknown> = {}) => ({
   resolvedAt: '2026-10-28T10:00:00Z', ...over,
 });
 const OPTIONS = { data: [{ kind: 'issue', id: 'issue-1', label: 'Issue 3 · Kitchen set' }], isSuccess: true, isError: false };
-const read = (value: unknown) => ({ data: value, isError: false, refetch: jest.fn() });
+const read = (value: unknown, over: Record<string, unknown> = {}) => ({
+  data: value, isError: false, dataUpdatedAt: 1, refetch: jest.fn(), ...over,
+});
 const CONDITION = { conditionId: 'condition-1', text: 'Touch up the hall', responseId: 'response-1', signerId: 'signer-1' };
+// Each recorded citation is checked on its own (useServiceConditionCitation).
+const CITED: Record<string, { available: true; label: string }> = {
+  'issue:issue-1': { available: true, label: 'Issue 3 · Kitchen set' },
+};
+const citationRead = (kind: string, id: string) => ({
+  data: CITED[`${kind}:${id}`] ?? { available: false }, isError: false, refetch: jest.fn(),
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockRole.value = 'owner';
   mockEvidence.mockReturnValue(OPTIONS);
+  mockCitation.mockImplementation(citationRead);
   mockCompletion.mockReturnValue(record());
   mockOpenerFor.mockReturnValue(mockOpener);
 });
@@ -111,7 +126,7 @@ describe('studio service obligations', () => {
     expect(mockComplete).not.toHaveBeenCalled();
   });
 
-  it('sends the displayed hash; a stale refusal asks for a review and the next try sends the new hash', async () => {
+  it('a stale refusal retires the shown hash: Complete waits for a successful refetch, then sends the new hash', async () => {
     mockObligations.mockReturnValue(read(reading()));
     mockComplete.mockRejectedValueOnce({ code: '40001', message: 'stale_obligations' });
     const { rerender } = render(<StudioServiceSection projectId="job-1" />);
@@ -119,9 +134,23 @@ describe('studio service obligations', () => {
     fireEvent.click(completeButton());
     expect(await screen.findByRole('alert')).toHaveTextContent(STALE_NOTE);
     expect(mockComplete).toHaveBeenCalledWith({ acceptanceRequestId: 'request-1', obligationHash: 'hash-1' });
-    mockObligations.mockReturnValue(read(reading({ obligationHash: 'hash-2' })));
+    // The refetch has not answered: the refused reading is still on screen.
+    expect(completeButton()).toBeDisabled();
+    fireEvent.click(completeButton());
+    expect(mockComplete).toHaveBeenCalledTimes(1);
+    // The refetch failed: the calm read error with Retry, and Complete stays held.
+    const failedRead = read(reading(), { isError: true });
+    mockObligations.mockReturnValue(failedRead);
+    rerender(<StudioServiceSection projectId="job-1" />);
+    expect(screen.getByText('The studio service could not be refreshed. What you have entered is kept.')).toBeInTheDocument();
+    expect(completeButton()).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry the studio service' }));
+    expect(failedRead.refetch).toHaveBeenCalled();
+    // A refetch succeeded and the updated list is shown: Complete sends its hash.
+    mockObligations.mockReturnValue(read(reading({ obligationHash: 'hash-2' }), { dataUpdatedAt: 2 }));
     mockComplete.mockResolvedValueOnce({ completionId: 'completion-1', state: 'completed' });
     rerender(<StudioServiceSection projectId="job-1" />);
+    expect(completeButton()).toBeEnabled();
     fireEvent.click(completeButton());
     await waitFor(() => expect(mockComplete).toHaveBeenLastCalledWith({ acceptanceRequestId: 'request-1', obligationHash: 'hash-2' }));
   });
@@ -210,6 +239,41 @@ describe('conditions (K3 option A)', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Resolve this condition' })).toBeNull();
   });
+
+  it('decides each citation by its own check, never by what the picker listed', () => {
+    // The picker read a first page that does not hold this nested document.
+    mockEvidence.mockReturnValue(OPTIONS);
+    CITED['storageObject:object-deep'] = { available: true, label: 'site/2026/walkthrough.pdf' };
+    mockObligations.mockReturnValue(read(reading()));
+    mockCompletion.mockReturnValue(record([completion()], [resolution({ evidence: { storageObjectId: 'object-deep' } })]));
+    render(<StudioServiceSection projectId="job-1" />);
+    expect(mockCitation).toHaveBeenCalledWith('storageObject', 'object-deep');
+    const resolved = document.querySelector('[data-resolved-condition="condition-1"]') as HTMLElement;
+    expect(resolved).toHaveTextContent('Cited: site/2026/walkthrough.pdf');
+    expect(resolved).not.toHaveTextContent('no longer available');
+    delete CITED['storageObject:object-deep'];
+  });
+
+  it('tells a citation still being checked from one whose check failed, and offers Retry', () => {
+    mockEvidence.mockReturnValue({ data: undefined, isSuccess: false, isError: true, refetch: jest.fn() });
+    const failed = { data: undefined, isError: true, refetch: jest.fn() };
+    mockCitation.mockReturnValue(failed);
+    mockObligations.mockReturnValue(read(reading()));
+    mockCompletion.mockReturnValue(record([completion()], [resolution()]));
+    const { rerender } = render(<StudioServiceSection projectId="job-1" />);
+    const resolved = () => document.querySelector('[data-resolved-condition="condition-1"]') as HTMLElement;
+    expect(resolved()).toHaveTextContent("Cited: this reference couldn't be checked just now. The resolution stands.");
+    expect(resolved()).not.toHaveTextContent('reading…');
+    expect(resolved()).not.toHaveTextContent('no longer available');
+    // Calm, and the condition stays resolved: no alert, no way to resolve it again.
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Resolve this condition' })).toBeNull();
+    fireEvent.click(within(resolved()).getByRole('button', { name: 'Check the reference again' }));
+    expect(failed.refetch).toHaveBeenCalled();
+    mockCitation.mockReturnValue({ data: undefined, isError: false, refetch: jest.fn() });
+    rerender(<StudioServiceSection projectId="job-1" />);
+    expect(resolved()).toHaveTextContent('Cited: reading…');
+  });
 });
 
 describe('revoke', () => {
@@ -240,6 +304,35 @@ describe('revoke', () => {
     expect(screen.queryByRole('button', { name: 'Revoke this completion' })).toBeNull();
     expect(document.querySelector('[data-earlier-completion="completion-0"]')).toHaveTextContent('Revoked');
     expect(document.querySelector('[data-earlier-completion="completion-0"]')).toHaveTextContent('Wrong edition');
+  });
+
+  it('offers revoke on every live earlier completion, with the same reason rule and role gate', async () => {
+    mockObligations.mockReturnValue(read(reading({ scopeEditionId: 'edition-2' })));
+    const records = [
+      completion({ completionId: 'completion-live-old', completedAt: '2026-09-01T10:00:00Z' }),
+      completion({ completionId: 'completion-0', revokedAt: '2026-10-26T10:00:00Z', revokeReason: 'Wrong edition' }),
+    ];
+    mockCompletion.mockReturnValue(record(records));
+    const { unmount } = render(<StudioServiceSection projectId="job-1" />);
+    const live = document.querySelector('[data-earlier-completion="completion-live-old"]') as HTMLElement;
+    const revoked = document.querySelector('[data-earlier-completion="completion-0"]') as HTMLElement;
+    expect(within(revoked).queryByRole('button', { name: /^Revoke/ })).toBeNull();
+    fireEvent.click(within(live).getByRole('button', { name: /^Revoke the completion of / }));
+    const form = within(live).getByRole('form');
+    fireEvent.click(within(form).getByRole('button', { name: 'Revoke' }));
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Give a reason for revoking.');
+    expect(mockRevoke).not.toHaveBeenCalled();
+    fireEvent.change(within(form).getByLabelText('Why it is revoked'), { target: { value: 'Superseded by edition 2' } });
+    mockRevoke.mockResolvedValueOnce({ completionId: 'completion-live-old' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Revoke' }));
+    await waitFor(() => expect(mockRevoke).toHaveBeenCalledWith({
+      completionId: 'completion-live-old', reason: 'Superseded by edition 2',
+    }));
+    unmount();
+    // A member sees the history without the act; the server stays the authority.
+    mockRole.value = 'member';
+    render(<StudioServiceSection projectId="job-1" />);
+    expect(screen.queryByRole('button', { name: /^Revoke/ })).toBeNull();
   });
 });
 
