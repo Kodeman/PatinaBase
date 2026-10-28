@@ -2,6 +2,19 @@ Use `*_test.sql` on a reset database (CI); use `*_isolated.psql` via host psql o
 
 Replay horizon: a runner that re-applies migration M must then re-apply, in numeric order, every later migration up to the head that redefines anything M (re)creates — a function body, a function or table grant, a policy, a trigger, or a CHECK/vocabulary constraint — and apply the same rule to each migration that adds. Otherwise the transaction ends at M's older horizon while the bodies assert the cumulative chain (re-applying 00868 alone revokes the authenticated EXECUTE that 00871 grants). Find redefiners with a grep over `CREATE OR REPLACE FUNCTION`, `CREATE POLICY`/`DROP POLICY`, `GRANT`/`REVOKE` and constraint names; a new migration that redefines an earlier round-8 object must be added to every runner that replays the earlier one. Replayed migrations still need their own prerequisites, so runners assume a database at or near the head.
 
+## C4 consumer separation and activation rehearsal (owned stack)
+
+`service_acceptance_x08_test.sql` checks the designer `get_project_decision_reviews` and client `list_my_project_decision_reviews` artifact-only lists against a nonempty baseline while service requests are added. It exercises required/optional signers, project-client observer, studio/comember, another household, GC, maker, second studio and anon. Draft and sent cannot coexist as open requests on one project: the fixture checks draft invisibility first, then supersedes it. Sent superseded history remains visible; unsent superseded history does not.
+
+`service_acceptance_activation_plan_test.sql` rehearses exactly C4 §2.8's six authenticated grants and service-role-only hash stamp, dynamically checks all service-acceptance functions (including the authenticated storage predicate exception and PUBLIC denial), then applies inverse revokes and compares the shipped ACL census. Neither suite leaves activation behind; both raise on failure, print PASS counts and end in `ROLLBACK`.
+
+These two suites refuse anything except `127.0.0.1:55322`. Use a freshly reset **owned** CLI stack with a unique project ID and +1000 port offset (API 55321, DB 55322, shadow 55320, pooler 55329), following the isolation, pin, cron and teardown instructions below. Never point them at shared 54322. Example, from the repository root:
+
+```sh
+psql postgresql://postgres:postgres@127.0.0.1:55322/postgres -X -v ON_ERROR_STOP=1 -f supabase/tests/round8/service_acceptance_x08_test.sql
+psql postgresql://postgres:postgres@127.0.0.1:55322/postgres -X -v ON_ERROR_STOP=1 -f supabase/tests/round8/service_acceptance_activation_plan_test.sql
+```
+
 ## Concurrency suites on a second local stack
 
 Every guard defaults to the shared stack (`127.0.0.1:54322`). Pointing a suite elsewhere is a parameter, never a relaxed guard:
