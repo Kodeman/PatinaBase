@@ -7,6 +7,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => mocks,
 }));
 import {
+  readMyStudioServiceCompletion, useMyStudioServiceCompletion,
   readMyServiceAcceptanceEvidence, readMyServiceAcceptanceRequests, useMyServiceAcceptanceEvidence,
   useMyServiceAcceptanceRequests, useRespondServiceAcceptance,
 } from '../use-my-service-acceptance';
@@ -207,4 +208,54 @@ it.each<[string, (e: any) => void]>([
   const bad: Evidence = evidence();
   mutate(bad);
   expect(() => readMyServiceAcceptanceEvidence(bad)).toThrow();
+});
+
+const completion = (over: Record<string, unknown> = {}) => ({
+  completionId: 'completion-1', scopeEditionId: 'scope-1', acceptanceRequestId: 'request-1',
+  state: 'completed_with_conditions', completedAt: '2026-10-27T12:00:00Z', conditionsClosedAt: null,
+  scopeContentHash: 'scope-hash', requestNumber: 1, ...over,
+});
+const completionPayload = (completions: unknown[] = [completion()], over = {}) => ({
+  projectId: 'project-1', audience: 'client', completions, ...over,
+});
+it('allowlists client completion states dates and accepted scope without financial or obligation fields', () => {
+  const read = readMyStudioServiceCompletion(completionPayload([completion({ financialHold: { secret: 'private' }, obligationSnapshot: 'private', openConditionIds: ['private'] })]), 'project-1', 'request-1');
+  expect(read).toEqual({ projectId: 'project-1', completion: completion() });
+  expect(JSON.stringify(read)).not.toMatch(/financial|obligation|openCondition|private/);
+  expect(readMyStudioServiceCompletion(completionPayload([completion({ state: 'completed', conditionsClosedAt: '2026-10-28T12:00:00Z' })]), 'project-1', 'request-1')?.completion?.state).toBe('completed');
+});
+it('fails closed for absent unknown revoked or non-client completion without falling back from an unknown latest state', () => {
+  for (const payload of [completionPayload([]), completionPayload([completion({ state: 'future' }), completion()]), completionPayload([completion({ revokedAt: '2026-10-28' })]), completionPayload([completion({ revokedAt: '2026-10-28' })], { audience: 'studio' }), completionPayload([completion()], { audience: 'future' })]) {
+    expect(readMyStudioServiceCompletion(payload, 'project-1', 'request-1')).toEqual({ projectId: 'project-1', completion: null });
+  }
+  expect(readMyStudioServiceCompletion(completionPayload([], { capability: 'inactive' }), 'project-1', 'request-1')).toBeNull();
+});
+it('rejects malformed completion references dates lists and project identity', () => {
+  for (const over of [{ completedAt: 'invalid' }, { conditionsClosedAt: undefined }, { scopeContentHash: '' }, { requestNumber: 0 }, { acceptanceRequestId: null }, { state: null }]) {
+    expect(() => readMyStudioServiceCompletion(completionPayload([completion(over)]), 'project-1', 'request-1')).toThrow();
+  }
+  expect(() => readMyStudioServiceCompletion({ ...completionPayload(), completions: {} }, 'project-1', 'request-1')).toThrow();
+  expect(() => readMyStudioServiceCompletion(completionPayload(), 'foreign', 'request-1')).toThrow();
+});
+it('reads the completion RPC under a client-specific canonical key and hides permission denial but surfaces read failure', async () => {
+  const query = useMyStudioServiceCompletion('project-1', 'request-1') as any;
+  expect(query.queryKey).toEqual(['service-completion', 'project', 'project-1', 'completion', 'client', 'request-1']);
+  expect((useMyStudioServiceCompletion(null, 'request-1') as any).enabled).toBe(false);
+  mocks.rpc.mockResolvedValue({ data: completionPayload(), error: null });
+  expect((await query.queryFn()).completion).toEqual(completion());
+  expect(mocks.rpc).toHaveBeenCalledWith('get_studio_service_completion', { p_project_id: 'project-1' });
+  for (const error of [{ code: '42501', message: 'insufficient_privilege' }, { message: 'scope_editions_inactive' }, { message: 'permission denied for function get_studio_service_completion' }]) {
+    mocks.rpc.mockResolvedValue({ data: null, error });
+    expect(await query.queryFn()).toBeNull();
+  }
+  mocks.rpc.mockResolvedValue({ data: null, error: { message: 'offline' } });
+  await expect(query.queryFn()).rejects.toEqual({ message: 'offline' });
+});
+
+it('selects only the viewed request completion even when another request completed more recently', () => {
+  const other = completion({ acceptanceRequestId: 'request-2', completionId: 'completion-2' });
+  expect(readMyStudioServiceCompletion(completionPayload([other, completion()]), 'project-1', 'request-1')?.completion).toEqual(completion());
+  expect(readMyStudioServiceCompletion(completionPayload([other]), 'project-1', 'request-1')?.completion).toBeNull();
+  expect(readMyStudioServiceCompletion(completionPayload([other, completion({ revokedAt: '2026-10-28' })]), 'project-1', 'request-1')?.completion).toBeNull();
+  expect((useMyStudioServiceCompletion('project-1', 'request-2') as any).queryKey).not.toEqual((useMyStudioServiceCompletion('project-1', 'request-1') as any).queryKey);
 });

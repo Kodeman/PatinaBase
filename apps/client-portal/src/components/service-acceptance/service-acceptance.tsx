@@ -5,9 +5,10 @@ import Link from 'next/link';
 import {
   useMyServiceAcceptanceRequests, useRespondServiceAcceptance,
   type MyServiceAcceptanceRequest, type MyServiceAcceptanceResponse,
-  type RespondServiceAcceptanceInput, type ServiceAcceptanceAnswer,
+  type RespondServiceAcceptanceInput, type ServiceAcceptanceAnswer, type MyServiceAcceptanceReceipt,
 } from '@patina/supabase';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { StudioServiceCompletion } from './studio-service-completion';
 
 const actions: Record<ServiceAcceptanceAnswer, string> = {
   accept: 'Accept', accept_with_conditions: 'Accept with conditions', return: 'Return',
@@ -72,8 +73,8 @@ function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest
   const [confirming, setConfirming] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const [recorded, setRecorded] = useState<ResponseReadingValue | null>(null);
-  const [pending, setPending] = useState<number | null>(null);
-  const waiting = pending ?? request.signers.filter((s) => s.required && !s.response).length;
+  const [receipt, setReceipt] = useState<MyServiceAcceptanceReceipt | null>(null);
+  const waiting = request.signers.filter((s) => s.required && !s.response).length;
   const valid = answer === 'accept' || (answer === 'accept_with_conditions' && conditions.length >= 1 && conditions.length <= 20 && conditions.every((c) => c.text.trim().length >= 1 && [...c.text.trim()].length <= 2000)) || (answer === 'return' && !!reason.trim() && [...reason.trim()].length <= 2000);
   const stale = answer !== null && (presented.scopeContentHash !== request.scopeContentHash || presented.evidenceManifestHash !== request.evidenceManifestHash || presented.signerPolicyRevision !== request.signerPolicyRevision);
   const errorCopy = failure ? acceptanceRefusal(failure) : null;
@@ -90,14 +91,14 @@ function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest
       const receipt = await mutation.mutateAsync(input);
       setRecorded({ response: answer, conditions: input.conditions, returnReason: input.returnReason || null,
         method: 'portal_authenticated', respondedAt: '' });
-      setPending(receipt.pendingRequiredSigners.length);
+      setReceipt(receipt);
       setFailure(null);
     } catch (error) {
       setFailure(error);
     }
   }
 
-  if (recorded) return <section aria-label="Your recorded response" role="status"><h2>Your response is recorded</h2><ResponseReading response={recorded} />{request.lifecycle === 'sent' && pending !== null && pending > 0 && <p>Waiting for {pending} required responses</p>}</section>;
+  if (recorded) return <section aria-label="Your recorded response" role="status"><h2>Your response is recorded</h2><ResponseReading response={recorded} />{receipt?.aggregateOutcome === 'pending' && receipt.pendingRequiredSigners.length > 0 && <p>Waiting for {receipt.pendingRequiredSigners.length} required responses</p>}</section>;
   return <section aria-label="Your response" className="space-y-4">
     <h2 className="font-serif text-2xl">Your response</h2>
     {request.lifecycle === 'sent' && waiting > 0 && <p>Waiting for {waiting} required responses</p>}
@@ -148,6 +149,7 @@ export function ServiceAcceptanceReading({ request, reload, evidence }: {
     <Link href={`/projects/${encodeURIComponent(request.projectId)}`}>Return to your house</Link>
     <header><h1 className="font-serif text-3xl">Service acceptance</h1><p>Request {request.requestNumber} · {request.lifecycle} · {request.aggregateOutcome.replaceAll('_', ' ')}</p></header>
     <ServiceAcceptanceEvidence request={request} evidence={evidence} />
+    <StudioServiceCompletion projectId={request.projectId} requestId={request.requestId} aggregateOutcome={request.aggregateOutcome} />
     {request.lifecycle === 'sent' && (request.viewerRole !== 'signer_required' || own) && pending > 0 && <p>Waiting for {pending} required responses</p>}
     {own && <section aria-label="Your recorded response"><h2>Your response</h2><ResponseReading response={own} /></section>}
     {request.viewerRole === 'signer_required' && request.lifecycle === 'sent' && !own && <ResponseForm request={request} reload={reload} />}
