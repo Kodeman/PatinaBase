@@ -3,7 +3,12 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(), from: vi.fn(), list: vi.fn(), bucket: vi.fn(), invalidateQueries: vi.fn(),
   // fetchQuery answers from its own queryFn, as a cold cache does.
   fetchQuery: vi.fn((options: { queryFn: () => unknown }) => options.queryFn()),
+  // The QueryClient on screen: one per signed-in subject, the same object
+  // across every hook call until the subject changes.
+  client: null as unknown,
 }));
+/** A signed-in subject's QueryClient, with its own invalidateQueries. */
+const subjectClient = (invalidateQueries = mocks.invalidateQueries) => ({ invalidateQueries, fetchQuery: mocks.fetchQuery });
 vi.mock('../use-agreement-parts', async (original) => original());
 vi.mock('../../client', () => ({
   createBrowserClient: () => ({
@@ -14,7 +19,7 @@ vi.mock('../../client', () => ({
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries, fetchQuery: mocks.fetchQuery }),
+  useQueryClient: () => mocks.client,
 }));
 import * as completionHooks from '../use-service-completion';
 import {
@@ -103,6 +108,7 @@ const completionRead = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.client = subjectClient();
 });
 
 describe('service completion reads', () => {
@@ -200,12 +206,45 @@ describe('service completion acts', () => {
     const [before, after] = await Promise.all([background, refreshed]);
     expect(before.obligationHash).toBe('hash-1');
     expect(after.readNumber - before.readNumber).toBe(1);
-    const mark = completionHooks.staleReadingMark?.('job-r1');
+    const mark = completionHooks.staleReadingMark(mocks.client as never, 'job-r1');
     expect(mark).toBe(before.readNumber);
     expect(after.readNumber).toBeGreaterThan(mark as number);
     // An inactive denial is not stale and leaves the mark where it was.
     (useCompleteStudioService('job-r1') as unknown as Act<unknown>).onError({ message: 'permission denied for function x' });
-    expect(completionHooks.staleReadingMark?.('job-r1')).toBe(mark);
+    expect(completionHooks.staleReadingMark(mocks.client as never, 'job-r1')).toBe(mark);
+  });
+
+  it('F1: a previous subject\'s late stale refusal marks and refreshes only its own QueryClient', async () => {
+    for (let read = 0; read < 4; read += 1) {
+      mocks.rpc.mockResolvedValueOnce({ data: obligations({ projectId: 'job-f1' }), error: null });
+    }
+    type Reading = { readNumber: number };
+    // Subject A reads the job and starts Complete; A signs out before the refusal lands.
+    const invalidateA = vi.fn();
+    const clientA = subjectClient(invalidateA);
+    mocks.client = clientA;
+    await (useStudioServiceObligations('job-f1') as unknown as Read<Reading>).queryFn();
+    const lateAct = useCompleteStudioService('job-f1') as unknown as Act<unknown>;
+    // Subject B reads the same job in its own QueryClient.
+    const invalidateB = vi.fn();
+    const clientB = subjectClient(invalidateB);
+    mocks.client = clientB;
+    const deriveB = useStudioServiceObligations('job-f1') as unknown as Read<Reading>;
+    const readingB = await deriveB.queryFn();
+    lateAct.onError({ code: '40001', message: 'stale_obligations' });
+    // B's reading is not retired and B is not refreshed; A holds the mark.
+    expect(completionHooks.staleReadingMark(clientB as never, 'job-f1')).toBeNull();
+    expect(invalidateB).not.toHaveBeenCalled();
+    expect(invalidateA).toHaveBeenCalledWith({ queryKey: serviceCompletionKeys.project('job-f1') });
+    const markA = completionHooks.staleReadingMark(clientA as never, 'job-f1');
+    expect(markA).toBe(1);
+    // B's reads never satisfy A's mark, nor block B: each client numbers its own.
+    expect(readingB.readNumber).toBe(1);
+    await deriveB.queryFn();
+    expect(completionHooks.staleReadingMark(clientA as never, 'job-f1')).toBe(markA);
+    mocks.client = clientA;
+    const nextA = await (useStudioServiceObligations('job-f1') as unknown as Read<Reading>).queryFn();
+    expect(nextA.readNumber).toBe(2);
   });
 
   it('resolves a condition with its text and one evidence reference', async () => {
@@ -377,6 +416,25 @@ describe('recorded citations, each checked on its own (C6 §2.2)', () => {
     await (useServiceConditionEvidenceOptions('job-1', true) as unknown as Read<unknown>).queryFn();
     const citation = useServiceConditionCitation('job-1', 'storageObject', 'object-1') as unknown as Read<unknown>;
     expect(mocks.fetchQuery).toHaveBeenCalledWith(expect.objectContaining({ queryKey: citation.queryKey }));
+  });
+
+  it('F2: a mounted stored citation or picker walks the inventory again within two minutes, focus included', async () => {
+    const bounded = {
+      staleTime: completionHooks.INVENTORY_REFRESH_MS, refetchInterval: completionHooks.INVENTORY_REFRESH_MS,
+      refetchIntervalInBackground: false, refetchOnWindowFocus: true,
+    };
+    expect(completionHooks.INVENTORY_REFRESH_MS).toBe(2 * 60 * 1000);
+    expect(useServiceConditionCitation('job-1', 'storageObject', OBJECT)).toMatchObject(bounded);
+    expect(useServiceConditionEvidenceOptions('job-1')).toMatchObject(bounded);
+    // The picker's own read takes the inventory fresh within the same bound.
+    tables({});
+    storageTree({});
+    await (useServiceConditionEvidenceOptions('job-1') as unknown as Read<unknown>).queryFn();
+    expect(mocks.fetchQuery).toHaveBeenCalledWith(expect.objectContaining({
+      queryKey: serviceCompletionKeys.storage('job-1'), staleTime: completionHooks.INVENTORY_REFRESH_MS,
+    }));
+    // Row citations keep the portal defaults.
+    expect(useServiceConditionCitation('job-1', 'issue', ISSUE)).not.toHaveProperty('refetchInterval');
   });
 
   it('every read opts out of the global toast through meta.errorSurface', () => {

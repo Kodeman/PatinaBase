@@ -13,7 +13,6 @@ import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from
 import type { ScopeEdition } from '@patina/types';
 import {
   citedReferences,
-  staleReadingMark,
   useCompleteStudioService,
   useOrganizations,
   useProjectV2,
@@ -23,6 +22,7 @@ import {
   useServiceAcceptance,
   useServiceConditionCitation,
   useServiceConditionEvidenceOptions,
+  useStaleReadingMark,
   useStudioServiceCompletion,
   useStudioServiceObligations,
   type ServiceConditionEvidence,
@@ -89,18 +89,22 @@ export function StudioServiceSection({ projectId }: { projectId: string }) {
         !failed && <p role="status" className="t-body-sm mt-3">Reading the studio service…</p>
       ) : (
         <StudioServiceBody projectId={projectId} reading={reading} current={current} earlier={earlier}
-          resolutions={record.data.resolutions} report={report} readFailed={obligations.isError} />
+          resolutions={record.data.resolutions} report={report} readFailed={obligations.isError}
+          readInFlight={obligations.isFetching} readAgain={() => void obligations.refetch()} />
       )}
     </section>
   );
 }
 
-/** Whether the last refresh of the reading on screen failed. */
+/** Whether the last refresh of the reading on screen failed, whether one is
+ *  in flight, and how to start one. */
 interface ReadState {
   readFailed: boolean;
+  readInFlight: boolean;
+  readAgain: () => void;
 }
 
-function StudioServiceBody({ projectId, reading, current, earlier, resolutions, report, readFailed }: {
+function StudioServiceBody({ projectId, reading, current, earlier, resolutions, report, ...readState }: {
   projectId: string;
   reading: StudioServiceObligations;
   current: StudioServiceCompletion | null;
@@ -116,8 +120,7 @@ function StudioServiceBody({ projectId, reading, current, earlier, resolutions, 
       {current ? (
         <CompletionRecord projectId={projectId} completion={current} edition={edition} report={report} />
       ) : (
-        <Obligations projectId={projectId} reading={reading} edition={edition} report={report}
-          readFailed={readFailed} />
+        <Obligations projectId={projectId} reading={reading} edition={edition} report={report} {...readState} />
       )}
       <FinancialHold reading={reading} />
       {requestId && (
@@ -141,7 +144,7 @@ function byPackage(items: StudioServiceObligationItem[]): [string | null, Studio
   return [...groups.entries()];
 }
 
-function Obligations({ projectId, reading, edition, report, readFailed }: {
+function Obligations({ projectId, reading, edition, report, ...readState }: {
   projectId: string; reading: StudioServiceObligations; edition: ScopeEdition | null; report: Report;
 } & ReadState) {
   // While switched off the server holds the service with one inactive blocker;
@@ -176,13 +179,12 @@ function Obligations({ projectId, reading, edition, report, readFailed }: {
           </ul>
         </>
       )}
-      <CompleteService projectId={projectId} reading={reading} edition={edition} report={report}
-        readFailed={readFailed} />
+      <CompleteService projectId={projectId} reading={reading} edition={edition} report={report} {...readState} />
     </div>
   );
 }
 
-function CompleteService({ projectId, reading, edition, report, readFailed }: {
+function CompleteService({ projectId, reading, edition, report, readFailed, readInFlight, readAgain }: {
   projectId: string; reading: StudioServiceObligations; edition: ScopeEdition | null; report: Report;
 } & ReadState) {
   const id = useId();
@@ -192,12 +194,11 @@ function CompleteService({ projectId, reading, edition, report, readFailed }: {
   // that answered after the click included: Complete waits for a read begun
   // after the refusal to succeed and be on screen, and a failed read (the
   // section's calm error with Retry) keeps it held.
-  const retiredThrough = staleReadingMark(projectId);
+  const retired = useRetiredReading(projectId, reading);
   const requestId = reading.acceptance.requestId;
   // Zero blockers, the inactive one included: the server refuses any.
   const ready = reading.blockers.length === 0 && requestId != null;
-  const held = !ready || complete.isPending || readFailed
-    || (retiredThrough != null && reading.readNumber <= retiredThrough);
+  const held = !ready || complete.isPending || readFailed || retired;
   const onComplete = async () => {
     if (held) return;
     setError(null);
@@ -228,8 +229,26 @@ function CompleteService({ projectId, reading, edition, report, readFailed }: {
           aria-describedby={`${id}-consequence`}>
           Complete studio service
         </DocumentAction>
+        <CheckAgain retired={retired} readFailed={readFailed} readInFlight={readInFlight} readAgain={readAgain} />
       </DocumentActionRow>
     </div>
+  );
+}
+
+/** Whether a stale refusal in this QueryClient retired the reading on screen. */
+function useRetiredReading(projectId: string, reading: StudioServiceObligations): boolean {
+  const retiredThrough = useStaleReadingMark(projectId);
+  return retiredThrough != null && reading.readNumber <= retiredThrough;
+}
+
+/** Retired with no read coming: the studio starts one. A failed read already
+ *  offers the section's Retry. */
+function CheckAgain({ retired, readFailed, readInFlight, readAgain }: { retired: boolean } & ReadState) {
+  if (!retired || readInFlight || readFailed) return null;
+  return (
+    <DocumentAction actionKey="recheck-studio-service" variant="tertiary" onClick={readAgain}>
+      Check the list again
+    </DocumentAction>
   );
 }
 

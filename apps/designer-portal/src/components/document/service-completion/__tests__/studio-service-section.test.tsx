@@ -15,7 +15,7 @@ const mockOpener = jest.fn();
 const mockRole = { value: 'owner' as string };
 const mockOpenerFor = jest.fn();
 const mockStale = new Set(['stale_obligations', 'service_obligations_open', 'service_acceptance_condition_resolved']);
-// staleReadingMark: the hook records it when a stale refusal lands (vitest suite).
+// useStaleReadingMark: the hook records it, per QueryClient, when a stale refusal lands (vitest suite).
 const mockMark = { value: null as number | null };
 jest.mock('@patina/supabase', () => ({
   useStudioServiceObligations: () => mockObligations(),
@@ -51,7 +51,7 @@ jest.mock('@patina/supabase', () => ({
   isServiceAcceptanceInactive: (error: { message?: string }) => /permission denied for function/.test(error?.message ?? ''),
   serviceCompletionRefusal: (error: { message?: string }) => /^([a-z][a-z0-9_]*)(?::|$)/.exec(error?.message ?? '')?.[1] ?? null,
   get STALE_SERVICE_COMPLETION_REFUSALS() { return mockStale; },
-  staleReadingMark: () => mockMark.value,
+  useStaleReadingMark: () => mockMark.value,
 }));
 jest.mock('../../paper/unfold-bridge', () => ({ unfoldOpenerFor: (id: string) => mockOpenerFor(id) }));
 
@@ -79,7 +79,7 @@ const resolution = (over: Record<string, unknown> = {}) => ({
 });
 const OPTIONS = { data: [{ kind: 'issue', id: 'issue-1', label: 'Issue 3 · Kitchen set' }], isSuccess: true, isError: false };
 const read = (value: unknown, over: Record<string, unknown> = {}) => ({
-  data: value, isError: false, dataUpdatedAt: 1, refetch: jest.fn(), ...over,
+  data: value, isError: false, isFetching: false, dataUpdatedAt: 1, refetch: jest.fn(), ...over,
 });
 const CONDITION = { conditionId: 'condition-1', text: 'Touch up the hall', responseId: 'response-1', signerId: 'signer-1' };
 // Each recorded citation is checked on its own (useServiceConditionCitation).
@@ -187,6 +187,34 @@ describe('studio service obligations', () => {
     fireEvent.click(completeButton());
     await waitFor(() => expect(mockComplete).toHaveBeenLastCalledWith({ acceptanceRequestId: 'request-1', obligationHash: 'hash-2' }));
     expect(mockComplete).toHaveBeenCalledTimes(2);
+  });
+
+  it('F1: Complete held by a stale mark with no read coming offers "Check the list again", which reads afresh', () => {
+    const checkAgain = () => screen.queryByRole('button', { name: 'Check the list again' });
+    // A read is in flight: it will answer, so nothing is offered.
+    mockMark.value = 1;
+    mockObligations.mockReturnValue(read(reading(), { isFetching: true }));
+    const { rerender } = render(<StudioServiceSection projectId="job-1" />);
+    expect(completeButton()).toBeDisabled();
+    expect(checkAgain()).toBeNull();
+    // No read in flight and none failed: Complete is held with a way out.
+    const settled = read(reading());
+    mockObligations.mockReturnValue(settled);
+    rerender(<StudioServiceSection projectId="job-1" />);
+    expect(completeButton()).toBeDisabled();
+    expect(checkAgain()).toBeInTheDocument();
+    fireEvent.click(checkAgain() as HTMLElement);
+    expect(settled.refetch).toHaveBeenCalledTimes(1);
+    // A failed read keeps the section's own Retry instead.
+    mockObligations.mockReturnValue(read(reading(), { isError: true }));
+    rerender(<StudioServiceSection projectId="job-1" />);
+    expect(screen.getByRole('button', { name: 'Retry the studio service' })).toBeInTheDocument();
+    expect(checkAgain()).toBeNull();
+    // A reading begun after the mark releases Complete and the action goes.
+    mockObligations.mockReturnValue(read(reading({ readNumber: 2 })));
+    rerender(<StudioServiceSection projectId="job-1" />);
+    expect(completeButton()).toBeEnabled();
+    expect(checkAgain()).toBeNull();
   });
 
   it('reads a permission denial as the calm switched-off note, not an error', async () => {

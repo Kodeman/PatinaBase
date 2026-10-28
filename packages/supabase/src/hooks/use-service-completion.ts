@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { scopeRecord } from './use-agreement-parts';
 import type { ServiceAcceptanceOutcome } from './use-service-acceptance';
@@ -217,29 +217,49 @@ export function readStudioServiceCompletion(value: unknown, projectId: string): 
   };
 }
 
-// Every obligations read takes the next number as it starts. A stale refusal
-// records the last number begun before it (before its refresh starts), so only
-// a reading numbered above that mark began after the refusal: a read already in
-// flight when the server refused can never re-enable Complete.
-let obligationReadsStarted = 0;
-const staleMarks = new Map<string, number>();
+// Every obligations read takes its QueryClient's next number as it starts. A
+// stale refusal records, in the client its act ran in, the last number begun
+// before it (before its refresh starts), so only a reading numbered above that
+// mark began after the refusal: a read already in flight when the server
+// refused can never re-enable Complete. Numbers and marks belong to one
+// QueryClient (one signed-in subject): a previous subject's late refusal never
+// retires, and its reads never satisfy, another subject's reading.
+interface ObligationReads { started: number; marks: Map<string, number> }
+const obligationReads = new WeakMap<QueryClient, ObligationReads>();
 
-/** The last obligations read begun before this job's latest stale refusal, or
- *  null when none was refused. A reading at or below it is retired. */
-export function staleReadingMark(projectId: string): number | null {
-  return staleMarks.get(projectId) ?? null;
+function readsOf(client: QueryClient): ObligationReads {
+  let reads = obligationReads.get(client);
+  if (!reads) {
+    reads = { started: 0, marks: new Map() };
+    obligationReads.set(client, reads);
+  }
+  return reads;
+}
+
+/** The last obligations read begun in this QueryClient before this job's
+ *  latest stale refusal there, or null when none was refused. A reading at or
+ *  below it is retired. */
+export function staleReadingMark(client: QueryClient, projectId: string): number | null {
+  return obligationReads.get(client)?.marks.get(projectId) ?? null;
+}
+
+/** staleReadingMark for the QueryClient on screen. */
+export function useStaleReadingMark(projectId: string): number | null {
+  return staleReadingMark(useQueryClient(), projectId);
 }
 
 /** derive_studio_service_obligations: the blockers, informational items, open
  *  conditions and financial hold the studio reads before completing. */
 export function useStudioServiceObligations(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: serviceCompletionKeys.obligations(projectId),
     enabled: !!projectId,
     meta: SILENT,
     queryFn: async (): Promise<StudioServiceObligations> => {
-      obligationReadsStarted += 1;
-      const readNumber = obligationReadsStarted;
+      const reads = readsOf(queryClient);
+      reads.started += 1;
+      const readNumber = reads.started;
       const { data, error } = await createBrowserClient().rpc('derive_studio_service_obligations', {
         p_project_id: projectId as string,
       });
@@ -320,8 +340,10 @@ function useServiceCompletionAct<Args, Result>(
     onError: (error: unknown) => {
       const token = serviceCompletionRefusal(error);
       if (!token || !STALE_SERVICE_COMPLETION_REFUSALS.has(token)) return;
-      // Marked before the refresh starts its read, which numbers above it.
-      staleMarks.set(projectId, obligationReadsStarted);
+      // Marked before the refresh starts its read, which numbers above it, and
+      // only in the client this act was created with.
+      const reads = readsOf(queryClient);
+      reads.marks.set(projectId, reads.started);
       void refresh();
     },
   });
@@ -487,17 +509,36 @@ async function storageInventory(client: Client, projectId: string): Promise<Stor
   return { objects };
 }
 
+/** How long a mounted citation or picker may show the job's stored objects
+ *  before they are walked again: a deleted document reads gone within it. */
+export const INVENTORY_REFRESH_MS = 2 * 60 * 1000;
+
 /**
  * The job's storage inventory, one query per job under the signed-in user's
  * read (the designer's QueryClient is per signed-in subject): the evidence
  * picker and every stored-object citation read it, so the job is walked once.
+ * It is fresh for INVENTORY_REFRESH_MS, not the portal's five minutes.
  */
 function storageInventoryQuery(projectId: string) {
   return {
     queryKey: serviceCompletionKeys.storage(projectId),
     queryFn: () => storageInventory(createBrowserClient(), projectId),
+    staleTime: INVENTORY_REFRESH_MS,
   };
 }
+
+/**
+ * While a citation or the picker is mounted it walks the inventory again on
+ * this bound, in the background, and on window focus (this read only; the
+ * portal's defaults stay off), never while the tab is hidden. A failed walk
+ * is an error over the cached answer (the reader's "couldn't be checked").
+ */
+const MOUNTED_INVENTORY_FRESHNESS = {
+  staleTime: INVENTORY_REFRESH_MS,
+  refetchInterval: INVENTORY_REFRESH_MS,
+  refetchIntervalInBackground: false,
+  refetchOnWindowFocus: true,
+} as const;
 
 /**
  * What a resolution can cite, as the signed-in user can read it: the job's
@@ -512,6 +553,7 @@ export function useServiceConditionEvidenceOptions(projectId: string | null | un
     queryKey: serviceCompletionKeys.evidence(projectId),
     enabled: enabled && !!projectId,
     meta: SILENT,
+    ...MOUNTED_INVENTORY_FRESHNESS,
     queryFn: async (): Promise<ServiceConditionEvidenceOption[]> => {
       const supabase = createBrowserClient();
       const [issues, requests, inventory] = await Promise.all([
@@ -583,7 +625,7 @@ export function citeStoredObject(inventory: StoredObjectInventory, id: string): 
 export function useServiceConditionCitation(projectId: string, kind: ServiceConditionEvidenceKind, id: string) {
   return useQuery<StoredObjectInventory | ServiceConditionCitation, Error, ServiceConditionCitation, readonly unknown[]>(
     kind === 'storageObject'
-      ? { ...storageInventoryQuery(projectId), meta: SILENT,
+      ? { ...storageInventoryQuery(projectId), ...MOUNTED_INVENTORY_FRESHNESS, meta: SILENT,
         select: (inventory) => citeStoredObject(inventory as StoredObjectInventory, id) }
       : { queryKey: serviceCompletionKeys.citation(projectId, kind, id), meta: SILENT,
         queryFn: () => checkRow(createBrowserClient(), projectId, kind, id) },
