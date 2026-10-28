@@ -42,6 +42,7 @@ import {
   topActiveModalDialog,
   topDismissiblePopover,
 } from './active-dialog';
+import { usePaperRendererSnapshot } from '@/hooks/use-paper-renderer';
 import { lastPressedControl } from './pressed-control';
 
 const FOCUSABLE_SELECTOR = [
@@ -266,6 +267,7 @@ export function DocSheet({
    *  that caller sets it; every other sheet keeps the z-50 layer. */
   aboveFolio?: boolean;
 }) {
+  const { renderer } = usePaperRendererSnapshot();
   const restoreRef = useRef<HTMLElement | null>(null);
   const returnFocusRef = useRef(returnFocusTo);
 
@@ -391,6 +393,7 @@ export function DocSheet({
   return createPortal(
     <div
       data-doc-sheet-layer
+      data-paper-renderer={renderer === 'round8' ? 'round8' : undefined}
       data-doc-sheet-stack-state={isTopModal ? 'top' : 'covered'}
       aria-hidden={isTopModal ? undefined : true}
       inert={isTopModal ? undefined : true}

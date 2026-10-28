@@ -125,11 +125,18 @@ function startResolution(): void {
   }
 }
 
+/** Portals observe the document's latch without starting a second resolution. */
+export function usePaperRendererSnapshot(): PaperRendererState {
+  const override = parseFlagOverride(FLAG);
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return override === undefined ? snapshot : overrides[String(override)];
+}
+
 /** Presentation only: the settled renderer never changes while this document is open. */
 export function usePaperRenderer(): PaperRendererState {
   const sessionUserId = useSessionUserId();
   const override = parseFlagOverride(FLAG);
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const snapshot = usePaperRendererSnapshot();
 
   useEffect(() => {
     if (override !== undefined) return;

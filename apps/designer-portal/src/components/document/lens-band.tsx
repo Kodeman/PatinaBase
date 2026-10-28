@@ -25,6 +25,7 @@
  */
 
 import {
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -34,6 +35,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { Round8MarginContext } from './paper/margin-layout';
 import {
   LENS_ANNOUNCE_DEDUPE_MS,
   LENS_TURN_OUT_MS,
@@ -194,6 +196,7 @@ export function LensBand({
    *  through its own `onAct`. */
   openActSheet?: (act: LensAct) => boolean;
 }) {
+  const round8 = useContext(Round8MarginContext);
   const { line1 } = model;
   // Slice 2 (D1, D2) — the stage word on line 1, Next and the door on line 2.
   // Off, the band is exactly the 0b band.
@@ -283,9 +286,17 @@ export function LensBand({
     : '';
   const [yielded, setYielded] = useState({ key: '', by: 0 });
   const dropped = yielded.key === rungKey ? yielded.by : 0;
-  const rung = spoken
+  const selectedRung = spoken
     ? (spoken.rungs[Math.min(dropped, spoken.rungs.length - 1)] ?? spoken)
     : null;
+  // The generic short subject is "TASK"; round 8 keeps the task's identity
+  // even on the final rung, where the sentence can wrap rather than disappear.
+  const namedTask = round8 && spoken?.standing.some(
+    (item) => item.key === spoken.next?.rowKey && item.needKind === 'task_due',
+  );
+  const rung = namedTask && selectedRung && spoken?.next
+    ? { ...selectedRung, sentence: spoken.next.sentence }
+    : selectedRung;
   // US-25 fix-now 13 — the measure stops on the last sentence rung (the phone
   // form, wrapped if it must) rather than giving the reason up for the act
   // alone: below 600 the act is the dock's (US-43 R6), so an act-only rung
