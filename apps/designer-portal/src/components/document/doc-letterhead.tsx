@@ -26,11 +26,13 @@
  * longer take the width away from the left.
  */
 
-import type { ReactNode } from 'react';
+import { useContext, type ReactNode } from 'react';
 import { StrataMark } from './strata-mark';
 import { LetterheadTitle, LetterheadVitals } from './letterhead-vitals';
+import { Round8MarginContext } from './paper/margin-layout';
 import type { FillState } from '@/lib/document/fill-state';
 import type { SectionKey } from '@/lib/document/desk-derivation';
+import { STAGE_WORD } from '@/lib/document/act-names';
 
 /** US-28 S7 (V20 U-Q14) — the stage once, as the 3px title rule. Care has no
  *  stage pigment (`--tab-*` stops at install), so its title takes no rule. */
@@ -75,6 +77,77 @@ export function DocLetterhead({
   /** W3: the letterhead instruments' ledger — its own column at ≥1180. */
   instruments?: ReactNode;
 }) {
+  const round8 = useContext(Round8MarginContext);
+  const titleBlock = projectId ? (
+    <LetterheadTitle projectId={projectId} serverTitle={title} />
+  ) : (
+    /* R6 — 34px at every width. The 40px step and the negative
+       tracking both went with it: 40px of Playfair spent ~11
+       characters of a 390 measure, and the standing sentence, not the
+       name, is the head's largest true fact. */
+    <h1
+      data-part="name"
+      className="min-w-0 break-words font-heading text-[34px] font-medium leading-[1.08] text-[var(--text-primary)]"
+    >
+      {title}
+    </h1>
+  );
+  const vitalsLine = projectId ? (
+    <LetterheadVitals projectId={projectId} stageWord={stageWord} />
+  ) : (
+    vitals && (
+      /* D5 — 15px, and it WRAPS. The clip trio said the line was one
+         row long whatever it carried; a vital the paper cannot finish
+         is not a vital. */
+      <p
+        data-letterhead-vitals
+        data-part="f1"
+        className="mt-1 text-[15px] text-[var(--text-muted)]"
+      >
+        {vitals}
+      </p>
+    )
+  );
+
+  if (round8) {
+    // RC-4 D3 — the round-8 cover (Room Proof 08): kicker, serif title, the
+    // italic subject, one facts line closed by its rule, then the
+    // photograph's slot, which the ledger's Press band fills. No stage mark
+    // and no title rule. The job type is the only kicker fact the paper
+    // holds (there is no job number), so nothing else is printed there. With
+    // the stage word in the kicker, the facts line does not repeat it.
+    const stageInKicker = Boolean(projectId && stageWord);
+    const kicker = projectId
+      ? stageWord && stageWord !== 'Project'
+        ? `Project · ${stageWord}`
+        : 'Project'
+      : stage
+        ? STAGE_WORD[stage]
+        : null;
+    return (
+      <header
+        id="document-project-status"
+        tabIndex={-1}
+        data-part="head"
+        data-r8-cover=""
+        className="mb-[22px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+      >
+        <div data-r8-cover-line="" className="r8-small">
+          {kicker && <span data-r8-cover-kicker="">{kicker}</span>}
+          {/* The chip prints nothing while no client is linked; the CSS then
+              drops this span, so "Prepared" never stands alone. */}
+          {client && <span data-r8-cover-client="">Prepared {client}</span>}
+        </div>
+        <div className="min-w-0">{titleBlock}</div>
+        {subject}
+        <div data-r8-cover-facts="" data-r8-stage-in-kicker={stageInKicker ? '' : undefined}>
+          {vitalsLine}
+        </div>
+        {instruments && <div data-r8-cover-plate="">{instruments}</div>}
+      </header>
+    );
+  }
+
   return (
     <header
       id="document-project-status"
@@ -99,41 +172,13 @@ export function DocLetterhead({
             stage && TITLE_RULE_STAGE[stage] ? `title-rule ${TITLE_RULE_STAGE[stage]}` : ''
           }`}
         >
-          {projectId ? (
-            <LetterheadTitle projectId={projectId} serverTitle={title} />
-          ) : (
-            /* R6 — 34px at every width. The 40px step and the negative
-               tracking both went with it: 40px of Playfair spent ~11
-               characters of a 390 measure, and the standing sentence, not the
-               name, is the head's largest true fact. */
-            <h1
-              data-part="name"
-              className="min-w-0 break-words font-heading text-[34px] font-medium leading-[1.08] text-[var(--text-primary)]"
-            >
-              {title}
-            </h1>
-          )}
+          {titleBlock}
         </div>
         {/* Row 2, left — who it is for, and the vitals. */}
         <div className="min-w-0">
           {client}
           {subject}
-          {projectId ? (
-            <LetterheadVitals projectId={projectId} stageWord={stageWord} />
-          ) : (
-            vitals && (
-              /* D5 — 15px, and it WRAPS. The clip trio said the line was one
-                 row long whatever it carried; a vital the paper cannot finish
-                 is not a vital. */
-              <p
-                data-letterhead-vitals
-                data-part="f1"
-                className="mt-1 text-[15px] text-[var(--text-muted)]"
-              >
-                {vitals}
-              </p>
-            )
-          )}
+          {vitalsLine}
         </div>
         {/* Row 2, right — the ledger, MOUNTED at every width (D-B20): below
             1180 the single column simply stacks it under the vitals. */}
