@@ -47,6 +47,10 @@ private actor ControlledService: ServiceAcceptanceService {
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws {
         sent.append(submission)
     }
+
+    func fetchStudioServiceCompletion(projectId: String) async throws -> RemoteStudioServiceCompletionRead {
+        RemoteStudioServiceCompletionRead()
+    }
 }
 
 private func row(_ json: String) throws -> RemoteServiceAcceptanceRequest {
