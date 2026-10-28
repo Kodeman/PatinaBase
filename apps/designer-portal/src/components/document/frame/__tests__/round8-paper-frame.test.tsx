@@ -14,6 +14,12 @@ jest.mock('@/components/document/service-acceptance/service-acceptance-section',
     <div data-service-acceptance-mount={projectId} />
   ),
 }));
+// Likewise studio service completion (service-completion/__tests__).
+jest.mock('@/components/document/service-completion/studio-service-section', () => ({
+  StudioServiceSection: ({ projectId }: { projectId: string }) => (
+    <div data-studio-service-mount={projectId} />
+  ),
+}));
 
 // The page owns the data reads; a gate stands in for its read here.
 let roomFilesReady = false;
@@ -195,6 +201,12 @@ describe('Round8PaperFrame', () => {
     expect(closeout.querySelector('[data-slot="project-care"]')!.compareDocumentPosition(mount))
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(container.querySelectorAll('[data-service-acceptance-mount]')).toHaveLength(1);
+    // Studio service completion reads beside acceptance, after it, in the same chapter.
+    const studio = await within(closeout as HTMLElement).findByText(
+      (_, element) => element?.getAttribute('data-studio-service-mount') === 'project-1',
+    );
+    expect(mount.compareDocumentPosition(studio)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(container.querySelectorAll('[data-studio-service-mount]')).toHaveLength(1);
   });
 
   it("mounts Design and Site only when the page's gates find content", () => {
