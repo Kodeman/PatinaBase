@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { StudioMasthead, STUDIO_DOORS } from '../studio-masthead';
 import { openCommandBar, openLedger } from '@/components/document/command-bar';
 
@@ -18,6 +18,24 @@ it('keeps command search and registry doors on their existing owners', () => {
     expect(openLedger).toHaveBeenCalledWith(door.key);
   }
   expect(screen.getByRole('button', { name: 'Your account — Leah Designer' })).toBeInTheDocument();
+});
+
+it('marks the canonical Studio host current and keeps phone primary doors mounted with touch targets', () => {
+  render(<StudioMasthead studioName="Studio" viewerName="Leah" dateLabel="Today" />);
+  const nav = screen.getByRole('navigation', { name: 'Studio' });
+  const studio = within(nav).getByRole('link', { name: 'Studio' });
+  expect(studio).toHaveAttribute('href', '/desk');
+  expect(studio).toHaveAttribute('aria-current', 'page');
+  expect(studio).toHaveAttribute('data-studio-door', 'desk-host');
+  expect(nav).not.toHaveClass('hidden');
+  expect(nav).toHaveClass('w-full');
+  expect(nav.querySelector('ul')).toHaveClass('flex-wrap');
+  for (const name of ['Library', 'People', 'Studio books', 'Correspondence']) {
+    const door = within(nav).getByRole('button', { name });
+    expect(door).toBeVisible();
+    expect(door).toHaveClass('min-h-11', 'min-w-11');
+    expect(door).not.toHaveAttribute('aria-current');
+  }
 });
 
 it('keeps hours, account and help reachable without another menu', () => {
