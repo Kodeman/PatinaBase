@@ -23,13 +23,13 @@ Every guard defaults to the shared stack (`127.0.0.1:54322`). Pointing a suite e
 | --- | --- | --- | --- |
 | `ROUND8_DB_URL` | the eight `*_concurrency.test.mjs` host-psql suites | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` | any host other than `127.0.0.1`/`localhost`, query or fragment (`?host=`, `?hostaddr=`, `?service=`), comma host lists, socket form, a non-plain database path |
 | `API_URL` | `fabrication_instruction` | none | anything but `http://127.0.0.1:<port>/` |
-| `-v expected_port=<n>` | `fill_locked_current_concurrency.psql`, `fill_locked_current_isolated.psql`, `scope_composition_concurrency_test.sql`, `scope_consumer_projection_test.sql` | `54322` | `HOST` must still equal `127.0.0.1` |
+| `-v expected_port=<n>` | `fill_locked_current_concurrency.psql`, `fill_locked_current_isolated.psql`, `scope_composition_concurrency_test.sql`, `scope_consumer_projection_test.sql`, `service_acceptance_test.sql`, `service_acceptance_isolated.psql` | `54322` | `HOST` must still equal `127.0.0.1` |
 | `ROUND8_OWNER_TICKET` | `scope_reconciliation_concurrency.test.mjs` | none: unset refuses | any value not exactly equal to the owned container's `sidequest.ticket` label |
 | `ROUND8_CLONE_DB` | `owned_psql.mjs`, `owned_seed.mjs`, `scope_reconciliation` | `round8_clone` | anything but a plain lowercase identifier |
 
 `owned_psql.test.mjs` proves each parameter unset, wrong and right.
 
-`service_completion_test.sql` (C6, 00888) is the one guard that defaults to `-v expected_port=56322`, the owned +2000 stack its ticket verifier names. Pass `-v expected_port=<n>` to run it on another local stack. It enables `scope_editions` inside its own rolled-back transaction, so it needs no capability change.
+Two guards default to an owned port instead: `service_completion_test.sql` (C6, 00888) to `-v expected_port=56322`, the owned +2000 stack its ticket verifier names, and `service_acceptance_client_evidence_test.sql` (00889) to `57322`, which also refuses 54322 outright; its concurrency suite reads `SQ_DB_PORT` (default `57322`) instead of `ROUND8_DB_URL`. Pass `-v expected_port=<n>` to run either on another local stack. It enables `scope_editions` inside its own rolled-back transaction, so it needs no capability change.
 
 `service_completion_concurrency.test.mjs` (C6 §2.11 F7 races) is a window suite: it commits an `f88e` fixture built from the shared sections of `service_completion_test.sql`, removes it at the end. It enables `scope_editions` for its window and restores the value it found, so it runs straight after `service_completion_test.sql`, which asserts that the capability ships off. A completion that refuses releases its locks at the error, not at `ROLLBACK`, so the suite runs those orders without a wait. Its three-session schedule also holds the service-obligation key from a fourth session, to place one resolution's row lock between another's key wait and its completion update:
 
@@ -41,7 +41,7 @@ ROUND8_DB_URL=postgresql://postgres:postgres@127.0.0.1:56322/postgres SERVICE_CO
 ### Isolated CLI stack
 
 1. Copy `supabase/config.toml`, `migrations/`, `seed/` and `templates/` into a scratch workdir outside the repo. Copy no `.env*` file.
-2. Set `project_id` to your own name (never `supabase`) and move every port by +3000 (API 57321, DB 57322, shadow 57320, pooler 57329). Disable studio, inbucket, analytics and edge runtime.
+2. Set `project_id` to your own name (never `supabase`) and move every port by an offset no other local stack holds. The X08 and activation-plan suites above accept only +1000 (API 55321, DB 55322, shadow 55320, pooler 55329); the examples below use +3000 (API 57321, DB 57322, shadow 57320, pooler 57329). Disable studio, inbucket, analytics and edge runtime.
 3. Write only the five version pins into `<workdir>/supabase/.temp`: `postgres-version`, `gotrue-version`, `rest-version`, `storage-version`, `storage-migration`. Never copy `project-ref`, `linked-project` or `pooler-url`.
 4. `supabase start --workdir <workdir>`, or `supabase db reset --local --workdir <workdir>`. Never `--linked`.
 
