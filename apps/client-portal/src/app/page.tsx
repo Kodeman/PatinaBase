@@ -1,3 +1,4 @@
+import { ServiceAcceptanceDoor } from '@/components/service-acceptance/service-acceptance-door';
 import { Threshold } from '@/components/threshold/threshold';
 import { LetterboxDoor } from '@/components/threshold/letterbox-door';
 import { HeroPreloadLinks } from '@/components/threshold/editorial/house-issue';
@@ -105,6 +106,7 @@ export default async function HomePage(props: {
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <HeroPreloadLinks preloads={heroPreloads(editorial)} />
       <main className="w-full min-w-0">
+        <ServiceAcceptanceDoor projectId={project.id} />
         <Threshold
           projectId={project.id}
           project={project}
