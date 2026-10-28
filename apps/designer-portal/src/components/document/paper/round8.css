@@ -414,4 +414,30 @@
   }
 }
 
+/* RC-4b — current room, and phone schedule headings inside the paper gutter. */
+[data-paper-renderer="round8"] [data-studio-door][aria-current="page"] {
+  color: var(--color-forest);
+  font-weight: 600;
+  border-color: var(--color-forest);
+}
+
+[data-paper-renderer="round8"] [data-schedule-phase] h3 {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+[data-paper-renderer="round8"] [data-schedule-phase] .doc-row-verbs {
+  flex-shrink: 0;
+}
+
+/* Phone only: the 280px ghost underline would overrun a narrow gutter; wider
+   paper keeps its intrinsic underline width. */
+@media (max-width: 599px) {
+  [data-paper-renderer="round8"] input[aria-label="Name a phase"] {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 /* end Round 8 paper renderer */

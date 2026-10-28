@@ -54,6 +54,20 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+/** A round-8 scope the page itself renders (frame, desk, room); the sheet
+ *  layers are excluded so a stacked sheet cannot vouch for the next one. */
+const PAGE_ROUND8_SCOPE =
+  '[data-paper-renderer="round8"]:not([data-doc-sheet-layer])';
+
+/** RC-4b — the body portal sits outside the paper, so it takes the round-8
+ *  scope from the page it lays over, read when the layer mounts at open. A
+ *  route that does not render round 8 leaves the layer legacy. */
+function adoptPageRenderer(layer: HTMLDivElement | null) {
+  if (layer?.ownerDocument.querySelector(PAGE_ROUND8_SCOPE)) {
+    layer.dataset.paperRenderer = 'round8';
+  }
+}
+
 type DocSheetOrigin = 'document' | 'margin';
 const DocSheetOriginContext = createContext<DocSheetOrigin>('document');
 
@@ -390,6 +404,7 @@ export function DocSheet({
 
   return createPortal(
     <div
+      ref={adoptPageRenderer}
       data-doc-sheet-layer
       data-doc-sheet-stack-state={isTopModal ? 'top' : 'covered'}
       aria-hidden={isTopModal ? undefined : true}
