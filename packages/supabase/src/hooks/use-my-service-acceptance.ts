@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { serviceAcceptanceKeys } from '../query-keys/service-acceptance';
 import { scopeRecord } from './use-agreement-parts';
+import { serviceCompletionKeys, type StudioServiceCompletion } from './use-service-completion';
+import { isServiceAcceptanceInactive } from './use-service-acceptance';
 import type { ScopePackagePayload, ScopePartyKind, ScopeServiceSlot } from '@patina/types';
 import type {
   ServiceAcceptanceAnswer, ServiceAcceptanceCondition, ServiceAcceptanceLifecycle,
@@ -59,6 +61,63 @@ function list(value: unknown): Record<string, unknown>[] {
   if (!Array.isArray(value)) throw new Error('Malformed acceptance list');
   return value.map(scopeRecord);
 }
+export type MyStudioServiceCompletion = Pick<StudioServiceCompletion,
+  'completionId' | 'scopeEditionId' | 'acceptanceRequestId' | 'state' | 'completedAt' | 'conditionsClosedAt'> & {
+  scopeContentHash: string;
+  requestNumber: number;
+};
+export interface MyStudioServiceCompletionReading {
+  projectId: string;
+  completion: MyStudioServiceCompletion | null;
+}
+
+function completionDate(value: unknown): string {
+  const date = text(value);
+  if (!Number.isFinite(Date.parse(date))) throw new Error('Malformed completion date');
+  return date;
+}
+
+export function readMyStudioServiceCompletion(value: unknown, projectId: string): MyStudioServiceCompletionReading | null {
+  const row = scopeRecord(value);
+  if (row.projectId !== projectId) throw new Error('Completion project mismatch');
+  if (row.audience !== 'client') return { projectId, completion: null };
+  if (row.capability === 'inactive') return null;
+  // The RPC orders newest first. An unknown latest state must not reveal an older completion.
+  const latest = list(row.completions).find((completion) => completion.revokedAt == null);
+  if (!latest) return { projectId, completion: null };
+  const state = text(latest.state);
+  if (state !== 'completed' && state !== 'completed_with_conditions') {
+    return { projectId, completion: null };
+  }
+  return { projectId, completion: {
+    completionId: text(latest.completionId),
+    scopeEditionId: text(latest.scopeEditionId),
+    acceptanceRequestId: text(latest.acceptanceRequestId),
+    state,
+    completedAt: completionDate(latest.completedAt),
+    conditionsClosedAt: latest.conditionsClosedAt === null ? null : completionDate(latest.conditionsClosedAt),
+    scopeContentHash: text(latest.scopeContentHash),
+    requestNumber: integer(latest.requestNumber),
+  } };
+}
+
+export function useMyStudioServiceCompletion(projectId: string | null | undefined) {
+  const supabase = createBrowserClient();
+  return useQuery({
+    queryKey: [...serviceCompletionKeys.completion(projectId), 'client'],
+    enabled: !!projectId,
+    meta: { errorSurface: 'silent' },
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_studio_service_completion', { p_project_id: projectId! });
+      if (error) {
+        if (error.code === '42501' || isServiceAcceptanceInactive(error)) return null;
+        throw error;
+      }
+      return readMyStudioServiceCompletion(data, projectId!);
+    },
+  });
+}
+
 function readResponse(value: unknown): MyServiceAcceptanceResponse | null {
   if (value == null) return null;
   const row = scopeRecord(value);

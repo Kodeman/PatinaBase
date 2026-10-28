@@ -4,7 +4,7 @@ import { ServiceAcceptanceDoor } from './service-acceptance-door';
 import type { MyServiceAcceptanceRequest } from '@patina/supabase';
 const mockMutate = jest.fn();
 let mockQuery: any;
-jest.mock('@patina/supabase', () => ({ useMyServiceAcceptanceRequests: () => mockQuery, useRespondServiceAcceptance: () => ({ mutateAsync: mockMutate, isPending: false }) }));
+jest.mock('@patina/supabase', () => ({ useMyStudioServiceCompletion: () => ({ data: null, isPending: false, isError: false }), useMyServiceAcceptanceRequests: () => mockQuery, useRespondServiceAcceptance: () => ({ mutateAsync: mockMutate, isPending: false }) }));
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 const request = (over: Partial<MyServiceAcceptanceRequest> = {}): MyServiceAcceptanceRequest => ({
   requestId: 'r1', projectId: 'p1', requestNumber: 4, scopeEditionId: 'edition-1',
@@ -14,7 +14,7 @@ const request = (over: Partial<MyServiceAcceptanceRequest> = {}): MyServiceAccep
   signers: [{ signerId: 's1', slot: 'Client', required: true, response: null }], ...over,
 });
 const receipt = (pendingRequiredSigners: { signerId: string; slot: string }[] = [], aggregateOutcome = 'accepted') => ({
-  responseId: 'response-1', aggregateOutcome: pendingRequiredSigners.length ? 'pending' : aggregateOutcome,
+  responseId: 'response-1', aggregateOutcome,
   pendingRequiredSigners, signerPolicyRevision: 2, replayed: false,
 });
 const click = (name: string) => fireEvent.click(screen.getByRole('button', { name, exact: true }));
@@ -41,7 +41,7 @@ it.each(['withdrawn', 'superseded', 'closed'])('keeps %s request read only', (li
 });
 it('requires conditions and confirmation then sends the exact presented snapshot', async () => {
   const shown = request();
-  mockMutate.mockResolvedValue(receipt([{ signerId: 's2', slot: 'Partner' }]));
+  mockMutate.mockResolvedValue(receipt([{ signerId: 's2', slot: 'Partner' }], 'pending'));
   render(<ServiceAcceptanceReading request={shown} reload={mockQuery.refetch} />);
   click('Accept with conditions');
   expect(screen.getByRole('button', { name: 'Review response' })).toBeDisabled();
@@ -188,5 +188,22 @@ it('enforces the return reason length boundary', () => {
 it('shows a waiting count for remaining required signers after an own recorded response', () => {
   const own = { response: 'accept' as const, conditions: [], returnReason: null, respondedAt: 'today', method: 'portal_authenticated' as const };
   render(<ServiceAcceptanceReading request={request({ signers: [{ signerId: 's1', slot: 'Client', required: true, response: own }, { signerId: 's2', slot: 'Partner', required: true, response: null }] })} reload={mockQuery.refetch} />);
+  expect(screen.getByText('Waiting for 1 required responses')).toBeInTheDocument();
+});
+
+it('does not wait for remaining signers after a terminal returned receipt', async () => {
+  mockMutate.mockResolvedValue(receipt([{ signerId: 's2', slot: 'Partner' }], 'returned'));
+  render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
+  click('Return');
+  fireEvent.change(screen.getByLabelText('Reason for returning'), { target: { value: 'Work remains' } });
+  click('Review response'); click('Confirm response');
+  await screen.findByText('Your response is recorded');
+  expect(screen.queryByText(/Waiting for .* required responses/)).not.toBeInTheDocument();
+});
+it('waits for remaining signers only while the receipt aggregate is pending', async () => {
+  mockMutate.mockResolvedValue(receipt([{ signerId: 's2', slot: 'Partner' }], 'pending'));
+  render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
+  click('Accept'); click('Review response'); click('Confirm response');
+  await screen.findByText('Your response is recorded');
   expect(screen.getByText('Waiting for 1 required responses')).toBeInTheDocument();
 });
