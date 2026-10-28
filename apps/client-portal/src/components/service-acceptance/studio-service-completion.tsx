@@ -1,6 +1,6 @@
 'use client';
 
-import { useMyStudioServiceCompletion } from '@patina/supabase';
+import { useMyStudioServiceCompletion, type MyServiceAcceptanceRequest } from '@patina/supabase';
 import { useHydrated } from '@/hooks/use-hydrated';
 
 function CompletionDate({ value }: { value: string }) {
@@ -9,9 +9,11 @@ function CompletionDate({ value }: { value: string }) {
   })}</time>;
 }
 
-export function StudioServiceCompletion({ projectId }: { projectId: string }) {
+export function StudioServiceCompletion({ projectId, requestId, aggregateOutcome }: Pick<MyServiceAcceptanceRequest, 'projectId' | 'requestId' | 'aggregateOutcome'>) {
   const hydrated = useHydrated();
-  const query = useMyStudioServiceCompletion(projectId);
+  const accepted = aggregateOutcome === 'accepted' || aggregateOutcome === 'accepted_with_conditions';
+  const query = useMyStudioServiceCompletion(accepted ? projectId : null, requestId);
+  if (!accepted) return null;
   if (!hydrated || query.isPending) return <p role="status">Loading studio service…</p>;
   if (query.isError) return <section aria-label="Studio service" className="space-y-3 border-y py-6">
     <h2 className="font-serif text-2xl">Studio service</h2>
@@ -24,7 +26,7 @@ export function StudioServiceCompletion({ projectId }: { projectId: string }) {
     <h2 className="font-serif text-2xl">Studio service</h2>
     {!completion ? <p>The studio will confirm when its service is complete</p> : <>
       <p>{completion.state === 'completed_with_conditions' && !completion.conditionsClosedAt
-        ? 'Complete, with conditions still being resolved' : "The studio's service is complete"}</p>
+        ? 'Complete, with conditions still being resolved' : 'The studio’s service is complete'}</p>
       <p>Completed <CompletionDate value={completion.completedAt} /></p>
       {completion.conditionsClosedAt && <p>Conditions resolved <CompletionDate value={completion.conditionsClosedAt} /></p>}
       <dl className="space-y-3">
@@ -32,6 +34,6 @@ export function StudioServiceCompletion({ projectId }: { projectId: string }) {
         <div><dt>Accepted scope reference</dt><dd><code className="break-all text-sm">{completion.scopeContentHash}</code></dd></div>
       </dl>
     </>}
-    <p>Care questions are still welcome.</p>
+    {completion && <p>Care questions are still welcome.</p>}
   </section>;
 }

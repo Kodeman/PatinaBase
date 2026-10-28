@@ -77,13 +77,14 @@ function completionDate(value: unknown): string {
   return date;
 }
 
-export function readMyStudioServiceCompletion(value: unknown, projectId: string): MyStudioServiceCompletionReading | null {
+export function readMyStudioServiceCompletion(value: unknown, projectId: string, requestId: string): MyStudioServiceCompletionReading | null {
   const row = scopeRecord(value);
   if (row.projectId !== projectId) throw new Error('Completion project mismatch');
   if (row.audience !== 'client') return { projectId, completion: null };
   if (row.capability === 'inactive') return null;
-  // The RPC orders newest first. An unknown latest state must not reveal an older completion.
-  const latest = list(row.completions).find((completion) => completion.revokedAt == null);
+  // The RPC orders newest first. An unknown matching state must not reveal an older completion.
+  const latest = list(row.completions).find((completion) =>
+    completion.revokedAt == null && text(completion.acceptanceRequestId) === requestId);
   if (!latest) return { projectId, completion: null };
   const state = text(latest.state);
   if (state !== 'completed' && state !== 'completed_with_conditions') {
@@ -101,10 +102,10 @@ export function readMyStudioServiceCompletion(value: unknown, projectId: string)
   } };
 }
 
-export function useMyStudioServiceCompletion(projectId: string | null | undefined) {
+export function useMyStudioServiceCompletion(projectId: string | null | undefined, requestId: string) {
   const supabase = createBrowserClient();
   return useQuery({
-    queryKey: [...serviceCompletionKeys.completion(projectId), 'client'],
+    queryKey: [...serviceCompletionKeys.completion(projectId), 'client', requestId],
     enabled: !!projectId,
     meta: { errorSurface: 'silent' },
     queryFn: async () => {
@@ -113,7 +114,7 @@ export function useMyStudioServiceCompletion(projectId: string | null | undefine
         if (error.code === '42501' || isServiceAcceptanceInactive(error)) return null;
         throw error;
       }
-      return readMyStudioServiceCompletion(data, projectId!);
+      return readMyStudioServiceCompletion(data, projectId!, requestId);
     },
   });
 }

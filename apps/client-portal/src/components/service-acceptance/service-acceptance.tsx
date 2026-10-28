@@ -149,7 +149,7 @@ export function ServiceAcceptanceReading({ request, reload, evidence }: {
     <Link href={`/projects/${encodeURIComponent(request.projectId)}`}>Return to your house</Link>
     <header><h1 className="font-serif text-3xl">Service acceptance</h1><p>Request {request.requestNumber} · {request.lifecycle} · {request.aggregateOutcome.replaceAll('_', ' ')}</p></header>
     <ServiceAcceptanceEvidence request={request} evidence={evidence} />
-    <StudioServiceCompletion projectId={request.projectId} />
+    <StudioServiceCompletion projectId={request.projectId} requestId={request.requestId} aggregateOutcome={request.aggregateOutcome} />
     {request.lifecycle === 'sent' && (request.viewerRole !== 'signer_required' || own) && pending > 0 && <p>Waiting for {pending} required responses</p>}
     {own && <section aria-label="Your recorded response"><h2>Your response</h2><ResponseReading response={own} /></section>}
     {request.viewerRole === 'signer_required' && request.lifecycle === 'sent' && !own && <ResponseForm request={request} reload={reload} />}
