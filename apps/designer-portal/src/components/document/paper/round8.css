@@ -126,8 +126,8 @@
 
 /* ── the plate (§H-3.1) · the US-46 R203 plate, painted over its whole 44px
    target. Geometry only: the paint, its hover and its forced-colours edge
-   stay the legacy rules, and no other DocumentAction tier is restyled. With
-   the paint at the target's edge, the shared ring stands 2px off it, on paper
+   stay the legacy rules; the separate compact type floor below changes no
+   action grammar. With the paint at the target's edge, the shared ring stands 2px off it, on paper
    (focus-ring 5.61:1). ─────────────────────────────────────────────────── */
 [data-paper-renderer="round8"] .da-plate::after {
   inset: 0;
@@ -137,6 +137,14 @@
 [data-paper-renderer="round8"] .da-plate[data-held-focus-cue]::after {
   outline-offset: 2px;
 }
+
+/* ── compact action type · US-52 W6 D4 12px floor ──────────────────────── */
+@media (max-width: 1179px) {
+  [data-paper-renderer="round8"] .da-act {
+    font-size: 12px;
+  }
+}
+/* end compact action type */
 
 /* ── depth (§H-3.3) · the five enumerated sites, and only these ─────────── */
 [data-paper-renderer="round8"] .r8-return-bar {
