@@ -119,7 +119,7 @@ async function stamp(
     .select(
       "id,request_id,storage_object_id,storage_object_version,storage_object_etag",
     )
-    .eq("id", intakeId).eq("request_id", requestId).single();
+    .eq("id", intakeId).eq("request_id", requestId).maybeSingle();
   if (error) throw error;
   if (!intake) throw new Refusal("paper_intake_not_found", 404);
   const path = await objectPath(admin, projectId, intake.storage_object_id);
