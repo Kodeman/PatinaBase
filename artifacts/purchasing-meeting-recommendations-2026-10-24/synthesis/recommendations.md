@@ -4,6 +4,8 @@
 
 Inputs: `design/journey.md` (J), `design/money-truth.md` (MT), `design/grouped-buy.md` (GB), the three critiques in `review/`, `transcript/findings.md` (F1–F12, P1–P2), `transcript/as-built.md`, `transcript/meeting-2026-10-23.md` (cited `mtg:N`, the line number). Code paths are relative to `apps/designer-portal/src/` unless they start with `supabase/`. Every anchor quoted below was re-opened on 24 October against main. Screens are in `artifacts/purchasing-workflow-review-2026-10-22/walk/screens/` (local walk, 22 October, some pre-US-51 names).
 
+**Re-based 27 October 2026:** this plan is built on top of the Room Proof 08 redesign (US-52) once it merges. `round8-rebase.md` gives each change's landing place, the rows that moved (R-12's entry moves into the round-8 purchase lens), the new ruling Q-08, and the re-based waves A–D that replace §4's order of work. Where the two disagree, `round8-rebase.md` wins.
+
 Settled in V26 and not reopened here: one ship-to per order (F-05), one review before every Send (F-06), tracking stays manual (F-07), the assigned buyer owns the order (F-03), client visibility is studio-only (F-08).
 
 ---
@@ -88,7 +90,7 @@ Size is design-size (S = copy or one control; M = one bounded interaction; L = s
 ### R-01 · The Order act says why it's held and offers the act that clears it — F1
 
 - **Quote.** Kody: "my order button went away… I did something wrong." (mtg:120, 131) · "So we couldn't order because she hadn't." / Leah: "We hadn't recorded her payment yet." (mtg:239-240)
-- **Today.** When a selected line isn't ready, the next act returns `null` (`components/document/line-unfold/next-act.ts:87-90`), so the whole Next row is not drawn (`components/document/line-unfold.tsx:344`). The reasons drop into the order cell as an 11px muted list whose heading "Before this can be ordered" exists only as an aria-label (`components/document/line-unfold/order-cell.tsx:132-142`). The strip sentence "Authorized — the purchase order opens when the deposit clears (A{n})" is also 11px (`lib/document/authorization-derivation.ts:388-391`, rendered at `line-unfold.tsx:469-472`). The reasons are `lib/document/authorization-derivation.ts:446-472`. After the payment was recorded, Order came back only on refresh (mtg:235-237).
+- **Today.** When a selected line isn't ready, the next act returns `null` (`components/document/line-unfold/next-act.ts:87-90`), so the whole Next row is not drawn (`components/document/line-unfold.tsx:344`). The reasons drop into the order cell as an 11px muted list whose heading "Before this can be ordered" exists only as an aria-label (`components/document/line-unfold/order-cell.tsx:132-142`). The strip sentence "Authorized — the purchase order opens when the deposit clears (A{n})" is also 11px (`lib/document/authorization-derivation.ts:388-391`, rendered at `line-unfold.tsx:469-472`). The reasons are `lib/document/authorization-derivation.ts:446-472`. After the payment was recorded, Order came back only on refresh (mtg:235-237). *Under round 8 (`round8-rebase.md`):* the 12px metadata floor makes the reasons legible, and the purchase lens already lists them. The gap that remains is that no reason offers its act.
 - **Change.** On a selected line the Next row never disappears. When the line can't be ordered, it states the first reason and offers the act that clears it; further reasons read "+2 more" and open the cell. Order comes back in place, without a refresh.
 
   ```
@@ -359,6 +361,8 @@ See §6. No change beyond R-06's rename.
 
 ## 4 · Phasing
 
+> Superseded for sequencing by `round8-rebase.md` §4 (waves A–D, after round 8 merges). The sizes and contents below still hold.
+
 S means copy or one control; M means one bounded interaction; L means several surfaces or coordinated schema/writes. Full-item sizes above include every promised part, not just the easy entry label.
 
 **NOW — minimal unblock before the next Harchess purchases.** Only copy and single controls, sized S. This does not deliver the complete proposal.
@@ -418,6 +422,7 @@ Each was asked in more than one proposal; the ids below replace J-1–J-4, G1–
 | **Q-06** (was G1, J-4) | Which door does a web checkout of a piece that ships use? | A. The order paper, marked placed. B. A grouped "Bought it already". | **A.** Only the paper carries ship-to, riders, the ETA (`movement-cell.tsx:216`) and per-piece shipments. "Bought it already" stays for walked-out store buys, finds and expenses. |
 
 | **Q-07** | Extend the Send review to recording an external order? | A. Add a review before mark as placed. B. Keep direct recording with clearer words. | **A, proposed**, M in NOW-next. V26 F-06 covers Send only; this extension requires founders’ ruling. |
+| **Q-08** (new, round 8) | May the round-8 purchase lens hold a door that opens the order queue? (`purchase-lens.tsx:16-17`: nothing in it drafts.) | A. A door, never a writer: "Order together →" opens the existing `OrderPaperQueue`; a paper is created only when the studio saves. B. Keep maker grouping on the vendor page only. | **A.** It is the same kind of door as the line's "Prepare a PO". See `round8-rebase.md` §5. |
 
 ---
 
