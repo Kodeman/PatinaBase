@@ -32,7 +32,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Select, Textarea } from '@/components/ui/controls';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
-import { ReadyToSendSheet } from '../outbound/ready-to-send-sheet';
+import { OPEN_STATUSES, ReadyToSendSheet } from '../outbound/ready-to-send-sheet';
 import {
   INACTIVE_NOTE, LIFECYCLE, OUTCOME, SUPERSEDED, answerLabel, refusalCopy, responseLabel, shortDate, slotLabel,
 } from './copy';
@@ -52,11 +52,13 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
   const requests = [...(read.data?.requests ?? [])].sort((a, b) => b.requestNumber - a.requestNumber);
   const byId = new Map(requests.map((request) => [request.requestId, request]));
   // Each required signer has its own notice (00891); the same drafts the
-  // ready-to-send sheet lists say which still wait for the designer.
+  // ready-to-send sheet keeps open say which still wait for the designer. A
+  // delivered notice whose send is not finalized stays open there, with its
+  // retry, so the hand-off stays too.
   const outbound = useOutboundDrafts({ projectId });
   const awaiting = (requestId: string) => (outbound.data ?? []).filter((draft) =>
     draft.ref_type === 'service_acceptance_request' && draft.ref_id === requestId
-    && draft.status === 'awaiting_review').length;
+    && OPEN_STATUSES.has(draft.status)).length;
 
   return (
     <section aria-labelledby={`service-acceptance-${projectId}`} data-service-acceptance className="mt-6">

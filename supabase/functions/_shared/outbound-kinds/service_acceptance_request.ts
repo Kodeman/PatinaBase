@@ -18,14 +18,27 @@ interface SignerRow {
 interface RequestRow {
   id: string;
   project_id: string;
+  lifecycle: string;
   service_acceptance_signers: SignerRow[] | null;
+}
+
+// A draft request turns sent on its first delivered notice; closed,
+// superseded and withdrawn requests take no answer (00893).
+const OPEN_LIFECYCLES = new Set(["draft", "sent"]);
+
+function bindsOpenRequest(
+  request: RequestRow | null,
+  draft: OutboundDraft,
+): request is RequestRow {
+  return request !== null && request.id === draft.ref_id &&
+    request.project_id === draft.project_id &&
+    OPEN_LIFECYCLES.has(request.lifecycle);
 }
 
 // 00891: each active required signer has its own draft, so a draft binds to
 // its request through its recipient, not through request.outbound_draft_id.
 function bindsDraft(request: RequestRow | null, draft: OutboundDraft) {
-  return request !== null && request.id === draft.ref_id &&
-    request.project_id === draft.project_id &&
+  return bindsOpenRequest(request, draft) &&
     (request.service_acceptance_signers ?? []).some((signer) =>
       addressesSigner(signer, draft)
     );
@@ -50,7 +63,7 @@ export async function renderEmail(
     "service_acceptance_requests",
   )
     .select(
-      "id,project_id,service_acceptance_signers(profile_id,household_person_id,status,required)",
+      "id,project_id,lifecycle,service_acceptance_signers(profile_id,household_person_id,status,required)",
     ).eq("id", draft.ref_id).single();
   if (error) throw error;
   if (

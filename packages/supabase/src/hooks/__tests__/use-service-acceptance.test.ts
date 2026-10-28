@@ -27,6 +27,7 @@ import {
   useServiceAcceptanceManifests, useStampServiceAcceptancePaper, useWithdrawServiceAcceptanceRequest,
 } from '../use-service-acceptance';
 import { serviceAcceptanceKeys } from '../../query-keys';
+import { outboundDraftKeys } from '../use-outbound-drafts';
 
 // Shape of get_project_service_acceptance (00886) as captured from the C4 oracle.
 const response = (over: Record<string, unknown> = {}) => ({
@@ -125,8 +126,12 @@ describe('service acceptance studio acts (WP-10C)', () => {
       p_client_request_id: expect.stringMatching(KEY),
     });
     act.onSuccess();
-    expect(mocks.invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateQueries).toHaveBeenCalledTimes(2);
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: serviceAcceptanceKeys.project('job-1') });
+    // 00893 (SQ-2348 F3): the new signer notices are read under the same key
+    // as useOutboundDrafts({ projectId }) and Ready to send, so it goes stale.
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: outboundDraftKeys.list('job-1') });
+    expect(outboundDraftKeys.list('job-1')).toEqual(['outbound-drafts', 'job-1', 'all']);
   });
 
   it('replays a failed act with the same key, and mints a new key once it succeeds', async () => {

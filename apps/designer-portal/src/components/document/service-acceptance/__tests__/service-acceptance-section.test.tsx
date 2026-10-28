@@ -38,6 +38,8 @@ jest.mock('@patina/supabase', () => ({
 }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: mockUser }) }));
 jest.mock('../../outbound/ready-to-send-sheet', () => ({
+  // The sheet's own open-state set, not a copy.
+  OPEN_STATUSES: jest.requireActual('../../outbound/ready-to-send-sheet').OPEN_STATUSES,
   ReadyToSendSheet: ({ projectId }: { projectId: string }) => <div data-testid="ready-to-send">{projectId}</div>,
 }));
 jest.mock('../../overlays/doc-sheet', () => ({
@@ -334,6 +336,22 @@ test('a sent request keeps Review and send while another signer notice still wai
   rerender(<ServiceAcceptanceSection projectId="job-1" />);
   expect(screen.queryByRole('button', { name: 'Review and send' })).toBeNull();
   expect(screen.queryByText(/still waiting for your review/)).toBeNull();
+});
+
+test('a delivered but unfinalized last notice keeps Review and send and the open sheet mounted', () => {
+  mockRead.mockReturnValue(readOf([sentRequest({ predecessorRequestId: null })]));
+  mockDrafts.mockReturnValue({ data: [notice({ status: 'sent' }), notice({ id: 'draft-3' })] });
+  const { rerender } = render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+  expect(screen.getByRole('dialog', { name: 'Ready to send' })).toBeInTheDocument();
+
+  // The provider took draft-3 but its finalization failed: still sending, with
+  // delivered_at and no after_send_done_at. The sheet keeps it open to retry.
+  mockDrafts.mockReturnValue({ data: [notice({ status: 'sent' }), notice({ id: 'draft-3', status: 'sending',
+    delivered_at: '2026-10-28T12:00:00Z', after_send_done_at: null })] });
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.getByRole('button', { name: 'Review and send' })).toBeInTheDocument();
+  expect(within(screen.getByRole('dialog', { name: 'Ready to send' })).getByTestId('ready-to-send')).toHaveTextContent('job-1');
 });
 
 test('closed history offers no hand-off even if a signer notice was never sent', () => {

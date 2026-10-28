@@ -1054,6 +1054,132 @@ DO $$ DECLARE c record; r jsonb; req uuid; first_d uuid; second_d uuid; got text
    'send order '||c.name||': the first delivery marks the request sent, the second is a no-op ['||COALESCE(got,'')||']');
  END LOOP;
 END $$;
+-- 00893 (SQ-2349; SQ-2348 F1): a request that closes discards every signer
+-- notice still awaiting review. A sending or sent notice is left as it is.
+CREATE FUNCTION pg_temp.answer(req uuid, n integer, response text, k text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM pg_temp.actor(n);
+ PERFORM public.respond_service_acceptance(r.id,response,'[]'::jsonb,
+   CASE WHEN response='return' THEN 'Not this scope' END,r.scope_content_hash,r.evidence_manifest_hash,
+   r.signer_policy_revision,k)
+ FROM public.service_acceptance_requests r WHERE r.id=req;
+ PERFORM pg_temp.actor(1);
+END $$;
+CREATE FUNCTION pg_temp.request_state(req uuid) RETURNS text LANGUAGE sql AS $$
+ SELECT r.lifecycle||'/'||r.aggregate_outcome||'|'||pg_temp.draft_states(req)
+ FROM public.service_acceptance_requests r WHERE r.id=req;
+$$;
+DO $$ DECLARE c record; r jsonb; req uuid; got text; BEGIN
+ FOR c IN SELECT * FROM (VALUES
+   ('return',false,'closed/returned|sent,discarded',
+    'the first required return closes the request and discards the unsent sibling notice; the sent notice stays sent'),
+   ('return',true,'closed/returned|sent,sending',
+    'a sibling notice already sending is left as it is when the request closes'),
+   ('accept',false,'sent/pending|sent,awaiting_review>closed/accepted|sent,discarded',
+    'the sibling notice waits while an answer is pending, and is discarded once every required signer has answered')
+ ) v(answer,claim_sibling,expected,name) LOOP
+  BEGIN
+   r:=pg_temp.sa_create('close-'||c.answer||'-'||c.claim_sibling);
+   req:=(r->>'requestId')::uuid;
+   PERFORM pg_temp.deliver_draft((r->'outboundDraftIds'->>0)::uuid);
+   IF c.claim_sibling THEN
+    PERFORM pg_temp.actor(NULL);
+    PERFORM public.claim_outbound_draft_for_send((r->'outboundDraftIds'->>1)::uuid);
+    PERFORM pg_temp.actor(1);
+   END IF;
+   PERFORM pg_temp.answer(req,5,c.answer,'client-evidence-close-5-'||c.answer||'-'||c.claim_sibling);
+   got:=pg_temp.request_state(req);
+   IF c.answer='accept' THEN
+    PERFORM pg_temp.answer(req,6,'accept','client-evidence-close-6');
+    got:=got||'>'||pg_temp.request_state(req);
+   END IF;
+   RAISE EXCEPTION 'probe rolled back';
+  EXCEPTION WHEN OTHERS THEN
+   IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+  END;
+  PERFORM pg_temp.assert_true(got=c.expected,c.name||' ['||COALESCE(got,'<null>')||']');
+ END LOOP;
+END $$;
+-- 00893 (SQ-2349; SQ-2348 F2): replacing a signer moves the notice. The
+-- retired signer's unsent notice is discarded; a required replacement gets
+-- exactly one awaiting_review notice, bound to the request, the project and
+-- the new signer, keyed per signer; a replay writes nothing.
+CREATE FUNCTION pg_temp.drop_policy_slot(s text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ SET LOCAL session_replication_role=replica;
+ DELETE FROM public.project_scope_edition_signers WHERE slot=s
+  AND edition_id=(SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active');
+ SET LOCAL session_replication_role=origin;
+END $$;
+CREATE FUNCTION pg_temp.replace_slot(req uuid, s text, profile uuid, card uuid, k text) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.replace_service_acceptance_signer(req,
+   (SELECT id FROM public.service_acceptance_signers WHERE request_id=req AND slot=s AND status='active'),
+   profile,card,(SELECT signer_policy_revision FROM public.service_acceptance_requests WHERE id=req),'Moved out',k);
+$$;
+DO $$ DECLARE r jsonb; x jsonb; y jsonb; req uuid; retired uuid; got text; BEGIN
+ -- The sole required signer (partner) is replaced by the client before Send.
+ BEGIN
+  PERFORM pg_temp.drop_policy_slot('client');
+  r:=pg_temp.sa_create('replace-sole');
+  req:=(r->>'requestId')::uuid;
+  retired:=(SELECT id FROM public.service_acceptance_signers WHERE request_id=req AND slot='partner');
+  x:=pg_temp.replace_slot(req,'partner',pg_temp.uid(5),NULL,'client-evidence-replace-sole');
+  y:=public.replace_service_acceptance_signer(req,retired,pg_temp.uid(5),NULL,1,'Moved out','client-evidence-replace-sole');
+  got:=pg_temp.draft_states(req)||'|'||pg_temp.signer_drafts(req)
+   ||'|'||(SELECT (count(*)=1 AND min(d.id::text)=x->>'outboundDraftId' AND bool_and(d.kind='service_acceptance_request'
+       AND d.ref_type='service_acceptance_request' AND d.project_id=pg_temp.project() AND d.to_contact_id IS NULL
+       AND d.channel='email' AND d.recipient_kind='client' AND d.composed_by=pg_temp.uid(1)::text
+       AND d.organization_id='f8891000-0000-4000-8000-000000000001' AND d.subject='Review the agreed services'
+       AND d.dedupe_key='service_acceptance_request:'||req||':partner:'||(x->>'signerId')
+       AND d.payload=jsonb_build_object('requestId',req,'projectId',pg_temp.project(),'requestNumber',q.request_number,
+         'scopeEditionId',q.scope_edition_id)))::text
+     FROM public.outbound_drafts d JOIN public.service_acceptance_requests q ON q.id=d.ref_id
+     WHERE d.ref_id=req AND d.status='awaiting_review' AND d.to_client_id=pg_temp.uid(5))
+   ||'|'||((y->>'replayed')::boolean AND y->>'outboundDraftId'=x->>'outboundDraftId'
+       AND (SELECT count(*)=2 FROM public.outbound_drafts WHERE ref_id=req))::text;
+  PERFORM pg_temp.deliver_draft((x->>'outboundDraftId')::uuid);
+  got:=got||'|'||pg_temp.request_state(req);
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+ END;
+ PERFORM pg_temp.assert_true(got='discarded,awaiting_review|'||pg_temp.uid(6)||'|-|client-evidence-6@test.invalid;'
+   ||pg_temp.uid(5)||'|-|client-evidence-5@test.invalid|true|true|sent/pending|discarded,sent',
+  'replacing the sole required signer before Send discards their notice, drafts one bound notice for the replacement '
+  ||'(a replay adds none), and the request can be sent again ['||COALESCE(got,'<null>')||']');
+ -- A sibling: the partner is replaced by the household card; the client keeps their notice.
+ BEGIN
+  PERFORM pg_temp.drop_policy_slot('household');
+  r:=pg_temp.sa_create('replace-sibling');
+  req:=(r->>'requestId')::uuid;
+  x:=pg_temp.replace_slot(req,'partner',NULL,'f8896000-0000-4000-8000-000000000003','client-evidence-replace-sibling');
+  got:=pg_temp.draft_states(req)||'|'||pg_temp.signer_drafts(req)||'|'||((x->>'outboundDraftId')=(SELECT id::text
+    FROM public.outbound_drafts WHERE ref_id=req AND to_contact_id='f8896000-0000-4000-8000-000000000003'))::text;
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+ END;
+ PERFORM pg_temp.assert_true(got='awaiting_review,discarded,awaiting_review|'||pg_temp.uid(5)||'|-|client-evidence-5@test.invalid;'
+   ||pg_temp.uid(6)||'|-|client-evidence-6@test.invalid;-|f8896000-0000-4000-8000-000000000003|<null>|true',
+  'replacing one of two required signers keeps the other''s notice and drafts one for the household card ['
+  ||COALESCE(got,'<null>')||']');
+ -- After Send: the retired signer's delivered notice stays sent.
+ BEGIN
+  PERFORM pg_temp.drop_policy_slot('client');
+  r:=pg_temp.sa_create('replace-sent');
+  req:=(r->>'requestId')::uuid;
+  PERFORM pg_temp.deliver_draft((r->>'outboundDraftId')::uuid);
+  x:=pg_temp.replace_slot(req,'partner',pg_temp.uid(5),NULL,'client-evidence-replace-sent');
+  got:=pg_temp.request_state(req)||'|'||pg_temp.signer_drafts(req);
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM<>'probe rolled back' THEN got:='error '||SQLSTATE||': '||SQLERRM; END IF;
+ END;
+ PERFORM pg_temp.assert_true(got='sent/pending|sent,awaiting_review|'||pg_temp.uid(6)||'|-|client-evidence-6@test.invalid;'
+   ||pg_temp.uid(5)||'|-|client-evidence-5@test.invalid',
+  'replacing a signer after Send leaves their delivered notice sent and drafts one for the replacement ['
+  ||COALESCE(got,'<null>')||']');
+END $$;
 UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
 
 -- ---------------------------------------------------------------------------

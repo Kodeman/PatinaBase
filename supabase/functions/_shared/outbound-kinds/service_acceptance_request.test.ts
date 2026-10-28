@@ -54,6 +54,7 @@ function admin(
             data: table === "projects" ? { name: "Oak & <House>" } : {
               id: "request",
               project_id: "project",
+              lifecycle: "draft",
               service_acceptance_signers: [
                 signer({ profile_id: "client" }),
                 signer({ profile_id: "partner" }),
@@ -190,6 +191,21 @@ Deno.test("service acceptance renderer refuses a foreign draft on the request (d
   for (const { draft: candidate = draft, overrides = {} } of foreign) {
     await assertRejects(
       () => renderEmail({ admin: admin(overrides), draft: candidate }),
+      Error,
+      "draft binding differs",
+    );
+  }
+});
+Deno.test("service acceptance renderer sends a sibling while the request is sent, and refuses once it takes no answer (00893)", async () => {
+  const sibling = { ...draft, id: "sibling", to_client_id: "partner" };
+  const sent = await renderEmail({
+    admin: admin({ lifecycle: "sent" }),
+    draft: sibling,
+  });
+  assertEquals(sent.userId, "partner");
+  for (const lifecycle of ["closed", "superseded", "withdrawn", undefined]) {
+    await assertRejects(
+      () => renderEmail({ admin: admin({ lifecycle }), draft: sibling }),
       Error,
       "draft binding differs",
     );
