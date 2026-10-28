@@ -16,8 +16,9 @@
  * in order for each journey: designer @rc2-send, client @rc2-return, designer
  * @rc2-resend, client @rc2-accept, designer @rc2-complete. Each journey's send
  * leg applies the fixture once (a fresh job); legs never tear anything down.
- * At the end it stops the owned stack with --no-backup (unless --keep-stack)
- * and removes the scratch workdir.
+ * At the end it stops the owned stack with --no-backup (unless --keep-stack),
+ * checks the full teardown census (containers and volumes, including removal of
+ * child-only resources), and removes the scratch workdir.
  *
  * Refusal-check mode applies consumer-journey-fixture.sql to <db url> without
  * owned identity and with identity self-derived from that URL (the SQ-2334 F1

@@ -246,6 +246,9 @@ SQ-2337 repairs the RC-2b harness against review SQ-2334 (F1–F3). The legs, ta
 
 ### Runs
 
+- The RC-2c teardown "Runs" line below came from the f87520150 runner; it was not re-run on the repaired runner.
+- Runner cleanup regression command: `node --test apps/designer-portal/e2e/round8/run-consumer-journey.unit.mjs`.
+
 Command (from the worktree root): `node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --evidence /Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-2337/final --runs 2`.
 
 - One fresh owned stack (Supabase CLI 2.120.0, project `patina-rc2-journey`, API 57321, DB 57322).

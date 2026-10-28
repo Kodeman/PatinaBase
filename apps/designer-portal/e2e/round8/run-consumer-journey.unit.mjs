@@ -15,7 +15,7 @@ const moduleBody = source.slice(0, main).replace(/^import .*;\n/gm, '')
   .replaceAll('import.meta.url', 'moduleUrl');
 
 function harness(t, options = {}) {
-  const scratch = fs.mkdtempSync(path.join(process.env.RC2_CLEANUP_TEST_TMPDIR ?? os.tmpdir(), 'rc2-cleanup-test-'));
+  const scratch = fs.realpathSync(fs.mkdtempSync(path.join(process.env.RC2_CLEANUP_TEST_TMPDIR ?? os.tmpdir(), 'rc2-cleanup-test-')));
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
   const repo = path.join(scratch, 'repo');
   const home = path.join(scratch, 'home');
@@ -136,6 +136,15 @@ test('partial startup failure still attempts teardown and preserves recovery on 
   assert.deepEqual(h.deleted, []);
 });
 
+test('partial startup failure attempts clean teardown and removes the owned child', async (t) => {
+  const h = harness(t, { startError: true });
+  await assert.rejects(h.journey(), /start failed/);
+  assert.ok(h.commands.some((command) => command[1] === 'stop'));
+  assert.equal(fs.existsSync(h.prepared[0]), false);
+  assert.deepEqual(h.deleted, [h.prepared[0]]);
+  assert.ok(h.logs.some((line) => line.includes('teardown:') && line.includes('containers left 0')
+    && line.includes('volumes left 0')));
+});
 test('--keep-stack intentionally retains the owned child without stopping or deleting', async (t) => {
   const h = harness(t);
   assert.equal(await h.journey({ keepStack: true }), true);
@@ -145,16 +154,19 @@ test('--keep-stack intentionally retains the owned child without stopping or del
   assert.deepEqual(h.deleted, []);
 });
 
-for (const kind of ['root', 'home', 'repo', 'other checkout', 'symlink to checkout']) {
+for (const kind of ['root', 'home', 'repo', 'other checkout', 'symlink to checkout', 'symlink to home']) {
   test(`rejects dangerous workdir parent: ${kind}`, async (t) => {
     const h = harness(t, { preparationError: true });
     const checkout = path.join(h.parent, 'other-checkout');
     fs.mkdirSync(checkout);
     fs.writeFileSync(path.join(checkout, '.git'), 'gitdir: /unused/worktrees/example');
     const link = path.join(h.parent, 'checkout-link');
-    fs.symlinkSync(checkout, link);
+    fs.symlinkSync(h.repo, link);
+    fs.writeFileSync(path.join(h.repo, '.git'), 'gitdir: /unused/worktrees/example');
+    const homeLink = path.join(h.parent, 'home-link');
+    fs.symlinkSync(h.home, homeLink);
     const target = { root: path.parse(h.parent).root, home: h.home, repo: h.repo,
-      'other checkout': checkout, 'symlink to checkout': link }[kind];
+      'other checkout': checkout, 'symlink to checkout': link, 'symlink to home': homeLink }[kind];
     await assert.rejects(h.journey({ workdir: target }), /unsafe workdir parent/);
     assert.deepEqual(h.prepared, [], 'refuse before preparation');
     assert.deepEqual(h.deleted, [], 'refuse without deleting anything');
