@@ -1,6 +1,7 @@
 -- C4 household-card signer identity (00894, SQ-2352 / review SQ-2351 R1):
 -- the profile a household card links to NOW lists the request, reads its
--- evidence and answers the card's slot, exactly like a profile signer. The
+-- evidence and answers the card's slot, exactly like a profile signer. 00895
+-- (SQ-2354 / SQ-2353 F1) also covers the project completion reader. The
 -- enclosing runner owns BEGIN/ROLLBACK.
 --
 -- Actors: studio A owner 1; client 5 (profile slot "client"); 6 linked to the
@@ -155,8 +156,15 @@ $$;
 CREATE FUNCTION pg_temp.create(k text) RETURNS jsonb LANGUAGE sql AS $$
   SELECT public.create_service_acceptance_request(pg_temp.project(),
     (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active'),
-    'f8948000-0000-4000-8000-000000000001',k);
+    (SELECT id FROM public.evidence_manifests WHERE project_id=pg_temp.project() AND purpose='service_acceptance'),k);
 $$;
+-- Completion reads run through authenticated, not a table read or a definer
+-- fixture helper; captured errors fail the named success assertion.
+CREATE FUNCTION pg_temp.completion() RETURNS jsonb LANGUAGE sql AS $$
+  SELECT pg_temp.attempt(format('SELECT public.get_studio_service_completion(%L)',pg_temp.project()))->'ok';
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.completion() TO authenticated;
+
 -- The caller's own entries for a request in the client list.
 CREATE FUNCTION pg_temp.listed(req uuid) RETURNS jsonb LANGUAGE sql AS $$
   SELECT jsonb_build_object('count',count(*),'entry',(array_agg(e))[1])
@@ -227,6 +235,8 @@ SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
   'profile signer lists the request once on its own slot');
 SELECT pg_temp.assert_true((public.get_my_service_acceptance_evidence(pg_temp.req('r1'))->>'requestId')::uuid=pg_temp.req('r1'),
   'profile signer reads the evidence');
+SELECT pg_temp.assert_true(pg_temp.completion()->>'audience'='client' AND pg_temp.completion()->'completions'='[]'::jsonb,
+  'profile signer reads the empty client completion projection');
 
 -- The linked profile of an active household card lists and reads like a profile signer.
 SELECT pg_temp.actor(6);
@@ -238,17 +248,24 @@ INSERT INTO sa_results VALUES('ev-6',pg_temp.attempt(format('SELECT public.get_m
 SELECT pg_temp.assert_true((pg_temp.v('ev-6')->'ok'->>'requestId')::uuid=pg_temp.req('r1'),
   'linked card profile reads the evidence '||COALESCE(pg_temp.v('ev-6')->>'error',''));
 
+SELECT pg_temp.assert_true(pg_temp.completion()->>'audience'='client' AND pg_temp.completion()->'completions'='[]'::jsonb,
+  'linked card profile reads the empty client completion projection');
+
 -- Refused or not listed: the unlinked card's would-be user and another household member.
 SELECT pg_temp.actor(10);
 SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=0,'unlinked card would-be user is not listed');
 SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')),'42501','insufficient_privilege',
   'unlinked card would-be user cannot read the evidence');
+SELECT pg_temp.expect_error(format('SELECT public.get_studio_service_completion(%L)',pg_temp.project()),'42501','insufficient_privilege',
+  'unlinked card would-be user cannot read completion');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-10-early')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
   'unlinked card would-be user cannot respond');
 SELECT pg_temp.actor(8);
 SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=0,'another household member is not listed');
 SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')),'42501','insufficient_privilege',
   'another household member cannot read the evidence');
+SELECT pg_temp.expect_error(format('SELECT public.get_studio_service_completion(%L)',pg_temp.project()),'42501','insufficient_privilege',
+  'another household member cannot read completion');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-8')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
   'another household member cannot respond');
 
@@ -261,6 +278,8 @@ SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
   'card linked after send lists the request on its slot');
 SELECT pg_temp.assert_true((pg_temp.attempt(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')))
   ->'ok'->>'requestId')::uuid=pg_temp.req('r1'),'card linked after send reads the evidence');
+SELECT pg_temp.assert_true(pg_temp.completion()->>'audience'='client',
+  'card linked after send reads completion');
 INSERT INTO sa_results VALUES('guest',pg_temp.attempt(format($q$SELECT pg_temp.respond(%L,'accept','hi-guest')$q$,pg_temp.req('r1'))));
 SELECT pg_temp.assert_true(pg_temp.v('guest')->'ok'->>'aggregateOutcome'='pending',
   'card linked after send responds '||COALESCE(pg_temp.v('guest')->>'error',''));
@@ -271,16 +290,22 @@ SELECT pg_temp.actor(6);
 SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=0,'previous link is no longer listed');
 SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')),'42501','insufficient_privilege',
   'previous link cannot read the evidence');
+SELECT pg_temp.expect_error(format('SELECT public.get_studio_service_completion(%L)',pg_temp.project()),'42501','insufficient_privilege',
+  'previous link cannot read completion');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-6-old')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
   'previous link cannot respond');
 SELECT pg_temp.actor(9);
 SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId')::uuid
   =pg_temp.signer(pg_temp.req('r1'),'co_client'),'current link lists the card slot');
+SELECT pg_temp.assert_true(pg_temp.completion()->>'audience'='client',
+  'new current link reads completion after repoint');
 SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),NULL)=1,'designer unlinks the co_client card');
 SELECT pg_temp.actor(9);
 SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=0,'unlinked card is no longer listed');
 SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r1')),'42501','insufficient_privilege',
   'unlinked card cannot read the evidence');
+SELECT pg_temp.expect_error(format('SELECT public.get_studio_service_completion(%L)',pg_temp.project()),'42501','insufficient_privilege',
+  'unlinked card cannot read completion');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-9')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
   'card unlinked before responding is refused');
 
@@ -322,9 +347,57 @@ SELECT pg_temp.assert_true((SELECT x.signer_id=pg_temp.signer(pg_temp.req('r1'),
   FROM public.service_acceptance_responses x WHERE x.id=(pg_temp.v('guest')->'ok'->>'responseId')::uuid),
   'guest response is attributed to its slot and its linked profile');
 
+-- A real completion, created by the native authority after the accepted
+-- request, must be served to the card's current link without studio fields.
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_phases SET status='completed',completed_at=COALESCE(completed_at,now())
+WHERE project_id=pg_temp.project() AND status<>'completed';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('completion',public.complete_studio_service(pg_temp.project(),pg_temp.req('r1'),
+  public._derive_studio_service_obligations(pg_temp.project())->>'obligationHash','hi-complete'));
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+INSERT INTO sa_results VALUES('completion-read',pg_temp.completion());
+SELECT pg_temp.assert_true(pg_temp.v('completion-read')->>'audience'='client'
+  AND pg_temp.v('completion-read')->>'projectId'=pg_temp.project()::text
+  AND jsonb_array_length(pg_temp.v('completion-read')->'completions')=1
+  AND pg_temp.v('completion-read')->'completions'->0->>'completionId'=pg_temp.v('completion')->>'completionId'
+  AND pg_temp.v('completion-read')->'completions'->0->>'state'='completed'
+  AND pg_temp.v('completion-read')->'completions'->0->>'acceptanceRequestId'=pg_temp.req('r1')::text
+  AND pg_temp.v('completion-read')->'completions'->0 ?& ARRAY['completedAt','conditionsClosedAt','scopeEditionId','scopeContentHash','requestNumber']
+  AND NOT pg_temp.v('completion-read')->'completions'->0 ?| ARRAY['financialHold','obligationSnapshot','openConditionIds','completedBy','revokedAt']
+  AND NOT pg_temp.v('completion-read') ?| ARRAY['capability','resolutions'],
+  'linked card profile reads the completed client-safe record');
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(9))=1,'designer repoints card after completion');
+SELECT pg_temp.actor(6);
+SELECT pg_temp.expect_error(format('SELECT public.get_studio_service_completion(%L)',pg_temp.project()),'42501','insufficient_privilege',
+  'previous link loses completed record access');
+SELECT pg_temp.actor(9);
+SELECT pg_temp.assert_true(pg_temp.completion()->'completions'->0->>'completionId'=pg_temp.v('completion')->>'completionId',
+  'new current link reads the same completed record');
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),NULL)=1,'designer unlinks card after completion');
+SELECT pg_temp.actor(9);
+SELECT pg_temp.expect_error(format('SELECT public.get_studio_service_completion(%L)',pg_temp.project()),'42501','insufficient_privilege',
+  'unlink removes completed record access');
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(6))=1,'designer restores card after completion');
+RESET ROLE;
+
 -- Replaced slots never qualify: the retired card slot's linked profile, and
 -- the primary client once its slot moves to an unlinked card.
+-- Use a separate project: r1's still-active slots must not mask a retired
+-- slot's denial in the project-level completion reader.
 SELECT pg_temp.actor(1);
+SELECT pg_temp.draft('f8943000-0000-4000-8000-000000000002');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.send_and_sign('f8943000-0000-4000-8000-000000000002');
+UPDATE sa_results SET value=public.countersign_design_services_agreement(
+  'f8943000-0000-4000-8000-000000000002','Identity Designer') WHERE key='origin';
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
+('f8948000-0000-4000-8000-000000000002',pg_temp.project(),NULL,'service_acceptance','[]',repeat('b',64),repeat('2',64),'hi-2',pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
 INSERT INTO sa_results VALUES('r2',pg_temp.create('hi-r2'));
 SELECT pg_temp.deliver(pg_temp.req('r2'));
 SELECT pg_temp.snap(pg_temp.req('r2'));
@@ -341,6 +414,8 @@ SELECT pg_temp.actor(6);
 SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r2'))->>'count')::int=0,'replaced card slot profile is not listed');
 SELECT pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.req('r2')),'42501','insufficient_privilege',
   'replaced card slot profile cannot read the evidence');
+SELECT pg_temp.expect_error(format('SELECT public.get_studio_service_completion(%L)',pg_temp.project()),'42501','insufficient_privilege',
+  'replaced card slot profile cannot read completion');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-6-replaced')$q$,pg_temp.req('r2')),'55000',
   'signer_not_active','replaced card slot profile cannot respond');
 SELECT pg_temp.actor(5);
@@ -348,6 +423,8 @@ SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r2'))->>'count')::int=1
   AND pg_temp.listed(pg_temp.req('r2'))->'entry'->>'viewerRole'='observer'
   AND pg_temp.listed(pg_temp.req('r2'))->'entry'->'viewerSignerId'='null'::jsonb,
   'primary client is listed only as an observer of the card slots');
+SELECT pg_temp.assert_true(pg_temp.completion()->>'audience'='client',
+  'primary client still reads completion after its signer slot is replaced');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-5-replaced')$q$,pg_temp.req('r2')),'55000',
   'signer_not_active','primary client cannot answer for an unlinked card slot');
 RESET ROLE;
