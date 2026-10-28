@@ -740,18 +740,40 @@ BEGIN
   END IF;
   -- Each reference must exist on this project: a plan issue, a site request, or a
   -- storage object whose path names the project (directly or by a site request).
+  -- This function reads as its definer, so each kind also restates the SELECT
+  -- policy that lets the actor read that row or object; a reference the actor
+  -- cannot read refuses the same way as one that does not exist.
   IF EXISTS (SELECT 1 FROM jsonb_each_text(p_evidence) e WHERE NOT CASE e.key
-      WHEN 'issueId' THEN EXISTS (SELECT 1 FROM public.plan_issues i
-        WHERE i.id = e.value::uuid AND i.project_id = v_request.project_id)
-      WHEN 'siteRequestId' THEN EXISTS (SELECT 1 FROM public.site_requests s
-        WHERE s.id = e.value::uuid AND s.project_id = v_request.project_id)
-      ELSE EXISTS (SELECT 1 FROM storage.objects o WHERE o.id = e.value::uuid AND CASE
-        WHEN o.bucket_id IN ('project-documents', 'project-ffe-working', 'service-acceptance-paper')
-          THEN (storage.foldername(o.name))[1] = v_request.project_id::text
-        WHEN o.bucket_id = 'field-media'
-          THEN (storage.foldername(o.name))[1:2] = ARRAY['project', v_request.project_id::text]
-        WHEN o.bucket_id = 'site-requests' THEN EXISTS (SELECT 1 FROM public.site_requests s
-          WHERE s.project_id = v_request.project_id AND s.id::text = (storage.foldername(o.name))[1])
+      -- plan_issues_studio_rw (00429_plan_room_foundation.sql).
+      WHEN 'issueId' THEN EXISTS (SELECT 1 FROM public.plan_issues i JOIN public.projects p ON p.id = i.project_id
+        WHERE i.id = e.value::uuid AND i.project_id = v_request.project_id
+          AND public.is_design_studio_comember(p.designer_id))
+      -- site_requests_designer_read (00471_site_request_authority_action_detail.sql).
+      WHEN 'siteRequestId' THEN EXISTS (SELECT 1 FROM public.site_requests s JOIN public.projects p ON p.id = s.project_id
+        WHERE s.id = e.value::uuid AND s.project_id = v_request.project_id
+          AND public.is_design_studio_comember(p.designer_id))
+      ELSE EXISTS (SELECT 1 FROM storage.objects o JOIN public.projects p ON p.id = v_request.project_id
+        WHERE o.id = e.value::uuid AND CASE o.bucket_id
+        -- service_acceptance_paper_read and its restrictive read boundary (00886).
+        WHEN 'service-acceptance-paper' THEN (storage.foldername(o.name))[1] = p.id::text
+          AND public._can_access_service_acceptance_paper_object(o.name)
+        -- "Project members can read documents" (00584_studio_comember_rls_sweep.sql).
+        WHEN 'project-documents' THEN (storage.foldername(o.name))[1] = p.id::text
+          AND (p.designer_id = auth.uid() OR public.is_studio_comember(p.designer_id)
+            OR public.is_project_team_member(p.id)
+            OR (p.client_id = auth.uid() AND EXISTS (SELECT 1 FROM public.project_documents pd
+              WHERE pd.project_id = p.id AND pd.storage_path = o.name AND pd.client_visible = true)))
+        -- project_ffe_working_studio_select (00433_ffe_safe_reader_media_compatibility.sql).
+        WHEN 'project-ffe-working' THEN (storage.foldername(o.name))[1] = p.id::text
+          AND public.is_studio_comember(p.designer_id)
+        -- "Field team can read field media" (00584_studio_comember_rls_sweep.sql).
+        WHEN 'field-media' THEN (storage.foldername(o.name))[1:2] = ARRAY['project', p.id::text]
+          AND (public.is_project_team_member(p.id) OR public.is_studio_comember(p.designer_id))
+        -- "Site request designers read immutable media" (00374_field_site_request_loop.sql).
+        -- Its site_requests join reads through site_requests_designer_read (00471).
+        WHEN 'site-requests' THEN EXISTS (SELECT 1 FROM public.site_requests s
+          WHERE s.project_id = p.id AND s.id::text = (storage.foldername(o.name))[1])
+          AND public.is_studio_comember(p.designer_id) AND public.is_design_studio_comember(p.designer_id)
         ELSE false END)
       END) THEN
     RAISE EXCEPTION 'service_acceptance_evidence_unbound' USING ERRCODE = 'check_violation';

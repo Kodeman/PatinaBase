@@ -693,6 +693,59 @@ FROM (VALUES
   (2,'a project-documents object under this project','{"storageObjectId":"f8889000-0000-4000-8000-000000000004"}'),
   (3,'a field-media object under this project','{"storageObjectId":"f8889000-0000-4000-8000-000000000005"}'),
   (4,'a site-requests object of this project''s request','{"storageObjectId":"f8889000-0000-4000-8000-000000000006"}')) x(n,label,e);
+-- §2.2 visibility (SQ-2263 F1): a resolver must also be able to read each reference.
+-- Designer 1 leaves studio A. Admin 3 can still resolve, but no longer reads this
+-- project's issues, site requests, acceptance paper or media.
+SET LOCAL session_replication_role=replica;
+INSERT INTO storage.objects(id,bucket_id,name) VALUES
+('f8889000-0000-4000-8000-00000000000a','service-acceptance-paper',pg_temp.project()||'/f8889000-0000-4000-8000-00000000000b.pdf'),
+('f8889000-0000-4000-8000-00000000000c','project-ffe-working',pg_temp.project()||'/items/lamp.jpg');
+CREATE TEMP TABLE visibility_cases(n integer,label text,e jsonb);
+INSERT INTO visibility_cases VALUES
+  (1,'the service-acceptance paper','{"storageObjectId":"f8889000-0000-4000-8000-00000000000a"}'),
+  (2,'a plan issue','{"issueId":"f888e000-0000-4000-8000-000000000001"}'),
+  (3,'a site request','{"siteRequestId":"f8889000-0000-4000-8000-000000000002"}'),
+  (4,'a project-documents object','{"storageObjectId":"f8889000-0000-4000-8000-000000000004"}'),
+  (5,'a project-ffe-working object','{"storageObjectId":"f8889000-0000-4000-8000-00000000000c"}'),
+  (6,'a field-media object','{"storageObjectId":"f8889000-0000-4000-8000-000000000005"}'),
+  (7,'a site-requests object','{"storageObjectId":"f8889000-0000-4000-8000-000000000006"}');
+-- How many cases the actor reads natively, through the tables' own RLS.
+CREATE FUNCTION pg_temp.natively_visible() RETURNS bigint LANGUAGE sql AS $$
+  SELECT count(*) FROM visibility_cases c
+  WHERE EXISTS (SELECT 1 FROM public.plan_issues i WHERE i.id::text=c.e->>'issueId')
+    OR EXISTS (SELECT 1 FROM public.site_requests s WHERE s.id::text=c.e->>'siteRequestId')
+    OR EXISTS (SELECT 1 FROM storage.objects o WHERE o.id::text=c.e->>'storageObjectId');
+$$;
+GRANT SELECT ON visibility_cases TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.natively_visible() TO authenticated;
+SAVEPOINT designer_left;
+UPDATE public.organization_members SET status='removed' WHERE user_id=pg_temp.uid(1);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(3);
+SELECT pg_temp.assert_true(public.project_recorded_studio(pg_temp.project())='f8881000-0000-4000-8000-000000000001'
+  AND public._can_complete_studio_service(pg_temp.project()) AND NOT public.can_compose_project_plan(pg_temp.project())
+  AND NOT public.is_project_team_member(pg_temp.project()),
+  'the admin of the recorded studio may resolve but no longer reads the project');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert_true(pg_temp.natively_visible()=0,'natively the admin reads none of the cases');
+RESET ROLE;
+SELECT pg_temp.expect_error(format($q$SELECT public.resolve_service_acceptance_condition(%L,%L,'Done',%L,%L)$q$,
+  pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1),e,'r-unseen-'||n),'23514','service_acceptance_evidence_unbound',
+  'evidence the resolver cannot read refuses: '||label)
+FROM visibility_cases;
+ROLLBACK TO SAVEPOINT designer_left;
+-- Control: the same admin cites the same references once it reads them again.
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(3);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assert_true(pg_temp.natively_visible()=7,'natively the admin reads every case again');
+RESET ROLE;
+SELECT pg_temp.expect_error(format($q$DO $p$ BEGIN
+  PERFORM public.resolve_service_acceptance_condition(%L,%L,'Done',%L,%L); RAISE EXCEPTION 'bound probe'; END $p$$q$,
+  pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1),e,'r-seen-'||n),'P0001','bound probe',
+  'evidence the resolver reads binds: '||label)
+FROM visibility_cases;
+SELECT pg_temp.actor(1);
 INSERT INTO sa_results VALUES('res1',public.resolve_service_acceptance_condition(pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1),
   'Done on site','{"issueId":"f888e000-0000-4000-8000-000000000001","siteRequestId":"f8889000-0000-4000-8000-000000000002",
   "storageObjectId":"f8889000-0000-4000-8000-000000000005"}','r-1'));

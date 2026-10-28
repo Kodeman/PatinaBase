@@ -18,6 +18,9 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 - §2.5 step 1 takes `projects` FOR KEY SHARE, not FOR SHARE. Both modes exclude the FOR UPDATE that `close_project` and the C2, C4 and C5 paths take. The writer census found two paths that UPDATE `projects` after a contributing write (`settle_section_on_gate_approval` and `_activate_proposal_as_project_impl`). Against FOR SHARE each would be a hard 40P01. The census is in the 00888 header. It leaves no residual path (corrected by SQ-2257 below).
 - The activation grant plan is in §2.7.
 
+**Revision 2026-10-28 (SQ-2264, 00888).** Repairs the SQ-2263 F1 finding on the SQ-2257 candidate:
+- **Evidence visibility** (§2.2, §2.4): `resolve_service_acceptance_condition` runs as its definer, so the project binding alone let a studio owner or admin cite an artifact they cannot read. One case is the acceptance paper after the designer of record has left the studio. Each reference must now also pass the SELECT policy that governs it for the acting user. Otherwise the resolution refuses with `service_acceptance_evidence_unbound`.
+
 **Revision 2026-10-28 (SQ-2257, 00888).** Repairs the SQ-2255 and SQ-2256 review findings on the SQ-2230 candidate:
 - **Post-key replay** (§2.4): `complete_studio_service` reads its key's receipt again after step 5. A same-key call that waited on the key gets the replayed receipt, or `idempotency_key_reused` when the actor or body differs. Only then does a different key get `service_already_completed`. The cheap lookup before step 1 stays. The resolution key is read only after step 5. Revocation is not keyed: it replays after its completion row lock.
 - **Evidence binding** (§2.2, §2.4): every evidence reference must exist and belong to the request's project, or the resolution refuses with `service_acceptance_evidence_unbound`.
@@ -88,6 +91,16 @@ None of the first three may write `projects.status`, `closure_checklist` or `por
   - `issueId`: a `plan_issues` row of that project;
   - `siteRequestId`: a `site_requests` row of that project;
   - `storageObjectId`: a `storage.objects` row whose path names that project. In `project-documents`, `project-ffe-working` and `service-acceptance-paper` the first folder is the project id. In `field-media` the path starts `project/<projectId>/`. In `site-requests` the first folder is a site request of that project. Any other bucket has no project path, so its objects refuse;
+  - every reference must also be **actor-visible** (SQ-2264): the acting user passes the SELECT policy that lets them read that row or object. The function runs as its definer, so it restates each policy for the user:
+    - an issue: `plan_issues_studio_rw` (00429);
+    - a site request: `site_requests_designer_read` (00471);
+    - a `service-acceptance-paper` object: `_can_access_service_acceptance_paper_object` (00886);
+    - a `project-documents` object: "Project members can read documents" (00584);
+    - a `project-ffe-working` object: `project_ffe_working_studio_select` (00433);
+    - a `field-media` object: "Field team can read field media" (00584);
+    - a `site-requests` object: "Site request designers read immutable media" (00374), with its join through `site_requests_designer_read`.
+
+    A reference the actor cannot read refuses with `service_acceptance_evidence_unbound`, the same code as one that does not exist, so the refusal does not reveal whether the id exists;
 - `resolved_by`, `resolved_at`, `client_request_id`;
 - `UNIQUE (request_id, condition_id)` and `UNIQUE (request_id, client_request_id)`.
 
@@ -156,7 +169,7 @@ Constraints:
 **`resolve_service_acceptance_condition(p_request_id, p_condition_id, p_resolution, p_evidence, p_client_request_id) → jsonb`** (replaces `resolve_studio_service_condition(p_completion_id, …)`, F3)
 - Keyed by the acceptance request, not by a completion, so it can run before any completion exists. It inserts one resolution row. The caller is the designer or a studio owner/admin.
 - It refuses an unknown `conditionId`, a condition that is already resolved, or a request whose edition is not active.
-- It refuses evidence that is not one object of the three keys with UUID strings (`service_acceptance_resolution_invalid`), and evidence that names a row that does not exist or belongs to another project (`service_acceptance_evidence_unbound`, `check_violation`) (§2.2).
+- It refuses evidence that is not one object of the three keys with UUID strings (`service_acceptance_resolution_invalid`), and evidence that names a row that does not exist, that belongs to another project, or that the caller cannot read (`service_acceptance_evidence_unbound`, `check_violation`) (§2.2).
 - **Replay:** the same `client_request_id` with the same caller and body returns the first resolution (`replayed: true`); a different caller or body refuses with `idempotency_key_reused`. The key is read after step 5 (§2.5), so a racing twin replays.
 - It is a contributing write (§2.5).
 
@@ -318,6 +331,7 @@ The implementing slice greps every writer of the listed tables and records which
   - Keyed completions (SQ-2257): two identical calls (the second returns the replayed receipt); the same key with another actor, and with another body (`idempotency_key_reused`); two different keys (`service_already_completed`).
   - The SQ-2256 schedule (SQ-2257): a first completion, a session queued for the key, and two resolutions of the completion's request, so that before the step-3 fix one resolution locks the committed completion row while the other already waits on the key. The pass condition is no `40P01` and one terminal state: one resolution, one `completed` completion, and the second resolution refused as already resolved.
 - **Evidence binding (SQ-2257):** an unknown id and another project's id refuse for each kind, as does an object in a bucket without a project path, and one foreign reference beside a bound one. A site request and objects under each project path convention are accepted.
+- **Evidence visibility (SQ-2264):** the designer of record leaves the recorded studio. Its admin can still resolve, but natively reads none of seven references: the acceptance paper, a plan issue, a site request, and one object each in `project-documents`, `project-ffe-working`, `field-media` and `site-requests`. Each one refuses with `service_acceptance_evidence_unbound`. Control: with the membership restored, the same admin natively reads all seven, and each one binds.
 - **Fixtures:** full-service and design-only/client-buy fixtures through F08. A direct call while inactive is denied; `has_function_privilege` is false for `PUBLIC`, `anon` and `authenticated` (F20). With `scope_editions` inactive, completion refuses even with its grant restored (F8).
 - **Existing suite:** `supabase/tests/document/close_project_readiness_test.sql` passes unchanged.
 
