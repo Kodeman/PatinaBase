@@ -863,6 +863,28 @@ DO $$ DECLARE got text; BEGIN
  END;
  PERFORM pg_temp.assert_true(got='admitted:1','admission accepts a manifest of every readable non-plan kind ['||COALESCE(got,'')||']');
 END $$;
+-- 00890 (SQ-2324): the V22 draft create composes is addressed to the project
+-- client's profile email, trimmed; a missing or blank email leaves to_address
+-- NULL, so Ready-to-send keeps its "no address on file" hold.
+DO $$ DECLARE c record; r jsonb; got text; BEGIN
+ FOR c IN SELECT * FROM (VALUES
+   (1,true,NULL::text,'client-evidence-5@test.invalid'::text,'create addresses the V22 draft to the client''s profile email'),
+   (2,false,NULL,NULL,'create leaves the V22 draft unaddressed for a client with no email'),
+   (3,false,'   ',NULL,'create treats a blank client email as no address')) v(n,fixture_email,email,expected,name) LOOP
+  BEGIN
+   IF NOT c.fixture_email THEN UPDATE public.profiles SET email=c.email WHERE id=pg_temp.uid(5); END IF;
+   r:=public.create_service_acceptance_request(pg_temp.project(),
+     (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active'),
+     (SELECT (value->>'manifestId')::uuid FROM ev_results WHERE key='manifest2'),'client-evidence-address-'||c.n);
+   SELECT d.to_client_id||'|'||COALESCE(d.to_address,'<null>') INTO got FROM public.outbound_drafts d
+   WHERE d.id=(r->>'outboundDraftId')::uuid;
+   RAISE EXCEPTION 'probe rolled back';
+  EXCEPTION WHEN raise_exception THEN
+   IF SQLERRM<>'probe rolled back' THEN got:=SQLERRM; END IF;
+  END;
+  PERFORM pg_temp.assert_true(got=pg_temp.uid(5)||'|'||COALESCE(c.expected,'<null>'),c.name||' ['||COALESCE(got,'')||']');
+ END LOOP;
+END $$;
 UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
 
 -- ---------------------------------------------------------------------------
