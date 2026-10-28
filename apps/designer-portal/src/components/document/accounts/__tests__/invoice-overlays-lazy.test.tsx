@@ -6,6 +6,9 @@ type ComposerProps = ComponentProps<typeof import('../invoice-composer').Invoice
 const mockComposer = jest.fn();
 const mockPush = jest.fn();
 let mockReleaseComposer: () => void;
+let mockRejectComposer: (error: Error) => void;
+
+afterEach(() => jest.restoreAllMocks());
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('react', () => {
@@ -13,8 +16,9 @@ jest.mock('react', () => {
   return {
     ...actual,
     // A cold chunk stays unresolved until the test explicitly delivers it.
-    lazy: (load: () => Promise<unknown>) => actual.lazy(() => new Promise((resolve) => {
-      mockReleaseComposer = () => { void load().then(resolve); };
+    lazy: (load: () => Promise<unknown>) => actual.lazy(() => new Promise((resolve, reject) => {
+      mockReleaseComposer = () => { void load().then(resolve, reject); };
+      mockRejectComposer = reject;
     })),
   };
 });
@@ -87,5 +91,42 @@ it('keeps cold composer context in the eager dismissible sheet, discards cancell
   expect(mockPush).toHaveBeenCalledWith('/doc/project-2');
   expect(screen.queryByRole('dialog')).toBeNull();
   unmount();
-  jest.restoreAllMocks();
+});
+
+it('contains a rejected composer import in the mounted sheet and retries with a fresh lazy identity', async () => {
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 0; });
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+  render(<><main data-testid="paper"><input aria-label="Job draft" defaultValue="Kept words" /></main><button>Draw invoice</button><InvoiceOverlays /></>);
+  const paper = screen.getByTestId('paper');
+  const draft = screen.getByRole('textbox', { name: 'Job draft' });
+  const opener = screen.getByRole('button', { name: 'Draw invoice' });
+  opener.focus();
+  const context = { mode: 'edit' as const, invoiceId: 'draft-retry', initialTimeEntryIds: ['time-retry'] };
+  act(() => openInvoiceComposer(context));
+  const sheet = screen.getByRole('dialog', { name: 'Edit the draft' });
+  const rejectedRelease = mockReleaseComposer;
+
+  await act(async () => mockRejectComposer(new Error('ChunkLoadError')));
+
+  expect(screen.getByRole('alert')).toHaveTextContent('The invoice composer could not be loaded.');
+  expect(screen.getByRole('dialog', { name: 'Edit the draft' })).toBe(sheet);
+  expect(screen.getByTestId('paper')).toBe(paper);
+  expect(screen.getByRole('textbox', { name: 'Job draft' })).toBe(draft);
+  expect(draft).toHaveValue('Kept words');
+  expect(mockComposer).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.getByRole('status')).toHaveTextContent('Loading invoice composer');
+  expect(mockReleaseComposer).not.toBe(rejectedRelease);
+  await act(async () => mockReleaseComposer());
+
+  expect(screen.getByRole('dialog', { name: 'Edit the draft' })).toBe(sheet);
+  expect(screen.getByTestId('paper')).toBe(paper);
+  expect(mockComposer.mock.calls.at(-1)?.[0].context).toBe(context);
+  fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+  expect(screen.getByTestId('folio')).toHaveAttribute('data-invoice', 'draft-1');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(opener).toHaveFocus();
 });

@@ -13,7 +13,9 @@
  * the Accounts book stays mounted beneath — pull, act, put it back (D14).
  */
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { ActFailLine } from "@/components/feedback/act-fail-line";
 import { useRouter } from "next/navigation";
 import { PaperFolioSheet } from "../overlays/paper-folio-sheet";
 import { SectionLoadingLine } from "../section-loading-line";
@@ -21,9 +23,11 @@ import { InvoiceFolio } from "./invoice-folio";
 
 // Keep the event/context owner and dismissible sheet eager; only an opened
 // sheet needs the composer, not every importer of its openers.
-const InvoiceComposer = lazy(() =>
-  import("./invoice-composer").then((module) => ({ default: module.InvoiceComposer })),
-);
+function createInvoiceComposer() {
+  return lazy(() =>
+    import("./invoice-composer").then((module) => ({ default: module.InvoiceComposer })),
+  );
+}
 
 // ── One-act openers ─────────────────────────────────────────────────────────
 
@@ -79,6 +83,8 @@ type OverlayState =
 
 export function InvoiceOverlays() {
   const router = useRouter();
+  const [InvoiceComposer, setInvoiceComposer] = useState(createInvoiceComposer);
+  const composerBodyRef = useRef<HTMLDivElement>(null);
   const [overlay, setOverlay] = useState<OverlayState>(null);
 
   useEffect(() => {
@@ -131,16 +137,31 @@ export function InvoiceOverlays() {
         wide
       >
         {overlay?.kind === "composer" && (
-          <Suspense fallback={<SectionLoadingLine label="Loading invoice composer" />}>
-            <InvoiceComposer
-              key={overlay.context.mode === "edit" ? overlay.context.invoiceId : "new"}
-              context={overlay.context}
-              // The handoff: the fresh draft opens as the folio — issue & send
-              // live there (review-then-send, R74).
-              onDrafted={(invoiceId) => setOverlay({ kind: "folio", invoiceId })}
-              onClose={close}
-            />
-          </Suspense>
+          <div ref={composerBodyRef} tabIndex={-1}>
+            <ErrorBoundary fallback={(_error, reset) => (
+              <ActFailLine
+                error={new Error("The invoice composer could not be loaded.")}
+                retryKey="invoice-composer-load-retry"
+                onRetry={() => {
+                  composerBodyRef.current?.focus({ preventScroll: true });
+                  // React.lazy caches rejection; retry needs a fresh lazy identity.
+                  setInvoiceComposer(createInvoiceComposer);
+                  reset();
+                }}
+              />
+            )}>
+              <Suspense fallback={<SectionLoadingLine label="Loading invoice composer" />}>
+                <InvoiceComposer
+                  key={overlay.context.mode === "edit" ? overlay.context.invoiceId : "new"}
+                  context={overlay.context}
+                  // The handoff: the fresh draft opens as the folio — issue & send
+                  // live there (review-then-send, R74).
+                  onDrafted={(invoiceId) => setOverlay({ kind: "folio", invoiceId })}
+                  onClose={close}
+                />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
         )}
       </PaperFolioSheet>
     </>
