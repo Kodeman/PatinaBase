@@ -3,6 +3,7 @@ import { MobileActionDock } from './mobile-action-dock';
 import { MobileBar } from './mobile-bar';
 import {
   MobileShellProvider,
+  useMobileActiveDoc,
   useMobilePrimaryAction,
   useMobileSecondaryAction,
   type MobilePrimaryAction,
@@ -134,6 +135,83 @@ describe('unified mobile edge owner', () => {
     expect(primary).toHaveClass('min-h-11');
     fireEvent.click(primary);
     expect(press).toHaveBeenCalledTimes(1);
+  });
+
+  // RC-4 D1 / SQ-2306 F1 — jsdom has no layout, so these pin the contract the
+  // live 320/390/768 geometry probe measures: the band's Next asks for its own
+  // width but has no intrinsic floor, its label breaks only between words, and
+  // the contents door keeps a 44px target whose name survives its words
+  // stepping out.
+  it('RC-4 D1 — the band’s Next plate gives way word by word and the door keeps its target and name', () => {
+    mockPathname = '/doc/proj-1';
+    function ActiveDoc() {
+      useMobileActiveDoc({
+        projectId: 'proj-1',
+        proposalId: null,
+        clientName: 'Aspen Loft',
+        title: 'Aspen Loft — the long paper',
+        sections: [],
+      });
+      return null;
+    }
+    const label = 'Prepare purchasing authorization';
+    render(
+      <MobileShellProvider>
+        <ActiveDoc />
+        <Registration
+          action={{
+            actionKey: 'act-lens-band',
+            surfaceKey: 'open-document',
+            regionKey: 'lens-band',
+            label,
+            target: { kind: 'press', onPress: jest.fn() },
+          }}
+        />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    const plate = screen.getByRole('button', { name: label });
+    expect(plate).toHaveClass('da-plate');
+    // printed whole, never shortened here
+    expect(plate.querySelector('.da-label')?.textContent).toBe(label);
+    // wraps at word boundaries; nothing holds it to one intrinsic line
+    expect(plate).toHaveClass('[&_.da-label]:whitespace-normal');
+    expect(plate.className).not.toMatch(/whitespace-nowrap|truncate|break-all|break-words/);
+    // its slot sizes to the plate but may shrink below it, and yields at 600
+    const slot = plate.parentElement!;
+    expect(slot).toHaveClass('min-w-0', 'flex-[0_1_auto]', 'min-[600px]:hidden');
+    expect(slot.className).not.toMatch(/min-w-fit|min-w-max|shrink-0/);
+
+    // the door: a 44px floor, a stable name, and words that step out together
+    const door = screen.getByRole('button', { name: 'Open project contents' });
+    expect(door).toHaveClass('min-h-11', 'min-w-11', 'flex-[1_1_0]');
+    const words = within(door).getByText('Project file sections').parentElement!;
+    expect(words).toHaveClass('min-w-0', 'flex-1', '[container-type:inline-size]');
+    for (const line of Array.from(words.children)) {
+      expect(line).toHaveClass('hidden', '[@container(min-width:72px)]:block');
+    }
+  });
+
+  it('RC-4 D1 — any other centre act keeps its shared, shrinkable slot', () => {
+    render(
+      <MobileShellProvider>
+        <Registration
+          action={{
+            actionKey: 'act-desk-head',
+            surfaceKey: 'open-document',
+            regionKey: 'desk-head',
+            label: 'Capture a lead',
+            target: { kind: 'press', onPress: jest.fn() },
+          }}
+        />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+    const scored = screen.getByRole('button', { name: 'Capture a lead' });
+    expect(scored).toHaveClass('[&_.da-label]:whitespace-normal');
+    expect(scored.parentElement).toHaveClass('min-w-0', 'flex-[1.15_1_0]');
+    expect(scored.parentElement).not.toHaveClass('min-[600px]:hidden');
   });
 
   it('keeps the signed-proposal activation action above fallback guide messaging', () => {
