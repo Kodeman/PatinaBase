@@ -129,20 +129,18 @@ test('successful teardown removes only the owned child, not its parent or siblin
 });
 
 test('partial startup failure still attempts teardown and preserves recovery on failed stop', async (t) => {
-  const h = harness(t, { startError: true, stopStatus: 1 });
-  await assert.rejects(h.journey(), /start failed/);
-  assert.ok(h.commands.some((command) => command[1] === 'stop'));
-  assert.equal(fs.existsSync(h.prepared[0]), true);
-  assert.deepEqual(h.deleted, []);
-});
+  const failed = harness(t, { startError: true, stopStatus: 1 });
+  await assert.rejects(failed.journey(), /start failed/);
+  assert.ok(failed.commands.some((command) => command[1] === 'stop'));
+  assert.equal(fs.existsSync(failed.prepared[0]), true);
+  assert.deepEqual(failed.deleted, []);
 
-test('partial startup failure attempts clean teardown and removes the owned child', async (t) => {
-  const h = harness(t, { startError: true });
-  await assert.rejects(h.journey(), /start failed/);
-  assert.ok(h.commands.some((command) => command[1] === 'stop'));
-  assert.equal(fs.existsSync(h.prepared[0]), false);
-  assert.deepEqual(h.deleted, [h.prepared[0]]);
-  assert.ok(h.logs.some((line) => line.includes('teardown:') && line.includes('containers left 0')
+  const clean = harness(t, { startError: true });
+  await assert.rejects(clean.journey(), /start failed/);
+  assert.ok(clean.commands.some((command) => command[1] === 'stop'));
+  assert.equal(fs.existsSync(clean.prepared[0]), false, 'clean teardown removes the owned child');
+  assert.deepEqual(clean.deleted, [clean.prepared[0]]);
+  assert.ok(clean.logs.some((line) => line.includes('teardown:') && line.includes('containers left 0')
     && line.includes('volumes left 0')));
 });
 test('--keep-stack intentionally retains the owned child without stopping or deleting', async (t) => {
