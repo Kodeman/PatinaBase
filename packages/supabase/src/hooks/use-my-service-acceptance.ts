@@ -104,11 +104,66 @@ export function useMyServiceAcceptanceRequests() {
   });
 }
 
+// The kinds 00889 admits and projects; po_spec_snapshot and
+// coordination_item_revision are refused at admission, so never read here.
 const evidenceKinds = ['plan_issue', 'plan_issue_print', 'plan_print', 'product_configuration',
-  'custom_commission_revision', 'review_item', 'approval_artifact', 'po_spec_snapshot',
-  'coordination_item_revision'] as const;
+  'custom_commission_revision', 'review_item', 'approval_artifact'] as const;
 const parties = ['studio', 'client', 'gc', 'other', 'none'] as const;
 export type ServiceAcceptanceEvidenceKind = typeof evidenceKinds[number];
+export type ServiceAcceptanceEvidenceFacts = Record<string, string | number | boolean>;
+/** A member's client-safe content: allowlisted facts, nested facts, and lists of facts. */
+export type MyServiceAcceptanceEvidenceContent =
+  Record<string, string | number | boolean | ServiceAcceptanceEvidenceFacts | ServiceAcceptanceEvidenceFacts[]>;
+// The C4 §2.2 allowlist per kind, as 00889 _service_acceptance_client_member
+// projects it. Plan kinds have no content (their documents are the content).
+const contentAllowlist: Partial<Record<ServiceAcceptanceEvidenceKind,
+  { facts: readonly string[]; objects?: Record<string, readonly string[]>; lists?: Record<string, readonly string[]> }>> = {
+  product_configuration: {
+    facts: ['productName', 'leadTimeWeeks'],
+    objects: {
+      dimensions: ['width', 'depth', 'height', 'length', 'diameter', 'seatHeight', 'armHeight', 'unit'],
+      fabric: ['fabricName', 'pattern'],
+    },
+    lists: { selections: ['groupName', 'valueLabel'], components: ['name', 'quantity', 'handedness'] },
+  },
+  custom_commission_revision: {
+    facts: ['summary', 'intent', 'siteConditions', 'requirements', 'materials', 'finish', 'targetDate', 'revision'],
+    lists: { measurements: ['label', 'value', 'unit'], drawings: ['name', 'revision'] },
+  },
+  review_item: {
+    facts: ['docCode', 'category', 'quantity', 'room'],
+    objects: { details: ['description', 'dimensions', 'finish', 'material', 'color', 'leadTime', 'care'] },
+  },
+  approval_artifact: { facts: ['source', 'question'] },
+};
+function evidenceFacts(value: unknown, keys: readonly string[]): ServiceAcceptanceEvidenceFacts {
+  const row = scopeRecord(value);
+  const facts: ServiceAcceptanceEvidenceFacts = {};
+  for (const key of keys) {
+    const fact = row[key];
+    if (fact === undefined) continue;
+    if (typeof fact === 'number' && !Number.isFinite(fact)) throw new Error('Malformed acceptance evidence');
+    if (typeof fact !== 'number' && typeof fact !== 'boolean') text(fact);
+    facts[key] = fact as string | number | boolean;
+  }
+  return facts;
+}
+function readEvidenceContent(kind: ServiceAcceptanceEvidenceKind, value: unknown): MyServiceAcceptanceEvidenceContent | null {
+  const allow = contentAllowlist[kind];
+  if (!allow) {
+    if (value != null) throw new Error('Malformed acceptance evidence');
+    return null;
+  }
+  const row = scopeRecord(value);
+  const content: MyServiceAcceptanceEvidenceContent = evidenceFacts(row, allow.facts);
+  for (const [key, keys] of Object.entries(allow.objects ?? {})) {
+    if (row[key] != null) content[key] = evidenceFacts(row[key], keys);
+  }
+  for (const [key, keys] of Object.entries(allow.lists ?? {})) {
+    if (row[key] != null) content[key] = list(row[key]).map((item) => evidenceFacts(item, keys));
+  }
+  return content;
+}
 export interface MyServiceAcceptanceScopePackage {
   key: string;
   label: string;
@@ -122,6 +177,7 @@ export interface MyServiceAcceptanceEvidenceMember {
   kind: ServiceAcceptanceEvidenceKind;
   title: string;
   issuedAt: string | null;
+  content: MyServiceAcceptanceEvidenceContent | null;
   documents: MyServiceAcceptanceEvidenceDocument[];
 }
 /** What a signer accepts (A20): the content behind the request's frozen hashes. */
@@ -154,12 +210,16 @@ export function readMyServiceAcceptanceEvidence(value: unknown): MyServiceAccept
     scope: { editionId: text(scope.editionId), contentHash: text(scope.contentHash), packages: list(scope.packages).map(readScopePackage) },
     evidence: {
       manifestId: text(evidence.manifestId), manifestHash: text(evidence.manifestHash),
-      members: list(evidence.members).map((m) => ({
-        kind: choice(m.kind, evidenceKinds), title: text(m.title), issuedAt: m.issuedAt == null ? null : text(m.issuedAt),
-        documents: list(m.documents).map((d) => ({
-          bucket: choice(d.bucket, ['project-documents'] as const), path: text(d.path), title: text(d.title),
-        })),
-      })),
+      members: list(evidence.members).map((m) => {
+        const kind = choice(m.kind, evidenceKinds);
+        return {
+          kind, title: text(m.title), issuedAt: m.issuedAt == null ? null : text(m.issuedAt),
+          content: readEvidenceContent(kind, m.content),
+          documents: list(m.documents).map((d) => ({
+            bucket: choice(d.bucket, ['project-documents'] as const), path: text(d.path), title: text(d.title),
+          })),
+        };
+      }),
     },
   };
 }

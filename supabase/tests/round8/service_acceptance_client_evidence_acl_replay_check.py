@@ -14,8 +14,11 @@ SEED = ROOT / "supabase/seed/00-legacy-grants.sql"
 FUNCTIONS = (
     "_is_service_acceptance_client_reader(uuid)",
     "_service_acceptance_evidence_documents(uuid)",
+    "_service_acceptance_scalars(jsonb,text[])",
     "_service_acceptance_client_member(uuid,jsonb)",
+    "_service_acceptance_object_projects(text[])",
     "_can_read_service_acceptance_evidence_object(text)",
+    "_guard_service_acceptance_evidence_object()",
     "get_my_service_acceptance_evidence(uuid)",
 )
 AUTHENTICATED = ("_can_read_service_acceptance_evidence_object(text)", "get_my_service_acceptance_evidence(uuid)")

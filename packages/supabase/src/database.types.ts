@@ -41499,6 +41499,10 @@ export type Database = {
       }
       _service_acceptance_hash: { Args: { p_value: Json }; Returns: string }
       _service_acceptance_key: { Args: { p_key: string }; Returns: string }
+      _service_acceptance_object_projects: {
+        Args: { p_names: string[] }
+        Returns: string[]
+      }
       _service_acceptance_open_conditions: {
         Args: { p_request_id: string }
         Returns: Json
@@ -41517,6 +41521,10 @@ export type Database = {
       }
       _service_acceptance_response_receipt: {
         Args: { p_replayed: boolean; p_response_id: string }
+        Returns: Json
+      }
+      _service_acceptance_scalars: {
+        Args: { p_keys: string[]; p_value: Json }
         Returns: Json
       }
       _service_completion_financial_hold: {

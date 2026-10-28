@@ -107,9 +107,19 @@ const evidence = () => ({
       responsibilities: { design: 'client', purchasing: 'client', installation: 'other' }, phases: [] },
   ] },
   evidence: { manifestId: 'manifest-1', manifestHash: 'evidence-hash', members: [
-    { kind: 'plan_issue', title: 'Issue 1', issuedAt: '2026-10-27T00:00:00Z',
+    { kind: 'plan_issue', title: 'Issue 1', issuedAt: '2026-10-27T00:00:00Z', content: null,
       documents: [{ bucket: 'project-documents', path: 'project-1/set.pdf', title: 'Kitchen set' }] },
-    { kind: 'review_item', title: 'Sofa', issuedAt: null, documents: [] },
+    { kind: 'review_item', title: 'Sofa', issuedAt: null, documents: [],
+      content: { docCode: 'F-12', quantity: 2, room: 'Living room', details: { finish: 'Oiled walnut' } } },
+    { kind: 'product_configuration', title: 'Dining chair', issuedAt: null, documents: [],
+      content: { productName: 'Spindle chair', leadTimeWeeks: 10, selections: [{ groupName: 'Finish', valueLabel: 'Ebonized oak' }],
+        components: [{ name: 'Seat cushion', quantity: 1 }], dimensions: { width: 20, unit: 'in' }, fabric: { fabricName: 'Linen' } } },
+    { kind: 'custom_commission_revision', title: 'Dining chair revision 2', issuedAt: null, documents: [],
+      content: { summary: 'Ebonized dining chair', revision: 2, measurements: [{ label: 'Seat height', value: 18, unit: 'in' }],
+        drawings: [{ name: 'Chair elevation', revision: 'B' }] } },
+    { kind: 'approval_artifact', title: 'Care pack', issuedAt: null,
+      content: { source: 'spec_book_artifact', question: 'Approve the care pack?' },
+      documents: [{ bucket: 'project-documents', path: 'project-1/care.pdf', title: 'Care pack folio' }] },
   ] },
 });
 type Evidence = ReturnType<typeof evidence>;
@@ -133,9 +143,17 @@ it('keeps only client-safe evidence fields even when the server sends more', () 
   Object.assign(leaky.scope.packages[0].responsibilities, { payer: 'client', fabrication_contract: 'gc' });
   Object.assign(leaky.evidence.members[0], { id: 'private-id', sha256: 'private-sha', costCents: 1 });
   Object.assign(leaky.evidence.members[0].documents[0], { storageObjectId: 'private-object' });
+  Object.assign(leaky.evidence.members[1].content, { clientUnitPriceCents: 1, productId: 'private-product', media: [{ id: 'private-media' }] });
+  Object.assign(leaky.evidence.members[1].content.details, { note: 'private note' });
+  Object.assign(leaky.evidence.members[2].content, { tradePriceCents: 1, variant: { sku: 'private-sku' } });
+  Object.assign(leaky.evidence.members[2].content.selections[0], { priceDeltaCents: 1 });
+  Object.assign(leaky.evidence.members[2].content.fabric, { mill: 'private-mill', sidemark: 'private-sidemark' });
+  Object.assign(leaky.evidence.members[3].content, { budgetCents: 1, fabricatorName: 'private-maker', notes: 'private note' });
+  Object.assign(leaky.evidence.members[3].content.drawings[0], { url: 'https://private.invalid/drawing.pdf' });
+  Object.assign(leaky.evidence.members[4].content, { context: 'private context', costCentsDelta: 1 });
   const read = readMyServiceAcceptanceEvidence(leaky);
   expect(read).toEqual(evidence());
-  expect(JSON.stringify(read)).not.toMatch(/private|payer|fabrication|roomIds|provenance|sha256|costCents/);
+  expect(JSON.stringify(read)).not.toMatch(/private|payer|fabrication|roomIds|provenance|sha256|costCents|Price|sku|mill|budgetCents|url/);
 });
 it.each<[string, (e: any) => void]>([
   ['request number', (e) => { e.requestNumber = 0; }],
@@ -153,6 +171,17 @@ it.each<[string, (e: any) => void]>([
   ['documents', (e) => { e.evidence.members[1].documents = null; }],
   ['bucket', (e) => { e.evidence.members[0].documents[0].bucket = 'service-acceptance-paper'; }],
   ['path', (e) => { e.evidence.members[0].documents[0].path = ''; }],
+  ['refused po spec kind', (e) => { e.evidence.members[1].kind = 'po_spec_snapshot'; }],
+  ['refused coordination kind', (e) => { e.evidence.members[1].kind = 'coordination_item_revision'; }],
+  ['plan content', (e) => { e.evidence.members[0].content = { title: 'Kitchen set' }; }],
+  ['missing content', (e) => { e.evidence.members[1].content = null; }],
+  ['content shape', (e) => { e.evidence.members[4].content = ['Approve the care pack?']; }],
+  ['nested fact', (e) => { e.evidence.members[1].content.room = { id: 'room-1', name: 'Living room' }; }],
+  ['blank fact', (e) => { e.evidence.members[4].content.question = ' '; }],
+  ['fact number', (e) => { e.evidence.members[2].content.leadTimeWeeks = Number.NaN; }],
+  ['fact list', (e) => { e.evidence.members[2].content.selections = { groupName: 'Finish' }; }],
+  ['list fact', (e) => { e.evidence.members[3].content.measurements[0].value = [18]; }],
+  ['fact object', (e) => { e.evidence.members[1].content.details = 'Oiled walnut'; }],
 ])('rejects malformed evidence: %s', (_name, mutate) => {
   const bad: Evidence = evidence();
   mutate(bad);

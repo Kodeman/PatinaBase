@@ -90,8 +90,10 @@ SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
 SELECT pg_temp.uid(n),'client-evidence-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated'
 FROM generate_series(1,11) n;
+-- 9 (GC) and 10 (maker) are trade profiles, not designers: their native project
+-- relationships are inserted once the project exists.
 INSERT INTO public.profiles(id,email,full_name,is_designer)
-SELECT id,email,'Client evidence fixture',true FROM auth.users WHERE id::text LIKE 'f8890000-%';
+SELECT id,email,'Client evidence fixture',id NOT IN (pg_temp.uid(9),pg_temp.uid(10)) FROM auth.users WHERE id::text LIKE 'f8890000-%';
 INSERT INTO public.organizations(id,type,name,slug,status) VALUES
 ('f8891000-0000-4000-8000-000000000001','design_studio','Evidence A','client-evidence-a','active'),
 ('f8891000-0000-4000-8000-000000000002','design_studio','Evidence B','client-evidence-b','active');
@@ -101,7 +103,7 @@ INSERT INTO public.organization_members(user_id,organization_id,role,status) VAL
 (pg_temp.uid(4),'f8891000-0000-4000-8000-000000000002','owner','active');
 INSERT INTO public.user_roles(user_id,role_id,granted_by)
 SELECT p.id,r.id,p.id FROM public.profiles p CROSS JOIN public.roles r
-WHERE p.id::text LIKE 'f8890000-%' AND r.name='studio_owner';
+WHERE p.id::text LIKE 'f8890000-%' AND p.is_designer AND r.name='studio_owner';
 INSERT INTO public.studio_contacts(id,organization_id,entity_kind,contact_kind,full_name,profile_id) VALUES
 ('f8896000-0000-4000-8000-000000000001','f8891000-0000-4000-8000-000000000001','person','client','Client',pg_temp.uid(5)),
 ('f8896000-0000-4000-8000-000000000002','f8891000-0000-4000-8000-000000000001','person','client','Partner',pg_temp.uid(6)),
@@ -213,6 +215,56 @@ INSERT INTO public.project_approval_artifacts(id,decision_id,project_id,source_k
   artifact_title,question,context,due_at,phase_id,cost_cents_delta,schedule_days_delta,lead_time_days_delta,source_snapshot)
 VALUES (pg_temp.uid(771),pg_temp.uid(761),pg_temp.project(),'spec_book_artifact',pg_temp.uid(772),1,repeat('d',64),'Care pack',
   'Approve the care pack?','Studio note: trade cost 4120',now()+interval '7 days',pg_temp.uid(762),987654,0,0,'{"tradeCostCents":412000}');
+-- The GC (9) and the maker (10) are related to this project natively: active
+-- project team members, project parties, and the maker is the studio's vendor.
+INSERT INTO public.vendors(id,name,contact_profile_id) VALUES(pg_temp.uid(781),'Evidence maker works',pg_temp.uid(10));
+INSERT INTO public.studio_vendor_accounts(organization_id,vendor_id) VALUES('f8891000-0000-4000-8000-000000000001',pg_temp.uid(781));
+INSERT INTO public.project_team_members(project_id,user_id,role,assigned_by) VALUES
+(pg_temp.project(),pg_temp.uid(9),'vendor',pg_temp.uid(1)),(pg_temp.project(),pg_temp.uid(10),'vendor',pg_temp.uid(1));
+INSERT INTO public.project_parties(id,project_id,party_kind,display_name,company_name,profile_id,vendor_id,created_by) VALUES
+(pg_temp.uid(791),pg_temp.project(),'gc','Evidence GC','Evidence builders',pg_temp.uid(9),NULL,pg_temp.uid(1)),
+(pg_temp.uid(792),pg_temp.project(),'vendor','Evidence maker','Evidence maker works',pg_temp.uid(10),pg_temp.uid(781),pg_temp.uid(1));
+-- The care pack is a ready spec book artifact (document 4): the approval
+-- artifact's own file is evidence too.
+INSERT INTO public.project_documents(id,project_id,title,storage_path,client_visible,uploaded_by) VALUES
+(pg_temp.uid(704),pg_temp.project(),'Care pack folio',pg_temp.doc_path(4),false,pg_temp.uid(1));
+INSERT INTO storage.objects(bucket_id,name,owner_id,metadata) VALUES
+('project-documents',pg_temp.doc_path(4),pg_temp.uid(1)::text,'{"mimetype":"application/pdf"}');
+INSERT INTO public.spec_book_artifacts(id,revision_id,audience,status,project_document_id,storage_path,checksum_sha256,rendered_at)
+VALUES (pg_temp.uid(772),pg_temp.uid(773),'care','ready',pg_temp.uid(704),pg_temp.doc_path(4),repeat('a',64),now());
+-- Non-plan evidence for a second manifest (SQ-2272 F1): a published review
+-- item, an approved configuration and an approved commission revision, each
+-- carrying poison (prices, sku, vendor, notes, urls, ids, media) marked
+-- secret or 7770xx that its client projection must drop.
+INSERT INTO public.project_review_editions(id,project_id,edition_number,title,status,published_at,snapshot_hash) VALUES
+(pg_temp.uid(841),pg_temp.project(),1,'Living room review','published',now(),repeat('1',64));
+INSERT INTO public.project_review_items(id,edition_id,source_ffe_item_id,selection_thread_id,item_snapshot,content_hash) VALUES
+(pg_temp.uid(842),pg_temp.uid(841),pg_temp.uid(843),pg_temp.uid(844),jsonb_build_object('name','Walnut sofa','docCode','F-12',
+  'category','Seating','quantity',2,'productId','secret-product','selectionId','secret-selection',
+  'room',jsonb_build_object('id','secret-room','name','Living room'),
+  'clientFields',jsonb_build_object('description','Low walnut sofa','finish','Oiled walnut','note','secret note',
+    'leadTime',jsonb_build_object('secret',1)),
+  'media',jsonb_build_array(jsonb_build_object('id','secret-media','checksumSha256',repeat('5',64))),
+  'clientUnitPriceCents',777001,'clientLineTotalCents',777002),repeat('2',64));
+INSERT INTO public.product_configurations(id,product_id,owner_user_id,project_id,name,status,version,schema_revision,
+  evaluation,snapshot,snapshot_hash,approved_at,approved_by)
+SELECT pg_temp.uid(851),pg_temp.uid(852),pg_temp.uid(1),pg_temp.project(),'Dining chair','approved',1,1,'{}'::jsonb,s,
+  public._configuration_snapshot_hash(s),now(),pg_temp.uid(1)
+FROM (SELECT jsonb_build_object('productName','Spindle chair','leadTimeWeeks',10,'retailPriceCents',777003,
+  'tradePriceCents',777004,'variant',jsonb_build_object('sku','secret-sku','vendorSku','secret-vendor-sku'),
+  'selections',jsonb_build_array(jsonb_build_object('groupName','Finish','valueLabel','Ebonized oak','priceDeltaCents',777005)),
+  'components',jsonb_build_array(jsonb_build_object('name','Seat cushion','quantity',1,'handedness','none','tradePriceCents',777006)),
+  'dimensions',jsonb_build_object('width',20,'depth',22,'height',34,'unit','in','secretKey','secret-dimension'),
+  'comDetails',jsonb_build_object('fabricName','Linen','pattern','Herringbone','mill','secret-mill','sidemark','secret-sidemark',
+    'notes','secret note'),'customCommission',jsonb_build_object('secret',true)) s) x;
+INSERT INTO public.custom_commission_revisions(id,configuration_id,revision_number,status,brief,drawings,quote,provenance,
+  submitted_at,quoted_at,approved_at) VALUES
+(pg_temp.uid(861),pg_temp.uid(851),2,'approved',jsonb_build_object('summary','Ebonized dining chair','intent','Match the table',
+  'requirements','Seat height 18 in','targetDate','2026-12-01','budgetCents',777007,'allowanceCents',777008,
+  'fabricatorName','secret fabricator','notes','secret note','measurements',jsonb_build_array(jsonb_build_object(
+    'label','Seat height','value',18,'unit','in','source','secret-source'))),
+  jsonb_build_array(jsonb_build_object('name','Chair elevation','revision','B','url','https://secret.invalid/drawing.pdf')),
+  '{"totalCents":777009}'::jsonb,'{}'::jsonb,now(),now(),now());
 SET LOCAL session_replication_role=origin;
 -- Native C1 mint (service_role-only RPC, called as the composing designer).
 INSERT INTO ev_results VALUES('manifest',public.create_evidence_manifest(pg_temp.project(),NULL,'service_acceptance',jsonb_build_array(
@@ -222,9 +274,27 @@ INSERT INTO ev_results VALUES('manifest',public.create_evidence_manifest(pg_temp
 SELECT pg_temp.assert_true((SELECT manifest_hash=encode(extensions.digest(public._plan_room_canonical_json(members),'sha256'),'hex')
   AND jsonb_array_length(members)=3 FROM public.evidence_manifests WHERE id=(SELECT (value->>'manifestId')::uuid FROM ev_results WHERE key='manifest')),
   'native manifest hash is taken over its three frozen members');
+INSERT INTO ev_results SELECT 'manifest2',public.create_evidence_manifest(pg_temp.project(),NULL,'service_acceptance',jsonb_build_array(
+  jsonb_build_object('kind','review_item','id',pg_temp.uid(842),'sha256',repeat('2',64),'version',1),
+  jsonb_build_object('kind','product_configuration','id',c.id,'sha256',c.snapshot_hash,'version',1),
+  jsonb_build_object('kind','custom_commission_revision','id',v.id,'sha256',encode(extensions.digest(public._plan_room_canonical_json(
+    jsonb_build_object('configurationId',v.configuration_id,'revision',v.revision_number,'brief',v.brief,'drawings',v.drawings,
+      'quote',v.quote,'provenance',v.provenance)),'sha256'),'hex'),'rev',2),
+  jsonb_build_object('kind','approval_artifact','id',pg_temp.uid(771),'sha256',repeat('d',64),'version',1)),'client-evidence-2')
+FROM public.product_configurations c JOIN public.custom_commission_revisions v ON v.configuration_id=c.id WHERE v.id=pg_temp.uid(861);
+-- Manifests naming kinds with no client projection (refused at admission below).
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.evidence_manifests(id,project_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by)
+SELECT pg_temp.uid(880+k),pg_temp.project(),'service_acceptance',m,
+  encode(extensions.digest(public._plan_room_canonical_json(m),'sha256'),'hex'),repeat('6',64),'client-evidence-refused-'||k,pg_temp.uid(1)
+FROM (VALUES(1,jsonb_build_array(jsonb_build_object('kind','po_spec_snapshot','id',pg_temp.uid(891),'sha256',repeat('3',64),'rev',1))),
+  (2,jsonb_build_array(jsonb_build_object('kind','coordination_item_revision','id',pg_temp.uid(892),'sha256',repeat('4',64),'rev',1)))) x(k,m);
+INSERT INTO ev_results SELECT 'refused'||k,jsonb_build_object('manifestId',pg_temp.uid(880+k)) FROM generate_series(1,2) k;
+SET LOCAL session_replication_role=origin;
 
 -- Projection fixture (x08 pattern): requests bound to the native edition and manifest.
-CREATE FUNCTION pg_temp.fixture_request(n integer, state text, delivered boolean) RETURNS void LANGUAGE plpgsql AS $$
+CREATE FUNCTION pg_temp.fixture_request(n integer, state text, delivered boolean, manifest_key text DEFAULT 'manifest')
+RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  INSERT INTO public.outbound_drafts(id,organization_id,project_id,kind,channel,recipient_kind,to_client_id,
  subject,body,ref_type,ref_id,dedupe_key) VALUES
@@ -236,7 +306,7 @@ BEGIN
  CASE WHEN delivered THEN now() END,'client-evidence-'||n,repeat('b',64),pg_temp.uid(1)
  FROM public.project_scope_editions e, public.evidence_manifests m
  WHERE e.project_id=pg_temp.project() AND e.status='active'
-   AND m.id=(SELECT (value->>'manifestId')::uuid FROM ev_results WHERE key='manifest');
+   AND m.id=(SELECT (value->>'manifestId')::uuid FROM ev_results WHERE key=manifest_key);
  INSERT INTO public.service_acceptance_signers(id,request_id,slot,required,profile_id,policy_slot) VALUES
  (pg_temp.uid(300+n),pg_temp.uid(100+n),'required',true,pg_temp.uid(6),'required'),
  (pg_temp.uid(400+n),pg_temp.uid(100+n),'optional',false,pg_temp.uid(7),'optional');
@@ -267,6 +337,11 @@ DO $$ DECLARE n integer; BEGIN
    AND name IN (pg_temp.doc_path(1),pg_temp.doc_path(2))),'unsent draft opens no storage object for actor '||n);
  END LOOP;
 END $$;
+-- An unsent draft freezes nothing: the studio may still replace a print it names.
+SELECT pg_temp.actor(1);
+WITH u AS (UPDATE storage.objects SET metadata=metadata||'{"eTag":"draft-edit"}' WHERE bucket_id='project-documents'
+  AND name=pg_temp.doc_path(1) RETURNING 1)
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM u),'unsent draft leaves its print object mutable for the studio');
 RESET ROLE;
 SET LOCAL session_replication_role=replica;
 UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
@@ -323,17 +398,20 @@ BEGIN
  PERFORM pg_temp.assert_true(jsonb_array_length(members)=3 AND (SELECT array_agg(m->>'kind' ORDER BY o)
    FROM jsonb_array_elements(members) WITH ORDINALITY x(m,o))=(SELECT array_agg(m->>'kind' ORDER BY o)
    FROM jsonb_array_elements(man.members) WITH ORDINALITY x(m,o)),'one member per frozen manifest member, in order, for actor '||n);
- PERFORM pg_temp.assert_true((SELECT bool_and(pg_temp.keys(m)=ARRAY['documents','issuedAt','kind','title'] AND m->>'issuedAt' IS NOT NULL
+ PERFORM pg_temp.assert_true((SELECT bool_and(pg_temp.keys(m)=ARRAY['content','documents','issuedAt','kind','title']
+   AND m->>'issuedAt' IS NOT NULL
    AND (SELECT COALESCE(bool_and(pg_temp.keys(d)=ARRAY['bucket','path','title'] AND d->>'bucket'='project-documents'),true)
      FROM jsonb_array_elements(m->'documents') d)) FROM jsonb_array_elements(members) m),'exact member and document key sets for actor '||n);
- PERFORM pg_temp.assert_true((SELECT jsonb_agg(jsonb_build_object('kind',m->>'kind','title',m->>'title','documents',m->'documents'))
-   FROM jsonb_array_elements(members) m)=jsonb_build_array(
-   jsonb_build_object('kind','approval_artifact','title','Care pack','documents','[]'::jsonb),
-   jsonb_build_object('kind','plan_issue','title','Spec book issue 1','documents',jsonb_build_array(
+ PERFORM pg_temp.assert_true((SELECT jsonb_agg(jsonb_build_object('kind',m->>'kind','title',m->>'title','content',m->'content',
+     'documents',m->'documents')) FROM jsonb_array_elements(members) m)=jsonb_build_array(
+   jsonb_build_object('kind','approval_artifact','title','Care pack','content',jsonb_build_object('source','spec_book_artifact',
+     'question','Approve the care pack?'),'documents',jsonb_build_array(
+     jsonb_build_object('bucket','project-documents','path',pg_temp.doc_path(4),'title','Care pack folio'))),
+   jsonb_build_object('kind','plan_issue','title','Spec book issue 1','content',NULL,'documents',jsonb_build_array(
      jsonb_build_object('bucket','project-documents','path',pg_temp.doc_path(1),'title','Kitchen set'))),
-   jsonb_build_object('kind','plan_print','title','A-201 Kitchen elevations','documents',jsonb_build_array(
+   jsonb_build_object('kind','plan_print','title','A-201 Kitchen elevations','content',NULL,'documents',jsonb_build_array(
      jsonb_build_object('bucket','project-documents','path',pg_temp.doc_path(2),'title','Kitchen elevations')))),
-  'titles and print documents resolve from the native member rows for actor '||n);
+  'titles, client content and documents resolve from the native member rows for actor '||n);
  SELECT string_agg(f,',') INTO leak FROM unnest(ARRAY['payer','fabrication','provenance','room_ids','owed','signerPolicy',
    'profile','cost','price','margin','trade','note','snapshot','sha256','created_by','fee','evidence-3','margin workbook',
    pg_temp.uid(1)::text,pg_temp.uid(5)::text,pg_temp.uid(6)::text,pg_temp.uid(7)::text,pg_temp.uid(11)::text]) f
@@ -342,9 +420,10 @@ BEGIN
  -- Storage: exactly the returned documents open, the unrelated one does not.
  PERFORM pg_temp.assert_true(public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(1))
   AND public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(2))
-  AND NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(3)),'predicate admits the two evidence documents only for actor '||n);
+  AND public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(4))
+  AND NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(3)),'predicate admits the three evidence documents only for actor '||n);
  PERFORM pg_temp.assert_true((SELECT array_agg(name ORDER BY name) FROM storage.objects WHERE bucket_id='project-documents'
-   AND name IN (pg_temp.doc_path(1),pg_temp.doc_path(2),pg_temp.doc_path(3)))=ARRAY[pg_temp.doc_path(1),pg_temp.doc_path(2)],
+   AND name LIKE pg_temp.project()::text||'/%')=ARRAY[pg_temp.doc_path(1),pg_temp.doc_path(2),pg_temp.doc_path(4)],
   'storage SELECT opens exactly the evidence documents for actor '||n);
  INSERT INTO ev_results VALUES('reader'||n,ev);
 END $$;
@@ -366,13 +445,14 @@ DO $$ DECLARE n integer; label text; BEGIN
   PERFORM pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.uid(102)),'42501','insufficient_privilege',
    'evidence refused: '||label);
   PERFORM pg_temp.assert_true(NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(1))
-   AND NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(2)),'evidence predicate refuses: '||label);
+   AND NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(2))
+   AND NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(4)),'evidence predicate refuses: '||label);
   PERFORM pg_temp.assert_true(public.get_my_service_acceptance_requests()='[]'::jsonb,'client list agrees, no rows: '||label);
  END LOOP;
  FOR n,label IN SELECT * FROM (VALUES(11,'replaced signer'),(8,'another household'),(4,'second studio')) actors(n,label) LOOP
   PERFORM pg_temp.actor(n);
   PERFORM pg_temp.assert_true((SELECT count(*)=0 FROM storage.objects WHERE bucket_id='project-documents'
-   AND name IN (pg_temp.doc_path(1),pg_temp.doc_path(2))),'storage opens no evidence document: '||label);
+   AND name IN (pg_temp.doc_path(1),pg_temp.doc_path(2),pg_temp.doc_path(4))),'storage opens no evidence document: '||label);
  END LOOP;
  FOREACH n IN ARRAY ARRAY[5,6,7] LOOP
   PERFORM pg_temp.actor(n);
@@ -383,6 +463,51 @@ DO $$ DECLARE n integer; label text; BEGIN
    'unsent superseded request stays refused for actor '||n);
   PERFORM pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.uid(199)),'42501','insufficient_privilege',
    'missing request refused alike for actor '||n);
+ END LOOP;
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- GC and maker, natively related: refused the acceptance read and predicate.
+-- Their file access is the pre-existing 00584 team read, which 00889 leaves alone.
+-- ---------------------------------------------------------------------------
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=2 FROM public.project_team_members WHERE project_id=pg_temp.project()
+  AND user_id IN (pg_temp.uid(9),pg_temp.uid(10)) AND role='vendor' AND removed_at IS NULL)
+ AND (SELECT array_agg(party_kind ORDER BY party_kind)=ARRAY['gc','vendor'] FROM public.project_parties
+  WHERE project_id=pg_temp.project() AND profile_id IN (pg_temp.uid(9),pg_temp.uid(10)))
+ AND EXISTS(SELECT 1 FROM public.project_parties pp JOIN public.vendors v ON v.id=pp.vendor_id
+  JOIN public.studio_vendor_accounts a ON a.vendor_id=v.id AND a.organization_id='f8891000-0000-4000-8000-000000000001'
+  WHERE pp.project_id=pg_temp.project() AND pp.profile_id=pg_temp.uid(10) AND v.contact_profile_id=pg_temp.uid(10))
+ AND NOT EXISTS(SELECT 1 FROM public.profiles WHERE id IN (pg_temp.uid(9),pg_temp.uid(10)) AND is_designer),
+ 'GC and maker are native team members and parties, the maker is the studio vendor, neither is a designer');
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE n integer; label text; BEGIN
+ FOR n,label IN SELECT * FROM (VALUES(9,'GC'),(10,'maker')) actors(n,label) LOOP
+  PERFORM pg_temp.actor(n);
+  PERFORM pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.uid(102)),'42501',
+   'insufficient_privilege','evidence refused to the related '||label);
+  PERFORM pg_temp.assert_true(NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(1))
+   AND NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(2))
+   AND NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(3))
+   AND NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(4)),'evidence predicate refuses the related '||label);
+  PERFORM pg_temp.assert_true(public.is_project_team_member(pg_temp.project())
+   AND (SELECT array_agg(name ORDER BY name) FROM storage.objects WHERE bucket_id='project-documents'
+    AND name LIKE pg_temp.project()::text||'/%')=ARRAY[pg_temp.doc_path(1),pg_temp.doc_path(2),pg_temp.doc_path(3),pg_temp.doc_path(4)],
+   'the related '||label||' keeps the 00584 team read of every project document');
+ END LOOP;
+END $$;
+RESET ROLE;
+UPDATE public.project_team_members SET removed_at=now()
+ WHERE project_id=pg_temp.project() AND user_id IN (pg_temp.uid(9),pg_temp.uid(10));
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE n integer; label text; BEGIN
+ FOR n,label IN SELECT * FROM (VALUES(9,'GC'),(10,'maker')) actors(n,label) LOOP
+  PERFORM pg_temp.actor(n);
+  PERFORM pg_temp.assert_true(NOT public.is_project_team_member(pg_temp.project())
+   AND (SELECT count(*)=0 FROM storage.objects WHERE bucket_id='project-documents' AND name LIKE pg_temp.project()::text||'/%'),
+   'off the team, the '||label||'''s party and vendor ties open no project document');
+  PERFORM pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.uid(102)),'42501',
+   'insufficient_privilege','evidence still refused to the '||label||' off the team');
  END LOOP;
 END $$;
 SELECT pg_temp.actor(NULL);
@@ -397,6 +522,170 @@ SELECT pg_temp.expect_error(format('SELECT public._can_read_service_acceptance_e
  'anon denied the storage predicate');
 SELECT pg_temp.assert_true((SELECT count(*)=0 FROM storage.objects WHERE bucket_id='project-documents'),'anon opens no project document');
 RESET ROLE;
+
+-- ---------------------------------------------------------------------------
+-- A sent request freezes the objects behind its plan prints and its spec book
+-- approval artifact (SQ-2273 F1): no overwrite, move, delete, or re-upload at
+-- a bound name, for the studio (allowed by the 00584 write policies),
+-- service_role, or the migration owner.
+-- ---------------------------------------------------------------------------
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid
+  WHERE t.tgrelid='storage.objects'::regclass AND t.tgname='immutable_service_acceptance_evidence_object' AND t.tgenabled='O'
+   AND t.tgtype=(1|2|4|8|16)::int2 AND p.oid=to_regprocedure('public._guard_service_acceptance_evidence_object()')
+   AND p.prosecdef AND p.proconfig @> ARRAY['search_path=public, pg_temp']),
+ 'one enabled BEFORE INSERT OR UPDATE OR DELETE row trigger guards evidence objects');
+SELECT pg_temp.assert_true(CASE WHEN g IS NOT NULL THEN NOT has_function_privilege(r,g,'EXECUTE') END,
+ r||' no execute on the evidence object guard')
+FROM unnest(ARRAY['anon','authenticated','service_role']) r, to_regprocedure('public._guard_service_acceptance_evidence_object()') g;
+-- The Storage API's own delete switch, so a refusal below is the guard's, not protect_delete's.
+SET LOCAL storage.allow_delete_query='true';
+CREATE TEMP TABLE frozen_objects AS SELECT id,name,metadata,version,updated_at FROM storage.objects
+ WHERE bucket_id='project-documents' AND name IN (pg_temp.doc_path(1),pg_temp.doc_path(2),pg_temp.doc_path(4));
+GRANT SELECT ON frozen_objects TO authenticated;
+CREATE FUNCTION pg_temp.refuse_writes(who text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE n integer;
+BEGIN
+ FOREACH n IN ARRAY ARRAY[1,2,4] LOOP
+  PERFORM pg_temp.expect_error(format($q$UPDATE storage.objects SET metadata=metadata||'{"eTag":"swapped"}'
+   WHERE bucket_id='project-documents' AND name=%L$q$,pg_temp.doc_path(n)),'23514','bound by a sent request',
+   who||': same-name overwrite of bound document '||n||' refused');
+  PERFORM pg_temp.expect_error(format($q$UPDATE storage.objects SET name=%L WHERE bucket_id='project-documents' AND name=%L$q$,
+   pg_temp.doc_path(n)||'.moved',pg_temp.doc_path(n)),'23514','bound by a sent request',who||': move of bound document '||n||' refused');
+  PERFORM pg_temp.expect_error(format($q$DELETE FROM storage.objects WHERE bucket_id='project-documents' AND name=%L$q$,
+   pg_temp.doc_path(n)),'23514','bound by a sent request',who||': delete of bound document '||n||' refused');
+  PERFORM pg_temp.expect_error(format($q$INSERT INTO storage.objects(bucket_id,name,owner_id,metadata)
+   VALUES('project-documents',%L,%L,'{"eTag":"replacement"}')$q$,pg_temp.doc_path(n),pg_temp.uid(1)),'23514','bound by a sent request',
+   who||': re-upload at bound document '||n||' refused');
+  PERFORM pg_temp.expect_error(format($q$INSERT INTO storage.objects(bucket_id,name,owner_id,metadata)
+   VALUES('project-documents',%L,%L,'{"eTag":"replacement"}') ON CONFLICT (bucket_id,name) DO UPDATE SET metadata=excluded.metadata$q$,
+   pg_temp.doc_path(n),pg_temp.uid(1)),'23514','bound by a sent request',who||': upsert at bound document '||n||' refused');
+ END LOOP;
+ PERFORM pg_temp.expect_error(format($q$UPDATE storage.objects SET name=%L WHERE bucket_id='project-documents' AND name=%L$q$,
+  pg_temp.doc_path(1),pg_temp.doc_path(3)),'23514','bound by a sent request',who||': moving another object onto a bound name refused');
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.refuse_writes(text),pg_temp.expect_error(text,text,text,text),pg_temp.assert_true(boolean,text),
+  pg_temp.uid(integer),pg_temp.project(),pg_temp.doc_path(integer) TO service_role;
+GRANT ALL ON assertion_count,ev_results TO service_role;
+GRANT EXECUTE ON FUNCTION pg_temp.refuse_writes(text) TO authenticated;
+SELECT pg_temp.refuse_writes('migration owner');
+SET LOCAL ROLE service_role;
+SELECT pg_temp.refuse_writes('service_role');
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(1);
+SELECT pg_temp.refuse_writes('studio owner');
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((SELECT array_agg(o.id ORDER BY o.name) FROM storage.objects o WHERE o.bucket_id='project-documents'
+  AND o.name IN (pg_temp.doc_path(1),pg_temp.doc_path(2),pg_temp.doc_path(4)))=(SELECT array_agg(id ORDER BY name) FROM frozen_objects),
+ 'the signer still opens the very objects that were bound');
+-- An unbound document beside them stays ordinary studio work.
+SELECT pg_temp.actor(1);
+WITH u AS (UPDATE storage.objects SET metadata=metadata||'{"eTag":"studio-edit"}' WHERE bucket_id='project-documents'
+  AND name=pg_temp.doc_path(3) RETURNING 1)
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM u),'unbound document: studio overwrite still allowed');
+WITH d AS (DELETE FROM storage.objects WHERE bucket_id='project-documents' AND name=pg_temp.doc_path(3) RETURNING 1)
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM d),'unbound document: studio delete still allowed');
+WITH i AS (INSERT INTO storage.objects(bucket_id,name,owner_id,metadata)
+  VALUES('project-documents',pg_temp.doc_path(3),pg_temp.uid(1)::text,'{"eTag":"reupload"}') RETURNING 1)
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM i),'unbound document: studio re-upload still allowed');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT array_agg(jsonb_build_object('id',o.id,'name',o.name,'metadata',o.metadata,'version',o.version,
+  'updatedAt',o.updated_at) ORDER BY o.name) FROM storage.objects o WHERE o.bucket_id='project-documents'
+  AND o.name IN (pg_temp.doc_path(1),pg_temp.doc_path(2),pg_temp.doc_path(4)))=(SELECT array_agg(jsonb_build_object('id',f.id,'name',f.name,
+  'metadata',f.metadata,'version',f.version,'updatedAt',f.updated_at) ORDER BY f.name) FROM frozen_objects f)
+ AND (SELECT count(*)=3 FROM frozen_objects),
+ 'bound objects are byte-for-byte the rows that were bound');
+
+-- ---------------------------------------------------------------------------
+-- Non-plan evidence reads through per-kind allowlists (SQ-2272 F1): a sent
+-- request on the second native manifest.
+-- ---------------------------------------------------------------------------
+SET LOCAL session_replication_role=replica;
+UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
+ WHERE id=pg_temp.uid(102);
+SELECT pg_temp.fixture_request(3,'sent',true,'manifest2');
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE n integer; ev jsonb; members jsonb; leak text; BEGIN
+ FOREACH n IN ARRAY ARRAY[6,5] LOOP
+  PERFORM pg_temp.actor(n);
+  ev:=public.get_my_service_acceptance_evidence(pg_temp.uid(103));
+  members:=ev->'evidence'->'members';
+  PERFORM pg_temp.assert_true(jsonb_array_length(members)=4 AND (SELECT bool_and(pg_temp.keys(m)=ARRAY['content','documents',
+    'issuedAt','kind','title'] AND m->>'issuedAt' IS NOT NULL) FROM jsonb_array_elements(members) m),
+   'every non-plan member has the member shape for actor '||n);
+  PERFORM pg_temp.assert_true((SELECT jsonb_object_agg(m->>'kind',jsonb_build_object('title',m->>'title','content',m->'content',
+      'documents',m->'documents')) FROM jsonb_array_elements(members) m)=jsonb_build_object(
+    'review_item',jsonb_build_object('title','Walnut sofa','documents','[]'::jsonb,'content',jsonb_build_object('docCode','F-12',
+      'category','Seating','quantity',2,'room','Living room','details',jsonb_build_object('description','Low walnut sofa',
+      'finish','Oiled walnut'))),
+    'product_configuration',jsonb_build_object('title','Dining chair','documents','[]'::jsonb,'content',jsonb_build_object(
+      'productName','Spindle chair','leadTimeWeeks',10,
+      'selections',jsonb_build_array(jsonb_build_object('groupName','Finish','valueLabel','Ebonized oak')),
+      'components',jsonb_build_array(jsonb_build_object('name','Seat cushion','quantity',1,'handedness','none')),
+      'dimensions',jsonb_build_object('width',20,'depth',22,'height',34,'unit','in'),
+      'fabric',jsonb_build_object('fabricName','Linen','pattern','Herringbone'))),
+    'custom_commission_revision',jsonb_build_object('title','Dining chair revision 2','documents','[]'::jsonb,'content',
+      jsonb_build_object('summary','Ebonized dining chair','intent','Match the table','requirements','Seat height 18 in',
+      'targetDate','2026-12-01','revision',2,
+      'measurements',jsonb_build_array(jsonb_build_object('label','Seat height','value',18,'unit','in')),
+      'drawings',jsonb_build_array(jsonb_build_object('name','Chair elevation','revision','B')))),
+    'approval_artifact',jsonb_build_object('title','Care pack','documents',jsonb_build_array(jsonb_build_object('bucket',
+      'project-documents','path',pg_temp.doc_path(4),'title','Care pack folio')),'content',jsonb_build_object(
+      'source','spec_book_artifact','question','Approve the care pack?'))),
+   'each non-plan kind reads exactly its allowlisted projection for actor '||n);
+  SELECT string_agg(f,',') INTO leak FROM unnest(ARRAY['secret','7770','price','cost','sku','vendor','mill','sidemark','note',
+    'budget','allowance','fabricator','url','media','checksum','productid','snapshot','context','trade',pg_temp.uid(1)::text,
+    pg_temp.uid(843)::text,pg_temp.uid(844)::text,pg_temp.uid(852)::text]) f WHERE strpos(lower(members::text),lower(f))>0;
+  PERFORM pg_temp.assert_true(leak IS NULL,'no poison from the native rows for actor '||n||' ['||COALESCE(leak,'')||']');
+ END LOOP;
+END $$;
+-- A sent request whose manifest names a kind with no projection fails closed.
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
+ WHERE id=pg_temp.uid(103);
+SELECT pg_temp.fixture_request(4,'sent',true,'refused1');
+UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
+ WHERE id=pg_temp.uid(104);
+SELECT pg_temp.fixture_request(5,'sent',true,'refused2');
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE n integer; r integer; BEGIN
+ FOREACH r IN ARRAY ARRAY[104,105] LOOP
+  FOREACH n IN ARRAY ARRAY[6,5] LOOP
+   PERFORM pg_temp.actor(n);
+   PERFORM pg_temp.expect_error(format('SELECT public.get_my_service_acceptance_evidence(%L)',pg_temp.uid(r)),'23514',
+    'service_acceptance_evidence_not_client_readable','reader fails closed on unreadable request '||r||' for actor '||n);
+  END LOOP;
+ END LOOP;
+END $$;
+RESET ROLE;
+-- Admission refuses those kinds before writing anything and admits a manifest
+-- of every readable kind. create_service_acceptance_request ships inactive.
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SELECT pg_temp.actor(1);
+SELECT pg_temp.expect_error(format('SELECT public.create_service_acceptance_request(%L,%L,%L,%L)',pg_temp.project(),
+  (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active'),pg_temp.uid(880+k),
+  'client-evidence-admit-'||k),'23514','service_acceptance_evidence_not_client_readable',
+  'admission refuses a '||(SELECT members->0->>'kind' FROM public.evidence_manifests WHERE id=pg_temp.uid(880+k))||' member')
+FROM generate_series(1,2) k;
+SELECT pg_temp.assert_true((SELECT count(*)=5 FROM public.service_acceptance_requests WHERE project_id=pg_temp.project()),
+ 'a refused admission writes no request');
+DO $$ DECLARE got text; BEGIN
+ BEGIN
+  PERFORM public.create_service_acceptance_request(pg_temp.project(),
+    (SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project() AND status='active'),
+    (SELECT (value->>'manifestId')::uuid FROM ev_results WHERE key='manifest2'),'client-evidence-admit-readable');
+  got:=(SELECT 'admitted:'||count(*) FROM public.service_acceptance_requests WHERE project_id=pg_temp.project()
+    AND lifecycle IN ('draft','sent') AND evidence_manifest_id=(SELECT (value->>'manifestId')::uuid FROM ev_results WHERE key='manifest2'));
+  RAISE EXCEPTION 'probe rolled back';
+ EXCEPTION WHEN raise_exception THEN
+  IF SQLERRM<>'probe rolled back' THEN got:=SQLERRM; END IF;
+ END;
+ PERFORM pg_temp.assert_true(got='admitted:1','admission accepts a manifest of every readable non-plan kind ['||COALESCE(got,'')||']');
+END $$;
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
 SELECT pg_temp.assert_true((SELECT NOT enabled FROM public.server_capabilities WHERE key='scope_editions'),'capability still off after reads');
 DO $$ BEGIN RAISE NOTICE 'C4 client evidence: PASS % assertions', (SELECT n FROM assertion_count); END $$;
 ROLLBACK;

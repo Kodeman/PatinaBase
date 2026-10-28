@@ -25466,7 +25466,19 @@ END $g$;
 
 -- 00889_round8_service_acceptance_client_evidence.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_scalars(jsonb,text[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._service_acceptance_client_member(uuid,jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._service_acceptance_object_projects(text[]) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -25479,6 +25491,12 @@ END $g$;
 -- 00889_round8_service_acceptance_client_evidence.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public._can_read_service_acceptance_evidence_object(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00889_round8_service_acceptance_client_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._guard_service_acceptance_evidence_object() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

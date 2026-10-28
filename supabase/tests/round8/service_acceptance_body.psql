@@ -280,9 +280,10 @@ RESET ROLE;
 SELECT pg_temp.assert_true((SELECT count(*)=3 FROM public.project_scope_edition_signers s JOIN public.project_scope_editions e
   ON e.id=s.edition_id WHERE e.project_id=pg_temp.project() AND e.status='active'),'origin edition freezes three signers');
 SET LOCAL session_replication_role=replica;
+-- Members name a client-readable kind: 00889 admits no other (C4 §2.2).
 INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
 ('f8868000-0000-4000-8000-000000000001',pg_temp.project(),NULL,'service_acceptance','[]',repeat('a',64),repeat('1',64),'sa-1',pg_temp.uid(1)),
-('f8868000-0000-4000-8000-000000000002',pg_temp.project(),NULL,'service_acceptance','[{"m":2}]',repeat('b',64),repeat('2',64),'sa-2',pg_temp.uid(1)),
+('f8868000-0000-4000-8000-000000000002',pg_temp.project(),NULL,'service_acceptance','[{"kind":"plan_print","m":2}]',repeat('b',64),repeat('2',64),'sa-2',pg_temp.uid(1)),
 ('f8868000-0000-4000-8000-000000000003',pg_temp.project(),'f8868100-0000-4000-8000-000000000001','fabrication_instruction',
  '[{"m":3}]',repeat('c',64),repeat('3',64),'sa-3',pg_temp.uid(1));
 SET LOCAL session_replication_role=origin;
