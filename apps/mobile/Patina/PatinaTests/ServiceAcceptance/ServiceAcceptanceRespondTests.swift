@@ -32,6 +32,10 @@ private actor FakeServiceAcceptanceService: ServiceAcceptanceService {
         sent.append(submission)
         if !failures.isEmpty { throw failures.removeFirst() }
     }
+
+    func fetchStudioServiceCompletion(projectId: String) async throws -> RemoteStudioServiceCompletionRead {
+        RemoteStudioServiceCompletionRead()
+    }
 }
 
 private func refusalBody(_ code: String, _ message: String) -> RoomsAPIError {

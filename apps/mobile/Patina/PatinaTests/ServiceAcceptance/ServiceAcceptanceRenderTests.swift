@@ -21,16 +21,23 @@ import Foundation
 private actor StubService: ServiceAcceptanceService {
     let rows: [RemoteServiceAcceptanceRequest]
     let failure: Error?
+    let completion: RemoteStudioServiceCompletionRead
 
-    init(rows: [RemoteServiceAcceptanceRequest], failure: Error? = nil) {
+    init(rows: [RemoteServiceAcceptanceRequest], failure: Error? = nil,
+         completion: RemoteStudioServiceCompletionRead = RemoteStudioServiceCompletionRead()) {
         self.rows = rows
         self.failure = failure
+        self.completion = completion
     }
 
     func fetchMyServiceAcceptanceRequests() async throws -> [RemoteServiceAcceptanceRequest] { rows }
 
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws {
         if let failure { throw failure }
+    }
+
+    func fetchStudioServiceCompletion(projectId: String) async throws -> RemoteStudioServiceCompletionRead {
+        completion
     }
 }
 
@@ -45,11 +52,17 @@ struct ServiceAcceptanceRenderTests {
 
     private static let size = CGSize(width: 393, height: 760)
 
-    private static func model(_ json: String, failure: Error? = nil) async throws -> ServiceAcceptanceModel {
+    private static func model(_ json: String, failure: Error? = nil,
+                              completion: RemoteStudioServiceCompletionRead = RemoteStudioServiceCompletionRead())
+        async throws -> ServiceAcceptanceModel {
         let request = try ServiceAcceptanceFixture.request(json)
-        let model = ServiceAcceptanceModel(service: StubService(rows: [request], failure: failure))
+        let model = ServiceAcceptanceModel(
+            service: StubService(rows: [request], failure: failure, completion: completion)
+        )
         await model.load()
         model.presentedRequestId = request.requestId
+        // ImageRenderer never runs `.task`; read the studio service directly.
+        await model.loadStudioService(for: request)
         return model
     }
 
@@ -108,9 +121,32 @@ struct ServiceAcceptanceRenderTests {
             ("03-unknown-role-observer", observer), ("04-paused", paused), ("05-closed-accepted", closed),
             ("06-return-over-limit", overLimit), ("07-recorded-awaiting-reload", recorded)
         ]
+        Self.shootAll(states)
+    }
+
+    @Test("the Studio service section renders in each state, in both appearances")
+    func studioServiceRenders() async throws {
+        let accepted = StudioServiceFixture.accepted
+        let complete = try await Self.model(
+            accepted, completion: try StudioServiceFixture.read(StudioServiceFixture.completion(state: "completed"))
+        )
+        let request = try #require(complete.request(id: "req-1"))
+        #expect(complete.studioService(for: request)?.status == .complete)
+        let conditions = try await Self.model(
+            accepted,
+            completion: try StudioServiceFixture.read(StudioServiceFixture.completion(state: "completed_with_conditions"))
+        )
+        let notYet = try await Self.model(accepted, completion: try StudioServiceFixture.read())
+        Self.shootAll([
+            ("08-studio-service-complete", complete), ("09-studio-service-conditions", conditions),
+            ("10-studio-service-not-yet", notYet)
+        ])
+    }
+
+    private static func shootAll(_ states: [(String, ServiceAcceptanceModel)]) {
         for style in PatinaContrast.appearances {
             for (name, model) in states {
-                let tones = Self.shoot(model, name, style)
+                let tones = shoot(model, name, style)
                 #expect(tones > 4, "\(name) rasterised to \(tones) tone(s) in \(PatinaContrast.name(style))")
             }
         }

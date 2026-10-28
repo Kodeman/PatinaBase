@@ -400,9 +400,81 @@ nonisolated enum ServiceAcceptanceRefusal: Equatable, Sendable {
     }
 }
 
+// MARK: - Studio service completion (C6, WP-10B-d)
+
+/// `studio_service_completions.state` (00888). K3 Option A writes both.
+/// Anything else reads as not complete.
+nonisolated enum StudioServiceCompletionState: String, ServiceAcceptanceWireValue {
+    case completed
+    case completedWithConditions = "completed_with_conditions"
+    case unknown
+
+    static var unknownValue: Self { .unknown }
+}
+
+/// One live completion as the client projection of
+/// `get_studio_service_completion` serves it: state, dates and the accepted
+/// scope reference. The studio projection carries more (the financial hold,
+/// the obligation snapshot); this type never decodes those keys.
+nonisolated struct RemoteStudioServiceCompletion: Decodable, Sendable, Equatable {
+    let acceptanceRequestId: String
+    let state: StudioServiceCompletionState
+    let completedAt: String?
+    /// Set once the last open condition of a `completed_with_conditions`
+    /// completion is resolved.
+    let conditionsClosedAt: String?
+    let scopeContentHash: String?
+    let requestNumber: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case acceptanceRequestId, state, completedAt, conditionsClosedAt, scopeContentHash, requestNumber
+    }
+
+    init(from decoder: Decoder) throws {
+        let keys = try decoder.container(keyedBy: CodingKeys.self)
+        acceptanceRequestId = try keys.decode(String.self, forKey: .acceptanceRequestId)
+        state = try keys.decodeIfPresent(StudioServiceCompletionState.self, forKey: .state) ?? .unknown
+        completedAt = try keys.decodeIfPresent(String.self, forKey: .completedAt)
+        conditionsClosedAt = try keys.decodeIfPresent(String.self, forKey: .conditionsClosedAt)
+        scopeContentHash = try keys.decodeIfPresent(String.self, forKey: .scopeContentHash)
+        requestNumber = try keys.decodeIfPresent(Int.self, forKey: .requestNumber)
+    }
+}
+
+/// The whole read. `capability` is served to the studio audience only; an
+/// `inactive` value hides the section.
+nonisolated struct RemoteStudioServiceCompletionRead: Decodable, Sendable, Equatable {
+    let capability: String?
+    /// Newest first, as served.
+    let completions: [RemoteStudioServiceCompletion]
+
+    private enum CodingKeys: String, CodingKey { case capability, completions }
+
+    init(capability: String? = nil, completions: [RemoteStudioServiceCompletion] = []) {
+        self.capability = capability
+        self.completions = completions
+    }
+
+    init(from decoder: Decoder) throws {
+        let keys = try decoder.container(keyedBy: CodingKeys.self)
+        capability = try keys.decodeIfPresent(String.self, forKey: .capability)
+        completions = try keys.decodeIfPresent([RemoteStudioServiceCompletion].self, forKey: .completions) ?? []
+    }
+}
+
 // MARK: - Calls
 
 extension DecisionsAPIClient {
+
+    /// The studio's service completion for one project. Throws the raw error
+    /// (a caller who may not read it gets `insufficient_privilege`).
+    func fetchStudioServiceCompletion(projectId: String) async throws -> RemoteStudioServiceCompletionRead {
+        let data = try await callRPC("get_studio_service_completion", body: ["p_project_id": projectId])
+        let payload = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let payload, !payload.isEmpty, payload != "null" else { return RemoteStudioServiceCompletionRead() }
+        return try JSONDecoder().decode(RemoteStudioServiceCompletionRead.self, from: data)
+    }
 
     /// Every sent service-acceptance request this caller can read. `[]` for a
     /// caller with none.

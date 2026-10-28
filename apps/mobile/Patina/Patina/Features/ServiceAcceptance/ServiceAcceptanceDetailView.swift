@@ -79,6 +79,7 @@ struct ServiceAcceptanceDetailContent: View {
                 }
                 if let settled { settledSection(settled) }
                 responses(request)
+                if let reading = model.studioService(for: request) { StudioServiceSection(reading: reading) }
                 if model.canRespond(request) { respondSection(request) }
             } else if model.isLoading || model.isFirstLoad {
                 PatinaLoadingState()
@@ -89,6 +90,14 @@ struct ServiceAcceptanceDetailContent: View {
             }
             refusalLine
         }
+        // Re-read when another request opens or this one's outcome lands.
+        .task(id: studioServiceKey) {
+            if let request = model.presentedRequest { await model.loadStudioService(for: request) }
+        }
+    }
+
+    private var studioServiceKey: String? {
+        model.presentedRequest.map { "\($0.requestId)|\($0.aggregateOutcome.rawValue)" }
     }
 
     // MARK: - Read
