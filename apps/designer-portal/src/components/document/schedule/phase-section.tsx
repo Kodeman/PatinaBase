@@ -150,6 +150,7 @@ export function PhaseSection({
   return (
     <div
       id={anchorId}
+      data-schedule-phase=""
       className={`grid grid-cols-[30px_minmax(0,1fr)] gap-x-[1.1rem]${
         anchorId ? ' scroll-mt-24' : ''
       }`}

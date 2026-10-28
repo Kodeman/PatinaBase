@@ -66,6 +66,52 @@
   text-transform: none;
 }
 
+/* Legacy slots carry absolute and rem-sized metadata utilities. Lift their
+   smallest steps here, without altering their legacy or drafting type faces. */
+[data-paper-renderer="round8"] {
+  --r8-type-min: 12px;
+}
+
+[data-paper-renderer="round8"] :is(
+  [class~="text-[8px]"], [class~="text-[9px]"], [class~="text-[9.5px]"],
+  [class~="text-[10px]"], [class~="text-[10.5px]"],
+  [class~="text-[11px]"], [class~="text-[11.5px]"],
+  [class~="text-[0.4rem]"], [class~="text-[0.42rem]"], [class~="text-[0.44rem]"],
+  [class~="text-[0.58rem]"], [class~="text-[0.62rem]"],
+  [class~="text-[0.64rem]"], [class~="text-[0.66rem]"]
+):not([aria-hidden]) {
+  font-size: var(--r8-type-min);
+}
+
+[data-paper-renderer="round8"] [data-paper-chapter] :is(.t-meta, .t-head, .font-mono):not([data-build-room-embedded] *),
+[data-paper-renderer="round8"] [data-contents-margin] :is(.t-meta, .t-head, .font-mono) {
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-paper-renderer="round8"] [data-schedule-phase] > div:last-child {
+  min-width: 0;
+}
+
+[data-paper-renderer="round8"] [data-schedule-milestone] {
+  flex-wrap: wrap;
+}
+
+[data-paper-renderer="round8"] [data-schedule-milestone] > span:last-child {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+[data-paper-renderer="round8"] [data-schedule-phase] .truncate {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* §H-2: the §A3 display steps keep their sizes and take Playfair at the
    reference weight, 400. Tracking stays 0 on them. */
 [data-paper-renderer="round8"] :is(.t-d1, .t-d2, .t-d3) {
@@ -81,8 +127,8 @@
 
 /* ── the plate (§H-3.1) · the US-46 R203 plate, painted over its whole 44px
    target. Geometry only: the paint, its hover and its forced-colours edge
-   stay the legacy rules, and no other DocumentAction tier is restyled. With
-   the paint at the target's edge, the shared ring stands 2px off it, on paper
+   stay the legacy rules; the separate compact type floor below changes no
+   action grammar. With the paint at the target's edge, the shared ring stands 2px off it, on paper
    (focus-ring 5.61:1). ─────────────────────────────────────────────────── */
 [data-paper-renderer="round8"] .da-plate::after {
   inset: 0;
@@ -92,6 +138,14 @@
 [data-paper-renderer="round8"] .da-plate[data-held-focus-cue]::after {
   outline-offset: 2px;
 }
+
+/* ── compact action type · US-52 W6 D4 12px floor ──────────────────────── */
+@media (max-width: 1179px) {
+  [data-paper-renderer="round8"] [class~="[&_.da-act]:text-[11px]"] .da-act {
+    font-size: 12px;
+  }
+}
+/* end compact action type */
 
 /* ── depth (§H-3.3) · the five enumerated sites, and only these ─────────── */
 [data-paper-renderer="round8"] .r8-return-bar {
