@@ -28875,6 +28875,82 @@ export type Database = {
           },
         ]
       }
+      service_acceptance_evidence_snapshot_objects: {
+        Row: {
+          bucket_id: string
+          object_id: string
+          object_name: string
+          object_version: string | null
+          ordinal: number
+          request_id: string
+          title: string | null
+        }
+        Insert: {
+          bucket_id: string
+          object_id: string
+          object_name: string
+          object_version?: string | null
+          ordinal: number
+          request_id: string
+          title?: string | null
+        }
+        Update: {
+          bucket_id?: string
+          object_id?: string
+          object_name?: string
+          object_version?: string | null
+          ordinal?: number
+          request_id?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_acceptance_evidence_snapshot_ob_request_id_ordinal_fkey"
+            columns: ["request_id", "ordinal"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_evidence_snapshots"
+            referencedColumns: ["request_id", "ordinal"]
+          },
+        ]
+      }
+      service_acceptance_evidence_snapshots: {
+        Row: {
+          content: Json | null
+          issued_at: string | null
+          member_id: string
+          member_kind: string
+          ordinal: number
+          request_id: string
+          title: string | null
+        }
+        Insert: {
+          content?: Json | null
+          issued_at?: string | null
+          member_id: string
+          member_kind: string
+          ordinal: number
+          request_id: string
+          title?: string | null
+        }
+        Update: {
+          content?: Json | null
+          issued_at?: string | null
+          member_id?: string
+          member_kind?: string
+          ordinal?: number
+          request_id?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_acceptance_evidence_snapshots_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_acceptance_paper_intakes: {
         Row: {
           client_request_id: string
@@ -41472,8 +41548,12 @@ export type Database = {
         }
       }
       _service_acceptance_client_member: {
-        Args: { p_manifest_id: string; p_member: Json }
-        Returns: Json
+        Args: { p_id: string; p_kind: string }
+        Returns: {
+          content: Json
+          issued_at: string
+          title: string
+        }[]
       }
       _service_acceptance_conditions: {
         Args: {
@@ -41499,10 +41579,6 @@ export type Database = {
       }
       _service_acceptance_hash: { Args: { p_value: Json }; Returns: string }
       _service_acceptance_key: { Args: { p_key: string }; Returns: string }
-      _service_acceptance_object_projects: {
-        Args: { p_names: string[] }
-        Returns: string[]
-      }
       _service_acceptance_open_conditions: {
         Args: { p_request_id: string }
         Returns: Json
@@ -41527,6 +41603,7 @@ export type Database = {
         Args: { p_keys: string[]; p_value: Json }
         Returns: Json
       }
+      _service_acceptance_texts: { Args: { p_value: Json }; Returns: Json }
       _service_completion_financial_hold: {
         Args: { p_project_id: string }
         Returns: Json

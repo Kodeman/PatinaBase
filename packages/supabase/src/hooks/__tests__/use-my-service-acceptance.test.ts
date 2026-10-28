@@ -115,7 +115,10 @@ const evidence = () => ({
       content: { productName: 'Spindle chair', leadTimeWeeks: 10, selections: [{ groupName: 'Finish', valueLabel: 'Ebonized oak' }],
         components: [{ name: 'Seat cushion', quantity: 1 }], dimensions: { width: 20, unit: 'in' }, fabric: { fabricName: 'Linen' } } },
     { kind: 'custom_commission_revision', title: 'Dining chair revision 2', issuedAt: null, documents: [],
-      content: { summary: 'Ebonized dining chair', revision: 2, measurements: [{ label: 'Seat height', value: 18, unit: 'in' }],
+      // requirements and materials in the native CustomCommissionBrief string[] shape (SQ-2280 F1).
+      content: { summary: 'Ebonized dining chair', revision: 2,
+        requirements: ['Seat height 18 in', 'Arms flush with the table'], materials: ['Ebonized oak', 'Linen'],
+        measurements: [{ label: 'Seat height', value: 18, unit: 'in' }],
         drawings: [{ name: 'Chair elevation', revision: 'B' }] } },
     { kind: 'approval_artifact', title: 'Care pack', issuedAt: null,
       content: { source: 'spec_book_artifact', question: 'Approve the care pack?' },
@@ -155,6 +158,17 @@ it('keeps only client-safe evidence fields even when the server sends more', () 
   expect(read).toEqual(evidence());
   expect(JSON.stringify(read)).not.toMatch(/private|payer|fabrication|roomIds|provenance|sha256|costCents|Price|sku|mill|budgetCents|url/);
 });
+it('reads native string[] commission requirements and materials exactly, in order', () => {
+  const content = readMyServiceAcceptanceEvidence(evidence()).evidence.members[3].content;
+  expect(content?.requirements).toEqual(['Seat height 18 in', 'Arms flush with the table']);
+  expect(content?.materials).toEqual(['Ebonized oak', 'Linen']);
+  const empty: any = evidence();
+  empty.evidence.members[3].content.materials = [];
+  delete empty.evidence.members[3].content.requirements;
+  const read = readMyServiceAcceptanceEvidence(empty).evidence.members[3].content;
+  expect(read?.materials).toEqual([]);
+  expect(read).not.toHaveProperty('requirements');
+});
 it.each<[string, (e: any) => void]>([
   ['request number', (e) => { e.requestNumber = 0; }],
   ['scope', (e) => { e.scope = null; }],
@@ -182,6 +196,13 @@ it.each<[string, (e: any) => void]>([
   ['fact list', (e) => { e.evidence.members[2].content.selections = { groupName: 'Finish' }; }],
   ['list fact', (e) => { e.evidence.members[3].content.measurements[0].value = [18]; }],
   ['fact object', (e) => { e.evidence.members[1].content.details = 'Oiled walnut'; }],
+  ['scalar requirements', (e) => { e.evidence.members[3].content.requirements = 'Seat height 18 in'; }],
+  ['null requirements', (e) => { e.evidence.members[3].content.requirements = null; }],
+  ['object materials', (e) => { e.evidence.members[3].content.materials = { 0: 'Ebonized oak' }; }],
+  ['number in requirements', (e) => { e.evidence.members[3].content.requirements = ['Seat height', 18]; }],
+  ['blank material', (e) => { e.evidence.members[3].content.materials = ['Ebonized oak', ' ']; }],
+  ['nested requirement', (e) => { e.evidence.members[3].content.requirements = [['Seat height 18 in']]; }],
+  ['fact object in materials', (e) => { e.evidence.members[3].content.materials = [{ name: 'Linen' }]; }],
 ])('rejects malformed evidence: %s', (_name, mutate) => {
   const bad: Evidence = evidence();
   mutate(bad);

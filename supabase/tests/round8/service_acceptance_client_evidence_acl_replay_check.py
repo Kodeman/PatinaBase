@@ -11,12 +11,14 @@ legacy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(legacy)
 MIGRATION = ROOT / "supabase/migrations/00889_round8_service_acceptance_client_evidence.sql"
 SEED = ROOT / "supabase/seed/00-legacy-grants.sql"
+TABLES = ("service_acceptance_evidence_snapshots", "service_acceptance_evidence_snapshot_objects")
 FUNCTIONS = (
     "_is_service_acceptance_client_reader(uuid)",
     "_service_acceptance_evidence_documents(uuid)",
     "_service_acceptance_scalars(jsonb,text[])",
-    "_service_acceptance_client_member(uuid,jsonb)",
-    "_service_acceptance_object_projects(text[])",
+    "_service_acceptance_texts(jsonb)",
+    "_service_acceptance_client_member(text,uuid)",
+    "_guard_service_acceptance_evidence_snapshot()",
     "_can_read_service_acceptance_evidence_object(text)",
     "_guard_service_acceptance_evidence_object()",
     "get_my_service_acceptance_evidence(uuid)",
@@ -31,7 +33,8 @@ def normalize(statement):
 def main():
     sql = MIGRATION.read_text()
     statements = [stmt for _, stmt in legacy.iter_top_level_acl_statements(legacy.clean(sql))]
-    expected = [f"REVOKE ALL ON FUNCTION public.{fn} FROM PUBLIC, anon, authenticated, service_role;" for fn in FUNCTIONS]
+    expected = [f"REVOKE ALL ON TABLE public.{t} FROM PUBLIC, anon, authenticated, service_role;" for t in TABLES]
+    expected += [f"REVOKE ALL ON FUNCTION public.{fn} FROM PUBLIC, anon, authenticated, service_role;" for fn in FUNCTIONS]
     expected += [f"GRANT EXECUTE ON FUNCTION public.{fn} TO authenticated;" for fn in AUTHENTICATED]
     actual = [normalize(stmt) for stmt in statements]
     assert sorted(actual) == sorted(normalize(stmt) for stmt in expected), "native extractor loses or adds 00889 ACLs"

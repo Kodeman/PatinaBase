@@ -111,13 +111,15 @@ const evidenceKinds = ['plan_issue', 'plan_issue_print', 'plan_print', 'product_
 const parties = ['studio', 'client', 'gc', 'other', 'none'] as const;
 export type ServiceAcceptanceEvidenceKind = typeof evidenceKinds[number];
 export type ServiceAcceptanceEvidenceFacts = Record<string, string | number | boolean>;
-/** A member's client-safe content: allowlisted facts, nested facts, and lists of facts. */
+/** A member's client-safe content: allowlisted facts, lists of text, nested facts, and lists of facts. */
 export type MyServiceAcceptanceEvidenceContent =
-  Record<string, string | number | boolean | ServiceAcceptanceEvidenceFacts | ServiceAcceptanceEvidenceFacts[]>;
+  Record<string, string | number | boolean | string[] | ServiceAcceptanceEvidenceFacts | ServiceAcceptanceEvidenceFacts[]>;
 // The C4 §2.2 allowlist per kind, as 00889 _service_acceptance_client_member
 // projects it. Plan kinds have no content (their documents are the content).
+// texts are native string[] fields (CustomCommissionBrief requirements, materials).
 const contentAllowlist: Partial<Record<ServiceAcceptanceEvidenceKind,
-  { facts: readonly string[]; objects?: Record<string, readonly string[]>; lists?: Record<string, readonly string[]> }>> = {
+  { facts: readonly string[]; texts?: readonly string[]; objects?: Record<string, readonly string[]>;
+    lists?: Record<string, readonly string[]> }>> = {
   product_configuration: {
     facts: ['productName', 'leadTimeWeeks'],
     objects: {
@@ -127,7 +129,8 @@ const contentAllowlist: Partial<Record<ServiceAcceptanceEvidenceKind,
     lists: { selections: ['groupName', 'valueLabel'], components: ['name', 'quantity', 'handedness'] },
   },
   custom_commission_revision: {
-    facts: ['summary', 'intent', 'siteConditions', 'requirements', 'materials', 'finish', 'targetDate', 'revision'],
+    facts: ['summary', 'intent', 'siteConditions', 'finish', 'targetDate', 'revision'],
+    texts: ['requirements', 'materials'],
     lists: { measurements: ['label', 'value', 'unit'], drawings: ['name', 'revision'] },
   },
   review_item: {
@@ -156,6 +159,11 @@ function readEvidenceContent(kind: ServiceAcceptanceEvidenceKind, value: unknown
   }
   const row = scopeRecord(value);
   const content: MyServiceAcceptanceEvidenceContent = evidenceFacts(row, allow.facts);
+  for (const key of allow.texts ?? []) {
+    if (row[key] === undefined) continue;
+    if (!Array.isArray(row[key])) throw new Error('Malformed acceptance evidence');
+    content[key] = (row[key] as unknown[]).map(text);
+  }
   for (const [key, keys] of Object.entries(allow.objects ?? {})) {
     if (row[key] != null) content[key] = evidenceFacts(row[key], keys);
   }

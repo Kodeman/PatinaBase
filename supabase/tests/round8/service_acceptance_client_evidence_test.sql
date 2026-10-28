@@ -16,6 +16,7 @@ DO $$ BEGIN RAISE EXCEPTION 'service_acceptance_client_evidence_test refused: no
 BEGIN;
 SET LOCAL lock_timeout='3s';
 SET LOCAL statement_timeout='60s';
+-- BEGIN shared helpers
 CREATE TEMP TABLE assertion_count(n integer NOT NULL);
 INSERT INTO assertion_count VALUES (0);
 GRANT ALL ON assertion_count TO authenticated, anon;
@@ -36,6 +37,16 @@ BEGIN
   PERFORM pg_temp.assert_true(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
     name||format(' [expected %s/%s, got %s/%s]',state,message,actual_state,actual_message));
 END $$;
+-- A boolean query about 00889's snapshot schema: an error (as on a base without
+-- it) is a failed assertion that names the error, not an aborted suite.
+CREATE FUNCTION pg_temp.assert_sql(query text, name text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE ok boolean; err text;
+BEGIN
+  BEGIN EXECUTE query INTO ok;
+  EXCEPTION WHEN OTHERS THEN ok:=false; err:=SQLERRM;
+  END;
+  PERFORM pg_temp.assert_true(ok,name||COALESCE(' ['||err||']',''));
+END $$;
 CREATE FUNCTION pg_temp.uid(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
   SELECT ('f8890000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
 $$;
@@ -49,19 +60,23 @@ CREATE FUNCTION pg_temp.keys(v jsonb) RETURNS text[] LANGUAGE sql IMMUTABLE AS $
   SELECT COALESCE(array_agg(k ORDER BY k),'{}') FROM jsonb_object_keys(v) k;
 $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assert_true(boolean,text),pg_temp.expect_error(text,text,text,text),
-  pg_temp.actor(integer),pg_temp.uid(integer),pg_temp.keys(jsonb) TO authenticated,anon;
+  pg_temp.assert_sql(text,text),pg_temp.actor(integer),pg_temp.uid(integer),pg_temp.keys(jsonb) TO authenticated,anon;
+-- END shared helpers
 
 -- ---------------------------------------------------------------------------
 -- Shipped ACL and shape: one read and one storage predicate reach authenticated.
 -- ---------------------------------------------------------------------------
 SELECT pg_temp.assert_true(to_regprocedure('public.get_my_service_acceptance_evidence(uuid)') IS NOT NULL,
   'reader get_my_service_acceptance_evidence(uuid) exists');
-DO $$ DECLARE f regprocedure; r text; granted boolean; BEGIN
-  FOREACH f IN ARRAY ARRAY['public.get_my_service_acceptance_evidence(uuid)','public._can_read_service_acceptance_evidence_object(text)',
+DO $$ DECLARE s text; f regprocedure; r text; granted boolean; BEGIN
+  FOREACH s IN ARRAY ARRAY['public.get_my_service_acceptance_evidence(uuid)','public._can_read_service_acceptance_evidence_object(text)',
     'public._is_service_acceptance_client_reader(uuid)','public._service_acceptance_evidence_documents(uuid)',
-    'public._service_acceptance_client_member(uuid,jsonb)']::regprocedure[] LOOP
-    granted:=f IN ('public.get_my_service_acceptance_evidence(uuid)'::regprocedure,
-      'public._can_read_service_acceptance_evidence_object(text)'::regprocedure);
+    'public._service_acceptance_client_member(text,uuid)','public._service_acceptance_scalars(jsonb,text[])',
+    'public._service_acceptance_texts(jsonb)'] LOOP
+    f:=to_regprocedure(s);
+    PERFORM pg_temp.assert_true(f IS NOT NULL,'exists '||s);
+    CONTINUE WHEN f IS NULL;
+    granted:=s IN ('public.get_my_service_acceptance_evidence(uuid)','public._can_read_service_acceptance_evidence_object(text)');
     PERFORM pg_temp.assert_true(has_function_privilege('authenticated',f,'EXECUTE')=granted,
       format('authenticated execute=%s %s',granted,f));
     FOREACH r IN ARRAY ARRAY['anon','service_role'] LOOP
@@ -69,10 +84,35 @@ DO $$ DECLARE f regprocedure; r text; granted boolean; BEGIN
     END LOOP;
     PERFORM pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM pg_proc p,aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a
       WHERE p.oid=f AND a.grantee=0 AND a.privilege_type='EXECUTE'),'PUBLIC no execute '||f);
-    PERFORM pg_temp.assert_true((SELECT p.prosecdef AND p.provolatile='s'
-      AND p.proconfig @> ARRAY['search_path=public, pg_temp'] FROM pg_proc p WHERE p.oid=f),'stable definer pinned search_path '||f);
+    PERFORM pg_temp.assert_true((SELECT p.prosecdef AND p.provolatile IN ('s','i')
+      AND p.proconfig @> ARRAY['search_path=public, pg_temp'] FROM pg_proc p WHERE p.oid=f),'definer pinned search_path '||f);
   END LOOP;
 END $$;
+SELECT pg_temp.assert_true(to_regprocedure('public._service_acceptance_object_projects(text[])') IS NULL
+  AND to_regprocedure('public._service_acceptance_client_member(uuid,jsonb)') IS NULL,
+  'no live-anchor resolver is left: the snapshot replaced _service_acceptance_object_projects and the read-time member');
+-- The send-time snapshot (SQ-2283): RLS on, no API-role privilege, immutable.
+SELECT pg_temp.assert_true((SELECT count(*)=6 AND bool_and(c.relrowsecurity)
+  AND bool_and(NOT has_table_privilege(r.r,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'))
+  FROM pg_class c CROSS JOIN (VALUES('anon'),('authenticated'),('service_role')) r(r)
+  WHERE c.oid IN (to_regclass('public.service_acceptance_evidence_snapshots'),
+    to_regclass('public.service_acceptance_evidence_snapshot_objects'))),
+  'both snapshot tables have RLS and no anon, authenticated or service_role privilege');
+SELECT pg_temp.assert_true((SELECT count(*)=0 FROM pg_policies WHERE schemaname='public'
+  AND tablename IN ('service_acceptance_evidence_snapshots','service_acceptance_evidence_snapshot_objects')),
+  'no policy opens a snapshot table');
+SELECT pg_temp.assert_true((SELECT count(*)=2 FROM pg_trigger t
+  WHERE t.tgrelid IN (to_regclass('public.service_acceptance_evidence_snapshots'),
+    to_regclass('public.service_acceptance_evidence_snapshot_objects'))
+   AND t.tgenabled='O' AND t.tgtype=(1|2|8|16)::int2
+   AND t.tgfoid=to_regprocedure('public._guard_service_acceptance_evidence_snapshot()')),
+  'one enabled BEFORE UPDATE OR DELETE row guard on each snapshot table');
+SELECT pg_temp.assert_true(CASE WHEN g IS NOT NULL THEN NOT has_function_privilege(r,g,'EXECUTE') END,
+ r||' no execute on the snapshot guard')
+FROM unnest(ARRAY['anon','authenticated','service_role']) r, to_regprocedure('public._guard_service_acceptance_evidence_snapshot()') g;
+SELECT pg_temp.assert_true(EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='public'
+  AND tablename='service_acceptance_evidence_snapshot_objects' AND indexdef LIKE '%(bucket_id, object_name)'),
+  'pinned objects are indexed by (bucket, object name)');
 SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(permissive='PERMISSIVE' AND cmd='SELECT' AND roles='{authenticated}'
   AND qual LIKE '%bucket_id = ''project-documents''::text%' AND qual LIKE '%_can_read_service_acceptance_evidence_object(name)%')
   FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='service_acceptance_evidence_client_read'),
@@ -84,8 +124,10 @@ SELECT pg_temp.assert_true((SELECT NOT enabled FROM public.server_capabilities W
 
 -- ---------------------------------------------------------------------------
 -- Fixture: a native agreement origin edition (x08 pattern), native plan prints,
--- a manifest minted by create_evidence_manifest, and projection-only requests.
+-- a manifest minted by create_evidence_manifest, and draft requests sent
+-- through the native V22 send transition (outbound draft delivered).
 -- ---------------------------------------------------------------------------
+-- BEGIN shared fixture
 SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
 SELECT pg_temp.uid(n),'client-evidence-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated'
@@ -187,7 +229,8 @@ RESET ROLE;
 SELECT pg_temp.assert_true((SELECT count(*)=2 FROM public.project_scope_edition_packages k JOIN public.project_scope_editions e
   ON e.id=k.edition_id WHERE e.project_id=pg_temp.project() AND e.status='active'),'origin edition freezes two packages');
 
--- Native plan evidence: documents 1 and 2 sit behind manifest prints; 3 is an
+-- Native plan evidence: documents 1 and 2 sit behind manifest prints; 3 sits
+-- behind print 723, named only by manifest3 (sent last), so until then it is an
 -- unrelated project document. None is client_visible, so only 00889 can admit them.
 SET LOCAL session_replication_role=replica;
 INSERT INTO public.project_documents(id,project_id,title,storage_path,client_visible,uploaded_by) VALUES
@@ -199,12 +242,14 @@ SELECT 'project-documents',pg_temp.doc_path(n),pg_temp.uid(1)::text,jsonb_build_
 FROM generate_series(1,3) n;
 INSERT INTO public.plan_sheets(id,project_id,sheet_number,title,state,current_print_number,current_print_id,created_by) VALUES
 (pg_temp.uid(711),pg_temp.project(),'A-101','Kitchen plan','shared',1,pg_temp.uid(721),pg_temp.uid(1)),
-(pg_temp.uid(712),pg_temp.project(),'A-201','Kitchen elevations','shared',1,pg_temp.uid(722),pg_temp.uid(1));
+(pg_temp.uid(712),pg_temp.project(),'A-201','Kitchen elevations','shared',1,pg_temp.uid(722),pg_temp.uid(1)),
+(pg_temp.uid(713),pg_temp.project(),'A-301','Kitchen lighting','shared',1,pg_temp.uid(723),pg_temp.uid(1));
 INSERT INTO public.plan_print_batches(id,project_id,idempotency_key,request_hash,item_count) VALUES
-(pg_temp.uid(731),pg_temp.project(),'client-evidence-batch',repeat('9',64),2);
+(pg_temp.uid(731),pg_temp.project(),'client-evidence-batch',repeat('9',64),3);
 INSERT INTO public.plan_prints(id,sheet_id,batch_id,print_number,rev_letter,project_document_id,sha256,source,created_by) VALUES
 (pg_temp.uid(721),pg_temp.uid(711),pg_temp.uid(731),1,'A',pg_temp.uid(701),repeat('c',64),'upload',pg_temp.uid(1)),
-(pg_temp.uid(722),pg_temp.uid(712),pg_temp.uid(731),1,'B',pg_temp.uid(702),repeat('e',64),'upload',pg_temp.uid(1));
+(pg_temp.uid(722),pg_temp.uid(712),pg_temp.uid(731),1,'B',pg_temp.uid(702),repeat('e',64),'upload',pg_temp.uid(1)),
+(pg_temp.uid(723),pg_temp.uid(713),pg_temp.uid(731),1,'A',pg_temp.uid(703),repeat('7',64),'upload',pg_temp.uid(1));
 INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,issued_at,created_by) VALUES
 (pg_temp.uid(741),pg_temp.project(),1,'Spec book issue 1','client-evidence-issue',repeat('8',64),repeat('f',64),1,now(),pg_temp.uid(1));
 INSERT INTO public.plan_issue_prints(id,issue_id,sheet_id,print_id,sheet_number,sheet_title,rev_letter,sha256) VALUES
@@ -260,7 +305,9 @@ FROM (SELECT jsonb_build_object('productName','Spindle chair','leadTimeWeeks',10
 INSERT INTO public.custom_commission_revisions(id,configuration_id,revision_number,status,brief,drawings,quote,provenance,
   submitted_at,quoted_at,approved_at) VALUES
 (pg_temp.uid(861),pg_temp.uid(851),2,'approved',jsonb_build_object('summary','Ebonized dining chair','intent','Match the table',
-  'requirements','Seat height 18 in','targetDate','2026-12-01','budgetCents',777007,'allowanceCents',777008,
+  -- requirements and materials in the native CustomCommissionBrief string[] shape.
+  'requirements',jsonb_build_array('Seat height 18 in','Arms flush with the table'),
+  'materials',jsonb_build_array('Ebonized oak','Linen'),'targetDate','2026-12-01','budgetCents',777007,'allowanceCents',777008,
   'fabricatorName','secret fabricator','notes','secret note','measurements',jsonb_build_array(jsonb_build_object(
     'label','Seat height','value',18,'unit','in','source','secret-source'))),
   jsonb_build_array(jsonb_build_object('name','Chair elevation','revision','B','url','https://secret.invalid/drawing.pdf')),
@@ -282,6 +329,9 @@ INSERT INTO ev_results SELECT 'manifest2',public.create_evidence_manifest(pg_tem
       'quote',v.quote,'provenance',v.provenance)),'sha256'),'hex'),'rev',2),
   jsonb_build_object('kind','approval_artifact','id',pg_temp.uid(771),'sha256',repeat('d',64),'version',1)),'client-evidence-2')
 FROM public.product_configurations c JOIN public.custom_commission_revisions v ON v.configuration_id=c.id WHERE v.id=pg_temp.uid(861);
+-- manifest3 names only print 723 (document 3), for the send-time pin checks.
+INSERT INTO ev_results VALUES('manifest3',public.create_evidence_manifest(pg_temp.project(),NULL,'service_acceptance',jsonb_build_array(
+  jsonb_build_object('kind','plan_print','id',pg_temp.uid(723),'sha256',repeat('7',64),'rev','A')),'client-evidence-3'));
 -- Manifests naming kinds with no client projection (refused at admission below).
 SET LOCAL session_replication_role=replica;
 INSERT INTO public.evidence_manifests(id,project_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by)
@@ -292,8 +342,9 @@ FROM (VALUES(1,jsonb_build_array(jsonb_build_object('kind','po_spec_snapshot','i
 INSERT INTO ev_results SELECT 'refused'||k,jsonb_build_object('manifestId',pg_temp.uid(880+k)) FROM generate_series(1,2) k;
 SET LOCAL session_replication_role=origin;
 
--- Projection fixture (x08 pattern): requests bound to the native edition and manifest.
-CREATE FUNCTION pg_temp.fixture_request(n integer, state text, delivered boolean, manifest_key text DEFAULT 'manifest')
+-- Draft requests (x08 pattern) bound to the native edition and a manifest;
+-- inserted under replica, sent only by pg_temp.send below.
+CREATE FUNCTION pg_temp.fixture_request(n integer, manifest_key text DEFAULT 'manifest')
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  INSERT INTO public.outbound_drafts(id,organization_id,project_id,kind,channel,recipient_kind,to_client_id,
@@ -302,8 +353,8 @@ BEGIN
  'email','client',pg_temp.uid(5),'Service acceptance','Projection fixture only','service_acceptance_request',pg_temp.uid(100+n),'client-evidence-'||n);
  INSERT INTO public.service_acceptance_requests(id,project_id,scope_edition_id,scope_content_hash,evidence_manifest_id,
  evidence_manifest_hash,request_number,lifecycle,outbound_draft_id,sent_at,client_request_id,request_hash,created_by)
- SELECT pg_temp.uid(100+n),pg_temp.project(),e.id,e.content_hash,m.id,m.manifest_hash,n,state,pg_temp.uid(200+n),
- CASE WHEN delivered THEN now() END,'client-evidence-'||n,repeat('b',64),pg_temp.uid(1)
+ SELECT pg_temp.uid(100+n),pg_temp.project(),e.id,e.content_hash,m.id,m.manifest_hash,n,'draft',pg_temp.uid(200+n),
+ NULL,'client-evidence-'||n,repeat('b',64),pg_temp.uid(1)
  FROM public.project_scope_editions e, public.evidence_manifests m
  WHERE e.project_id=pg_temp.project() AND e.status='active'
    AND m.id=(SELECT (value->>'manifestId')::uuid FROM ev_results WHERE key=manifest_key);
@@ -316,8 +367,18 @@ BEGIN
  (pg_temp.uid(100+n),'required',true,pg_temp.uid(11),'required','replaced',pg_temp.uid(300+n),'Moved out',pg_temp.uid(1),now(),
   'client-evidence-replace-'||n,repeat('7',64),2,'{}');
 END $$;
+-- The native V22 send: the delivery worker marks the outbound draft delivered
+-- and its after-send done, which fires _service_acceptance_after_send (sent_at
+-- and, since SQ-2283, the evidence snapshot). Runs with triggers on (origin).
+CREATE FUNCTION pg_temp.send(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ UPDATE public.outbound_drafts SET status='sent',delivered_at=now(),after_send_done_at=now()
+  WHERE id=pg_temp.uid(200+n) AND after_send_done_at IS NULL;
+ IF NOT FOUND THEN RAISE EXCEPTION 'no unsent outbound draft for request %',n; END IF;
+END $$;
+-- END shared fixture
 SET LOCAL session_replication_role=replica;
-SELECT pg_temp.fixture_request(1,'draft',false);
+SELECT pg_temp.fixture_request(1);
 SET LOCAL session_replication_role=origin;
 -- Reads run with every C4 mutation inactive: the capability ships off.
 UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
@@ -346,8 +407,18 @@ RESET ROLE;
 SET LOCAL session_replication_role=replica;
 UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
  WHERE id=pg_temp.uid(101);
-SELECT pg_temp.fixture_request(2,'sent',true);
+SELECT pg_temp.fixture_request(2);
 SET LOCAL session_replication_role=origin;
+SELECT pg_temp.send(2);
+SELECT pg_temp.assert_true((SELECT lifecycle='sent' AND sent_at IS NOT NULL FROM public.service_acceptance_requests
+  WHERE id=pg_temp.uid(102)),'the native send transition sends request 102');
+-- The send pins each member as it stands and each served object's identity.
+SELECT pg_temp.assert_sql(format($q$SELECT (SELECT array_agg(member_kind ORDER BY ordinal) FROM public.service_acceptance_evidence_snapshots
+  WHERE request_id=%1$L)=ARRAY['approval_artifact','plan_issue','plan_print']
+ AND (SELECT array_agg(p.object_name||'@'||(p.object_id=o.id AND p.object_version IS NOT DISTINCT FROM o.version) ORDER BY p.object_name)
+  FROM public.service_acceptance_evidence_snapshot_objects p JOIN storage.objects o ON o.bucket_id=p.bucket_id AND o.name=p.object_name
+  WHERE p.request_id=%1$L)=ARRAY[%2$L||'@true',%3$L||'@true',%4$L||'@true']$q$,pg_temp.uid(102),pg_temp.doc_path(1),pg_temp.doc_path(2),
+  pg_temp.doc_path(4)),'the send snapshots three members and pins the live identity of documents 1, 2 and 4');
 
 -- ---------------------------------------------------------------------------
 -- Readers: required signer, optional signer, project client.
@@ -597,14 +668,85 @@ SELECT pg_temp.assert_true((SELECT array_agg(jsonb_build_object('id',o.id,'name'
  'bound objects are byte-for-byte the rows that were bound');
 
 -- ---------------------------------------------------------------------------
+-- The pin is the send-time snapshot, not a live anchor (SQ-2281 F1): moving
+-- the Folio row behind the approval artifact to another project unpins nothing.
+-- ---------------------------------------------------------------------------
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.projects(id,name,created_by,designer_id) VALUES
+(pg_temp.uid(901),'Evidence project B',pg_temp.uid(1),pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+UPDATE public.project_documents SET project_id=pg_temp.uid(901) WHERE id=pg_temp.uid(704);
+SELECT pg_temp.assert_true((SELECT project_id=pg_temp.uid(901) FROM public.project_documents WHERE id=pg_temp.uid(704)),
+ 'the Folio row behind the approval artifact now sits on project B');
+SELECT pg_temp.refuse_writes('migration owner, Folio row on project B');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(1);
+SELECT pg_temp.refuse_writes('studio owner, Folio row on project B');
+RESET ROLE;
+UPDATE public.project_documents SET project_id=pg_temp.project() WHERE id=pg_temp.uid(704);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((SELECT array_agg(jsonb_build_object('id',o.id,'name',o.name,'metadata',o.metadata,'version',o.version)
+  ORDER BY o.name) FROM storage.objects o WHERE o.bucket_id='project-documents'
+  AND o.name IN (pg_temp.doc_path(1),pg_temp.doc_path(2),pg_temp.doc_path(4)))=(SELECT array_agg(jsonb_build_object('id',f.id,
+  'name',f.name,'metadata',f.metadata,'version',f.version) ORDER BY f.name) FROM frozen_objects f),
+ 'Folio row back on project A: the signer reads the original bound objects');
+RESET ROLE;
+
+-- ---------------------------------------------------------------------------
+-- A pinned name serves only the pinned row: when the live object there is not
+-- the pinned id and version (replaced by a path that skips triggers), the
+-- storage predicate refuses it; the other pins stay readable.
+-- ---------------------------------------------------------------------------
+SET LOCAL session_replication_role=replica;
+UPDATE storage.objects SET version='replaced-v2' WHERE bucket_id='project-documents' AND name=pg_temp.doc_path(2);
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true(NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(2))
+  AND public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(1)),
+ 'stale version: the pinned name is refused, another pin is still admitted');
+SELECT pg_temp.assert_true((SELECT array_agg(name ORDER BY name) FROM storage.objects WHERE bucket_id='project-documents'
+  AND name LIKE pg_temp.project()::text||'/%')=ARRAY[pg_temp.doc_path(1),pg_temp.doc_path(4)],
+ 'stale version: storage SELECT hides the replaced object');
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+UPDATE storage.objects SET version=f.version,id=gen_random_uuid() FROM frozen_objects f
+ WHERE storage.objects.bucket_id='project-documents' AND storage.objects.name=pg_temp.doc_path(2) AND f.name=storage.objects.name;
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true(NOT public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(2))
+  AND (SELECT count(*)=0 FROM storage.objects WHERE bucket_id='project-documents' AND name=pg_temp.doc_path(2)),
+ 'stale id: a different object at the pinned name is refused');
+RESET ROLE;
+SET LOCAL session_replication_role=replica;
+UPDATE storage.objects SET id=f.id FROM frozen_objects f
+ WHERE storage.objects.bucket_id='project-documents' AND storage.objects.name=pg_temp.doc_path(2) AND f.name=storage.objects.name;
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true(public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(2)),
+ 'the pinned id and version again: the object is served again');
+RESET ROLE;
+
+-- ---------------------------------------------------------------------------
 -- Non-plan evidence reads through per-kind allowlists (SQ-2272 F1): a sent
 -- request on the second native manifest.
 -- ---------------------------------------------------------------------------
 SET LOCAL session_replication_role=replica;
 UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
  WHERE id=pg_temp.uid(102);
-SELECT pg_temp.fixture_request(3,'sent',true,'manifest2');
+SELECT pg_temp.fixture_request(3,'manifest2');
 SET LOCAL session_replication_role=origin;
+SELECT pg_temp.send(3);
+-- Native CustomCommissionBrief lists keep their string[] shape (SQ-2280 F1);
+-- any other shape is dropped, never coerced.
+SELECT pg_temp.assert_sql($q$SELECT public._service_acceptance_texts('["Seat height 18 in"," ","Arms",3,null,{"x":"y"},["z"]]')
+  ='["Seat height 18 in","Arms"]'::jsonb AND public._service_acceptance_texts('[]')='[]'::jsonb
+ AND public._service_acceptance_texts('"Seat height 18 in"') IS NULL AND public._service_acceptance_texts('{"a":"b"}') IS NULL
+ AND public._service_acceptance_texts('7') IS NULL AND public._service_acceptance_texts(NULL) IS NULL$q$,
+ 'text lists keep exactly their non-blank string elements in order; scalars and objects are not lists');
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE n integer; ev jsonb; members jsonb; leak text; BEGIN
  FOREACH n IN ARRAY ARRAY[6,5] LOOP
@@ -626,8 +768,8 @@ DO $$ DECLARE n integer; ev jsonb; members jsonb; leak text; BEGIN
       'dimensions',jsonb_build_object('width',20,'depth',22,'height',34,'unit','in'),
       'fabric',jsonb_build_object('fabricName','Linen','pattern','Herringbone'))),
     'custom_commission_revision',jsonb_build_object('title','Dining chair revision 2','documents','[]'::jsonb,'content',
-      jsonb_build_object('summary','Ebonized dining chair','intent','Match the table','requirements','Seat height 18 in',
-      'targetDate','2026-12-01','revision',2,
+      jsonb_build_object('summary','Ebonized dining chair','intent','Match the table','requirements',jsonb_build_array('Seat height 18 in','Arms flush with the table'),
+      'materials',jsonb_build_array('Ebonized oak','Linen'),'targetDate','2026-12-01','revision',2,
       'measurements',jsonb_build_array(jsonb_build_object('label','Seat height','value',18,'unit','in')),
       'drawings',jsonb_build_array(jsonb_build_object('name','Chair elevation','revision','B')))),
     'approval_artifact',jsonb_build_object('title','Care pack','documents',jsonb_build_array(jsonb_build_object('bucket',
@@ -638,18 +780,54 @@ DO $$ DECLARE n integer; ev jsonb; members jsonb; leak text; BEGIN
     'budget','allowance','fabricator','url','media','checksum','productid','snapshot','context','trade',pg_temp.uid(1)::text,
     pg_temp.uid(843)::text,pg_temp.uid(844)::text,pg_temp.uid(852)::text]) f WHERE strpos(lower(members::text),lower(f))>0;
   PERFORM pg_temp.assert_true(leak IS NULL,'no poison from the native rows for actor '||n||' ['||COALESCE(leak,'')||']');
+  INSERT INTO ev_results VALUES('nonplan'||n,ev);
  END LOOP;
 END $$;
--- A sent request whose manifest names a kind with no projection fails closed.
 RESET ROLE;
+
+-- ---------------------------------------------------------------------------
+-- The client reads what was issued (SQ-2280 F2, SQ-2281 F3): renaming or
+-- re-timing every member row after the send changes no title, issuedAt,
+-- content or document title. Triggers are off for the edits, so even rows
+-- that are immutable after issue change underneath.
+-- ---------------------------------------------------------------------------
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_documents SET title='Renamed '||title WHERE id IN (pg_temp.uid(701),pg_temp.uid(702),pg_temp.uid(704));
+UPDATE public.plan_sheets SET title='Renamed sheet',sheet_number='Z'||sheet_number WHERE id IN (pg_temp.uid(711),pg_temp.uid(712));
+UPDATE public.plan_issues SET name='Renamed issue',issued_at=issued_at+interval '1 day' WHERE id=pg_temp.uid(741);
+UPDATE public.plan_prints SET created_at=created_at+interval '1 day' WHERE id IN (pg_temp.uid(721),pg_temp.uid(722));
+UPDATE public.project_approval_artifacts SET artifact_title='Renamed care pack',question='Renamed question?',
+  created_at=created_at+interval '1 day' WHERE id=pg_temp.uid(771);
+UPDATE public.product_configurations SET name='Renamed chair',issued_at=now()+interval '1 day' WHERE id=pg_temp.uid(851);
+UPDATE public.custom_commission_revisions SET issued_at=now()+interval '1 day' WHERE id=pg_temp.uid(861);
+UPDATE public.project_review_editions SET published_at=published_at+interval '1 day' WHERE id=pg_temp.uid(841);
+UPDATE public.project_review_items SET item_snapshot=item_snapshot||'{"name":"Renamed sofa"}' WHERE id=pg_temp.uid(842);
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE n integer; BEGIN
+ FOREACH n IN ARRAY ARRAY[6,5] LOOP
+  PERFORM pg_temp.actor(n);
+  PERFORM pg_temp.assert_true(public.get_my_service_acceptance_evidence(pg_temp.uid(102))=(SELECT value FROM ev_results
+    WHERE key='reader'||n),'plan evidence reads exactly as sent after its member rows were renamed and re-timed, actor '||n);
+  PERFORM pg_temp.assert_true(public.get_my_service_acceptance_evidence(pg_temp.uid(103))=(SELECT value FROM ev_results
+    WHERE key='nonplan'||n),'non-plan evidence reads exactly as sent after its member rows were renamed and re-timed, actor '||n);
+ END LOOP;
+END $$;
+RESET ROLE;
+
+-- A sent request whose manifest names a kind with no projection fails closed.
 SET LOCAL session_replication_role=replica;
 UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
  WHERE id=pg_temp.uid(103);
-SELECT pg_temp.fixture_request(4,'sent',true,'refused1');
+SELECT pg_temp.fixture_request(4,'refused1');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.send(4);
+SET LOCAL session_replication_role=replica;
 UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
  WHERE id=pg_temp.uid(104);
-SELECT pg_temp.fixture_request(5,'sent',true,'refused2');
+SELECT pg_temp.fixture_request(5,'refused2');
 SET LOCAL session_replication_role=origin;
+SELECT pg_temp.send(5);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE n integer; r integer; BEGIN
  FOREACH r IN ARRAY ARRAY[104,105] LOOP
@@ -686,6 +864,41 @@ DO $$ DECLARE got text; BEGIN
  PERFORM pg_temp.assert_true(got='admitted:1','admission accepts a manifest of every readable non-plan kind ['||COALESCE(got,'')||']');
 END $$;
 UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
+
+-- ---------------------------------------------------------------------------
+-- The send pins what it serves (SQ-2281 F2): a served object missing at send
+-- refuses the send, which writes nothing; once the object is back, the send
+-- pins it, the signer reads it, and it is frozen.
+-- ---------------------------------------------------------------------------
+SET LOCAL session_replication_role=replica;
+UPDATE public.service_acceptance_requests SET lifecycle='superseded',superseded_reason='successor_request',superseded_at=now()
+ WHERE id=pg_temp.uid(105);
+SELECT pg_temp.fixture_request(6,'manifest3');
+DELETE FROM storage.objects WHERE bucket_id='project-documents' AND name=pg_temp.doc_path(3);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error('SELECT pg_temp.send(6)','23514','service_acceptance_evidence_object_missing',
+ 'send refuses a served object that is missing at send');
+SELECT pg_temp.assert_sql(format($q$SELECT (SELECT lifecycle='draft' AND sent_at IS NULL FROM public.service_acceptance_requests
+  WHERE id=%1$L) AND NOT EXISTS(SELECT 1 FROM public.service_acceptance_evidence_snapshots WHERE request_id=%1$L)
+ AND (SELECT after_send_done_at IS NULL FROM public.outbound_drafts WHERE id=%2$L)$q$,pg_temp.uid(106),pg_temp.uid(206)),
+ 'the refused send leaves the request an unsent draft with no snapshot');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(1);
+SELECT pg_temp.assert_sql(format($q$WITH i AS (INSERT INTO storage.objects(bucket_id,name,owner_id,metadata)
+  VALUES('project-documents',%L,%L,'{"eTag":"lighting"}') RETURNING 1) SELECT count(*)=1 FROM i$q$,pg_temp.doc_path(3),pg_temp.uid(1)),
+ 'the studio uploads the lighting print again before the send');
+RESET ROLE;
+SELECT pg_temp.send(6) FROM public.outbound_drafts WHERE id=pg_temp.uid(206) AND after_send_done_at IS NULL;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true(public._can_read_service_acceptance_evidence_object(pg_temp.doc_path(3))
+  AND (SELECT metadata->>'eTag'='lighting' FROM storage.objects WHERE bucket_id='project-documents' AND name=pg_temp.doc_path(3)),
+ 'the send pinned the uploaded object and the signer reads it');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.expect_error(format($q$UPDATE storage.objects SET metadata=metadata||'{"eTag":"late"}'
+  WHERE bucket_id='project-documents' AND name=%L$q$,pg_temp.doc_path(3)),'23514','bound by a sent request',
+ 'after the send the studio cannot overwrite the pinned object');
+RESET ROLE;
 SELECT pg_temp.assert_true((SELECT NOT enabled FROM public.server_capabilities WHERE key='scope_editions'),'capability still off after reads');
 DO $$ BEGIN RAISE NOTICE 'C4 client evidence: PASS % assertions', (SELECT n FROM assertion_count); END $$;
 ROLLBACK;
