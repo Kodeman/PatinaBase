@@ -75,6 +75,10 @@ No V22 send was performed because the UI draft has no explicit address, and the 
 
 Stopped the designer dev server on port 3200 with its owned task ID. Ran `supabase stop --workdir /private/tmp/claude-501/-Users-kody-Code-patina-merged/1460bfe7-3b74-49b1-b90e-b7c7dd33fdc9/scratchpad/sq2235-stack --no-backup`; the CLI confirmed the owned stack stopped. A listener check found no processes on ports 3200, 56321, or 56322. No simulator was created in this continuation. The pre-existing `apps/designer-portal/next-env.d.ts` modification is unrelated and outside this evidence change.
 
+## Root cause (orchestrator)
+
+A20–A23/X08 are BLOCKED by the service-acceptance draft address defect: `create_service_acceptance_request` in migrations 00886/00889 calls `compose_outbound_draft` with `client_id` but omits `address`, so the resulting draft has no address and V22 correctly holds Send. Unlike other client-draft callers (for example `supabase/functions/invoice-reminders/index.ts:471`), this path does not resolve and pass the client email. The orchestrator is filing a migration repair; re-walk these legs after it lands. No fixture email was changed and no further journey legs were attempted.
+
 ## Verification
 
 Pinned verifier: `test -s docs/design/designer-portal-round8/evidence/rc/rc2-consumer-walk.md`.
