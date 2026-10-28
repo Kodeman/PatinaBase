@@ -31,7 +31,7 @@ Every guard defaults to the shared stack (`127.0.0.1:54322`). Pointing a suite e
 
 `service_completion_test.sql` (C6, 00888) is the one guard that defaults to `-v expected_port=56322`, the owned +2000 stack its ticket verifier names. Pass `-v expected_port=<n>` to run it on another local stack. It enables `scope_editions` inside its own rolled-back transaction, so it needs no capability change.
 
-`service_completion_concurrency.test.mjs` (C6 §2.11 F7 races) is a window suite: it commits an `f88e` fixture built from the shared sections of `service_completion_test.sql`, removes it at the end, and needs `scope_editions` enabled on the owned stack. Set the capability back to `false` before running `service_completion_test.sql`, which asserts that the capability ships off. A completion that refuses releases its locks at the error, not at `ROLLBACK`, so the suite runs those orders without a wait:
+`service_completion_concurrency.test.mjs` (C6 §2.11 F7 races) is a window suite: it commits an `f88e` fixture built from the shared sections of `service_completion_test.sql`, removes it at the end. It enables `scope_editions` for its window and restores the value it found, so it runs straight after `service_completion_test.sql`, which asserts that the capability ships off. A completion that refuses releases its locks at the error, not at `ROLLBACK`, so the suite runs those orders without a wait. Its three-session schedule also holds the service-obligation key from a fourth session, to place one resolution's row lock between another's key wait and its completion update:
 
 ```
 ROUND8_DB_URL=postgresql://postgres:postgres@127.0.0.1:56322/postgres SERVICE_COMPLETION_DB_WINDOW=owned \

@@ -15,8 +15,14 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 
 **Revision 2026-10-27 (SQ-2230, 00888).** K3 is **RULED Option A** (Kody, 2026-10-27; DECISIONS.md K3). Migration `00888_round8_service_completion.sql` implements this contract inactive:
 - The state CHECK ships wide: `completed` and `completed_with_conditions` (§2.2). Option B is not built.
-- §2.5 step 1 takes `projects` FOR KEY SHARE, not FOR SHARE. Both modes exclude the FOR UPDATE that `close_project` and the C2, C4 and C5 paths take. The writer census found two paths that UPDATE `projects` after a contributing write (`settle_section_on_gate_approval` and `_activate_proposal_as_project_impl`). Against FOR SHARE each would be a hard 40P01. The census and its one residual path are in the 00888 header.
+- §2.5 step 1 takes `projects` FOR KEY SHARE, not FOR SHARE. Both modes exclude the FOR UPDATE that `close_project` and the C2, C4 and C5 paths take. The writer census found two paths that UPDATE `projects` after a contributing write (`settle_section_on_gate_approval` and `_activate_proposal_as_project_impl`). Against FOR SHARE each would be a hard 40P01. The census is in the 00888 header. It leaves no residual path (corrected by SQ-2257 below).
 - The activation grant plan is in §2.7.
+
+**Revision 2026-10-28 (SQ-2257, 00888).** Repairs the SQ-2255 and SQ-2256 review findings on the SQ-2230 candidate:
+- **Post-key replay** (§2.4): `complete_studio_service` reads its key's receipt again after step 5. A same-key call that waited on the key gets the replayed receipt, or `idempotency_key_reused` when the actor or body differs. Only then does a different key get `service_already_completed`. The cheap lookup before step 1 stays. The resolution key is read only after step 5. Revocation is not keyed: it replays after its completion row lock.
+- **Evidence binding** (§2.2, §2.4): every evidence reference must exist and belong to the request's project, or the resolution refuses with `service_acceptance_evidence_unbound`.
+- **Request lock** (§2.5): resolution and revocation take step 3 FOR NO KEY UPDATE, not FOR SHARE. This removes the SQ-2256 cycle: a first completion, and two resolutions of its request.
+- **Census** (00888 header): the SQ-2230 residual path through `_sign_proposal_authorized_00400` does not exist. It combined two branches that exclude each other. An accepted retry skips the `client_decisions` insert. With the proposal's project set, the later lock is FOR SHARE, which does not conflict with step 1. FOR UPDATE runs only when the project is NULL, and then the insert took no project's key.
 
 **Revision 2026-10-23 (SQ-1871).** Answers the SQ-1862 re-review at `b63705210`:
 - **U1** (§2.3, §2.11): phase bindings are typed per slot (C2 §2.4a). A phase discharges a package's design or installation only when it is bound to that slot and was signed in the slot's current owed run (`owed_since`). A completed design phase can no longer discharge an installation obligation that an amendment adds later. K3 stays **OPEN**.
@@ -78,7 +84,10 @@ None of the first three may write `projects.status`, `closure_checklist` or `por
 
 **`service_acceptance_condition_resolutions`** (new, append-only, F3). This is the one place a condition is resolved, under either K3 option:
 - `id`, `request_id`, `condition_id` (the `conditionId` C4 assigned, C4 §2.1), `response_id`;
-- `resolution` (text), `evidence` (jsonb: an issue id, a storage object or a site request);
+- `resolution` (text), `evidence` (jsonb: an issue id, a storage object or a site request). Each reference must be a native row of the request's project (SQ-2257):
+  - `issueId`: a `plan_issues` row of that project;
+  - `siteRequestId`: a `site_requests` row of that project;
+  - `storageObjectId`: a `storage.objects` row whose path names that project. In `project-documents`, `project-ffe-working` and `service-acceptance-paper` the first folder is the project id. In `field-media` the path starts `project/<projectId>/`. In `site-requests` the first folder is a site request of that project. Any other bucket has no project path, so its objects refuse;
 - `resolved_by`, `resolved_at`, `client_request_id`;
 - `UNIQUE (request_id, condition_id)` and `UNIQUE (request_id, client_request_id)`.
 
@@ -142,11 +151,13 @@ Constraints:
   - any blocker remains;
   - `p_obligation_hash` differs from the server's current snapshot (`serialization_failure`, `stale_obligations`). The hash proves the designer saw the current state. It is **not** the concurrency control; §2.5 is;
   - the request's edition is no longer active.
-- **Replay:** a replay with the same `client_request_id` returns the first effect.
+- **Replay:** a replay with the same `client_request_id` returns the first effect. The key's receipt is read before step 1 and again after step 5 (§2.5): the same caller and body get the replayed receipt, another caller or body gets `idempotency_key_reused`, and only a different key gets `service_already_completed`.
 
 **`resolve_service_acceptance_condition(p_request_id, p_condition_id, p_resolution, p_evidence, p_client_request_id) → jsonb`** (replaces `resolve_studio_service_condition(p_completion_id, …)`, F3)
 - Keyed by the acceptance request, not by a completion, so it can run before any completion exists. It inserts one resolution row. The caller is the designer or a studio owner/admin.
 - It refuses an unknown `conditionId`, a condition that is already resolved, or a request whose edition is not active.
+- It refuses evidence that is not one object of the three keys with UUID strings (`service_acceptance_resolution_invalid`), and evidence that names a row that does not exist or belongs to another project (`service_acceptance_evidence_unbound`, `check_violation`) (§2.2).
+- **Replay:** the same `client_request_id` with the same caller and body returns the first resolution (`replayed: true`); a different caller or body refuses with `idempotency_key_reused`. The key is read after step 5 (§2.5), so a racing twin replays.
 - It is a contributing write (§2.5).
 
 **K3 transitions (SQ-1817 F3).** The earlier text listed open conditions as blockers (`§2.3`) and refused completion with any blocker, yet promised `completed_with_conditions` with resolution afterwards by `completionId`. Those cannot both hold. K3 is **RULED Option A** (2026-10-27); 00888 builds Option A only. The table keeps both lifecycles for the record. Each option below is one coherent lifecycle over the same records:
@@ -193,8 +204,18 @@ So a new live studio line could be placed into an included package after the com
   3. `service_acceptance_requests`, FOR SHARE.
   4. `studio_service_completions`, FOR UPDATE (or the insert target).
   5. `pg_advisory_xact_lock(key)`, exclusive. It waits for every in-flight contributing writer to commit, and blocks new ones until completion commits.
-  6. **Then**, in a later statement, the derivation, the hash comparison and the insert. The RPC is VOLATILE and runs under READ COMMITTED, so step 6 reads a snapshot taken after step 5 was granted. If the transaction runs at REPEATABLE READ or above, the RPC refuses (`serialization_failure`), because its snapshot would predate the lock.
-- `resolve_service_acceptance_condition` uses the same order, through step 5, on every call (Option A), before or after completion. `revoke_studio_service_completion` takes steps 1-4.
+  6. **Then**, in a later statement, the key's receipt is read again (a same-key call that committed during the wait is replayed or refused, §2.4), then the derivation, the hash comparison and the insert. The RPC is VOLATILE and runs under READ COMMITTED, so step 6 reads a snapshot taken after step 5 was granted. If the transaction runs at REPEATABLE READ or above, the RPC refuses (`serialization_failure`), because its snapshot would predate the lock.
+- `resolve_service_acceptance_condition` uses the same order, through step 5, on every call (Option A), before or after completion. Its step 3 is FOR NO KEY UPDATE. `revoke_studio_service_completion` takes steps 1-4, with the same FOR NO KEY UPDATE at step 3.
+
+| Step | Lock | Completion | Resolution | Revocation |
+|---|---|---|---|---|
+| 1 | `projects` | FOR KEY SHARE | FOR KEY SHARE | FOR KEY SHARE |
+| 2 | the request's edition | FOR SHARE | FOR SHARE | FOR SHARE |
+| 3 | the acceptance request | FOR SHARE | FOR NO KEY UPDATE | FOR NO KEY UPDATE |
+| 4 | live completions of that edition | FOR UPDATE | FOR UPDATE | FOR UPDATE, then the revoked row |
+| 5 | service-obligation key | exclusive | exclusive | — |
+
+Step 3 FOR NO KEY UPDATE conflicts with a completion's FOR SHARE and with another resolution's or revocation's lock. It does not conflict with the FOR KEY SHARE that a child-row foreign-key check takes (signers, responses, intakes, resolutions, completions), so it adds no wait to a writer that holds the shared key. A completion row is inserted only while its inserter holds the request FOR SHARE. So when a resolution's step 4 runs, every completion row it can later UPDATE is committed and visible, and step 4 locks it. After step 5, no C6 caller waits on a row lock.
 
 **Result.** Completion and any contributing write are totally ordered. This covers every blocker and the obligation hash, not the financial hold (§2.3). Either the write commits first, and completion sees it (a new blocker refuses, or the hash goes stale), or completion commits first and the write lands afterwards against a completed service. A later write never revokes a completion silently; revocation stays an explicit owner/admin act (§2.4).
 
@@ -294,6 +315,9 @@ The implementing slice greps every writer of the listed tables and records which
   - a C4 response, and `resolve_service_acceptance_condition`;
   - `close_project`.
   - Also: a stale obligation hash is refused, and the RPC refuses under REPEATABLE READ.
+  - Keyed completions (SQ-2257): two identical calls (the second returns the replayed receipt); the same key with another actor, and with another body (`idempotency_key_reused`); two different keys (`service_already_completed`).
+  - The SQ-2256 schedule (SQ-2257): a first completion, a session queued for the key, and two resolutions of the completion's request, so that before the step-3 fix one resolution locks the committed completion row while the other already waits on the key. The pass condition is no `40P01` and one terminal state: one resolution, one `completed` completion, and the second resolution refused as already resolved.
+- **Evidence binding (SQ-2257):** an unknown id and another project's id refuse for each kind, as does an object in a bucket without a project path, and one foreign reference beside a bound one. A site request and objects under each project path convention are accepted.
 - **Fixtures:** full-service and design-only/client-buy fixtures through F08. A direct call while inactive is denied; `has_function_privilege` is false for `PUBLIC`, `anon` and `authenticated` (F20). With `scope_editions` inactive, completion refuses even with its grant restored (F8).
 - **Existing suite:** `supabase/tests/document/close_project_readiness_test.sql` passes unchanged.
 

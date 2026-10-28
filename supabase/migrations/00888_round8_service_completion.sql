@@ -27,10 +27,17 @@
 --   1 projects FOR KEY SHARE, 2 the active edition FOR SHARE, 3 the acceptance
 --   request FOR SHARE, 4 live completions of that edition FOR UPDATE,
 --   5 pg_advisory_xact_lock(key) EXCLUSIVE,
---   6 then, in later statements, derives, compares the hash and inserts.
+--   6 then, in later statements, re-reads its key's receipt (replay), derives,
+--     compares the hash and inserts.
 -- It refuses unless the transaction is READ COMMITTED. resolve_service_acceptance_condition
--- takes the same order through step 5 on every call (before or after completion);
--- revoke_studio_service_completion takes steps 1-4.
+-- takes the same order through step 5 on every call (before or after completion),
+-- except that step 3 is FOR NO KEY UPDATE; revoke_studio_service_completion takes
+-- steps 1-4 the same way. Step 3 FOR NO KEY UPDATE conflicts with a completion's
+-- FOR SHARE and with another resolver's or revoker's lock, but not with the FOR KEY
+-- SHARE of a child-row FK check. A completion row is inserted only while its
+-- inserter holds its request FOR SHARE, so a resolver's step-4 statement sees,
+-- and locks, every completion it can later UPDATE: after step 5 no C6 caller waits
+-- on a row lock.
 -- Step 1 is FOR KEY SHARE, not the contract draft's FOR SHARE. Both conflict with
 -- the FOR UPDATE that close_project and the C2/C4/C5 paths take, so the
 -- serialization is the same. FOR SHARE also conflicts with a plain UPDATE of
@@ -60,12 +67,11 @@
 --     label, edition and fulfilment locks before the first write: R2) and
 --     resolve_service_acceptance_condition (steps 1-5 before the insert: R2).
 --     Two R0 writers then UPDATE projects; FOR KEY SHARE at step 1 covers them.
---   Residual (1): _sign_proposal_authorized_00400 inserts its approval
---     client_decisions row (shared key on proposals.project_id) and later takes
---     projects FOR UPDATE WHERE proposal_id = the signed proposal. Only an
---     accepted-proposal repair retry on an already-activated project can make
---     both the same project; that retry racing a completion would be a 40P01.
---     Not edited here: it is outside C6's declared scope.
+--     _sign_proposal_authorized_00400 is R0 too. Only a fresh signature inserts its
+--     approval client_decisions row, keyed on proposals.project_id. Its later
+--     projects lock is FOR SHARE when that project is set (no conflict with step 1)
+--     and FOR UPDATE only when it is NULL, where the insert took no project's key.
+--     An accepted retry skips the insert. No residual path remains.
 -- Direct table writes through RLS (project_ffe_items_studio_rw and the like)
 -- take the key through the trigger and lock nothing after it: R0.
 -- Invoice, invoice-line, payment and milestone tables carry no trigger (R20).
@@ -554,6 +560,8 @@ $$;
 
 -- Steps 1-4 of the §2.5 order for an existing request (the edition is the
 -- request's own, which completion and resolution then require to be active).
+-- Resolvers and revokers take the request FOR NO KEY UPDATE, so they queue
+-- behind a completion that holds it FOR SHARE and then lock its committed row.
 CREATE OR REPLACE FUNCTION public._lock_service_completion_scope(p_request_id uuid)
 RETURNS public.service_acceptance_requests LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE v_project uuid; v_edition uuid; v_request public.service_acceptance_requests%ROWTYPE;
@@ -565,7 +573,7 @@ BEGIN
   END IF;
   PERFORM 1 FROM public.projects WHERE id = v_project FOR KEY SHARE;
   PERFORM 1 FROM public.project_scope_editions WHERE id = v_edition FOR SHARE;
-  SELECT * INTO STRICT v_request FROM public.service_acceptance_requests WHERE id = p_request_id FOR SHARE;
+  SELECT * INTO STRICT v_request FROM public.service_acceptance_requests WHERE id = p_request_id FOR NO KEY UPDATE;
   PERFORM 1 FROM public.studio_service_completions
   WHERE project_id = v_project AND scope_edition_id = v_edition AND revoked_at IS NULL ORDER BY id FOR UPDATE;
   RETURN v_request;
@@ -641,7 +649,16 @@ BEGIN
   WHERE project_id = p_project_id AND scope_edition_id = v_edition AND revoked_at IS NULL ORDER BY id FOR UPDATE;
   -- 5. The service-obligation key, exclusive, last.
   PERFORM pg_advisory_xact_lock(public._service_obligation_key(p_project_id));
-  -- 6. Later statements: a READ COMMITTED snapshot taken after step 5.
+  -- 6. Later statements: a READ COMMITTED snapshot taken after step 5. A racing
+  -- call with this key may have committed while this one waited: replay it.
+  SELECT * INTO v_existing FROM public.studio_service_completions
+  WHERE project_id = p_project_id AND client_request_id = v_key;
+  IF v_existing.id IS NOT NULL THEN
+    IF v_existing.completed_by <> v_uid OR v_existing.request_hash <> v_hash THEN
+      RAISE EXCEPTION 'idempotency_key_reused' USING ERRCODE = 'unique_violation';
+    END IF;
+    RETURN public._service_completion_receipt(v_existing.id, true);
+  END IF;
   IF EXISTS (SELECT 1 FROM public.studio_service_completions
       WHERE project_id = p_project_id AND scope_edition_id = v_edition AND revoked_at IS NULL) THEN
     RAISE EXCEPTION 'service_already_completed' USING ERRCODE = 'unique_violation';
@@ -720,6 +737,24 @@ BEGIN
      OR EXISTS (SELECT 1 FROM jsonb_each(p_evidence) e WHERE jsonb_typeof(e.value) <> 'string'
        OR e.value #>> '{}' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') THEN
     RAISE EXCEPTION 'service_acceptance_resolution_invalid' USING ERRCODE = 'check_violation';
+  END IF;
+  -- Each reference must exist on this project: a plan issue, a site request, or a
+  -- storage object whose path names the project (directly or by a site request).
+  IF EXISTS (SELECT 1 FROM jsonb_each_text(p_evidence) e WHERE NOT CASE e.key
+      WHEN 'issueId' THEN EXISTS (SELECT 1 FROM public.plan_issues i
+        WHERE i.id = e.value::uuid AND i.project_id = v_request.project_id)
+      WHEN 'siteRequestId' THEN EXISTS (SELECT 1 FROM public.site_requests s
+        WHERE s.id = e.value::uuid AND s.project_id = v_request.project_id)
+      ELSE EXISTS (SELECT 1 FROM storage.objects o WHERE o.id = e.value::uuid AND CASE
+        WHEN o.bucket_id IN ('project-documents', 'project-ffe-working', 'service-acceptance-paper')
+          THEN (storage.foldername(o.name))[1] = v_request.project_id::text
+        WHEN o.bucket_id = 'field-media'
+          THEN (storage.foldername(o.name))[1:2] = ARRAY['project', v_request.project_id::text]
+        WHEN o.bucket_id = 'site-requests' THEN EXISTS (SELECT 1 FROM public.site_requests s
+          WHERE s.project_id = v_request.project_id AND s.id::text = (storage.foldername(o.name))[1])
+        ELSE false END)
+      END) THEN
+    RAISE EXCEPTION 'service_acceptance_evidence_unbound' USING ERRCODE = 'check_violation';
   END IF;
   PERFORM set_config('app.service_condition_resolution_id', v_id::text, true);
   INSERT INTO public.service_acceptance_condition_resolutions(id, request_id, condition_id, response_id, resolution,

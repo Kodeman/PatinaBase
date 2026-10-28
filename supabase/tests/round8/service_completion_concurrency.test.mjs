@@ -1,9 +1,9 @@
 // N(service_completion). C6 §2.11 F7 races on the committed 00888 schema, owned LOCAL DB window only.
-// Never installs migrations or toggles scope_editions. Refuses without ownership.
+// Never installs migrations. Refuses without ownership. Inside the owned window it enables
+// scope_editions and restores the value it found when it ends.
 // Run: node --test --test-concurrency=1 supabase/tests/round8/service_completion_concurrency.test.mjs
-// Required env: SERVICE_COMPLETION_DB_WINDOW=owned and ROUND8_DB_URL naming the owned stack;
-// scope_editions enabled on that stack only. Fixtures reuse the "shared" sections of
-// service_completion_test.sql under the f88e prefix.
+// Required env: SERVICE_COMPLETION_DB_WINDOW=owned and ROUND8_DB_URL naming the owned stack.
+// Fixtures reuse the "shared" sections of service_completion_test.sql under the f88e prefix.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -151,14 +151,18 @@ test('C6 completion is totally ordered with every contributing writer, both orde
   const a = open();
   const m = open();
   let fixtureOwned = false;
+  let capabilityWas = null;
   try {
     const preflight = await a.ok(`SELECT current_user='postgres' AND current_setting('transaction_isolation')='read committed' AND
       to_regprocedure('public.complete_studio_service(uuid,uuid,text,text)') IS NOT NULL AND
-      (SELECT enabled FROM public.server_capabilities WHERE key='scope_editions') AND
       NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f88e%') AND
       NOT EXISTS(SELECT 1 FROM public.organizations WHERE id::text LIKE 'f88e%') AND
       NOT EXISTS(SELECT 1 FROM public.products WHERE id::text LIKE 'f88e%');`, 'preflight');
-    assert.equal(preflight, 't', 'committed 00888, capability on, and empty owned fixture prefix required');
+    assert.equal(preflight, 't', 'committed 00888 and empty owned fixture prefix required');
+    // Restored in finally, even when the enabling statement's response is lost.
+    capabilityWas = await a.ok(`SELECT enabled FROM public.server_capabilities WHERE key='scope_editions';`, 'capability before');
+    assert.ok(['t', 'f'].includes(capabilityWas), 'scope_editions capability row present');
+    await a.ok(`UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';`, 'capability on for the window');
     const deadlocksBefore = Number(await m.ok('SELECT deadlocks FROM pg_stat_database WHERE datname=current_database();', 'deadlocks'));
     // Ownership starts before the commit can land (including a lost response).
     fixtureOwned = true;
@@ -263,6 +267,89 @@ test('C6 completion is totally ordered with every contributing writer, both orde
     'Option A: the completion closed in the resolution transaction');
     await revoke('resolution');
     await ready('resolution');
+
+    // Keyed completions racing (SQ-2257). The loser passes the cheap pre-lock lookup
+    // while the winner is uncommitted, then reads the winner's receipt after the key.
+    const receipt = res => JSON.parse(res.out);
+    v = await view();
+    r = await race('identical completions', { actor: 1, sql: complete(v, 'k-twin') }, { actor: 1, sql: complete(v, 'k-twin') });
+    succeeded(r.won, 'identical completions: the first commits');
+    succeeded(r.lost, 'identical completions: the queued twin returns a receipt');
+    assert.equal(receipt(r.lost).replayed, true, 'identical completions: the twin replays');
+    assert.equal(receipt(r.lost).completionId, receipt(r.won).completionId, 'identical completions: one completion');
+    await revoke('identical completions');
+    await ready('identical completions');
+    v = await view();
+    r = await race('same key, another actor', { actor: 1, sql: complete(v, 'k-reuse-actor') }, { actor: 3, sql: complete(v, 'k-reuse-actor') });
+    succeeded(r.won, 'same key, another actor: the first commits');
+    refused(r.lost, [['23505', 'idempotency_key_reused']], 'same key, another actor');
+    await revoke('same key, another actor');
+    await ready('same key, another actor');
+    v = await view();
+    r = await race('same key, another body', { actor: 1, sql: complete(v, 'k-reuse-body') },
+      { actor: 1, sql: complete({ ...v, hash: '0'.repeat(64) }, 'k-reuse-body') });
+    succeeded(r.won, 'same key, another body: the first commits');
+    refused(r.lost, [['23505', 'idempotency_key_reused']], 'same key, another body');
+    await revoke('same key, another body');
+    await ready('same key, another body');
+    v = await view();
+    r = await race('different keys', { actor: 1, sql: complete(v, 'k-diff-a') }, { actor: 1, sql: complete(v, 'k-diff-b') });
+    succeeded(r.won, 'different keys: the first commits');
+    refused(r.lost, [['23505', 'service_already_completed']], 'different keys');
+    await revoke('different keys');
+    await ready('different keys');
+
+    // SQ-2256 schedule: a first completion (a), two resolvers of its request (b, c) and
+    // a key holder (x) queued between them. Before the step-3 request lock, b saw no
+    // completion row, c locked the committed row and waited on the key, and b then
+    // waited on c's row: a hard 40P01. Now b and c queue on the request instead.
+    await setup(`SELECT pg_temp.accepted('q2','[{"text":"Rehang the door"}]');`, 'second request with one condition');
+    const q2 = await read(`to_jsonb(pg_temp.req('q2'))`);
+    const c3 = await read(`to_jsonb(pg_temp.condition(pg_temp.req('q2'),1))`);
+    const resolveQ2 = key => `SELECT public.resolve_service_acceptance_condition(${literal(q2)},${literal(c3)},'Door rehung',
+      '{"issueId":"f88ee000-0000-4000-8000-000000000001"}',${literal(key)})::text;`;
+    v = await view();
+    assert.equal(v.req, q2, 'q2 is the current request');
+    assert.deepEqual(v.codes, [], 'q2 leaves no blocker');
+    const [rb, rc, kx] = [open(), open(), open()];
+    const pidOf = async s => Number(await s.ok('SELECT pg_backend_pid();', 'pid'));
+    const [bPid, cPid, xPid] = [await pidOf(rb), await pidOf(rc), await pidOf(kx)];
+    const blocked = (pid, by, name) => m.ok(`DO $wait$ DECLARE deadline timestamptz:=clock_timestamp()+interval '5s'; BEGIN
+      WHILE NOT ${by === null ? `cardinality(pg_blocking_pids(${pid}))>0` : `${by}=ANY(pg_blocking_pids(${pid}))`} LOOP
+        IF clock_timestamp()>deadline THEN RAISE EXCEPTION 'ASSERTION FAILED: % did not wait',${literal(name)}; END IF;
+        PERFORM pg_sleep(0.02);
+      END LOOP;
+    END $wait$;`, name);
+    const first = await a.query(`BEGIN; ${as(1)} ${complete(v, 'k-three')}`);
+    succeeded(first, 'three sessions: the first completion holds the key');
+    const held = kx.query(`BEGIN; SELECT pg_advisory_xact_lock_shared(public._service_obligation_key(${literal(project)}));`);
+    held.catch(() => {});
+    await blocked(xPid, aPid, 'three sessions: the key holder queues behind the completion');
+    const bRun = rb.query(`BEGIN; ${as(1)} ${resolveQ2('r-three-b')}`);
+    bRun.catch(() => {});
+    await blocked(bPid, aPid, 'three sessions: resolver b waits on the completion');
+    await a.ok('COMMIT;', 'three sessions: the completion commits');
+    succeeded(await held, 'three sessions: the key holder takes the key');
+    await blocked(bPid, xPid, 'three sessions: resolver b waits on the key holder');
+    const cRun = rc.query(`BEGIN; ${as(3)} ${resolveQ2('r-three-c')}`);
+    cRun.catch(() => {});
+    await blocked(cPid, null, 'three sessions: resolver c waits');
+    await kx.ok('COMMIT;', 'three sessions: the key holder ends');
+    const bDone = await bRun;
+    await rb.ok(bDone.error ? 'ROLLBACK;' : 'COMMIT;', 'three sessions: resolver b ends');
+    const cDone = await cRun;
+    await rc.ok(cDone.error ? 'ROLLBACK;' : 'COMMIT;', 'three sessions: resolver c ends');
+    for (const s of [rb, rc, kx]) { await s.close(); sessions.delete(s); }
+    for (const done of [bDone, cDone]) assert.notEqual(done.sqlstate, '40P01', 'three sessions: no deadlock');
+    succeeded(bDone, 'three sessions: resolver b resolves the last condition');
+    assert.equal(receipt(bDone).completionState, 'completed', 'three sessions: b moves the completion to completed');
+    refused(cDone, [['23505', 'service_acceptance_condition_resolved']], 'three sessions: resolver c');
+    await check(`(SELECT count(*)=1 FROM public.service_acceptance_condition_resolutions WHERE request_id=${literal(q2)})
+      AND (SELECT count(*)=1 AND bool_and(state='completed' AND conditions_closed_at IS NOT NULL)
+        FROM public.studio_service_completions WHERE project_id=pg_temp.project() AND revoked_at IS NULL)`,
+    'three sessions: one resolution and one completed completion');
+    await revoke('three sessions');
+    await ready('three sessions');
 
     // A stale hash is refused (40001), and so is REPEATABLE READ.
     v = await view();
@@ -524,11 +611,17 @@ test('C6 completion is totally ordered with every contributing writer, both orde
     // so an aborted writer transaction cannot suppress cleanup.
     for (const s of sessions) s.kill();
     await Promise.all([...sessions].map(s => s.exited));
-    if (fixtureOwned) {
+    if (fixtureOwned || capabilityWas !== null) {
       const cleaner = new Session();
       try {
-        const result = await cleaner.query(cleanup);
-        assert.equal(result.error, false, `fixture cleanup: ${result.sqlstate} ${result.message}`);
+        if (capabilityWas !== null) {
+          await cleaner.ok(`UPDATE public.server_capabilities SET enabled=${capabilityWas === 't'} WHERE key='scope_editions';`,
+            'capability restored');
+        }
+        if (fixtureOwned) {
+          const result = await cleaner.query(cleanup);
+          assert.equal(result.error, false, `fixture cleanup: ${result.sqlstate} ${result.message}`);
+        }
       } finally { await cleaner.close(); }
     }
   }

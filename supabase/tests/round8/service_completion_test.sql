@@ -244,6 +244,9 @@ RESET ROLE;
 SET LOCAL session_replication_role=replica;
 INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
 ('f8888000-0000-4000-8000-000000000001',pg_temp.project(),NULL,'service_acceptance','[]',repeat('a',64),repeat('1',64),'sc-1',pg_temp.uid(1));
+-- The plan issue pg_temp.settle names as its evidence (§2.2 binds it to this project).
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by) VALUES
+('f888e000-0000-4000-8000-000000000001',pg_temp.project(),1,'Completion evidence','sc-issue',repeat('1',64),repeat('2',64),1,pg_temp.uid(1));
 SET LOCAL session_replication_role=origin;
 -- END shared origin
 
@@ -648,7 +651,51 @@ SELECT pg_temp.actor(1);
 SELECT pg_temp.expect_error(format($q$SELECT public.resolve_service_acceptance_condition(%L,%L,'Done','{"note":"x"}','r-bad')$q$,
   pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1)),'23514','service_acceptance_resolution_invalid',
   'evidence must name an issue, a storage object or a site request');
-INSERT INTO sa_results VALUES('res1',pg_temp.settle(pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1),'r-1'));
+-- §2.2 binding: each reference is a native row of THIS project. A second project
+-- (studio B) owns the foreign rows; the avatars object names this project in a
+-- bucket that carries no project path convention.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.projects(id,name,created_by,designer_id) VALUES
+('f8889000-0000-4000-8000-000000000001','Other completion project',pg_temp.uid(4),pg_temp.uid(4));
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by) VALUES
+('f888e000-0000-4000-8000-000000000002','f8889000-0000-4000-8000-000000000001',1,'Other evidence','sc-issue-b',repeat('1',64),repeat('2',64),1,pg_temp.uid(4));
+INSERT INTO public.site_requests(id,project_id,created_by,assignee_party_id,due_at) VALUES
+('f8889000-0000-4000-8000-000000000002',pg_temp.project(),pg_temp.uid(1),gen_random_uuid(),now()+interval '1 day'),
+('f8889000-0000-4000-8000-000000000003','f8889000-0000-4000-8000-000000000001',pg_temp.uid(4),gen_random_uuid(),now()+interval '1 day');
+INSERT INTO storage.objects(id,bucket_id,name) VALUES
+('f8889000-0000-4000-8000-000000000004','project-documents',pg_temp.project()||'/punch/paint.jpg'),
+('f8889000-0000-4000-8000-000000000005','field-media','project/'||pg_temp.project()||'/door.jpg'),
+('f8889000-0000-4000-8000-000000000006','site-requests','f8889000-0000-4000-8000-000000000002/1/1/knob.jpg'),
+('f8889000-0000-4000-8000-000000000007','project-documents','f8889000-0000-4000-8000-000000000001/punch/paint.jpg'),
+('f8889000-0000-4000-8000-000000000008','avatars',pg_temp.project()||'/paint.jpg'),
+('f8889000-0000-4000-8000-000000000009','site-requests','f8889000-0000-4000-8000-000000000003/1/1/knob.jpg');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error(format($q$SELECT public.resolve_service_acceptance_condition(%L,%L,'Done',%L,%L)$q$,
+  pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1),e,'r-unbound-'||n),'23514','service_acceptance_evidence_unbound',
+  'evidence refuses '||label)
+FROM (VALUES
+  (1,'an unknown issue',jsonb_build_object('issueId',gen_random_uuid())),
+  (2,'another project''s issue','{"issueId":"f888e000-0000-4000-8000-000000000002"}'::jsonb),
+  (3,'an unknown site request',jsonb_build_object('siteRequestId',gen_random_uuid())),
+  (4,'another project''s site request','{"siteRequestId":"f8889000-0000-4000-8000-000000000003"}'),
+  (5,'an unknown storage object',jsonb_build_object('storageObjectId',gen_random_uuid())),
+  (6,'another project''s storage object','{"storageObjectId":"f8889000-0000-4000-8000-000000000007"}'),
+  (7,'another project''s site-request object','{"storageObjectId":"f8889000-0000-4000-8000-000000000009"}'),
+  (8,'an object in a bucket without a project path','{"storageObjectId":"f8889000-0000-4000-8000-000000000008"}'),
+  (9,'one foreign reference beside a bound one',
+     '{"issueId":"f888e000-0000-4000-8000-000000000001","siteRequestId":"f8889000-0000-4000-8000-000000000003"}')) x(n,label,e);
+-- A bound reference passes; the probe rolls its resolution back.
+SELECT pg_temp.expect_error(format($q$DO $p$ BEGIN
+  PERFORM public.resolve_service_acceptance_condition(%L,%L,'Done',%L,%L); RAISE EXCEPTION 'bound probe'; END $p$$q$,
+  pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1),e,'r-bound-'||n),'P0001','bound probe','evidence binds '||label)
+FROM (VALUES
+  (1,'this project''s site request','{"siteRequestId":"f8889000-0000-4000-8000-000000000002"}'::jsonb),
+  (2,'a project-documents object under this project','{"storageObjectId":"f8889000-0000-4000-8000-000000000004"}'),
+  (3,'a field-media object under this project','{"storageObjectId":"f8889000-0000-4000-8000-000000000005"}'),
+  (4,'a site-requests object of this project''s request','{"storageObjectId":"f8889000-0000-4000-8000-000000000006"}')) x(n,label,e);
+INSERT INTO sa_results VALUES('res1',public.resolve_service_acceptance_condition(pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1),
+  'Done on site','{"issueId":"f888e000-0000-4000-8000-000000000001","siteRequestId":"f8889000-0000-4000-8000-000000000002",
+  "storageObjectId":"f8889000-0000-4000-8000-000000000005"}','r-1'));
 SELECT pg_temp.assert_true(pg_temp.v('res1')->>'completionId' IS NULL AND jsonb_array_length(pg_temp.derive()->'conditions')=1,
   'a resolution keyed by request works before any completion exists');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.settle(%L,%L,'r-again')$q$,pg_temp.req('a2'),pg_temp.condition(pg_temp.req('a2'),1)),
