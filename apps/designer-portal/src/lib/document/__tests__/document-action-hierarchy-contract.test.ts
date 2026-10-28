@@ -9,6 +9,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
+import postcss from "postcss";
 
 const SRC = join(__dirname, "..", "..", "..");
 const COMPONENTS = join(SRC, "components", "document");
@@ -642,10 +643,39 @@ describe("P02 round-8 plate (Kody 2026-10-23)", () => {
     expect(unscoped).toEqual([]);
   });
 
+  // US-52 W6 orchestrator ruling 2026-10-28, D4 12px floor.
+  // Only compact action type may change; every other primary property stays frozen.
+  function isCompactActionFloor({ selector, body }: { selector: string; body: string }): boolean {
+    const size = /^font-size:\s*(\d+(?:\.\d+)?)px;$/.exec(body);
+    return selector === `${ROUND8_SCOPE} .da-act` && !!size && Number(size[1]) >= 12;
+  }
+
+  it("raises compact action labels to 12px without changing legacy's 11px emission", () => {
+    const floors = round8Rules.filter(isCompactActionFloor);
+    expect(floors).toHaveLength(1);
+    postcss.parse(round8Css).walkRules(`${ROUND8_SCOPE} .da-act`, (rule) => {
+      expect(rule.parent?.type).toBe("atrule");
+      expect(rule.parent).toMatchObject({ name: "media", params: "(max-width: 1179px)" });
+    });
+    const legacy = actionRegion(letterhead, "letterhead-actions");
+    expect(legacy).toContain("[&_.da-act]:text-[11px] min-[1180px]:[&_.da-act]:text-[12px]");
+    expect(legacy).not.toContain("data-paper-renderer");
+  });
+
+  it("rejects any compact action property beyond the scoped font-size floor", () => {
+    expect(isCompactActionFloor({ selector: `${ROUND8_SCOPE} .da-act`, body: "font-size: 12px;" })).toBe(true);
+    for (const body of ["font-size: 11px;", "font-weight: 500;", "color: red;", "text-transform: none;", "letter-spacing: 0;", "padding: 0;", "font-size: 12px; color: red;"]) {
+      expect(isCompactActionFloor({ selector: `${ROUND8_SCOPE} .da-act`, body })).toBe(false);
+    }
+    for (const selector of [".da-act", `${ROUND8_SCOPE} .da-primary`, `${ROUND8_SCOPE} .da-label`]) {
+      expect(isCompactActionFloor({ selector, body: "font-size: 12px;" })).toBe(false);
+    }
+  });
+
   it("restyles only the plate's geometry: inset 0 paint, ring 2px off it", () => {
-    const actionRules = round8Rules.filter(({ selector }) => /\.da-/.test(selector));
-    // the plate is the only tier round 8 touches — terminal, danger and the
-    // scored primary keep their grammar byte for byte
+    const actionRules = round8Rules.filter(({ selector }) => /\.da-/.test(selector)).filter((rule) => !isCompactActionFloor(rule));
+    // The compact type exception above never changes primary grammar; the
+    // remaining action rules may touch only the plate's geometry.
     expect(strippedRound8).not.toMatch(/\.da-(terminal|danger|primary|secondary|tertiary)\b/);
     for (const { selector } of actionRules) {
       expect(new Set(selector.match(/\.da-[a-z-]+/g))).toEqual(new Set([".da-plate"]));

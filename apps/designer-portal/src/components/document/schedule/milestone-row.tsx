@@ -53,6 +53,7 @@ export function MilestoneRow({ milestone, today, highlighted = false, onUnpinAnc
   const stamp = milestoneStamp(milestone, today);
   return (
     <div
+      data-schedule-milestone=""
       className={`flex items-center gap-[0.7rem] py-[0.42rem] text-[0.8rem] text-[var(--color-mocha)]${
         highlighted
           ? ' -mx-2 rounded-[3px] bg-[rgba(196,165,123,0.14)] px-2 transition-colors'
