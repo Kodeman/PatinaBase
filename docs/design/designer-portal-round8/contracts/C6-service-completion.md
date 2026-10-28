@@ -101,6 +101,7 @@ None of the first three may write `projects.status`, `closure_checklist` or `por
     - a `site-requests` object: "Site request designers read immutable media" (00374), with its join through `site_requests_designer_read`.
 
     A reference the actor cannot read refuses with `service_acceptance_evidence_unbound`, the same code as one that does not exist, so the refusal does not reveal whether the id exists;
+  - each reference is a **point-in-time citation** (SQ-2267, orchestrator decision c_mvrk8nux_925ecb). Visibility and project binding are checked against the resolving transaction's snapshot only. A removal, relocation or membership revocation that commits at the same time or later does not invalidate the recorded resolution. There are no cross-domain locks and no FK pins on native artifact rows: they would bring back the lock-order coupling that §2.5 removed. Readers show a reference that no longer resolves as "no longer available" and never reopen or fail because of it. The paper-hash attestation covers paper integrity separately;
 - `resolved_by`, `resolved_at`, `client_request_id`;
 - `UNIQUE (request_id, condition_id)` and `UNIQUE (request_id, client_request_id)`.
 
