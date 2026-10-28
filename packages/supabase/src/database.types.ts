@@ -28807,6 +28807,74 @@ export type Database = {
         }
         Relationships: []
       }
+      service_acceptance_condition_resolutions: {
+        Row: {
+          client_request_id: string
+          condition_id: string
+          evidence: Json
+          id: string
+          request_hash: string
+          request_id: string
+          resolution: string
+          resolved_at: string
+          resolved_by: string
+          response_id: string
+        }
+        Insert: {
+          client_request_id: string
+          condition_id: string
+          evidence: Json
+          id?: string
+          request_hash: string
+          request_id: string
+          resolution: string
+          resolved_at?: string
+          resolved_by: string
+          response_id: string
+        }
+        Update: {
+          client_request_id?: string
+          condition_id?: string
+          evidence?: Json
+          id?: string
+          request_hash?: string
+          request_id?: string
+          resolution?: string
+          resolved_at?: string
+          resolved_by?: string
+          response_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_acceptance_condition_resolutions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_condition_resolutions_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_condition_resolutions_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_condition_resolutions_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_acceptance_paper_intakes: {
         Row: {
           client_request_id: string
@@ -33187,6 +33255,123 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_service_completions: {
+        Row: {
+          acceptance_request_id: string
+          client_request_id: string
+          completed_at: string
+          completed_by: string
+          conditions_closed_at: string | null
+          financial_hold: Json
+          id: string
+          obligation_hash: string
+          obligation_snapshot: Json
+          open_condition_ids: string[]
+          project_id: string
+          request_hash: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          scope_edition_id: string
+          state: string
+        }
+        Insert: {
+          acceptance_request_id: string
+          client_request_id: string
+          completed_at?: string
+          completed_by: string
+          conditions_closed_at?: string | null
+          financial_hold: Json
+          id?: string
+          obligation_hash: string
+          obligation_snapshot: Json
+          open_condition_ids?: string[]
+          project_id: string
+          request_hash: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scope_edition_id: string
+          state: string
+        }
+        Update: {
+          acceptance_request_id?: string
+          client_request_id?: string
+          completed_at?: string
+          completed_by?: string
+          conditions_closed_at?: string | null
+          financial_hold?: Json
+          id?: string
+          obligation_hash?: string
+          obligation_snapshot?: Json
+          open_condition_ids?: string[]
+          project_id?: string
+          request_hash?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scope_edition_id?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_service_completions_acceptance_request_id_fkey"
+            columns: ["acceptance_request_id"]
+            isOneToOne: false
+            referencedRelation: "service_acceptance_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_service_completions_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_service_completions_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_service_completions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "studio_service_completions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_service_completions_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_service_completions_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_service_completions_scope_edition_id_fkey"
+            columns: ["scope_edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_scope_editions"
             referencedColumns: ["id"]
           },
         ]
@@ -39136,6 +39321,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      _assert_service_completion_read_committed: {
+        Args: never
+        Returns: undefined
+      }
       _backfill_ffe_item_library_images: { Args: never; Returns: number }
       _board_deck_import_assert_lease: {
         Args: { p_import_id: string; p_lease_owner: string }
@@ -39304,6 +39493,10 @@ export type Database = {
         Returns: boolean
       }
       _can_author_proposal: { Args: { p_owner: string }; Returns: boolean }
+      _can_complete_studio_service: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       _can_manage_configurable_product: {
         Args: { p_product_id: string }
         Returns: boolean
@@ -39931,6 +40124,10 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: string
       }
+      _derive_studio_service_obligations: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       _derive_working_budget_draft_00661_impl: {
         Args: { p_project_id: string }
         Returns: Json
@@ -40469,6 +40666,43 @@ export type Database = {
       }
       _lock_service_acceptance_request: {
         Args: { p_exclusive: boolean; p_request_id: string }
+        Returns: {
+          aggregate_outcome: string
+          client_request_id: string
+          closed_at: string | null
+          closed_reason: string | null
+          created_at: string
+          created_by: string
+          evidence_manifest_hash: string
+          evidence_manifest_id: string
+          id: string
+          lifecycle: string
+          outbound_draft_id: string
+          predecessor_request_id: string | null
+          project_id: string
+          request_hash: string
+          request_number: number
+          scope_content_hash: string
+          scope_edition_id: string
+          sent_at: string | null
+          signer_policy_revision: number
+          superseded_at: string | null
+          superseded_reason: string | null
+          withdraw_client_request_id: string | null
+          withdraw_reason: string | null
+          withdraw_request_hash: string | null
+          withdrawn_at: string | null
+          withdrawn_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "service_acceptance_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _lock_service_completion_scope: {
+        Args: { p_request_id: string }
         Returns: {
           aggregate_outcome: string
           client_request_id: string
@@ -41243,6 +41477,10 @@ export type Database = {
       }
       _service_acceptance_hash: { Args: { p_value: Json }; Returns: string }
       _service_acceptance_key: { Args: { p_key: string }; Returns: string }
+      _service_acceptance_open_conditions: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
       _service_acceptance_paper_object_unchanged: {
         Args: { p_etag: string; p_object_id: string; p_version: string }
         Returns: boolean
@@ -41258,6 +41496,32 @@ export type Database = {
       _service_acceptance_response_receipt: {
         Args: { p_replayed: boolean; p_response_id: string }
         Returns: Json
+      }
+      _service_completion_financial_hold: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      _service_completion_receipt: {
+        Args: { p_completion_id: string; p_replayed: boolean }
+        Returns: Json
+      }
+      _service_obligation_items: {
+        Args: { p_edition_id: string; p_project_id: string }
+        Returns: {
+          code: string
+          kind: string
+          n: number
+          package_key: string
+        }[]
+      }
+      _service_obligation_key: {
+        Args: { p_project_id: string }
+        Returns: number
+      }
+      _service_obligation_label: { Args: { p_code: string }; Returns: string }
+      _service_obligation_write_lock: {
+        Args: { p_project_id: string }
+        Returns: undefined
       }
       _sign_design_services_agreement_authorized:
         | {
@@ -43384,6 +43648,15 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_studio_service: {
+        Args: {
+          p_acceptance_request_id: string
+          p_client_request_id: string
+          p_obligation_hash: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       compliance_document_state: {
         Args: { p_document_id: string }
         Returns: string
@@ -44338,6 +44611,10 @@ export type Database = {
       demote_to_personal: { Args: { p_product_id: string }; Returns: string }
       derive_signature_biases: {
         Args: { p_designer_id: string }
+        Returns: Json
+      }
+      derive_studio_service_obligations: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       derive_working_budget_draft: {
@@ -45779,6 +46056,10 @@ export type Database = {
       }
       get_site_request_action_detail: {
         Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
+      }
+      get_studio_service_completion: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       get_studio_vendor_accounts: {
@@ -49228,6 +49509,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_service_acceptance_condition: {
+        Args: {
+          p_client_request_id: string
+          p_condition_id: string
+          p_evidence: Json
+          p_request_id: string
+          p_resolution: string
+        }
+        Returns: Json
+      }
       resolve_spec_book_share: { Args: { p_token: string }; Returns: Json }
       resolve_studio_identity: {
         Args: {
@@ -49434,6 +49725,10 @@ export type Database = {
       revoke_room_scan_access: {
         Args: { p_association_id: string; p_reason?: string }
         Returns: boolean
+      }
+      revoke_studio_service_completion: {
+        Args: { p_completion_id: string; p_reason: string }
+        Returns: Json
       }
       rolodex_card_for_party_phone: {
         Args: { p_phone_e164: string; p_project_id: string }

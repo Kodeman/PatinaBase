@@ -16,6 +16,8 @@ Every guard defaults to the shared stack (`127.0.0.1:54322`). Pointing a suite e
 
 `owned_psql.test.mjs` proves each parameter unset, wrong and right.
 
+`service_completion_test.sql` (C6, 00888) is the one guard that defaults to `-v expected_port=56322`, the owned +2000 stack its ticket verifier names. Pass `-v expected_port=<n>` to run it on another local stack. It enables `scope_editions` inside its own rolled-back transaction, so it needs no capability change.
+
 ### Isolated CLI stack
 
 1. Copy `supabase/config.toml`, `migrations/`, `seed/` and `templates/` into a scratch workdir outside the repo. Copy no `.env*` file.
