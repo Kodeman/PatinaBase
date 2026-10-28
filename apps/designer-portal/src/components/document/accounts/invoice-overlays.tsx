@@ -13,11 +13,17 @@
  * the Accounts book stays mounted beneath — pull, act, put it back (D14).
  */
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PaperFolioSheet } from "../overlays/paper-folio-sheet";
+import { SectionLoadingLine } from "../section-loading-line";
 import { InvoiceFolio } from "./invoice-folio";
-import { InvoiceComposer } from "./invoice-composer";
+
+// Keep the event/context owner and dismissible sheet eager; only an opened
+// sheet needs the composer, not every importer of its openers.
+const InvoiceComposer = lazy(() =>
+  import("./invoice-composer").then((module) => ({ default: module.InvoiceComposer })),
+);
 
 // ── One-act openers ─────────────────────────────────────────────────────────
 
@@ -125,14 +131,16 @@ export function InvoiceOverlays() {
         wide
       >
         {overlay?.kind === "composer" && (
-          <InvoiceComposer
-            key={overlay.context.mode === "edit" ? overlay.context.invoiceId : "new"}
-            context={overlay.context}
-            // The handoff: the fresh draft opens as the folio — issue & send
-            // live there (review-then-send, R74).
-            onDrafted={(invoiceId) => setOverlay({ kind: "folio", invoiceId })}
-            onClose={close}
-          />
+          <Suspense fallback={<SectionLoadingLine label="Loading invoice composer" />}>
+            <InvoiceComposer
+              key={overlay.context.mode === "edit" ? overlay.context.invoiceId : "new"}
+              context={overlay.context}
+              // The handoff: the fresh draft opens as the folio — issue & send
+              // live there (review-then-send, R74).
+              onDrafted={(invoiceId) => setOverlay({ kind: "folio", invoiceId })}
+              onClose={close}
+            />
+          </Suspense>
         )}
       </PaperFolioSheet>
     </>
