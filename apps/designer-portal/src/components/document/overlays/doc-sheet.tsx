@@ -42,6 +42,7 @@ import {
   topActiveModalDialog,
   topDismissiblePopover,
 } from './active-dialog';
+import { lastPressedControl } from './pressed-control';
 
 const FOCUSABLE_SELECTOR = [
   'a[href]:not([tabindex="-1"])',
@@ -289,10 +290,12 @@ export function DocSheet({
   useEffect(() => {
     if (!open) return;
     const activeElement = document.activeElement;
+    // WebKit leaves a clicked button unfocused (BODY), so fall back to the
+    // control the user just pressed; an explicit returnFocusTo still wins.
     restoreRef.current =
       activeElement instanceof HTMLElement && activeElement !== document.body
         ? activeElement
-        : null;
+        : lastPressedControl(document);
     if (panelRef.current) {
       panelRef.current.dataset.docSheetOrigin = origin;
     }
@@ -325,7 +328,10 @@ export function DocSheet({
       const targets = [returnFocusRef.current, originalTrigger, fallback];
       window.requestAnimationFrame(() => {
         const target = targets.find(
-          (element) => element?.isConnected && isElementRendered(element),
+          (element) =>
+            element?.isConnected &&
+            isElementRendered(element) &&
+            !element.matches(':disabled'),
         );
         target?.focus({ preventScroll: true });
       });

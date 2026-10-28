@@ -16,7 +16,8 @@ const IDS = [PART, UNDATED, DRAFT, VOID].map(id => `'${id}'`).join(',');
 let owned = false;
 
 test.beforeAll(() => {
-  expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toMatch(/^http:\/\/127\.0\.0\.1:54321\/?$/);
+  // Local stack only, on whichever port the run owns (an owned stack is not 54321).
+  expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname).toBe('127.0.0.1');
   expect(psqlScalar(`SELECT count(*) FROM projects WHERE id='${JOB}';`)).toBe('0');
   expect(psqlScalar(`SELECT count(*) FROM invoices WHERE studio_id='${STUDIO}';`)).toBe('0');
   psqlRun(`BEGIN;
@@ -54,12 +55,21 @@ test.afterAll(() => {
   console.log('[H02 cleanup] project|invoice|payment=0|0|0');
 });
 
-async function openBook(page: Page) {
+async function openBook(page: Page, how: 'keyboard' | 'click' = 'keyboard') {
   await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
   await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
   let opener = page.locator('[data-studio-door="accounts"]');
-  if (await opener.isVisible()) await opener.click();
-  else {
+  if (how === 'click') {
+    // A real mouse/tap open: WebKit leaves the door unfocused (SQ-2325), so the
+    // sheet must still find its way back to it.
+    await expect(opener).toBeVisible();
+    await opener.click();
+  } else if (await opener.isVisible()) {
+    // Keyboard-open (focus + Enter): the door holds focus when the sheet opens
+    // (SQ-2302 shows this door on phones).
+    await opener.focus();
+    await page.keyboard.press('Enter');
+  } else {
     opener = page.getByRole('button', { name: 'More studio actions', exact: true });
     await opener.click();
     await page.getByRole('button', { name: 'Ledgers', exact: true }).click();
@@ -116,4 +126,13 @@ test('an invoice read failure refuses the book instead of printing zero; retry r
     release();
     await page.unroute(matcher);
   }
+});
+
+test('a click-opened book puts focus back on the masthead door, as the keyboard open does', async ({ authenticatedPage: page }) => {
+  test.setTimeout(180_000);
+  const { book, opener } = await openBook(page, 'click');
+  await expect(book.locator('[data-accounts-front-matter]')).toContainText('$240.00 issued; $50.00 received; $190.00 due.');
+  await page.keyboard.press('Escape');
+  await expect(book).not.toBeVisible();
+  await expect(opener).toBeFocused();
 });

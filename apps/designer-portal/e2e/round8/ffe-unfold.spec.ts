@@ -80,6 +80,11 @@ const instrument = (page: Page) =>
   page.locator('[data-paper-chapter="ffe"] [data-unfold-instrument="pieces"]');
 
 test.describe('WP-01.6 inline FF&E unfold (F01)', () => {
+  // Sign-in plus two or three cold paper landings, each with its own 60-120s
+  // wait, cannot share the base config's 60s test budget on a loaded WebKit
+  // run (RC-3, SQ-2312). Round-8 journeys elsewhere carry 180-300s.
+  test.setTimeout(180_000);
+
   test('the room door unfolds the Build room in place; Esc folds it back to the door', async ({
     authenticatedPage: page,
   }) => {
