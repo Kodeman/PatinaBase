@@ -1,14 +1,25 @@
--- RC-2 consumer journey (SQ-2329): FICTIONAL local-only service-acceptance job.
--- Builds on f01-fixture.sql (F01 studio + designer, applied first below) and
--- follows supabase/tests/round8/service_acceptance_body.psql's origin path:
--- a design-services agreement drafted, sent, signed by the client and
+-- RC-2 consumer journey (SQ-2329, repaired SQ-2337): FICTIONAL local-only
+-- service-acceptance job. Builds on f01-fixture.sql (F01 studio + designer,
+-- applied below, after the target guard) and follows
+-- supabase/tests/round8/service_acceptance_body.psql's origin path: a
+-- design-services agreement drafted, sent, signed by the client and
 -- countersigned by the designer mints the job's active scope edition, whose
 -- signer policy names two REQUIRED signers (client + household partner).
 --
--- Run with psql -f and the owned stack's host port, e.g.
---   psql -X -v ON_ERROR_STOP=1 -v expected_port=56322 \
---     postgresql://postgres:postgres@127.0.0.1:56322/postgres -f consumer-journey-fixture.sql
--- It refuses any host but 127.0.0.1 and any port but :expected_port.
+-- Applied only by run-consumer-journey.mjs (through consumer-journey.journey.ts)
+-- against the owned stack it started. The owned identity is read from Docker
+-- (the container the Supabase CLI labelled with the owned project), never
+-- derived from the URL under test:
+--   psql -X -v ON_ERROR_STOP=1 -v owned_port=<db host port> \
+--     -v owned_server_addr=<db container address> -v owned_system_id=<pg_control_system id> \
+--     -v evidence_path_1=<object> -v evidence_sha_1=<sha256> \
+--     -v evidence_path_2=<object> -v evidence_sha_2=<sha256> <owned db url> -f consumer-journey-fixture.sql
+--
+-- TARGET GUARD (SQ-2334 F1): before ANY write, including the F01 include, it
+-- refuses a non-loopback host, the shared stack's ports (54321/54322), a port
+-- other than owned_port, and a server whose address or cluster system
+-- identifier differs from the owned container's. The shared container also
+-- listens on 5432 inside Docker, so the container port proves nothing.
 --
 -- Re-runnable: actors, household and seats are upserted; every application
 -- composes a FRESH job (new proposal -> new project), so a re-run never edits
@@ -23,20 +34,55 @@
 -- studio   f0180000-0000-4000-8000-000000000001 (F01)   designer f0180000-...-000000000002 (F01)
 -- household c2c27000-0000-4000-8000-000000000001; cards c2c26000-...-01 (client) / -02 (partner)
 --
+-- Evidence (SQ-2334 F3): two issued drawing sets on the job, each behind real
+-- project-documents objects the runner uploaded through the Storage API
+-- (evidence_path_1/2, checked here to exist):
+--   issue 1 "RC2 fictional drawing set"          A-101 (file 1)      -> manifest 'rc2-sa-1'
+--   issue 2 "RC2 fictional drawing set, revised"  A-101 + A-201 (2)  -> manifest 'rc2-sa-2'
+-- Both manifests are minted natively (create_evidence_manifest as the
+-- designer). Request 1 cites manifest 1; the resend cites manifest 2.
+--
 -- Nothing here writes to_address, request lifecycle, responses or completions:
 -- those are produced only by the journey (UI -> RPC -> V22 send).
 \set ON_ERROR_STOP on
-\if :{?expected_port}
+\if :{?owned_port}
 \else
-\echo REFUSED: pass -v expected_port=<owned local host port>
-DO $$ BEGIN RAISE EXCEPTION 'consumer-journey fixture refused: expected_port not given'; END $$;
+\echo REFUSED: pass -v owned_port, owned_server_addr and owned_system_id from the owned container
+DO $$ BEGIN RAISE EXCEPTION 'consumer-journey fixture refused: owned_port not given'; END $$;
 \quit
 \endif
-SELECT :'HOST' = '127.0.0.1' AND :'PORT' = :'expected_port' AS local_stack \gset
-\if :local_stack
+\if :{?owned_server_addr}
 \else
-\echo REFUSED: consumer-journey fixture needs 127.0.0.1 port :expected_port, got :HOST port :PORT
-DO $$ BEGIN RAISE EXCEPTION 'consumer-journey fixture refused: not the expected local stack'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'consumer-journey fixture refused: owned_server_addr not given'; END $$;
+\quit
+\endif
+\if :{?owned_system_id}
+\else
+DO $$ BEGIN RAISE EXCEPTION 'consumer-journey fixture refused: owned_system_id not given'; END $$;
+\quit
+\endif
+-- Read-only probes only until the guard passes.
+SELECT CASE
+  WHEN :'HOST' NOT IN ('127.0.0.1', 'localhost', '::1') THEN 'host ' || :'HOST' || ' is not loopback'
+  WHEN :'PORT' IN ('54321', '54322') THEN 'port ' || :'PORT' || ' is the shared Supabase stack'
+  WHEN :'owned_port' IN ('54321', '54322') THEN 'owned_port ' || :'owned_port' || ' is the shared Supabase stack'
+  WHEN :'PORT' <> :'owned_port' THEN 'port ' || :'PORT' || ' is not the owned port ' || :'owned_port'
+  WHEN host(inet_server_addr()) IS DISTINCT FROM :'owned_server_addr'
+    THEN 'server address ' || COALESCE(host(inet_server_addr()), 'unknown') || ' is not the owned container'
+  WHEN (SELECT system_identifier::text FROM pg_control_system()) IS DISTINCT FROM :'owned_system_id'
+    THEN 'cluster system identifier is not the owned container''s'
+  ELSE '' END AS rc2_refusal \gset
+SELECT :'rc2_refusal' = '' AS rc2_owned \gset
+\if :rc2_owned
+\else
+\echo REFUSED: :rc2_refusal
+DO $$ BEGIN RAISE EXCEPTION 'consumer-journey fixture refused: not the owned local stack'; END $$;
+\quit
+\endif
+SELECT :{?evidence_path_1} AND :{?evidence_path_2} AND :{?evidence_sha_1} AND :{?evidence_sha_2} AS rc2_evidence_given \gset
+\if :rc2_evidence_given
+\else
+DO $$ BEGIN RAISE EXCEPTION 'consumer-journey fixture refused: evidence_path_1/2 and evidence_sha_1/2 not given'; END $$;
 \quit
 \endif
 
@@ -45,6 +91,16 @@ DO $$ BEGIN RAISE EXCEPTION 'consumer-journey fixture refused: not the expected 
 BEGIN;
 SET LOCAL lock_timeout = '3s';
 SET LOCAL statement_timeout = '60s';
+-- The activation blocks below re-check the owned cluster inside this transaction.
+SELECT set_config('rc2.owned_system_id', :'owned_system_id', true),
+       set_config('rc2.owned_server_addr', :'owned_server_addr', true) \gset
+CREATE FUNCTION pg_temp.require_owned_cluster(what text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF (SELECT system_identifier::text FROM pg_control_system()) IS DISTINCT FROM current_setting('rc2.owned_system_id')
+     OR host(inet_server_addr()) IS DISTINCT FROM current_setting('rc2.owned_server_addr') THEN
+    RAISE EXCEPTION 'refusing % outside the owned local database container', what;
+  END IF;
+END $$;
 
 -- ── Actors ─────────────────────────────────────────────────────────────────
 INSERT INTO auth.users (
@@ -107,13 +163,9 @@ ON CONFLICT (id) DO UPDATE SET status = 'active', household_id = EXCLUDED.househ
 -- LOCAL-ONLY ACTIVATION (1 of 2): scope editions capability.
 -- Shipped false (00868). Agreement composition and the countersign that
 -- mints the edition both read it, so it must be on before the job is built.
--- Never run against Strata; migrations stay inactive.
+-- Never run against Strata or the shared stack; migrations stay inactive.
 -- ════════════════════════════════════════════════════════════════════════════
-DO $$ BEGIN
-  IF current_database() <> 'postgres' OR inet_server_port() <> 5432 THEN
-    RAISE EXCEPTION 'refusing activation outside the owned local database container';
-  END IF;
-END $$;
+SELECT pg_temp.require_owned_cluster('the scope_editions activation');
 UPDATE public.server_capabilities SET enabled = true WHERE key = 'scope_editions';
 
 -- ── A fresh job: draft -> send -> client signs -> designer countersigns ───
@@ -187,35 +239,74 @@ BEGIN
   END IF;
 END $$;
 
--- Evidence manifest, a citable drawing issue and the delivered service:
--- inserted directly as service_acceptance_body.psql and service_completion_test.sql do.
+-- ── Issued drawing evidence behind real uploaded files ─────────────────────
+-- Plan rows inserted as service_acceptance_client_evidence_test.sql does; the
+-- files are real objects the runner uploaded, never synthesized here.
+SELECT set_config('rc2.evidence_path_1', :'evidence_path_1', true), set_config('rc2.evidence_path_2', :'evidence_path_2', true),
+       set_config('rc2.evidence_sha_1', :'evidence_sha_1', true), set_config('rc2.evidence_sha_2', :'evidence_sha_2', true) \gset
+CREATE TEMP TABLE rc2_evidence (issue_number integer, issue_id uuid, set_checksum text) ON COMMIT DROP;
 SET LOCAL session_replication_role = replica;
-INSERT INTO public.evidence_manifests (id, project_id, package_id, purpose, members, manifest_hash, request_hash,
-  idempotency_key, created_by)
-SELECT gen_random_uuid(), (result->>'projectId')::uuid, NULL, 'service_acceptance', '[]',
-  encode(extensions.digest('rc2-manifest-' || (result->>'projectId'), 'sha256'), 'hex'),
-  encode(extensions.digest('rc2-request-' || (result->>'projectId'), 'sha256'), 'hex'),
-  'rc2-sa-1', 'f0180000-0000-4000-8000-000000000002'
-FROM rc2_origin;
-INSERT INTO public.plan_issues (project_id, issue_number, name, idempotency_key, request_hash, set_checksum,
-  sheet_count, created_by)
-SELECT (result->>'projectId')::uuid, 1, 'RC2 fictional drawing set', 'rc2-issue-1', repeat('e', 64), repeat('f', 64),
-  1, 'f0180000-0000-4000-8000-000000000002'
-FROM rc2_origin;
+DO $$
+DECLARE
+  project uuid := (SELECT (result->>'projectId')::uuid FROM rc2_origin);
+  designer uuid := 'f0180000-0000-4000-8000-000000000002';
+  path1 text := current_setting('rc2.evidence_path_1'); path2 text := current_setting('rc2.evidence_path_2');
+  sha1 text := current_setting('rc2.evidence_sha_1'); sha2 text := current_setting('rc2.evidence_sha_2');
+  d1 uuid := gen_random_uuid(); d2 uuid := gen_random_uuid(); s1 uuid := gen_random_uuid(); s2 uuid := gen_random_uuid();
+  p1 uuid := gen_random_uuid(); p2 uuid := gen_random_uuid(); b uuid := gen_random_uuid();
+  i1 uuid := gen_random_uuid(); i2 uuid := gen_random_uuid();
+  set1 text; set2 text;
+BEGIN
+  IF (SELECT count(*) FROM storage.objects WHERE bucket_id = 'project-documents' AND name IN (path1, path2)) <> 2 THEN
+    RAISE EXCEPTION 'RC2 fixture: evidence objects % and % were not uploaded to project-documents', path1, path2;
+  END IF;
+  set1 := encode(extensions.digest('rc2-set-1:' || sha1, 'sha256'), 'hex');
+  set2 := encode(extensions.digest('rc2-set-2:' || sha1 || ':' || sha2, 'sha256'), 'hex');
+  INSERT INTO public.project_documents (id, project_id, title, storage_path, client_visible, uploaded_by) VALUES
+    (d1, project, 'RC2 fictional living room plan', path1, false, designer),
+    (d2, project, 'RC2 fictional living room elevations', path2, false, designer);
+  INSERT INTO public.plan_sheets (id, project_id, sheet_number, title, state, current_print_number, current_print_id, created_by) VALUES
+    (s1, project, 'A-101', 'Living room plan', 'shared', 1, p1, designer),
+    (s2, project, 'A-201', 'Living room elevations', 'shared', 1, p2, designer);
+  INSERT INTO public.plan_print_batches (id, project_id, idempotency_key, request_hash, item_count, created_by)
+  VALUES (b, project, 'rc2-batch-1', encode(extensions.digest('rc2-batch-' || project, 'sha256'), 'hex'), 2, designer);
+  INSERT INTO public.plan_prints (id, sheet_id, batch_id, print_number, rev_letter, project_document_id, sha256, source, created_by) VALUES
+    (p1, s1, b, 1, 'A', d1, sha1, 'upload', designer),
+    (p2, s2, b, 1, 'A', d2, sha2, 'upload', designer);
+  INSERT INTO public.plan_issues (id, project_id, issue_number, name, idempotency_key, request_hash, set_checksum,
+    sheet_count, issued_at, created_by) VALUES
+    (i1, project, 1, 'RC2 fictional drawing set', 'rc2-issue-1', repeat('e', 64), set1, 1, now(), designer),
+    (i2, project, 2, 'RC2 fictional drawing set, revised', 'rc2-issue-2', repeat('d', 64), set2, 2, now(), designer);
+  INSERT INTO public.plan_issue_prints (issue_id, sheet_id, print_id, sheet_number, sheet_title, rev_letter, sha256) VALUES
+    (i1, s1, p1, 'A-101', 'Living room plan', 'A', sha1),
+    (i2, s1, p1, 'A-101', 'Living room plan', 'A', sha1),
+    (i2, s2, p2, 'A-201', 'Living room elevations', 'A', sha2);
+  INSERT INTO rc2_evidence VALUES (1, i1, set1), (2, i2, set2);
+END $$;
+-- The delivered service, inserted directly as service_completion_test.sql does.
 UPDATE public.project_phases SET status = 'completed', completed_at = COALESCE(completed_at, now())
 WHERE project_id = (SELECT (result->>'projectId')::uuid FROM rc2_origin) AND status <> 'completed';
 SET LOCAL session_replication_role = origin;
+
+-- Native C1 mint, as the composing designer: one service_acceptance manifest per issue.
+SELECT pg_temp.actor('f0180000-0000-4000-8000-000000000002');
+DO $$
+DECLARE project uuid := (SELECT (result->>'projectId')::uuid FROM rc2_origin); e record;
+BEGIN
+  FOR e IN SELECT * FROM rc2_evidence ORDER BY issue_number LOOP
+    PERFORM public.create_evidence_manifest(project, NULL, 'service_acceptance',
+      jsonb_build_array(jsonb_build_object('kind', 'plan_issue', 'id', e.issue_id, 'sha256', e.set_checksum,
+        'version', e.issue_number)), 'rc2-sa-' || e.issue_number);
+  END LOOP;
+END $$;
+SELECT pg_temp.actor(NULL);
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- LOCAL-ONLY ACTIVATION (2 of 2): EXECUTE grants the shipped migrations
 -- withhold while the capability is inactive (rc2-consumer-walk.md, verbatim
 -- set). Refuses anything but the owned local database container.
 -- ════════════════════════════════════════════════════════════════════════════
-DO $$ BEGIN
-  IF current_database() <> 'postgres' OR inet_server_port() <> 5432 THEN
-    RAISE EXCEPTION 'refusing grants outside the owned local database container on port 5432';
-  END IF;
-END $$;
+SELECT pg_temp.require_owned_cluster('the C4/C6 activation grants');
 GRANT EXECUTE ON FUNCTION public.create_service_acceptance_request(uuid,uuid,uuid,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.record_service_acceptance_paper_intake(uuid,uuid,uuid,date,text,text,jsonb,text,integer,text,text,integer,text) TO authenticated;
@@ -227,5 +318,7 @@ GRANT EXECUTE ON FUNCTION public.complete_studio_service(uuid,uuid,text,text) TO
 GRANT EXECUTE ON FUNCTION public.resolve_service_acceptance_condition(uuid,uuid,text,jsonb,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.revoke_studio_service_completion(uuid,text) TO authenticated;
 
-SELECT json_build_object('rc2_job', (result->>'projectId'), 'proposal', proposal_id) AS rc2_fixture FROM rc2_origin;
+SELECT json_build_object('rc2_job', (result->>'projectId'), 'proposal', proposal_id,
+  'manifests', (SELECT json_object_agg(m.idempotency_key, m.id) FROM public.evidence_manifests m
+    WHERE m.project_id = (result->>'projectId')::uuid AND m.purpose = 'service_acceptance')) AS rc2_fixture FROM rc2_origin;
 COMMIT;

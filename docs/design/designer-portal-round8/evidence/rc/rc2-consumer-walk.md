@@ -1,6 +1,6 @@
 # RC-2 consumer walk
 
-Date: 2026-10-28. The current result is the last section, **"2026-10-28 RC-2b: reproducible Playwright journey after 00890"**. The sections before it are the historical hand-driven attempts that were blocked.
+Date: 2026-10-28. The current result is the last section, **"2026-10-28 RC-2c: owned-target harness, committed runner and evidence content"**. It supersedes the RC-2b harness description and narrows some RC-2b claims. RC-2b and the sections before it are kept as history.
 
 ## Owned environment and designer UI
 
@@ -162,3 +162,100 @@ The committed specs (`281ddbd3f`) passed two fresh, back-to-back journeys, 5/5 l
 - X08: **PASS** for the web client consumer. The existing client house page renders beside the new records, and the decided request drops out of the door. **Not exercised here:** iOS/Field consumers and old-parser fixtures (old-parser coverage is the SQL `service_acceptance_x08_test.sql` in RC-1).
 
 iOS is skipped (optional per the ticket). No product defect blocked the journey.
+
+## 2026-10-28 RC-2c: owned-target harness, committed runner and evidence content
+
+SQ-2337 repairs the RC-2b harness against review SQ-2334 (F1–F3). The legs, tags and order are the same as in RC-2b. What changed is how the target is bound, how the run is driven, and what each leg proves.
+
+### F1: the fixture refuses any target it does not own, before any write
+
+- `consumer-journey-fixture.sql` now refuses before its first statement that writes, and before the `\ir f01-fixture.sql` include. It requires three psql variables: `owned_port`, `owned_server_addr` and `owned_system_id`. It refuses when:
+  - the connection host is not loopback;
+  - the port is a shared-stack port (54321/54322), or `owned_port` is one;
+  - the port differs from `owned_port`;
+  - `inet_server_addr()` differs from `owned_server_addr`;
+  - `pg_control_system().system_identifier` differs from `owned_system_id`.
+- Inside the transaction, `pg_temp.require_owned_cluster()` re-checks the system identifier before each of the two activation blocks (the `scope_editions` capability and the GRANT set).
+- The identity is not derived from the URL under test. The runner reads it from Docker for the stack it started:
+  - container label `com.supabase.cli.project=patina-rc2-journey`;
+  - the published `5432/tcp` and `8000/tcp` host ports;
+  - the DB container's IP on that project's network;
+  - the cluster system identifier, read inside that container over its own loopback.
+
+  It then cross-checks that the URL under test reports the same server address and system identifier. It also checks that the shared stack's identifier differs.
+- The Playwright configs and both journey files refuse to start unless the `RC2_OWNED_*` variables are set. They also refuse a non-loopback URL, a shared port, or a port other than the owned one.
+- **Refusal proof** (`run-consumer-journey.mjs --refusal-check postgresql://postgres:postgres@127.0.0.1:54322/postgres`): `/Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-2337/refusal/refusal-check.json`.
+  - Read-only markers were taken before and after: RC2 users, RC2 jobs, F01 actors, RC2 manifests, the `scope_editions` capability, and the EXECUTE grants on `create_service_acceptance_request`/`complete_studio_service`. They were identical (0, 0, 0, 0, false, false, null).
+  - Fixture with no identity: exit 3, refused.
+  - Fixture with an identity self-derived from the 54322 URL: exit 3, `REFUSED: port 54322 is the shared Supabase stack`.
+  - Designer journey config with shared-stack env: exit 1, refused.
+  - Nothing was written to the shared stack.
+
+### F2: committed opt-in configs and a sequential runner
+
+- New configs:
+  - `apps/designer-portal/playwright.consumer-journey.config.ts` (port 3200);
+  - `apps/client-portal/playwright.consumer-journey.config.ts` (port 3202).
+
+  No existing `playwright*.config.ts` was edited. There is no global setup or teardown.
+- The journey files were renamed `*.spec.ts` → `*.journey.ts`, so the default configs' `testMatch` does not discover them. Only the consumer-journey configs match them. Type-check covers them.
+- Runner: `node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --evidence <dir> [--runs 2]`. It uses Node built-ins only. For each run it:
+  1. Checks that at least 9 GiB of disk is free. It refuses if the project's containers already exist or ports 57321/57322/3200/3202 are in use.
+  2. Copies `supabase/` into a scratch workdir. It copies only the five version/storage-migration pins from `supabase/.temp`, never the project-ref, linked-project or pooler-url pins.
+  3. Offsets every port by +3000.
+  4. Writes `functions/.env` with `EMAIL_DEV_MODE=dry_run` only.
+  5. Runs `supabase start` without studio, mailpit, logflare, vector, imgproxy or postgres-meta. Edge-runtime stays up for V22 Send.
+  6. Proves ownership as described above.
+  7. Records `stack-receipt.json` (names and ids only, never keys). It includes the edge-runtime functions env: `EMAIL_DEV_MODE=dry_run`, and no name matching RESEND/SMTP/SENDGRID/POSTMARK/MAILGUN/SES_/TWILIO.
+  8. Runs the five legs in order against that one stack. F01 is set up once, by `@rc2-send`'s `beforeAll`, before the designer signs in. No leg tears anything down.
+  9. Finally runs `supabase stop --no-backup`. It records the containers and volumes left (both must be 0) and removes the workdir.
+
+### F3: what each leg now proves
+
+- **Issued evidence:**
+  - The `@rc2-send` `beforeAll` uploads two real PDF prints through the Storage API into `project-documents` under a uuid run folder.
+  - The fixture refuses unless both objects exist. It then inserts the plan chain on top of them, the same way `service_acceptance_client_evidence_test.sql` does: documents, sheets A-101/A-201, a print batch, two prints with their sha256, and two issues.
+    - Issue 1 is "RC2 fictional drawing set" (A-101).
+    - Issue 2 is "RC2 fictional drawing set, revised" (A-101 + A-201).
+  - It mints two evidence manifests with `create_evidence_manifest` as the designer: `rc2-sa-1` over issue 1 and `rc2-sa-2` over issue 2.
+- **Send (`@rc2-send`):**
+  - The designer picks evidence set 1 in "Evidence the client reviews".
+  - The request row carries the agreed `scope_edition_id` and that manifest.
+  - The send-time snapshot freezes member `plan_issue:RC2 fictional drawing set` and exactly the manifest's one file.
+  - The V22 draft is `sent`, with `delivery_message_id` matching `^dryrun_\d+$`.
+- **Return (`@rc2-return`):**
+  - The client page shows the request number, the agreed scope edition id, and "Evidence reference · <manifest hash>".
+  - As the client signer, the leg signs in through GoTrue and calls `get_my_service_acceptance_evidence`. The returned request, edition, manifest hash and member match.
+  - It then downloads each listed document from Storage. Each starts `%PDF-`, and its sha256 equals the issued print's.
+- **Resend (`@rc2-resend`):**
+  - The new request uses the revised manifest, which differs from request 1's. Its snapshot freezes `plan_issue:RC2 fictional drawing set, revised` and two files, one of which is request 1's.
+  - Request 3 is drafted on the revised set; supersession is asserted as in RC-2b.
+  - Each send asserts the `dryrun_` id.
+- **Accept (`@rc2-accept`):** the partner, then the client, each get the same page references and signer-API proof for the revised set (2 files). The accepted edition is `active`.
+- **Complete (`@rc2-complete`):**
+  - The accepted request is on the agreed edition.
+  - The completion row reads `completed_with_conditions`, the request and that `scope_edition_id`.
+  - Care reads "scope edition N, in force from … accepted on request M".
+  - The rest is as in RC-2b.
+
+### Narrowed claims
+
+- **The client page shows references, not evidence content.** `ServiceAcceptancePage` does not pass the evidence to `ServiceAcceptanceReading`. The client sees the request number, the agreed scope edition id and the manifest hash, with the text "Their contents are not available on this page yet." The file contents reaching the client are proven through the signer's own authenticated API (RPC plus Storage download), not through page rendering. No claim is made that the client page renders the evidence.
+- **The evidence prints sit in a uuid run folder, not under `<job>/`.** The job id is minted by countersign inside the fixture, after the upload. So the files are not listed among the job's stored documents in the condition-resolution picker; the drawing issues are.
+- **Not exercised** (unchanged from RC-2b): paper intake, signer replacement, scope-edition supersession, iOS, design-only and client-buy service shapes, walkthrough, external punch items, later care questions, and old-parser consumers outside RC-1's SQL test.
+
+### Runs
+
+Command (from the worktree root): `node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --evidence /Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-2337/final --runs 2`.
+
+- One fresh owned stack (Supabase CLI 2.120.0, project `patina-rc2-journey`, API 57321, DB 57322).
+  - DB system identifier `7701817895472816170`, server address `172.24.0.2`. The shared stack's identifier is `7701004642274893866`.
+  - The functions env holds `EMAIL_DEV_MODE=dry_run` and no provider key names.
+- **run1: 5/5 passed**, job `fe6f6c50-f6ca-4644-aebd-a6ac8829fdc9`. Sends `dryrun_1793219308184`, `dryrun_1793219389413`, `dryrun_1793219395214`.
+- **run2: 5/5 passed**, job `c05fca9b-c96a-4a12-ac5d-a5eee9320e66`. Sends `dryrun_1793219538816`, `dryrun_1793219610976`, `dryrun_1793219616666`.
+- Teardown: `supabase stop --no-backup` exit 0; 0 containers and 0 volumes left; workdir removed.
+- Evidence (outside the repo): `/Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-2337/final/`.
+  - `stack-receipt.json`, `journey.txt`, and per-leg logs and reports under `run1/` and `run2/`.
+  - `executed-bytes.sha256` holds the hashes of the six harness files as executed.
+- An earlier attempt (`final-attempt1/`) passed `@rc2-send`, but the runner rejected it on dev-server log text ("Sanity fetch failed"). The runner now judges only Playwright's own summary line.
+- Development iterations are in `dev1/` and `dev2/`. dev2 found that a non-uuid first path segment in `project-documents` fails every designer list of that bucket, so the condition-resolution picker read "The references could not be read." The prints now use a uuid run folder.
