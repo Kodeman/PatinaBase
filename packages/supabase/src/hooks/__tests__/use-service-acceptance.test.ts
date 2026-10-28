@@ -39,7 +39,8 @@ const request = (over: Record<string, unknown> = {}) => ({
       response: response({ responseId: 'response-2', response: 'accept', conditions: [], method: 'paper_intake' }) }),
   ],
   paperIntakes: [intake(), intake({ intakeId: 'intake-0', signerId: 'signer-2', presentedSignerPolicyRevision: 1,
-    reviewState: 'lapsed', lapsedReason: 'signer_policy_revised', reviewedBy: null, reviewedAt: null })],
+    reviewState: 'lapsed', lapsedReason: 'signer_policy_revised', reviewedBy: null, reviewedAt: null }),
+  intake({ intakeId: 'intake-2', documentSha256: null, reviewState: 'pending_review', reviewedBy: null, reviewedAt: null })],
   ...over,
 });
 const bundle = (requests: unknown[] = [request()]) => ({ projectId: 'job-1', capability: 'inactive', requests });
@@ -56,6 +57,9 @@ describe('service acceptance read boundary', () => {
     ]);
     expect(mapped.signers[0].response?.conditions).toEqual([{ conditionId: 'condition-1', text: 'Keep the oak floor' }]);
     expect(mapped.paperIntakes[1]).toMatchObject({ reviewState: 'lapsed', lapsedReason: 'signer_policy_revised' });
+    // Recorded paper stays unstamped until WP-10C hashes the stored bytes.
+    expect(mapped.paperIntakes[2]).toMatchObject({ reviewState: 'pending_review', documentSha256: null });
+    expect(mapped.paperIntakes[0].documentSha256).toBe('a'.repeat(64));
   });
 
   it('fails closed on unknown vocabulary, malformed signers and foreign rows', () => {

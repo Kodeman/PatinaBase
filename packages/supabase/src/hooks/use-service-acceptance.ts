@@ -55,7 +55,7 @@ export interface ServiceAcceptancePaperIntake {
   intakeId: string;
   signerId: string;
   storageObjectId: string;
-  documentSha256: string;
+  documentSha256: string | null;
   paperSignedOn: string;
   signedName: string;
   disposition: ServiceAcceptanceAnswer;
@@ -160,7 +160,7 @@ function readSigner(row: Record<string, unknown>): ServiceAcceptanceSigner {
 function readIntake(row: Record<string, unknown>): ServiceAcceptancePaperIntake {
   return {
     intakeId: text(row.intakeId), signerId: text(row.signerId), storageObjectId: text(row.storageObjectId),
-    documentSha256: text(row.documentSha256), paperSignedOn: text(row.paperSignedOn), signedName: text(row.signedName),
+    documentSha256: nullableText(row.documentSha256), paperSignedOn: text(row.paperSignedOn), signedName: text(row.signedName),
     disposition: oneOf(row.disposition, ANSWERS), conditions: conditions(row.conditions),
     returnReason: nullableText(row.returnReason),
     presentedSignerPolicyRevision: positiveInteger(row.presentedSignerPolicyRevision),

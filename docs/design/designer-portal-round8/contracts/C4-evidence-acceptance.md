@@ -15,6 +15,8 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 - **T5** (§2.1, §2.2, §2.12): a replacement lapses every pending paper intake on the request, and confirmation re-checks signer activity, the current revision, the hashes and the absence of a response under the request lock. Conditional on K5; K5 stays **OPEN**.
 - **T6** (§2.1, §2.2, §2.2a, §2.12): `withdraw_service_acceptance_request` takes `p_client_request_id`, and the request row carries its receipt and hash.
 
+**Revision 2026-10-27 (SQ-2217).** Answers the SQ-2215 frontier review of the 00886 candidate: the paper content binding is a hash of the stored bytes, stamped by the service path, never object metadata (F1; §2.1, §2.2); client reads keep each response's method (F2; §2.2); the review decision vocabulary is `confirmed`/`rejected` (F4; §2.2); and the activation plan names its one storage-policy predicate exception and the stamp's `service_role` grant (F5; §2.8).
+
 ## 1. Why this cannot be a new approval kind
 
 | Fact | Evidence |
@@ -115,6 +117,12 @@ Only a `confirmed` intake creates a response with `method = 'paper_intake'`. The
 - **No carry-over.** Earlier paper consent is **not** preserved across a replacement. If a later ruling wants it preserved, that is a new exception with its own evidence-time rule and a reviewed contract change; this contract does not provide one.
 - This is conditional on K5 permitting paper at all. It decides nothing about K5: if paper is forbidden, the intake RPCs stay revoked and these rules never run.
 
+**How the content hash is bound (Revision 2026-10-27, SQ-2217; answers SQ-2215 F1).** Postgres cannot read the stored bytes, and storage metadata (eTag, size, version) is not a content hash. So the hash is computed outside the database and stamped onto the intake:
+- **Record.** `record_service_acceptance_paper_intake` requires the object to be in the private paper bucket with a non-null storage `version` and an eTag, and records both on the intake (`storage_object_version`, `storage_object_etag`). It leaves `document_sha256` NULL. Its receipt carries `documentSha256: null` until the intake is stamped.
+- **Stamp.** `stamp_service_acceptance_paper_hash(p_intake_id, p_document_sha256, p_object_version, p_object_etag)` is `service_role` only. It is revoked from `PUBLIC`, `anon` and `authenticated`, refuses any signed-in caller, and refuses while `scope_editions` is inactive. It refuses an intake that is not `pending_review` (`request_not_open`), a hash that is not 64 lowercase hex (`paper_document_hash_invalid`), and an object whose presented or current version or eTag differs from the recorded identity (`paper_document_changed`). Once stamped, the hash never moves: the same value replays, a different one raises `paper_document_hash_conflict`, and `document_stamped_at` records when it was bound.
+- **Review.** `confirmed` refuses an unstamped intake (`paper_document_unstamped`), an expected hash that differs from the stamped one, and an object whose current version or eTag differs from the stamped identity (`paper_document_changed`). `rejected` may proceed unstamped, with the expected hash then NULL. A confirmed intake always carries a hash (table check).
+- **Who hashes.** A byte-hashing edge function, owned by WP-10C, reads the stored PDF with the service role, hashes it and calls the stamp. Until it ships, recorded paper stays `pending_review` and cannot be confirmed.
+
 Whether paper intake counts at all is K5 (**OPEN**). The fields above are the safe shape for either answer: if K5 forbids paper, the record RPC stays revoked and no intake exists.
 
 ### 2.2 RPCs (request → response)
@@ -124,12 +132,13 @@ Whether paper intake counts at all is K5 (**OPEN**). The fields above are the sa
 | `create_service_acceptance_request` | Studio author | `p_project_id, p_scope_edition_id, p_evidence_manifest_id, p_client_request_id` | `{requestId, lifecycle:'draft', outboundDraftId, signers:[…], signerPolicyRevision}`. Creates the request, copies signers from `project_scope_edition_signers` (C2 §2.6), and creates an `outbound_drafts` row with kind `service_acceptance_request` and status `awaiting_review` (V22). Nothing is sent. Refusals are listed below (F9) |
 | Designer Send | Studio | Existing outbound send path | Delivery is recorded by the existing delivery truth (`00785`). The after-send hook for this kind sets `requests.sent_at` and `lifecycle='sent'` once (`after_send_done_at` semantics, `00785:14-17`). An attempt or an unknown outcome never marks the request sent |
 | `respond_service_acceptance` | An authenticated signer | `p_request_id, p_response, p_conditions, p_return_reason, p_scope_content_hash, p_evidence_manifest_hash, p_signer_policy_revision, p_client_request_id` | `{responseId, aggregateOutcome, pendingRequiredSigners:n, signerPolicyRevision, replayed}`. The signer is the caller's single active slot (R11) |
-| `record_service_acceptance_paper_intake` | Studio member | `p_request_id, p_signer_id, p_storage_object_id, p_paper_signed_on, p_signed_name, p_disposition, p_conditions, p_return_reason, p_presented_request_number, p_presented_scope_content_hash, p_presented_evidence_manifest_hash, p_presented_signer_policy_revision, p_client_request_id` | `{intakeId, reviewState:'pending_review', documentSha256}`. The server hashes the stored object. It has no effect on the outcome (F11) |
-| `review_service_acceptance_paper_intake` | Studio owner or admin, **not** the recorder | `p_intake_id, p_decision ('confirmed'/'rejected'), p_expected_document_sha256, p_note, p_client_request_id` | Refused if the stored bytes no longer hash to the intake's `document_sha256` or to the expected value. On `confirmed`, first re-checks signer activity, the current revision and hashes, and that no response exists, under the request and signer locks (§2.1, SQ-1857 T5); then inserts the response from the intake's recorded disposition and re-derives the outcome |
+| `record_service_acceptance_paper_intake` | Studio member | `p_request_id, p_signer_id, p_storage_object_id, p_paper_signed_on, p_signed_name, p_disposition, p_conditions, p_return_reason, p_presented_request_number, p_presented_scope_content_hash, p_presented_evidence_manifest_hash, p_presented_signer_policy_revision, p_client_request_id` | `{intakeId, reviewState:'pending_review', documentSha256:null}`. Records the object's storage version and eTag; the hash stays NULL until stamped (Revision 2026-10-27, SQ-2217, §2.1). It has no effect on the outcome (F11) |
+| `stamp_service_acceptance_paper_hash` | `service_role` only (the WP-10C byte-hashing function) | `p_intake_id, p_document_sha256, p_object_version, p_object_etag` | `{intakeId, documentSha256, reviewState:'pending_review', replayed}`. Binds the hash of the stored bytes once; refusals in §2.1 (SQ-2217) |
+| `review_service_acceptance_paper_intake` | Studio owner or admin, **not** the recorder | `p_intake_id, p_decision ('confirmed'/'rejected'; the older `'confirm'` is refused), p_expected_document_sha256, p_note, p_client_request_id` | `confirmed` is refused while the intake is unstamped (`paper_document_unstamped`), and either decision is refused if the expected value differs from the stamped hash; `confirmed` is also refused if the object's current version or eTag differs from the stamped identity (`paper_document_changed`). `rejected` needs a note and may proceed unstamped (SQ-2217). On `confirmed`, first re-checks signer activity, the current revision and hashes, and that no response exists, under the request and signer locks (§2.1, SQ-1857 T5); then inserts the response from the intake's recorded disposition and re-derives the outcome |
 | `replace_service_acceptance_signer` | Studio owner or admin | `p_request_id, p_signer_id, p_new_profile_id/person_id, p_expected_signer_policy_revision, p_reason, p_client_request_id` | `{signerId, signerPolicyRevision, lapsedIntakeIds, replayed}`. Marks the old signer replaced, adds the new one, increments the revision and lapses every `pending_review` intake on the request (SQ-1857 T5). Allowed only before any outcome is reached (§2.2a, F12). Validation is below (R11). If the policy came from the edition, see §2.5 |
 | `withdraw_service_acceptance_request` | Studio | `p_request_id, p_reason, p_client_request_id` | `{requestId, lifecycle:'withdrawn', withdrawnAt, replayed}`. `lifecycle='withdrawn'`, only from `draft` or `sent`. Responses stay readable as history. Receipt below (SQ-1857 T6) |
 | `get_project_service_acceptance` | Studio read | `p_project_id` | Requests, signers, responses, intakes and the derived outcome |
-| `get_my_service_acceptance_requests` | Client read | none | Only requests where the caller is an **active** signer or the project's client. Each row carries a `viewerRole` of `signer_required`, `signer_optional` or `observer`. This is a new vocabulary on a new projection, so no old parser sees it |
+| `get_my_service_acceptance_requests` | Client read | none | Only requests where the caller is an **active** signer or the project's client. Each row carries a `viewerRole` of `signer_required`, `signer_optional` or `observer`. This is a new vocabulary on a new projection, so no old parser sees it. Each active signer's response keeps its `method`, so a confirmed paper response reads `paper_intake`, distinct from an authenticated click-through; it withholds the response id, the paper object, its hash and who recorded or reviewed it (Revision 2026-10-27, SQ-2217) |
 
 **`create_service_acceptance_request` refuses (SQ-1817 F9)** when the signer set would be missing, empty, duplicated or unbound. An empty set must never accept vacuously:
 - the edition is not `active`, or `scope_editions` is inactive (C2 §2.8);
@@ -275,14 +284,22 @@ The four C4 tables are C6 *contributing* tables (C6 §2.5, F7): a write to any o
 -- GRANT EXECUTE ON FUNCTION public.withdraw_service_acceptance_request(uuid,text,text) TO authenticated;
 ```
 
+- **It grants the paper content stamp to `service_role` only (Revision 2026-10-27, SQ-2217).** Its one caller is the WP-10C byte-hashing edge function (§2.1):
+
+```sql
+-- GRANT EXECUTE ON FUNCTION public.stamp_service_acceptance_paper_hash(uuid,text,text,text) TO service_role;
+```
+
 - **It never grants:**
-  - anything to `PUBLIC`, `anon` or `service_role`;
+  - anything to `PUBLIC` or `anon`;
+  - anything to `service_role` except the stamp above, and never the stamp to `authenticated`;
   - any table privilege on the four C4 tables (reads stay the two definer RPCs);
-  - any internal helper, guard or trigger function (`_service_acceptance_*`, `_lock_service_acceptance_request`, `_derive_service_acceptance_outcome`, `_supersede_service_acceptance_request(s)`, `_lapse_service_acceptance_intakes`, `_validate_service_acceptance_signers`, `_guard_*service_acceptance*`).
+  - any internal helper, guard or trigger function (`_service_acceptance_*`, including `_service_acceptance_paper_object_unchanged`, `_lock_service_acceptance_request`, `_derive_service_acceptance_outcome`, `_supersede_service_acceptance_request(s)`, `_lapse_service_acceptance_intakes`, `_validate_service_acceptance_signers`, `_guard_*service_acceptance*`).
+- **The one predicate exception (Revision 2026-10-27, SQ-2217; answers SQ-2215 F5).** `_can_access_service_acceptance_paper_object(text)` is already granted to `authenticated` by 00886, because the paper bucket's storage policies call it in the caller's role. It is a read-only boolean predicate (`STABLE`, no writes) and the only helper any API role can execute. The activation migration does not change it and grants no other helper.
 - **Storage:** the paper bucket's policies already exist in 00886. They let a studio composer upload a PDF under `<projectId>/<objectId>.pdf`. Recording it as evidence still needs the activated intake RPC.
 - **In the same change:** regenerate `supabase/seed/00-legacy-grants.sql`. `database.types.ts` does not change, because grants are not typed.
-- **Gate:** a SQL suite asserting `has_function_privilege` is true for `authenticated` on the six functions and false for `anon` and `service_role`. Every helper stays false for all three, and `PUBLIC` holds no EXECUTE. The 00886 oracle (`supabase/tests/round8/service_acceptance_*`) still passes.
-- **Deactivation** is the inverse: `REVOKE EXECUTE … FROM authenticated` on the same six functions. Reads stay granted.
+- **Gate:** a SQL suite asserting `has_function_privilege` is true for `authenticated` on the six functions and false for `anon` and `service_role`; true for `service_role` on the stamp and false for `anon` and `authenticated`; true for `authenticated` on `_can_access_service_acceptance_paper_object(text)` and false for `anon` and `service_role`. Every other helper stays false for all three, and `PUBLIC` holds no EXECUTE. The 00886 oracle (`supabase/tests/round8/service_acceptance_*`) still passes.
+- **Deactivation** is the inverse: `REVOKE EXECUTE … FROM authenticated` on the same six functions and `REVOKE EXECUTE … FROM service_role` on the stamp. Reads and the storage predicate stay granted.
 
 ### 2.9 Audit
 

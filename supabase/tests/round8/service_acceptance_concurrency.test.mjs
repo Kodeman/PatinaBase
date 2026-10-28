@@ -183,8 +183,9 @@ test('C4 service acceptance serializes response, supersession, replacement and p
     const replace = (req, reason, key) => `public.replace_service_acceptance_signer(${literal(req.id)},
       ${literal(req.partner)},NULL,${literal(secondCard)},1,${literal(reason)},${literal(key)})`;
     const paper = (key, n) => `INSERT INTO sa_results VALUES(${literal(`${key}-paper`)},pg_temp.record_paper(pg_temp.req(${literal(key)}),
-      pg_temp.signer(pg_temp.req(${literal(key)}),'partner'),pg_temp.paper(${n},1),'accept',${literal(`cc-${key}-paper`)}));`;
-    const review = (intake, key) => `public.review_service_acceptance_paper_intake(${literal(intake.intakeId)},'confirm',
+      pg_temp.signer(pg_temp.req(${literal(key)}),'partner'),pg_temp.paper(${n},1),'accept',${literal(`cc-${key}-paper`)}));
+      SELECT pg_temp.stamp(${literal(`${key}-paper`)});`;
+    const review = (intake, key) => `public.review_service_acceptance_paper_intake(${literal(intake.intakeId)},'confirmed',
       ${literal(intake.documentSha256)},NULL,${literal(key)})`;
 
     // 1a. Supersession commits first: the response queues, then refuses on the terminal request.

@@ -25208,7 +25208,7 @@ END $g$;
 
 -- 00886_round8_service_acceptance.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._service_acceptance_paper_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+  REVOKE ALL ON FUNCTION public._service_acceptance_paper_object_unchanged(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -25251,6 +25251,12 @@ END $g$;
 -- 00886_round8_service_acceptance.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.record_service_acceptance_paper_intake(uuid,uuid,uuid,date,text,text,jsonb,text,integer,text,text,integer,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00886_round8_service_acceptance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_service_acceptance_paper_hash(uuid,text,text,text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

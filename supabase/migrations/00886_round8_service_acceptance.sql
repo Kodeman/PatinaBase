@@ -19,8 +19,10 @@
 --
 -- Inactive: every mutation re-checks scope_editions at entry and has EXECUTE
 -- revoked from PUBLIC, anon, authenticated and service_role. Only the two read
--- RPCs are granted to authenticated. The activation grant plan is appended to
--- C4 §2.8; activation is a later migration.
+-- RPCs and the read-only storage-policy predicate
+-- _can_access_service_acceptance_paper_object(text) are granted to
+-- authenticated. The activation grant plan is appended to C4 §2.8; activation
+-- is a later migration.
 --
 -- Lock order (§2.3): projects (FOR SHARE for a response or a paper review,
 -- FOR UPDATE for create, withdraw, replace and supersede), then the scope
@@ -38,12 +40,19 @@
 -- after_send_done_at, so the request stays in draft. The kind's renderer in
 -- supabase/functions/_shared/outbound-kinds is WP-10C (outside this slice).
 --
--- Paper document hash: Postgres cannot read storage bytes, so document_sha256
--- is the sha256 of the stored object's identity {objectId, bucketId, name,
--- version, eTag, size, mimetype}. The eTag is the storage backend's content
--- digest, and the object is immutable once an intake records it (trigger on
--- storage.objects, 00835 pattern). Review recomputes it and refuses
--- paper_document_changed on any difference.
+-- Paper content binding (C4 §2.1, SQ-2215 F1): Postgres cannot read storage
+-- bytes, so record_service_acceptance_paper_intake stores the object's identity
+-- (storage version and eTag) with document_sha256 NULL. The service-role step
+-- stamp_service_acceptance_paper_hash, called by the WP-10C edge function after
+-- it downloads that object version and hashes its bytes, binds document_sha256
+-- once. Confirmation refuses an unstamped intake (paper_document_unstamped), a
+-- different expected hash, and an object whose version or eTag moved after
+-- hashing (paper_document_changed). The object is also immutable once an intake
+-- records it (trigger on storage.objects, 00835 pattern).
+--
+-- Idempotent DDL: tables and indexes use IF NOT EXISTS (every constraint is
+-- inline in its CREATE TABLE), and each trigger and policy is dropped before it
+-- is created, so re-applying 00886 is a no-op on its own schema.
 --
 -- Supersession grafts (bodies copied verbatim from their current definitions,
 -- with only the marked C4 lines added):
@@ -56,7 +65,7 @@
 -- Records (§2.1)
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE public.service_acceptance_requests (
+CREATE TABLE IF NOT EXISTS public.service_acceptance_requests (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE RESTRICT,
   scope_edition_id uuid NOT NULL REFERENCES public.project_scope_editions(id) ON DELETE RESTRICT,
@@ -107,13 +116,13 @@ CREATE TABLE public.service_acceptance_requests (
   CONSTRAINT service_acceptance_requests_key_ck CHECK (
     btrim(client_request_id) <> '' AND length(client_request_id) <= 200)
 );
-CREATE UNIQUE INDEX service_acceptance_requests_one_open_idx
+CREATE UNIQUE INDEX IF NOT EXISTS service_acceptance_requests_one_open_idx
   ON public.service_acceptance_requests (project_id) WHERE lifecycle IN ('draft','sent');
-CREATE INDEX service_acceptance_requests_edition_idx
+CREATE INDEX IF NOT EXISTS service_acceptance_requests_edition_idx
   ON public.service_acceptance_requests (scope_edition_id) WHERE lifecycle IN ('draft','sent');
-CREATE INDEX service_acceptance_requests_draft_idx ON public.service_acceptance_requests (outbound_draft_id);
+CREATE INDEX IF NOT EXISTS service_acceptance_requests_draft_idx ON public.service_acceptance_requests (outbound_draft_id);
 
-CREATE TABLE public.service_acceptance_signers (
+CREATE TABLE IF NOT EXISTS public.service_acceptance_signers (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
   request_id uuid NOT NULL REFERENCES public.service_acceptance_requests(id) ON DELETE RESTRICT,
   slot text NOT NULL CHECK (btrim(slot) <> ''),
@@ -143,25 +152,28 @@ CREATE TABLE public.service_acceptance_signers (
     AND (replaced_at IS NULL) = (replacement_policy_revision IS NULL)
     AND (replaced_at IS NULL) = (replacement_lapsed_intake_ids IS NULL))
 );
-CREATE UNIQUE INDEX service_acceptance_signers_active_profile_idx
+CREATE UNIQUE INDEX IF NOT EXISTS service_acceptance_signers_active_profile_idx
   ON public.service_acceptance_signers (request_id, profile_id) WHERE status = 'active' AND profile_id IS NOT NULL;
-CREATE UNIQUE INDEX service_acceptance_signers_active_person_idx
+CREATE UNIQUE INDEX IF NOT EXISTS service_acceptance_signers_active_person_idx
   ON public.service_acceptance_signers (request_id, household_person_id)
   WHERE status = 'active' AND household_person_id IS NOT NULL;
-CREATE UNIQUE INDEX service_acceptance_signers_active_slot_idx
+CREATE UNIQUE INDEX IF NOT EXISTS service_acceptance_signers_active_slot_idx
   ON public.service_acceptance_signers (request_id, slot) WHERE status = 'active';
-CREATE UNIQUE INDEX service_acceptance_signers_replacement_key_idx
+CREATE UNIQUE INDEX IF NOT EXISTS service_acceptance_signers_replacement_key_idx
   ON public.service_acceptance_signers (request_id, replacement_client_request_id)
   WHERE replacement_client_request_id IS NOT NULL;
-CREATE INDEX service_acceptance_signers_profile_idx
+CREATE INDEX IF NOT EXISTS service_acceptance_signers_profile_idx
   ON public.service_acceptance_signers (profile_id) WHERE status = 'active';
 
-CREATE TABLE public.service_acceptance_paper_intakes (
+CREATE TABLE IF NOT EXISTS public.service_acceptance_paper_intakes (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
   request_id uuid NOT NULL REFERENCES public.service_acceptance_requests(id) ON DELETE RESTRICT,
   signer_id uuid NOT NULL REFERENCES public.service_acceptance_signers(id) ON DELETE RESTRICT,
   storage_object_id uuid NOT NULL,
-  document_sha256 text NOT NULL CHECK (document_sha256 ~ '^[0-9a-f]{64}$'),
+  storage_object_version text NOT NULL CHECK (btrim(storage_object_version) <> ''),
+  storage_object_etag text NOT NULL CHECK (btrim(storage_object_etag) <> ''),
+  document_sha256 text CHECK (document_sha256 ~ '^[0-9a-f]{64}$'),
+  document_stamped_at timestamptz,
   paper_signed_on date NOT NULL,
   signed_name text NOT NULL CHECK (btrim(signed_name) <> '' AND length(signed_name) <= 200),
   disposition text NOT NULL CHECK (disposition IN ('accept','accept_with_conditions','return')),
@@ -188,6 +200,9 @@ CREATE TABLE public.service_acceptance_paper_intakes (
   CONSTRAINT service_acceptance_paper_intakes_disposition_ck CHECK (
     (disposition = 'accept_with_conditions') = (jsonb_array_length(conditions) > 0)
     AND (disposition = 'return') = (return_reason IS NOT NULL)),
+  CONSTRAINT service_acceptance_paper_intakes_stamp_ck CHECK (
+    (document_sha256 IS NULL) = (document_stamped_at IS NULL)
+    AND (review_state <> 'confirmed' OR document_sha256 IS NOT NULL)),
   CONSTRAINT service_acceptance_paper_intakes_lapsed_ck CHECK (
     (review_state = 'lapsed') = (lapsed_reason IS NOT NULL) AND (lapsed_reason IS NULL) = (lapsed_at IS NULL)),
   CONSTRAINT service_acceptance_paper_intakes_review_ck CHECK (
@@ -198,13 +213,13 @@ CREATE TABLE public.service_acceptance_paper_intakes (
     AND (review_state <> 'rejected' OR btrim(COALESCE(review_note, '')) <> '')
     AND reviewed_by IS DISTINCT FROM recorded_by)
 );
-CREATE UNIQUE INDEX service_acceptance_paper_intakes_review_key_idx
+CREATE UNIQUE INDEX IF NOT EXISTS service_acceptance_paper_intakes_review_key_idx
   ON public.service_acceptance_paper_intakes (request_id, review_client_request_id)
   WHERE review_client_request_id IS NOT NULL;
-CREATE INDEX service_acceptance_paper_intakes_object_idx ON public.service_acceptance_paper_intakes (storage_object_id);
-CREATE INDEX service_acceptance_paper_intakes_signer_idx ON public.service_acceptance_paper_intakes (signer_id);
+CREATE INDEX IF NOT EXISTS service_acceptance_paper_intakes_object_idx ON public.service_acceptance_paper_intakes (storage_object_id);
+CREATE INDEX IF NOT EXISTS service_acceptance_paper_intakes_signer_idx ON public.service_acceptance_paper_intakes (signer_id);
 
-CREATE TABLE public.service_acceptance_responses (
+CREATE TABLE IF NOT EXISTS public.service_acceptance_responses (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
   request_id uuid NOT NULL REFERENCES public.service_acceptance_requests(id) ON DELETE RESTRICT,
   signer_id uuid NOT NULL REFERENCES public.service_acceptance_signers(id) ON DELETE RESTRICT,
@@ -231,7 +246,7 @@ CREATE TABLE public.service_acceptance_responses (
     AND (method = 'paper_intake') = (client_request_id IS NULL)
     AND (client_request_id IS NULL) = (request_hash IS NULL))
 );
-CREATE INDEX service_acceptance_responses_signer_idx ON public.service_acceptance_responses (signer_id);
+CREATE INDEX IF NOT EXISTS service_acceptance_responses_signer_idx ON public.service_acceptance_responses (signer_id);
 
 COMMENT ON TABLE public.service_acceptance_requests IS
   'C4 client acceptance of the agreed studio service: one request per scope edition send, append-only lifecycle.';
@@ -240,7 +255,7 @@ COMMENT ON COLUMN public.service_acceptance_requests.aggregate_outcome IS
 COMMENT ON TABLE public.service_acceptance_responses IS
   'Append-only authenticated click-through or confirmed paper responses (K5).';
 COMMENT ON COLUMN public.service_acceptance_paper_intakes.document_sha256 IS
-  'sha256 of the stored object identity {objectId, bucketId, name, version, eTag, size, mimetype}; the object is immutable once recorded.';
+  'Server-computed sha256 of the stored PDF bytes at storage_object_version/storage_object_etag. NULL until the service-role stamp_service_acceptance_paper_hash binds it; confirmation requires it.';
 
 ALTER TABLE public.service_acceptance_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_acceptance_signers ENABLE ROW LEVEL SECURITY;
@@ -304,6 +319,7 @@ DECLARE
       'reviewed_at','review_note','review_client_request_id','review_request_hash']
     ELSE ARRAY[]::text[] END;
   open_state text := CASE TG_TABLE_NAME WHEN 'service_acceptance_signers' THEN 'active' ELSE 'pending_review' END;
+  stamp text[] := ARRAY['document_sha256','document_stamped_at'];
 BEGIN
   IF TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND TG_TABLE_NAME = 'service_acceptance_responses') THEN
     RAISE EXCEPTION 'service_acceptance_record_immutable' USING ERRCODE = 'check_violation';
@@ -314,7 +330,16 @@ BEGIN
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF TG_TABLE_NAME <> 'service_acceptance_responses' AND to_jsonb(NEW)->>(CASE TG_TABLE_NAME
-         WHEN 'service_acceptance_signers' THEN 'status' ELSE 'review_state' END) <> open_state THEN
+         WHEN 'service_acceptance_signers' THEN 'status' ELSE 'review_state' END) <> open_state
+       OR (TG_TABLE_NAME = 'service_acceptance_paper_intakes' AND to_jsonb(NEW)->>'document_sha256' IS NOT NULL) THEN
+      RAISE EXCEPTION 'service_acceptance_transition_invalid' USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+  -- The content stamp: a pending intake gains its hash once and nothing else moves.
+  IF TG_TABLE_NAME = 'service_acceptance_paper_intakes' AND to_jsonb(OLD)->>'document_sha256' IS NULL
+     AND to_jsonb(NEW)->>'document_sha256' IS NOT NULL THEN
+    IF (to_jsonb(NEW) - stamp) IS DISTINCT FROM (to_jsonb(OLD) - stamp) OR to_jsonb(OLD)->>'review_state' <> open_state THEN
       RAISE EXCEPTION 'service_acceptance_transition_invalid' USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
@@ -327,12 +352,16 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS guard_service_acceptance_request ON public.service_acceptance_requests;
 CREATE TRIGGER guard_service_acceptance_request BEFORE INSERT OR UPDATE OR DELETE
   ON public.service_acceptance_requests FOR EACH ROW EXECUTE FUNCTION public._guard_service_acceptance_request();
+DROP TRIGGER IF EXISTS guard_service_acceptance_signer ON public.service_acceptance_signers;
 CREATE TRIGGER guard_service_acceptance_signer BEFORE INSERT OR UPDATE OR DELETE
   ON public.service_acceptance_signers FOR EACH ROW EXECUTE FUNCTION public._guard_service_acceptance_child();
+DROP TRIGGER IF EXISTS guard_service_acceptance_paper_intake ON public.service_acceptance_paper_intakes;
 CREATE TRIGGER guard_service_acceptance_paper_intake BEFORE INSERT OR UPDATE OR DELETE
   ON public.service_acceptance_paper_intakes FOR EACH ROW EXECUTE FUNCTION public._guard_service_acceptance_child();
+DROP TRIGGER IF EXISTS guard_service_acceptance_response ON public.service_acceptance_responses;
 CREATE TRIGGER guard_service_acceptance_response BEFORE INSERT OR UPDATE OR DELETE
   ON public.service_acceptance_responses FOR EACH ROW EXECUTE FUNCTION public._guard_service_acceptance_child();
 
@@ -608,14 +637,17 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public._service_acceptance_paper_fingerprint(p_object_id uuid)
-RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT public._service_acceptance_hash(jsonb_build_object('objectId', o.id, 'bucketId', o.bucket_id,
-    'name', o.name, 'version', o.version, 'eTag', o.metadata->>'eTag', 'size', o.metadata->>'size',
-    'mimetype', o.metadata->>'mimetype'))
-  FROM storage.objects o WHERE o.id = p_object_id;
+-- Object identity only, never a content hash: is the recorded paper object
+-- still at the storage version and eTag the intake recorded?
+CREATE OR REPLACE FUNCTION public._service_acceptance_paper_object_unchanged(p_object_id uuid, p_version text, p_etag text)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT EXISTS (SELECT 1 FROM storage.objects o WHERE o.id = p_object_id
+    AND o.bucket_id = 'service-acceptance-paper' AND o.version = p_version AND o.metadata->>'eTag' = p_etag);
 $$;
 
+-- Non-studio readers keep each response's method, so confirmed paper stays
+-- distinct from an authenticated click-through (K5), but never see the response
+-- id, the paper object, its hash, or who recorded or reviewed it.
 CREATE OR REPLACE FUNCTION public._service_acceptance_request_json(p_request_id uuid, p_studio boolean)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT jsonb_build_object(
@@ -630,7 +662,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_
         'replacedBySignerId', s.replaced_by_signer_id, 'replacementReason', s.replacement_reason,
         'replacedAt', s.replaced_at, 'response', resp.body)
       ELSE jsonb_build_object('signerId', s.id, 'slot', s.slot, 'required', s.required,
-        'response', resp.body - ARRAY['responseId','method']) END ORDER BY s.slot, s.created_at, s.id)
+        'response', resp.body - 'responseId') END ORDER BY s.slot, s.created_at, s.id)
       FROM public.service_acceptance_signers s
       LEFT JOIN LATERAL (SELECT jsonb_build_object('responseId', x.id, 'response', x.response,
           'conditions', x.conditions, 'returnReason', x.return_reason, 'method', x.method,
@@ -830,7 +862,7 @@ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_tem
 DECLARE
   v_uid uuid := auth.uid(); v_key text; v_hash text; v_request public.service_acceptance_requests%ROWTYPE;
   v_existing public.service_acceptance_paper_intakes%ROWTYPE; v_signer public.service_acceptance_signers%ROWTYPE;
-  v_object storage.objects%ROWTYPE; v_conditions jsonb; v_sha text; v_id uuid := extensions.gen_random_uuid();
+  v_object storage.objects%ROWTYPE; v_conditions jsonb; v_id uuid := extensions.gen_random_uuid();
   previous_marker text := current_setting('app.service_acceptance_request_id', true);
 BEGIN
   PERFORM public._assert_scope_composition_enabled();
@@ -885,21 +917,74 @@ BEGIN
      OR v_object.owner_id IS DISTINCT FROM v_uid::text
      OR v_object.metadata->>'mimetype' IS DISTINCT FROM 'application/pdf'
      OR NOT (CASE WHEN v_object.metadata->>'size' ~ '^[0-9]+$'
-       THEN (v_object.metadata->>'size')::numeric BETWEEN 1 AND 20971520 ELSE false END) THEN
+       THEN (v_object.metadata->>'size')::numeric BETWEEN 1 AND 20971520 ELSE false END)
+     OR btrim(COALESCE(v_object.version, '')) = '' OR btrim(COALESCE(v_object.metadata->>'eTag', '')) = '' THEN
     RAISE EXCEPTION 'service_acceptance_paper_invalid' USING ERRCODE = 'check_violation';
   END IF;
-  v_sha := public._service_acceptance_paper_fingerprint(v_object.id);
+  -- The content hash stays NULL until the service-role stamp binds the bytes.
   PERFORM set_config('app.service_acceptance_request_id', p_request_id::text, true);
-  INSERT INTO public.service_acceptance_paper_intakes(id, request_id, signer_id, storage_object_id, document_sha256,
-    paper_signed_on, signed_name, disposition, conditions, return_reason, presented_request_number,
-    presented_scope_content_hash, presented_evidence_manifest_hash, presented_signer_policy_revision,
-    client_request_id, request_hash, recorded_by)
-  VALUES (v_id, p_request_id, v_signer.id, v_object.id, v_sha, p_paper_signed_on, btrim(p_signed_name), p_disposition,
-    v_conditions, NULLIF(btrim(p_return_reason), ''), p_presented_request_number, p_presented_scope_content_hash,
-    p_presented_evidence_manifest_hash, p_presented_signer_policy_revision, v_key, v_hash, v_uid);
+  INSERT INTO public.service_acceptance_paper_intakes(id, request_id, signer_id, storage_object_id,
+    storage_object_version, storage_object_etag, paper_signed_on, signed_name, disposition, conditions, return_reason,
+    presented_request_number, presented_scope_content_hash, presented_evidence_manifest_hash,
+    presented_signer_policy_revision, client_request_id, request_hash, recorded_by)
+  VALUES (v_id, p_request_id, v_signer.id, v_object.id, v_object.version, v_object.metadata->>'eTag',
+    p_paper_signed_on, btrim(p_signed_name), p_disposition, v_conditions, NULLIF(btrim(p_return_reason), ''),
+    p_presented_request_number, p_presented_scope_content_hash, p_presented_evidence_manifest_hash,
+    p_presented_signer_policy_revision, v_key, v_hash, v_uid);
   PERFORM set_config('app.service_acceptance_request_id', COALESCE(previous_marker, ''), true);
-  RETURN jsonb_build_object('intakeId', v_id, 'reviewState', 'pending_review', 'documentSha256', v_sha,
+  RETURN jsonb_build_object('intakeId', v_id, 'reviewState', 'pending_review', 'documentSha256', NULL::text,
     'replayed', false);
+END;
+$$;
+
+-- The WP-10C edge function calls this as service_role after it downloads the
+-- recorded object version and hashes its bytes. It binds document_sha256 once;
+-- a same-value replay returns the receipt.
+CREATE OR REPLACE FUNCTION public.stamp_service_acceptance_paper_hash(
+  p_intake_id uuid, p_document_sha256 text, p_object_version text, p_object_etag text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_request_id uuid; v_intake public.service_acceptance_paper_intakes%ROWTYPE;
+  previous_marker text := current_setting('app.service_acceptance_request_id', true);
+BEGIN
+  PERFORM public._assert_scope_composition_enabled();
+  -- The service path carries no end-user identity; a signed-in caller never stamps.
+  IF auth.uid() IS NOT NULL THEN
+    RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF p_document_sha256 IS NULL OR p_document_sha256 !~ '^[0-9a-f]{64}$' THEN
+    RAISE EXCEPTION 'paper_document_hash_invalid' USING ERRCODE = 'check_violation';
+  END IF;
+  SELECT request_id INTO v_request_id FROM public.service_acceptance_paper_intakes WHERE id = p_intake_id;
+  IF v_request_id IS NULL THEN
+    RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  PERFORM public._lock_service_acceptance_request(v_request_id, false);
+  SELECT * INTO STRICT v_intake FROM public.service_acceptance_paper_intakes WHERE id = p_intake_id FOR UPDATE;
+  IF v_intake.document_sha256 IS NOT NULL THEN
+    IF v_intake.document_sha256 = p_document_sha256 AND v_intake.storage_object_version = p_object_version
+       AND v_intake.storage_object_etag = p_object_etag THEN
+      RETURN jsonb_build_object('intakeId', v_intake.id, 'documentSha256', v_intake.document_sha256,
+        'reviewState', v_intake.review_state, 'replayed', true);
+    END IF;
+    RAISE EXCEPTION 'paper_document_hash_conflict' USING ERRCODE = 'unique_violation';
+  END IF;
+  IF v_intake.review_state <> 'pending_review' THEN
+    RAISE EXCEPTION 'request_not_open' USING ERRCODE = 'object_not_in_prerequisite_state';
+  END IF;
+  IF p_object_version IS DISTINCT FROM v_intake.storage_object_version
+     OR p_object_etag IS DISTINCT FROM v_intake.storage_object_etag
+     OR NOT public._service_acceptance_paper_object_unchanged(v_intake.storage_object_id,
+       v_intake.storage_object_version, v_intake.storage_object_etag) THEN
+    RAISE EXCEPTION 'paper_document_changed' USING ERRCODE = 'serialization_failure';
+  END IF;
+  PERFORM set_config('app.service_acceptance_request_id', v_request_id::text, true);
+  UPDATE public.service_acceptance_paper_intakes SET document_sha256 = p_document_sha256,
+    document_stamped_at = clock_timestamp()
+  WHERE id = p_intake_id;
+  PERFORM set_config('app.service_acceptance_request_id', COALESCE(previous_marker, ''), true);
+  RETURN jsonb_build_object('intakeId', p_intake_id, 'documentSha256', p_document_sha256,
+    'reviewState', 'pending_review', 'replayed', false);
 END;
 $$;
 
@@ -938,18 +1023,23 @@ BEGIN
   IF v_intake.recorded_by = v_uid THEN
     RAISE EXCEPTION 'insufficient_privilege' USING ERRCODE = 'insufficient_privilege';
   END IF;
-  IF p_decision IS NULL OR p_decision NOT IN ('confirm','reject')
-     OR (p_decision = 'reject' AND btrim(COALESCE(p_note, '')) = '') OR length(COALESCE(p_note, '')) > 2000 THEN
+  IF p_decision IS NULL OR p_decision NOT IN ('confirmed','rejected')
+     OR (p_decision = 'rejected' AND btrim(COALESCE(p_note, '')) = '') OR length(COALESCE(p_note, '')) > 2000 THEN
     RAISE EXCEPTION 'service_acceptance_review_invalid' USING ERRCODE = 'check_violation';
   END IF;
   IF v_request.lifecycle <> 'sent' OR v_intake.review_state <> 'pending_review' THEN
     RAISE EXCEPTION 'request_not_open' USING ERRCODE = 'object_not_in_prerequisite_state';
   END IF;
-  IF public._service_acceptance_paper_fingerprint(v_intake.storage_object_id) IS DISTINCT FROM v_intake.document_sha256
-     OR p_expected_document_sha256 IS DISTINCT FROM v_intake.document_sha256 THEN
+  -- Confirmation binds the stamped bytes; a rejection may proceed unstamped.
+  IF p_decision = 'confirmed' AND v_intake.document_sha256 IS NULL THEN
+    RAISE EXCEPTION 'paper_document_unstamped' USING ERRCODE = 'object_not_in_prerequisite_state';
+  END IF;
+  IF p_expected_document_sha256 IS DISTINCT FROM v_intake.document_sha256
+     OR (p_decision = 'confirmed' AND NOT public._service_acceptance_paper_object_unchanged(v_intake.storage_object_id,
+       v_intake.storage_object_version, v_intake.storage_object_etag)) THEN
     RAISE EXCEPTION 'paper_document_changed' USING ERRCODE = 'serialization_failure';
   END IF;
-  IF p_decision = 'confirm' THEN
+  IF p_decision = 'confirmed' THEN
     SELECT * INTO STRICT v_signer FROM public.service_acceptance_signers WHERE id = v_intake.signer_id;
     IF v_signer.status <> 'active' THEN
       RAISE EXCEPTION 'signer_not_active' USING ERRCODE = 'object_not_in_prerequisite_state';
@@ -968,11 +1058,11 @@ BEGIN
     END IF;
   END IF;
   PERFORM set_config('app.service_acceptance_request_id', v_request_id::text, true);
-  UPDATE public.service_acceptance_paper_intakes SET review_state = CASE p_decision WHEN 'confirm' THEN 'confirmed'
-      ELSE 'rejected' END, reviewed_by = v_uid, reviewed_at = clock_timestamp(), review_note = NULLIF(btrim(p_note), ''),
+  UPDATE public.service_acceptance_paper_intakes SET review_state = p_decision, reviewed_by = v_uid,
+    reviewed_at = clock_timestamp(), review_note = NULLIF(btrim(p_note), ''),
     review_client_request_id = v_key, review_request_hash = v_hash
   WHERE id = p_intake_id;
-  IF p_decision = 'confirm' THEN
+  IF p_decision = 'confirmed' THEN
     v_response_id := extensions.gen_random_uuid();
     INSERT INTO public.service_acceptance_responses(id, request_id, signer_id, response, conditions, return_reason,
       method, paper_intake_id, presented_scope_content_hash, presented_evidence_manifest_hash,
@@ -983,8 +1073,7 @@ BEGIN
     PERFORM public._derive_service_acceptance_outcome(v_request_id);
   END IF;
   PERFORM set_config('app.service_acceptance_request_id', COALESCE(previous_marker, ''), true);
-  RETURN jsonb_build_object('intakeId', p_intake_id, 'reviewState', CASE p_decision WHEN 'confirm' THEN 'confirmed'
-      ELSE 'rejected' END, 'responseId', v_response_id,
+  RETURN jsonb_build_object('intakeId', p_intake_id, 'reviewState', p_decision, 'responseId', v_response_id,
     'aggregateOutcome', (SELECT aggregate_outcome FROM public.service_acceptance_requests WHERE id = v_request_id),
     'replayed', false);
 END;
@@ -1344,7 +1433,7 @@ REVOKE ALL ON FUNCTION public._supersede_service_acceptance_request(uuid,text) F
 REVOKE ALL ON FUNCTION public._supersede_service_acceptance_requests(uuid,text) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public._service_acceptance_pending_required(uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public._derive_service_acceptance_outcome(uuid) FROM PUBLIC, anon, authenticated, service_role;
-REVOKE ALL ON FUNCTION public._service_acceptance_paper_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public._service_acceptance_paper_object_unchanged(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public._service_acceptance_request_json(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public._service_acceptance_create_receipt(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public._service_acceptance_response_receipt(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
@@ -1352,6 +1441,7 @@ REVOKE ALL ON FUNCTION public._service_acceptance_after_send() FROM PUBLIC, anon
 REVOKE ALL ON FUNCTION public.create_service_acceptance_request(uuid,uuid,uuid,text) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.record_service_acceptance_paper_intake(uuid,uuid,uuid,date,text,text,jsonb,text,integer,text,text,integer,text) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.stamp_service_acceptance_paper_hash(uuid,text,text,text) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.review_service_acceptance_paper_intake(uuid,text,text,text,text) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.replace_service_acceptance_signer(uuid,uuid,uuid,uuid,integer,text,text) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.withdraw_service_acceptance_request(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role;

@@ -28812,7 +28812,8 @@ export type Database = {
           client_request_id: string
           conditions: Json
           disposition: string
-          document_sha256: string
+          document_sha256: string | null
+          document_stamped_at: string | null
           id: string
           lapsed_at: string | null
           lapsed_reason: string | null
@@ -28834,13 +28835,16 @@ export type Database = {
           reviewed_by: string | null
           signed_name: string
           signer_id: string
+          storage_object_etag: string
           storage_object_id: string
+          storage_object_version: string
         }
         Insert: {
           client_request_id: string
           conditions?: Json
           disposition: string
-          document_sha256: string
+          document_sha256?: string | null
+          document_stamped_at?: string | null
           id?: string
           lapsed_at?: string | null
           lapsed_reason?: string | null
@@ -28862,13 +28866,16 @@ export type Database = {
           reviewed_by?: string | null
           signed_name: string
           signer_id: string
+          storage_object_etag: string
           storage_object_id: string
+          storage_object_version: string
         }
         Update: {
           client_request_id?: string
           conditions?: Json
           disposition?: string
-          document_sha256?: string
+          document_sha256?: string | null
+          document_stamped_at?: string | null
           id?: string
           lapsed_at?: string | null
           lapsed_reason?: string | null
@@ -28890,7 +28897,9 @@ export type Database = {
           reviewed_by?: string | null
           signed_name?: string
           signer_id?: string
+          storage_object_etag?: string
           storage_object_id?: string
+          storage_object_version?: string
         }
         Relationships: [
           {
@@ -41234,9 +41243,9 @@ export type Database = {
       }
       _service_acceptance_hash: { Args: { p_value: Json }; Returns: string }
       _service_acceptance_key: { Args: { p_key: string }; Returns: string }
-      _service_acceptance_paper_fingerprint: {
-        Args: { p_object_id: string }
-        Returns: string
+      _service_acceptance_paper_object_unchanged: {
+        Args: { p_etag: string; p_object_id: string; p_version: string }
+        Returns: boolean
       }
       _service_acceptance_pending_required: {
         Args: { p_request_id: string }
@@ -51393,6 +51402,15 @@ export type Database = {
       stamp_project_pricing_studio: {
         Args: { p_project_id: string; p_studio_id: string }
         Returns: string
+      }
+      stamp_service_acceptance_paper_hash: {
+        Args: {
+          p_document_sha256: string
+          p_intake_id: string
+          p_object_etag: string
+          p_object_version: string
+        }
+        Returns: Json
       }
       start_purchase_order_change: { Args: { p_request: Json }; Returns: Json }
       start_timer: {

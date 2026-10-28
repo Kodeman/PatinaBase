@@ -28,7 +28,7 @@ BEGIN
     'role','authenticated')::text END,true);
 END $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assert_true(boolean,text),pg_temp.expect_error(text,text,text,text),
-  pg_temp.actor(integer),pg_temp.uid(integer) TO authenticated;
+  pg_temp.actor(integer),pg_temp.uid(integer) TO authenticated,service_role;
 -- END shared assertion helpers
 
 -- Shipped inactive: no mutation or helper is executable by PUBLIC, anon,
@@ -50,10 +50,12 @@ DO $$ DECLARE f record; r text; BEGIN
       WHERE p.oid=f.signature::oid AND acl.grantee=0 AND acl.privilege_type='EXECUTE'),'PUBLIC no execute '||f.signature);
   END LOOP;
 END $$;
-SELECT pg_temp.assert_true((SELECT count(*)=6 FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN
+SELECT pg_temp.assert_true((SELECT count(*)=7 FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN
   ('create_service_acceptance_request','respond_service_acceptance','record_service_acceptance_paper_intake',
-   'review_service_acceptance_paper_intake','replace_service_acceptance_signer','withdraw_service_acceptance_request')),
-  'six mutation RPCs exist');
+   'stamp_service_acceptance_paper_hash','review_service_acceptance_paper_intake','replace_service_acceptance_signer',
+   'withdraw_service_acceptance_request')),'seven mutation RPCs exist');
+SELECT pg_temp.assert_true(to_regproc('public._service_acceptance_paper_fingerprint') IS NULL,
+  'no metadata fingerprint stands in for the paper content hash');
 SELECT pg_temp.assert_true((SELECT bool_and(c.relrowsecurity) AND bool_and(NOT has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE'))
   AND bool_and(NOT has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE')) AND count(*)=4
   FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relname IN ('service_acceptance_requests',
@@ -80,7 +82,7 @@ SELECT pg_temp.expect_error('SELECT public.respond_service_acceptance(gen_random
   '55000','scope_editions_inactive','inactive respond refuses with grant restored');
 SELECT pg_temp.expect_error('SELECT public.record_service_acceptance_paper_intake(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),current_date,''n'',''accept'',''[]'',NULL,1,''h'',''h'',1,''k'')',
   '55000','scope_editions_inactive','inactive paper intake refuses with grant restored');
-SELECT pg_temp.expect_error('SELECT public.review_service_acceptance_paper_intake(gen_random_uuid(),''confirm'',''h'',NULL,''k'')',
+SELECT pg_temp.expect_error('SELECT public.review_service_acceptance_paper_intake(gen_random_uuid(),''confirmed'',''h'',NULL,''k'')',
   '55000','scope_editions_inactive','inactive paper review refuses with grant restored');
 SELECT pg_temp.expect_error('SELECT public.replace_service_acceptance_signer(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),NULL,1,''r'',''k'')',
   '55000','scope_editions_inactive','inactive replace refuses with grant restored');
@@ -94,6 +96,14 @@ DO $$ DECLARE f regprocedure; BEGIN
     EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM authenticated',f);
   END LOOP;
 END $$;
+-- The content stamp is service_role only; it is inactive with that grant restored here.
+GRANT EXECUTE ON FUNCTION public.stamp_service_acceptance_paper_hash(uuid,text,text,text) TO service_role;
+SELECT pg_temp.actor(NULL);
+SET LOCAL ROLE service_role;
+SELECT pg_temp.expect_error('SELECT public.stamp_service_acceptance_paper_hash(gen_random_uuid(),repeat(''a'',64),''v'',''e'')',
+  '55000','scope_editions_inactive','inactive paper stamp refuses with its service_role grant restored');
+RESET ROLE;
+REVOKE EXECUTE ON FUNCTION public.stamp_service_acceptance_paper_hash(uuid,text,text,text) FROM service_role;
 
 -- Fixture: studio A (1 owner, 2 member, 3 admin), studio B (4 owner), client 5,
 -- household partner 6 (with a profile), outsider 7; two profile-less cards.
@@ -204,10 +214,27 @@ $$;
 CREATE FUNCTION pg_temp.paper(n integer, owner_n integer) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE o uuid := ('f8869000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
 BEGIN
-  INSERT INTO storage.objects(id,bucket_id,name,owner_id,metadata)
-  VALUES (o,'service-acceptance-paper',pg_temp.project()||'/'||o||'.pdf',pg_temp.uid(owner_n)::text,
+  INSERT INTO storage.objects(id,bucket_id,name,owner_id,version,metadata)
+  VALUES (o,'service-acceptance-paper',pg_temp.project()||'/'||o||'.pdf',pg_temp.uid(owner_n)::text,'v-'||n,
     jsonb_build_object('mimetype','application/pdf','size',2048,'eTag','"etag-'||n||'"'));
   RETURN o;
+END $$;
+-- WP-10C's byte-hashing step as the service path (no JWT): hash stand-in bytes
+-- (default: the key) and stamp the intake stored under key k with the object
+-- identity it recorded; k's stored receipt then carries the stamped hash.
+CREATE FUNCTION pg_temp.stamp(k text, bytes text DEFAULT NULL) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE i public.service_acceptance_paper_intakes%ROWTYPE; stamped jsonb;
+  caller text := current_setting('request.jwt.claim.sub',true);
+BEGIN
+  SELECT * INTO STRICT i FROM public.service_acceptance_paper_intakes WHERE id=(pg_temp.v(k)->>'intakeId')::uuid;
+  PERFORM pg_temp.actor(NULL);
+  stamped:=public.stamp_service_acceptance_paper_hash(i.id,encode(extensions.digest(COALESCE(bytes,k),'sha256'),'hex'),
+    i.storage_object_version,i.storage_object_etag);
+  UPDATE sa_results SET value=value||jsonb_build_object('documentSha256',stamped->'documentSha256') WHERE key=k;
+  PERFORM set_config('request.jwt.claim.sub',COALESCE(caller,''),true);
+  PERFORM set_config('request.jwt.claims',CASE WHEN COALESCE(caller,'')='' THEN '' ELSE
+    jsonb_build_object('sub',caller,'role','authenticated')::text END,true);
+  RETURN stamped;
 END $$;
 CREATE FUNCTION pg_temp.record_paper(req uuid, signer uuid, obj uuid, disposition text, k text, revision integer DEFAULT NULL)
 RETURNS jsonb LANGUAGE sql AS $$
@@ -373,9 +400,20 @@ SELECT pg_temp.expect_error(format($q$SELECT public.withdraw_service_acceptance_
 SELECT pg_temp.actor(1);
 INSERT INTO sa_results VALUES('p1',pg_temp.record_paper(pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner'),
   pg_temp.paper(1,1),'accept','p-1'));
-SELECT pg_temp.assert_true((pg_temp.v('p1')->>'reviewState')='pending_review'
-  AND pg_temp.v('p1')->>'documentSha256'=public._service_acceptance_paper_fingerprint('f8869000-0000-4000-8000-000000000001'),
-  'paper intake records a pending intake bound to the stored document');
+SELECT pg_temp.assert_true((pg_temp.v('p1')->>'reviewState')='pending_review' AND pg_temp.v('p1')->'documentSha256'='null'::jsonb
+  AND (SELECT storage_object_id='f8869000-0000-4000-8000-000000000001' AND storage_object_version='v-1'
+    AND storage_object_etag='"etag-1"' AND document_sha256 IS NULL AND document_stamped_at IS NULL
+    FROM public.service_acceptance_paper_intakes WHERE id=(pg_temp.v('p1')->>'intakeId')::uuid),
+  'paper intake records the object identity and leaves the content hash unstamped');
+SELECT pg_temp.paper(8,1),pg_temp.paper(9,1);
+UPDATE storage.objects SET version=NULL WHERE id='f8869000-0000-4000-8000-000000000008';
+UPDATE storage.objects SET metadata=metadata-'eTag' WHERE id='f8869000-0000-4000-8000-000000000009';
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,%L,'f8869000-0000-4000-8000-000000000008','accept','p-noversion')$q$,
+  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'23514','service_acceptance_paper_invalid',
+  'paper without a storage version refuses');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,%L,'f8869000-0000-4000-8000-000000000009','accept','p-noetag')$q$,
+  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'23514','service_acceptance_paper_invalid',
+  'paper without an eTag refuses');
 SELECT pg_temp.actor(2);
 SELECT pg_temp.expect_error(format($q$SELECT public.replace_service_acceptance_signer(%L,%L,NULL,'f8866000-0000-4000-8000-000000000004',1,'moved','rp-member')$q$,
   pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'42501',NULL,'a member cannot replace a signer');
@@ -407,13 +445,26 @@ SELECT pg_temp.assert_true((SELECT s.required AND s.profile_id IS NULL AND old.s
   AND old.replacement_reason LIKE 'Partner travelling%' AND old.replaced_by_signer_id=s.id
   FROM public.service_acceptance_signers s JOIN public.service_acceptance_signers old ON old.replaced_by_signer_id=s.id
   WHERE s.id=(pg_temp.v('rp1')->>'signerId')::uuid),'a profile-less required signer is accepted and the replacement audited');
-SELECT pg_temp.assert_true((SELECT count(*)=0 FROM (SELECT public._validate_service_acceptance_signers(e.source_proposal_id,
-  '[{"slot":"only","required":true,"householdPersonId":"f8866000-0000-4000-8000-000000000003"}]')
-  FROM public.project_scope_editions e WHERE e.project_id=pg_temp.project() AND e.status='active') v WHERE false),
-  'create-time validation accepts a profile-less required signer (reachable on paper)');
+-- The validator runs directly on the active edition's proposal: no projection can skip it.
+SELECT pg_temp.expect_error($q$SELECT public._validate_service_acceptance_signers((SELECT e.source_proposal_id
+  FROM public.project_scope_editions e WHERE e.project_id=pg_temp.project() AND e.status='active'),
+  '[{"slot":"only","required":true,"householdPersonId":"f8866000-0000-4000-8000-00000000ffff"}]')$q$,
+  '23514','signer_policy_unbound','create-time validation refuses a card outside the household');
+DO $$ DECLARE proposal uuid; failure text; BEGIN
+  SELECT e.source_proposal_id INTO STRICT proposal FROM public.project_scope_editions e
+  WHERE e.project_id=pg_temp.project() AND e.status='active';
+  BEGIN
+    PERFORM public._validate_service_acceptance_signers(proposal,
+      '[{"slot":"only","required":true,"householdPersonId":"f8866000-0000-4000-8000-000000000003"}]');
+  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS failure=MESSAGE_TEXT;
+  END;
+  PERFORM pg_temp.assert_true(failure IS NULL,
+    'create-time validation accepts a profile-less required signer (reachable on paper)'||COALESCE(' [got '||failure||']',''));
+END $$;
 SELECT pg_temp.actor(3);
-SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-lapsed')$q$,
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirmed',%L,NULL,'rv-lapsed')$q$,
   pg_temp.v('p1')->>'intakeId',pg_temp.v('p1')->>'documentSha256'),'55000','request_not_open','a lapsed intake cannot be confirmed');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.stamp('p1')$q$,'55000','request_not_open','a lapsed intake is never stamped');
 SELECT pg_temp.actor(1);
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,%L,pg_temp.paper(2,1),'accept','p-stale',1)$q$,
   pg_temp.req('r1'),pg_temp.v('rp1')->>'signerId'),'40001','stale_signer_policy','paper presented at the old revision refuses');
@@ -426,26 +477,76 @@ INSERT INTO sa_results VALUES('p2',pg_temp.record_paper(pg_temp.req('r1'),(pg_te
   pg_temp.paper(5,1),'accept','p-2'));
 SELECT pg_temp.expect_error($q$UPDATE storage.objects SET name=name WHERE id='f8869000-0000-4000-8000-000000000005'$q$,
   '23514','Recorded acceptance paper','recorded paper object is immutable');
+INSERT INTO sa_results VALUES('p3',pg_temp.record_paper(pg_temp.req('r1'),(pg_temp.v('rp1')->>'signerId')::uuid,
+  pg_temp.paper(7,1),'accept','p-3'));
 SELECT pg_temp.actor(2);
-SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-member')$q$,
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirmed',%L,NULL,'rv-member')$q$,
   pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'42501',NULL,'a member cannot review paper');
 SELECT pg_temp.actor(1);
-SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-self')$q$,
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirmed',%L,NULL,'rv-self')$q$,
   pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'42501',NULL,'the recorder cannot review their own intake');
+-- C4 §2.2 decision vocabulary: 'confirmed'/'rejected'; the old 'confirm' refuses.
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',NULL,NULL,'rv-old')$q$,
+  pg_temp.v('p2')->>'intakeId'),'23514','service_acceptance_review_invalid','review refuses the old confirm vocabulary');
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirmed',NULL,NULL,'rv-unstamped')$q$,
+  pg_temp.v('p2')->>'intakeId'),'55000','paper_document_unstamped','confirmation refuses paper whose bytes are not yet hashed');
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'rejected',NULL,NULL,'rv-3-note')$q$,
+  pg_temp.v('p3')->>'intakeId'),'23514','service_acceptance_review_invalid','a rejection needs a note');
+INSERT INTO sa_results VALUES('rv3',public.review_service_acceptance_paper_intake((pg_temp.v('p3')->>'intakeId')::uuid,'rejected',
+  NULL,'Signature page missing','rv-3'));
+SELECT pg_temp.assert_true((pg_temp.v('rv3')->>'reviewState')='rejected' AND pg_temp.v('rv3')->'responseId'='null'::jsonb
+  AND (SELECT review_state='rejected' AND reviewed_by=pg_temp.uid(3) AND document_sha256 IS NULL
+    FROM public.service_acceptance_paper_intakes WHERE id=(pg_temp.v('p3')->>'intakeId')::uuid)
+  AND NOT EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE paper_intake_id=(pg_temp.v('p3')->>'intakeId')::uuid),
+  'an unstamped intake can be rejected and never creates a response');
+
+-- The service-role content stamp (WP-10C hashes the stored bytes, then calls it).
+SELECT pg_temp.expect_error(format($q$SELECT public.stamp_service_acceptance_paper_hash(%L,repeat('b',64),'v-5','"etag-5"')$q$,
+  pg_temp.v('p2')->>'intakeId'),'42501','insufficient_privilege','a signed-in caller never stamps');
+SELECT pg_temp.actor(NULL);
+SELECT pg_temp.expect_error(format($q$SELECT public.stamp_service_acceptance_paper_hash(%L,repeat('B',64),'v-5','"etag-5"')$q$,
+  pg_temp.v('p2')->>'intakeId'),'23514','paper_document_hash_invalid','stamp refuses a hash that is not 64 lowercase hex');
+SELECT pg_temp.expect_error(format($q$SELECT public.stamp_service_acceptance_paper_hash(%L,repeat('b',63),'v-5','"etag-5"')$q$,
+  pg_temp.v('p2')->>'intakeId'),'23514','paper_document_hash_invalid','stamp refuses a short hash');
+SELECT pg_temp.expect_error(format($q$SELECT public.stamp_service_acceptance_paper_hash(%L,repeat('b',64),'v-other','"etag-5"')$q$,
+  pg_temp.v('p2')->>'intakeId'),'40001','paper_document_changed','stamp refuses bytes hashed from another object version');
+SET LOCAL session_replication_role=replica;
+UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}','"moved"') WHERE id='f8869000-0000-4000-8000-000000000005';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.expect_error($q$SELECT pg_temp.stamp('p2')$q$,'40001','paper_document_changed',
+  'stamp refuses an object whose eTag moved after the intake recorded it');
+SET LOCAL session_replication_role=replica;
+UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}',to_jsonb('"etag-5"'::text)) WHERE id='f8869000-0000-4000-8000-000000000005';
+SET LOCAL session_replication_role=origin;
+INSERT INTO sa_results VALUES('s2',pg_temp.stamp('p2'));
+INSERT INTO sa_results VALUES('s2-replay',pg_temp.stamp('p2'));
+SELECT pg_temp.assert_true(pg_temp.v('s2')->>'documentSha256'=encode(extensions.digest('p2','sha256'),'hex')
+  AND NOT (pg_temp.v('s2')->>'replayed')::boolean AND (pg_temp.v('s2-replay')->>'replayed')::boolean
+  AND pg_temp.v('s2-replay')->>'documentSha256'=pg_temp.v('s2')->>'documentSha256'
+  AND (SELECT document_sha256=pg_temp.v('s2')->>'documentSha256' AND document_stamped_at IS NOT NULL AND review_state='pending_review'
+    FROM public.service_acceptance_paper_intakes WHERE id=(pg_temp.v('p2')->>'intakeId')::uuid),
+  'stamp binds the byte hash once and replays the same value');
+SELECT pg_temp.expect_error($q$SELECT pg_temp.stamp('p2','other bytes')$q$,'23505','paper_document_hash_conflict',
+  'a stamped intake refuses a different hash');
+SELECT pg_temp.expect_error(format($q$DO $d$ BEGIN PERFORM set_config('app.service_acceptance_request_id',%L,true);
+  UPDATE public.service_acceptance_paper_intakes SET document_sha256=repeat('e',64) WHERE id=%L; END $d$$q$,
+  pg_temp.req('r1'),pg_temp.v('p2')->>'intakeId'),'23514','service_acceptance_transition_invalid','a bound hash never moves');
 SELECT pg_temp.actor(3);
 SET LOCAL session_replication_role=replica;
 UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}','"changed"') WHERE id='f8869000-0000-4000-8000-000000000005';
 SET LOCAL session_replication_role=origin;
-SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-changed')$q$,
-  pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'40001','paper_document_changed','changed paper bytes refuse review');
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirmed',%L,NULL,'rv-changed')$q$,
+  pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'40001','paper_document_changed',
+  'paper bytes changed after hashing refuse confirmation');
 SET LOCAL session_replication_role=replica;
 UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}',to_jsonb('"etag-5"'::text)) WHERE id='f8869000-0000-4000-8000-000000000005';
 SET LOCAL session_replication_role=origin;
-SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirm',%L,NULL,'rv-expect')$q$,
+SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirmed',%L,NULL,'rv-expect')$q$,
   pg_temp.v('p2')->>'intakeId',repeat('0',64)),'40001','paper_document_changed','review checks the expected document hash');
-INSERT INTO sa_results VALUES('rv2',public.review_service_acceptance_paper_intake((pg_temp.v('p2')->>'intakeId')::uuid,'confirm',
+INSERT INTO sa_results VALUES('rv2',public.review_service_acceptance_paper_intake((pg_temp.v('p2')->>'intakeId')::uuid,'confirmed',
   pg_temp.v('p2')->>'documentSha256',NULL,'rv-2'));
-INSERT INTO sa_results VALUES('rv2-replay',public.review_service_acceptance_paper_intake((pg_temp.v('p2')->>'intakeId')::uuid,'confirm',
+INSERT INTO sa_results VALUES('rv2-replay',public.review_service_acceptance_paper_intake((pg_temp.v('p2')->>'intakeId')::uuid,'confirmed',
   pg_temp.v('p2')->>'documentSha256',NULL,'rv-2'));
 SELECT pg_temp.assert_true((pg_temp.v('rv2')->>'aggregateOutcome')='accepted_with_conditions'
   AND (pg_temp.v('rv2-replay')->>'replayed')::boolean AND pg_temp.v('rv2-replay')->>'responseId'=pg_temp.v('rv2')->>'responseId',
@@ -510,10 +611,26 @@ SELECT pg_temp.assert_true(jsonb_array_length(pg_temp.v('mine5'))=3
     OR e ? 'paperIntakes' OR e ? 'outboundDraftId' OR e ? 'withdrawReason' OR (e->'signers')::text LIKE '%profileId%')
   AND (SELECT bool_and(e->>'viewerRole'='signer_required') FROM jsonb_array_elements(pg_temp.v('mine5')) e),
   'client sees sent and terminal requests as a required signer, without studio fields');
+-- K5 provenance: the signer sees confirmed paper as paper, apart from their own click-through.
+SELECT pg_temp.assert_true((SELECT jsonb_object_agg(s->>'slot',s->'response'->>'method')
+    ='{"client":"portal_authenticated","partner":"paper_intake"}'::jsonb
+  FROM jsonb_array_elements(pg_temp.v('mine5')) e, jsonb_array_elements(e->'signers') s
+  WHERE e->>'requestId'=pg_temp.req('r1')::text AND s->'response'<>'null'::jsonb),
+  'the client sees the confirmed paper response as paper intake, distinct from the authenticated click-through');
+SELECT pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(pg_temp.v('mine5')) e,
+    jsonb_array_elements(e->'signers') s WHERE s->'response'<>'null'::jsonb
+    AND (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(s->'response') k)
+      <>ARRAY['conditions','method','respondedAt','response','returnReason'])
+  AND position(pg_temp.v('rv2')->>'responseId' in pg_temp.v('mine5')::text)=0
+  AND position(pg_temp.v('p2')->>'documentSha256' in pg_temp.v('mine5')::text)=0
+  AND position('f8869000-0000-4000-8000-000000000005' in pg_temp.v('mine5')::text)=0,
+  'client responses withhold the response id, paper object, hash and reviewer');
 SELECT pg_temp.actor(6);
-SELECT pg_temp.assert_true((SELECT jsonb_agg(e->>'requestId' ORDER BY e->>'requestId')=jsonb_agg(x ORDER BY x)
-  FROM jsonb_array_elements(public.get_my_service_acceptance_requests()) e,
-  LATERAL (SELECT to_jsonb(r) x FROM unnest(ARRAY[pg_temp.req('r2')::text,pg_temp.req('r4')::text]) r WHERE r=e->>'requestId') y),
+INSERT INTO sa_results VALUES('mine6',public.get_my_service_acceptance_requests());
+SELECT pg_temp.assert_true((SELECT COALESCE(jsonb_agg(e->>'requestId' ORDER BY e->>'requestId'),'[]'::jsonb)
+    FROM jsonb_array_elements(pg_temp.v('mine6')) e)
+  =(SELECT jsonb_agg(x ORDER BY x) FROM unnest(ARRAY[pg_temp.req('r2')::text,pg_temp.req('r4')::text]) x)
+  AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(pg_temp.v('mine6')) e WHERE e->>'requestId'=pg_temp.req('r1')::text),
   'a replaced signer stops seeing that request; other requests still show');
 SELECT pg_temp.actor(7);
 SELECT pg_temp.assert_true(public.get_my_service_acceptance_requests()='[]'::jsonb,'an outsider sees no requests');
@@ -524,7 +641,9 @@ SELECT pg_temp.expect_error(format('SELECT public.get_project_service_acceptance
   'the client cannot read the studio projection');
 SELECT pg_temp.actor(2);
 SELECT pg_temp.assert_true((SELECT jsonb_array_length(v->'requests')=4 AND v->>'capability'='active'
-  AND (v->'requests'->0->>'requestNumber')::int=4 AND jsonb_array_length(v->'requests'->3->'paperIntakes')=2
+  AND (v->'requests'->0->>'requestNumber')::int=4 AND jsonb_array_length(v->'requests'->3->'paperIntakes')=3
+  AND (SELECT array_agg(i->>'reviewState' ORDER BY i->>'reviewState') FROM jsonb_array_elements(v->'requests'->3->'paperIntakes') i)
+    =ARRAY['confirmed','lapsed','rejected']
   FROM public.get_project_service_acceptance(pg_temp.project()) v),'studio projection lists every request with paper intakes');
 
 -- X08: the old approval list never sees acceptance rows.
