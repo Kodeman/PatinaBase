@@ -53,6 +53,16 @@ describe('Round-8 typography (18px root)', () => {
     expect(sheet.toString()).toContain('--r8-type-min: 12px');
   });
 
+  it('leaves aria-hidden decorative tick stamps out of the inherited utility floor', () => {
+    const floors: string[] = [];
+    sheet.walkDecls('font-size', (decl) => {
+      if (decl.value !== 'var(--r8-type-min)' || decl.parent?.type !== 'rule') return;
+      floors.push(decl.parent.selector);
+      expect(decl.parent.selector).toContain('):not([aria-hidden])');
+    });
+    expect(floors).toHaveLength(1);
+  });
+
   it('uses sentence-case body type for paper metadata without changing drafting stock', () => {
     let found = false;
     sheet.walkRules((rule) => {
@@ -63,6 +73,7 @@ describe('Round-8 typography (18px root)', () => {
       expect(values.get('font-family')).toBe('var(--font-body)');
       expect(values.get('text-transform')).toBe('none');
       expect(values.get('letter-spacing')).toBe('0');
+      expect(values.get('font-variant-numeric')).toBe('tabular-nums');
       found = true;
     });
     expect(found).toBe(true);

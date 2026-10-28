@@ -647,13 +647,13 @@ describe("P02 round-8 plate (Kody 2026-10-23)", () => {
   // Only compact action type may change; every other primary property stays frozen.
   function isCompactActionFloor({ selector, body }: { selector: string; body: string }): boolean {
     const size = /^font-size:\s*(\d+(?:\.\d+)?)px;$/.exec(body);
-    return selector === `${ROUND8_SCOPE} .da-act` && !!size && Number(size[1]) >= 12;
+    return selector === `${ROUND8_SCOPE} [class~="[&_.da-act]:text-[11px]"] .da-act` && !!size && Number(size[1]) >= 12;
   }
 
   it("raises compact action labels to 12px without changing legacy's 11px emission", () => {
     const floors = round8Rules.filter(isCompactActionFloor);
     expect(floors).toHaveLength(1);
-    postcss.parse(round8Css).walkRules(`${ROUND8_SCOPE} .da-act`, (rule) => {
+    postcss.parse(round8Css).walkRules(`${ROUND8_SCOPE} [class~="[&_.da-act]:text-[11px]"] .da-act`, (rule) => {
       expect(rule.parent?.type).toBe("atrule");
       expect(rule.parent).toMatchObject({ name: "media", params: "(max-width: 1179px)" });
     });
@@ -663,13 +663,30 @@ describe("P02 round-8 plate (Kody 2026-10-23)", () => {
   });
 
   it("rejects any compact action property beyond the scoped font-size floor", () => {
-    expect(isCompactActionFloor({ selector: `${ROUND8_SCOPE} .da-act`, body: "font-size: 12px;" })).toBe(true);
+    expect(isCompactActionFloor({ selector: `${ROUND8_SCOPE} [class~="[&_.da-act]:text-[11px]"] .da-act`, body: "font-size: 12px;" })).toBe(true);
     for (const body of ["font-size: 11px;", "font-weight: 500;", "color: red;", "text-transform: none;", "letter-spacing: 0;", "padding: 0;", "font-size: 12px; color: red;"]) {
-      expect(isCompactActionFloor({ selector: `${ROUND8_SCOPE} .da-act`, body })).toBe(false);
+      expect(isCompactActionFloor({ selector: `${ROUND8_SCOPE} [class~="[&_.da-act]:text-[11px]"] .da-act`, body })).toBe(false);
     }
-    for (const selector of [".da-act", `${ROUND8_SCOPE} .da-primary`, `${ROUND8_SCOPE} .da-label`]) {
+    for (const selector of [".da-act", `${ROUND8_SCOPE} .da-act`, `${ROUND8_SCOPE} .da-primary`, `${ROUND8_SCOPE} .da-label`]) {
       expect(isCompactActionFloor({ selector, body: "font-size: 12px;" })).toBe(false);
     }
+  });
+
+  it("preserves the 15px primary/plate and 14px secondary/tertiary tiers outside the compact host", () => {
+    const action = readComponent("document-action.tsx");
+    for (const [variant, size] of [["primary", 15], ["plate", 15], ["danger", 15], ["secondary", 14], ["tertiary", 14]] as const) {
+      expect(action).toMatch(new RegExp(`${variant}: 'da-${variant} [^']*text-\\[${size}px\\]`));
+    }
+    const overrides: string[] = [];
+    postcss.parse(round8Css).walkDecls("font-size", (decl) => {
+      if (decl.parent?.type !== "rule") return;
+      const rule = decl.parent;
+      if (!/da-(?:act|primary|plate|danger|secondary|tertiary|label)\b/.test(rule.selector)) return;
+      overrides.push(rule.selector);
+      expect(rule.selector).toBe(`${ROUND8_SCOPE} [class~="[&_.da-act]:text-[11px]"] .da-act`);
+      expect(decl.value).toBe("12px");
+    });
+    expect(overrides).toHaveLength(1);
   });
 
   it("restyles only the plate's geometry: inset 0 paint, ring 2px off it", () => {
