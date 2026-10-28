@@ -47,6 +47,7 @@ export const OUTBOUND_KIND_LABEL: Record<string, string> = {
   site_request_due: 'Site request reminder',
   homeowner_window_pick: 'Delivery window request',
   hours_prompt: 'Hours reminder',
+  service_acceptance_request: 'Service acceptance request',
 };
 
 export function outboundKindLabel(kind: string): string {
