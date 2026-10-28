@@ -115,10 +115,11 @@ const lastKey = () => mocks.rpc.mock.calls.at(-1)![1].p_client_request_id as str
 
 describe('service acceptance studio acts (WP-10C)', () => {
   it('creates against the edition and manifest with a generated client_request_id', async () => {
-    mocks.rpc.mockResolvedValue({ data: { requestId: 'request-1', lifecycle: 'draft', outboundDraftId: 'draft-1' }, error: null });
+    mocks.rpc.mockResolvedValue({ data: { requestId: 'request-1', lifecycle: 'draft', outboundDraftId: 'draft-1',
+      outboundDraftIds: ['draft-1', 'draft-2'] }, error: null });
     const act = useCreateServiceAcceptanceRequest('job-1') as any;
     await expect(act.mutationFn({ scopeEditionId: 'edition-1', evidenceManifestId: 'manifest-1' }))
-      .resolves.toMatchObject({ outboundDraftId: 'draft-1' });
+      .resolves.toMatchObject({ outboundDraftId: 'draft-1', outboundDraftIds: ['draft-1', 'draft-2'] });
     expect(mocks.rpc).toHaveBeenCalledWith('create_service_acceptance_request', {
       p_project_id: 'job-1', p_scope_edition_id: 'edition-1', p_evidence_manifest_id: 'manifest-1',
       p_client_request_id: expect.stringMatching(KEY),
