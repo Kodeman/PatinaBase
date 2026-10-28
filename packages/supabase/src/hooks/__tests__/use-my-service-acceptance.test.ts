@@ -14,7 +14,7 @@ const request = (over: Record<string, unknown> = {}) => ({
   viewerRole: 'signer_required', viewerSignerId: 'signer-1',
   signers: [{ signerId: 'signer-1', slot: 'Client', required: true, response: null }], ...over,
 });
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); });
 it('maps required and optional roles and defaults unknown role to observer', () => {
   expect(readMyServiceAcceptanceRequests([request()])[0].viewerRole).toBe('signer_required');
   expect(readMyServiceAcceptanceRequests([request({ viewerRole: 'signer_optional', signers: [{ signerId: 'signer-1', slot: 'Client', required: false, response: null }] })])[0].viewerRole).toBe('signer_optional');
