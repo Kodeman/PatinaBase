@@ -4,25 +4,25 @@ US-52 Room Proof 08, step RC-7, lane E8. This lane raises X04–X07 from the R3b
 
 **Run facts**
 
-| Item | Value |
-| --- | --- |
-| Date | 2026-10-29 |
-| Worktree / branch | `/Users/kody/Code/patina-r8-rc7-e8`, branch `r8-rc7-e8` |
-| Tip under test | `a1f375cbc` (the lane base, the merged RC-7 tip) |
-| Owned stack | `project_id` `patina-rc7-e8`. Ports: API 64121, DB 64122, shadow 64120, pooler 64129. Started with `-x studio,mailpit,logflare,vector,edge-runtime,imgproxy,postgres-meta` and the 5 version pins. Marker `rc7_owned.stack = 'patina-rc7-e8'`. System id `7702166181275328554`. |
-| Migration head on the owned DB | `00902` (828 migration rows) |
-| pg_cron | `cron.launch_active_jobs = off`, set as `supabase_admin` |
-| Designer dev | `PLAYWRIGHT_DESIGNER_PORT=3810`, started by `playwright.round8.config.ts`: live data mode, round-8 renderer flag, `next dev --webpack`. Machine: Apple M4 Pro, unthrottled localhost. |
-| Browsers | `chromium` = Desktop Chrome 1440×900 at DPR 1. `webkit-iphone` = iPhone 14, 390×664 at DPR 3. |
+| Item                           | Value                                                                                                                                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Date                           | 2026-10-29                                                                                                                                                                                                                                                                      |
+| Worktree / branch              | `/Users/kody/Code/patina-r8-rc7-e8`, branch `r8-rc7-e8`                                                                                                                                                                                                                         |
+| Tip under test                 | `a1f375cbc` (the lane base, the merged RC-7 tip)                                                                                                                                                                                                                                |
+| Owned stack                    | `project_id` `patina-rc7-e8`. Ports: API 64121, DB 64122, shadow 64120, pooler 64129. Started with `-x studio,mailpit,logflare,vector,edge-runtime,imgproxy,postgres-meta` and the 5 version pins. Marker `rc7_owned.stack = 'patina-rc7-e8'`. System id `7702166181275328554`. |
+| Migration head on the owned DB | `00902` (828 migration rows)                                                                                                                                                                                                                                                    |
+| pg_cron                        | `cron.launch_active_jobs = off`, set as `supabase_admin`                                                                                                                                                                                                                        |
+| Designer dev                   | `PLAYWRIGHT_DESIGNER_PORT=3810`, started by `playwright.round8.config.ts`: live data mode, round-8 renderer flag, `next dev --webpack`. Machine: Apple M4 Pro, unthrottled localhost.                                                                                           |
+| Browsers                       | `chromium` = Desktop Chrome 1440×900 at DPR 1. `webkit-iphone` = iPhone 14, 390×664 at DPR 3.                                                                                                                                                                                   |
 
 **Result**
 
-| ID | Clause | Before (R3b) | Now | Spec | Asserted | Readback | Runs |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| X04 | Visual coherence against frozen round 8, desktop and phone | weak | **covered** for the named surfaces: studio and photographic cover, job paper, cabinetry chapter, activated acceptance/care chapter. Books and the dense sheet were not re-compared. | `rc7-e8-visual.spec.ts` | Cover `<img>` decoded from a signed `project-ffe-working` URL; C4/C6 inactive notes = 0; E7 requests rendered = DB lifecycles; page overflow 0 | `facts.json` per browser: plate src, natural size, chapters, DB cabinetry/request rows | 2 chromium, 2 webkit-iphone: 3/3 passed each |
-| X05 | WCAG 2.2 AA complete processes, screen reader | weak | **covered except the screen reader** (not verified; needs a person). Two keyboard-only processes complete in both engines. axe: 0 critical, 0 moderate, 0 minor; **serious color-contrast on 4 of 6 surfaces**. 1 focus defect. | `rc7-e8-a11y.spec.ts` | Every step reached by native Tab order and on screen; save persisted; Esc folds the unfold and returns focus to its door; refused submit writes nothing | DB `project_ffe_specs.finish` = typed value; `service_acceptance_condition_resolutions` count unchanged | 2 chromium, 2 webkit-iphone: 2 passed + 1 `fixme` (RC7-E8-1) each |
-| X06 | Zoom, real content bounds, bounded and reachable scrolling | weak | **covered at 1280 @ 200%** (0 clipped controls on all 5 surfaces). **390 @ 200% clips 6–7 controls** (RC7-E8-3). | `rc7-e8-zoom.spec.ts` | Each surface opens at the zoomed viewport; page does not scroll sideways | Per-control geometry and clipping ancestor; `rc7-e8-zoom-<browser>.json` | 2 chromium, 2 webkit-iphone: 6/6 passed each |
-| X07 | Settled-scroll zero shift; load targets; request capture | weak | **Partly covered.** Settled-scroll CLS is **0** on studio and job (paced and flung). LCP is within 2.5 s. Request capture is repaired. **Job cold-load CLS is 1.16–1.17**, against a proposed ≤0.1 (RC7-E8-4). Interaction latency and percentiles were not measured. | `rc7-e8-perf.spec.ts` | API requests captured > 0; context capture = Resource Timing (±max(3, 10%)); the scroll covers the whole document | `rc7-e8-perf-<browser>.json` | 2 chromium, 2 webkit-iphone: 2/2 passed each |
+| ID  | Clause                                                     | Before (R3b) | Now                                                                                                                                                                                                                                                                   | Spec                    | Asserted                                                                                                                                                | Readback                                                                                                | Runs                                                              |
+| --- | ---------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| X04 | Visual coherence against frozen round 8, desktop and phone | weak         | **covered** for the named surfaces: studio and photographic cover, job paper, cabinetry chapter, activated acceptance/care chapter. Books and the dense sheet were not re-compared.                                                                                   | `rc7-e8-visual.spec.ts` | Cover `<img>` decoded from a signed `project-ffe-working` URL; C4/C6 inactive notes = 0; E7 requests rendered = DB lifecycles; page overflow 0          | `facts.json` per browser: plate src, natural size, chapters, DB cabinetry/request rows                  | 2 chromium, 2 webkit-iphone: 3/3 passed each                      |
+| X05 | WCAG 2.2 AA complete processes, screen reader              | weak         | **covered except the screen reader** (not verified; needs a person). Two keyboard-only processes complete in both engines. axe: 0 critical, 0 moderate, 0 minor; **serious color-contrast on 4 of 6 surfaces**. 1 focus defect.                                       | `rc7-e8-a11y.spec.ts`   | Every step reached by native Tab order and on screen; save persisted; Esc folds the unfold and returns focus to its door; refused submit writes nothing | DB `project_ffe_specs.finish` = typed value; `service_acceptance_condition_resolutions` count unchanged | 2 chromium, 2 webkit-iphone: 2 passed + 1 `fixme` (RC7-E8-1) each |
+| X06 | Zoom, real content bounds, bounded and reachable scrolling | weak         | **covered at 1280 @ 200%** (0 clipped controls on all 5 surfaces). **390 @ 200% clips 6–7 controls** (RC7-E8-3).                                                                                                                                                      | `rc7-e8-zoom.spec.ts`   | Each surface opens at the zoomed viewport; page does not scroll sideways                                                                                | Per-control geometry and clipping ancestor; `rc7-e8-zoom-<browser>.json`                                | 2 chromium, 2 webkit-iphone: 6/6 passed each                      |
+| X07 | Settled-scroll zero shift; load targets; request capture   | weak         | **Partly covered.** Settled-scroll CLS is **0** on studio and job (paced and flung). LCP is within 2.5 s. Request capture is repaired. **Job cold-load CLS is 1.16–1.17**, against a proposed ≤0.1 (RC7-E8-4). Interaction latency and percentiles were not measured. | `rc7-e8-perf.spec.ts`   | API requests captured > 0; context capture = Resource Timing (±max(3, 10%)); the scroll covers the whole document                                       | `rc7-e8-perf-<browser>.json`                                                                            | 2 chromium, 2 webkit-iphone: 2/2 passed each                      |
 
 ## 1. Lane fixtures (owned stack only)
 
@@ -44,6 +44,7 @@ US-52 Room Proof 08, step RC-7, lane E8. This lane raises X04–X07 from the R3b
   - a GC cabinetry fulfilment `pkg.cabinets` (2 units, planned).
 
   Each record comes from its RPC, run as its real actor.
+
 - **`rc7-e8-cover-fixture.sql`** adds one active project board on F01. It runs after `rc7OwnedStackSql()`.
   - Its `cover_image_url` is `<job>/boards/<board>/room.png`. That is the only bare key that `guard_proposal_board_media_reference` accepts for a project board.
   - The spec uploads the reference's own cover, `artifacts/room-proof-round8-2026-10-23/assets/room.png`, to that key in `project-ffe-working`.
@@ -60,12 +61,12 @@ The portal and the reference were each captured at the same viewport, and I look
 
 Element captures hide fixed and sticky overlays outside the target. Full-page captures paint the fixed dock mid-page; that is a capture artifact.
 
-| Surface | Desktop 1440 | Phone 390 | Rating |
-| --- | --- | --- | --- |
-| Studio: photographic cover (`studio-top`, `studio-full` vs `ref-studio-top`) | The board photograph sits where the reference puts it: the left column, about 804×529, beside "Needs your attention". The caption is a white plate at the lower left of the photo, "F01 Fictional Full-Service House · board cover", as in the reference. `img` is signed (`/storage/v1/object/sign/project-ffe-working/`), natural 1536×1024, `alt=""` with a figcaption. | Decoded and signed (box 354×295). The head, the hours/find band and the one-time coach note push it below the first screen; the reference shows it on the first screen. | **match** (photograph, place, caption). **Deviations:** (a) the intro sits under the h1, not in the right column (already ruled acceptable in RC-4b); (b) the one-time Desk coach note adds about 170 px above the plate; (c) "Open the job paper" is an underlined text link, where the reference has a moss button. |
-| Job paper: top and full (`job-top`, `job-full` vs `ref-job-top`, `ref-index-top`) | Chapter order: brief, design, approvals, schedule, ffe, financials, closeout, record. The cover is the empty "Add a photograph for the cover" card: the job cover is a separate data source, and F01 has none. Overflow 0. | Same order; overflow 0. | **deviation, data-bound** (no job cover photo in F01). Otherwise as RC-4b. |
-| Cabinetry chapter (E7, `job-e7-cabinetry` vs `ref-job-cabinetry`) | Reads the GC fulfilment `pkg.cabinets`, 2 units, planned, as a single-column register: "No package record for this key", "No package issue is recorded", "These acts are not active yet" (the C5 instruction acts). The reference has a 2-column plate with an elevation drawing and "Unfold the build package". | Stacks cleanly; overflow 0. | **deviation, partly data-bound.** No owned fixture has an issued package or a drawing, so the plate and elevation cannot appear. The register type is sans and small where the reference uses the display serif. |
-| Acceptance / care chapter, C4/C6 active (E7, `job-e7-closeout` vs `ref-job-closeout`; F01 `job-f01-closeout`) | Every state renders: request 2 Closed · Accepted with conditions, with signers and the replaced partner; request 1 Returned, with its reason; studio service "Completed with conditions" with "Revoke this completion"; the client condition "Keep the oak floor · Open" with "Resolve this condition"; care references for edition 1. On F01 with C4/C6 active, the inactive notes are 0 and the copy reads "No agreed scope edition is active for this job…". | Stacks cleanly; overflow 0. | **deviation (hierarchy and type).** The reference's "Acceptance & handoff" is a bordered card with a display-serif lead ("Final acceptance is still open."), signer lines and a right column "Service completion — Held". The portal uses small sans headings and no card, behind the legacy tan "Project closeout" panel. The chapter label "Closeout" is deliberate (`ROUND8_PAPER_ORDER`). The RC-4 D2 gap (acceptance and completion readings absent) is **closed** when activated. |
+| Surface                                                                                                       | Desktop 1440                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Phone 390                                                                                                                                                               | Rating                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Studio: photographic cover (`studio-top`, `studio-full` vs `ref-studio-top`)                                  | The board photograph sits where the reference puts it: the left column, about 804×529, beside "Needs your attention". The caption is a white plate at the lower left of the photo, "F01 Fictional Full-Service House · board cover", as in the reference. `img` is signed (`/storage/v1/object/sign/project-ffe-working/`), natural 1536×1024, `alt=""` with a figcaption.                                                                                      | Decoded and signed (box 354×295). The head, the hours/find band and the one-time coach note push it below the first screen; the reference shows it on the first screen. | **match** (photograph, place, caption). **Deviations:** (a) the intro sits under the h1, not in the right column (already ruled acceptable in RC-4b); (b) the one-time Desk coach note adds about 170 px above the plate; (c) "Open the job paper" is an underlined text link, where the reference has a moss button.                                                                                                                                                                   |
+| Job paper: top and full (`job-top`, `job-full` vs `ref-job-top`, `ref-index-top`)                             | Chapter order: brief, design, approvals, schedule, ffe, financials, closeout, record. The cover is the empty "Add a photograph for the cover" card: the job cover is a separate data source, and F01 has none. Overflow 0.                                                                                                                                                                                                                                      | Same order; overflow 0.                                                                                                                                                 | **deviation, data-bound** (no job cover photo in F01). Otherwise as RC-4b.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Cabinetry chapter (E7, `job-e7-cabinetry` vs `ref-job-cabinetry`)                                             | Reads the GC fulfilment `pkg.cabinets`, 2 units, planned, as a single-column register: "No package record for this key", "No package issue is recorded", "These acts are not active yet" (the C5 instruction acts). The reference has a 2-column plate with an elevation drawing and "Unfold the build package".                                                                                                                                                | Stacks cleanly; overflow 0.                                                                                                                                             | **deviation, partly data-bound.** No owned fixture has an issued package or a drawing, so the plate and elevation cannot appear. The register type is sans and small where the reference uses the display serif.                                                                                                                                                                                                                                                                        |
+| Acceptance / care chapter, C4/C6 active (E7, `job-e7-closeout` vs `ref-job-closeout`; F01 `job-f01-closeout`) | Every state renders: request 2 Closed · Accepted with conditions, with signers and the replaced partner; request 1 Returned, with its reason; studio service "Completed with conditions" with "Revoke this completion"; the client condition "Keep the oak floor · Open" with "Resolve this condition"; care references for edition 1. On F01 with C4/C6 active, the inactive notes are 0 and the copy reads "No agreed scope edition is active for this job…". | Stacks cleanly; overflow 0.                                                                                                                                             | **deviation (hierarchy and type).** The reference's "Acceptance & handoff" is a bordered card with a display-serif lead ("Final acceptance is still open."), signer lines and a right column "Service completion — Held". The portal uses small sans headings and no card, behind the legacy tan "Project closeout" panel. The chapter label "Closeout" is deliberate (`ROUND8_PAPER_ORDER`). The RC-4 D2 gap (acceptance and completion readings absent) is **closed** when activated. |
 
 No X04 item is a defect: every difference is either a composition deviation or a data limit.
 
@@ -76,21 +77,22 @@ No X04 item is a defect: every difference is either a composition deviation or a
 1. **Studio → job → FF&E unfold → save → close → studio** (line "F01 Living Room selection 07").
    - Tab counts, chromium / webkit-iphone:
 
-     | Step | chromium | webkit-iphone |
-     | --- | --- | --- |
-     | Studio → "Open the job paper" | 14 | 14 |
-     | Job → Living Room disclosure | 7 | 42 (the phone paper opens the FF&E stop on arrival at it) |
-     | → "Edit room selections" | 38 | 38 |
-     | → Specifications lens (Shift+Tab) | 5 | 5 |
-     | → line | 14 | 14 |
-     | → Finish | 36 | 6 |
-     | Finish → line (Shift+Tab) | 36 | 36 |
-     | Door → job-head "Studio" (Shift+Tab) | 81 | 79 |
+     | Step                                 | chromium | webkit-iphone                                             |
+     | ------------------------------------ | -------- | --------------------------------------------------------- |
+     | Studio → "Open the job paper"        | 14       | 14                                                        |
+     | Job → Living Room disclosure         | 7        | 42 (the phone paper opens the FF&E stop on arrival at it) |
+     | → "Edit room selections"             | 38       | 38                                                        |
+     | → Specifications lens (Shift+Tab)    | 5        | 5                                                         |
+     | → line                               | 14       | 14                                                        |
+     | → Finish                             | 36       | 6                                                         |
+     | Finish → line (Shift+Tab)            | 36       | 36                                                        |
+     | Door → job-head "Studio" (Shift+Tab) | 81       | 79                                                        |
 
    - Enter saved; DB readback `project_ffe_specs.finish` = the typed value.
    - Esc inside the filled Finish field holds the unfold. That is by design: `escapeIsHeld`, `build-room-shell.tsx:186–206`.
    - From the line button, Esc folds the unfold and focus returns to the "Edit room selections" door.
    - The studio arrives, and the value still reads back.
+
 2. **Acceptance chapter (E7, C4/C6 active).**
    - "Resolve this condition" is reached in 76–78 tabs. Enter opens the form `Resolve: Keep the oak floor`.
    - Tab reaches "How it was resolved" and then "Record the resolution". Enter is refused with the alert "…choose one reference", and the resolutions count is unchanged.
@@ -104,14 +106,14 @@ No X04 item is a defect: every difference is either a composition deviation or a
 
 **axe** (axe-core 4.11.1 from the repo's existing `axe-playwright` install; tags wcag2a/2aa/21a/21aa/22aa; no dependency added):
 
-| Surface | Critical | Serious | Moderate | Minor | Identical in |
-| --- | --- | --- | --- | --- | --- |
-| Studio | 0 | 0 | 0 | 0 | both engines, all runs |
-| Job paper (F01) | 0 | 8 color-contrast | 0 | 0 | both engines, all runs |
-| FF&E unfold, Specifications, line open | 0 | 18 color-contrast | 0 | 0 | both engines, all runs |
-| Job paper (E7, acceptance active) | 0 | 1 color-contrast | 0 | 0 | both engines, all runs |
-| Acceptance/care chapter (E7) | 0 | 0 | 0 | 0 | both engines, all runs |
-| Resolve-condition form open | 0 | 6 color-contrast | 0 | 0 | both engines, all runs |
+| Surface                                | Critical | Serious           | Moderate | Minor | Identical in           |
+| -------------------------------------- | -------- | ----------------- | -------- | ----- | ---------------------- |
+| Studio                                 | 0        | 0                 | 0        | 0     | both engines, all runs |
+| Job paper (F01)                        | 0        | 8 color-contrast  | 0        | 0     | both engines, all runs |
+| FF&E unfold, Specifications, line open | 0        | 18 color-contrast | 0        | 0     | both engines, all runs |
+| Job paper (E7, acceptance active)      | 0        | 1 color-contrast  | 0        | 0     | both engines, all runs |
+| Acceptance/care chapter (E7)           | 0        | 0                 | 0        | 0     | both engines, all runs |
+| Resolve-condition form open            | 0        | 6 color-contrast  | 0        | 0     | both engines, all runs |
 
 The contrast pairs are RC7-E8-2.
 
@@ -124,13 +126,13 @@ The contrast pairs are RC7-E8-2.
 
 The probe walks every visible focusable control under the surface root. It records a control as clipped if it is outside the viewport horizontally, or if it is 1–98% visible inside an `overflow: hidden/clip` ancestor. It also records horizontal scroll containers and the fixed/sticky share of the viewport height.
 
-| Surface | 1280 @ 200% | 390 @ 200% |
-| --- | --- | --- |
-| Whole job paper (long content), 49–50 controls mounted | 0 clipped; page overflow 0; chrome 48% of height | **5 clipped**: `a[data-action-key="press-add-cover-photo"]` (x 37–257 of 195), `a[data-action-key="open-project-drawings"]` (18–204), `button[data-action-key="ffe-lead-spec"]` (18–197), `button[data-action-key="close-project"]` (174–308), `button[data-action-key="complete-studio-service"]` (18–204). Page overflow 0, because `body` has `overflow-x-hidden` (`globals.css:1746`). Chrome 52%. |
-| FF&E Specifications, line open (66 controls) | 0 clipped; no scroll containers | chromium: `select[aria-label="unit"]` (135–197) clipped. Both engines: the line `section` scrolls sideways (179/159 and 172/150) and has focusable content. |
-| FF&E rough lens (178 controls) | 0 clipped. At 640 CSS px the lens renders its phone list (the `phone` branch of `rough-in-table.tsx`), not the `<table>`. | 0 clipped |
-| Issued print history | 0 clipped | 0 clipped |
-| Drawing/evidence viewer (dialog) | 0 clipped | `button[data-action-key="close-plan-print-viewer"]` "Back to the document" (18–199) loses 4 px |
+| Surface                                                | 1280 @ 200%                                                                                                               | 390 @ 200%                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Whole job paper (long content), 49–50 controls mounted | 0 clipped; page overflow 0; chrome 48% of height                                                                          | **5 clipped**: `a[data-action-key="press-add-cover-photo"]` (x 37–257 of 195), `a[data-action-key="open-project-drawings"]` (18–204), `button[data-action-key="ffe-lead-spec"]` (18–197), `button[data-action-key="close-project"]` (174–308), `button[data-action-key="complete-studio-service"]` (18–204). Page overflow 0, because `body` has `overflow-x-hidden` (`globals.css:1746`). Chrome 52%. |
+| FF&E Specifications, line open (66 controls)           | 0 clipped; no scroll containers                                                                                           | chromium: `select[aria-label="unit"]` (135–197) clipped. Both engines: the line `section` scrolls sideways (179/159 and 172/150) and has focusable content.                                                                                                                                                                                                                                            |
+| FF&E rough lens (178 controls)                         | 0 clipped. At 640 CSS px the lens renders its phone list (the `phone` branch of `rough-in-table.tsx`), not the `<table>`. | 0 clipped                                                                                                                                                                                                                                                                                                                                                                                              |
+| Issued print history                                   | 0 clipped                                                                                                                 | 0 clipped                                                                                                                                                                                                                                                                                                                                                                                              |
+| Drawing/evidence viewer (dialog)                       | 0 clipped                                                                                                                 | `button[data-action-key="close-plan-print-viewer"]` "Back to the document" (18–199) loses 4 px                                                                                                                                                                                                                                                                                                         |
 
 The 1280 @ 200% chrome share (sticky job head plus dock = 48% of a 360 px viewport) is recorded as observation O-2; it is not a defect. Captures: `visual-rc7/<browser>-zoom-<size>-<surface>.jpg`. The PDF pixels inside the viewer are blank in headless browsers; the viewer frame and its controls were checked, the drawing render was not.
 
@@ -149,15 +151,15 @@ The 1280 @ 200% chrome share (sticky job head plus dock = 48% of a 360 px viewpo
   - **flung**: 90%-of-viewport jumps about 170 ms apart.
 - The document height is re-read every step, because the paper grows as stops open (job: 6,702 → 10,756 px).
 
-| Reading | Studio chromium | Job chromium | Studio webkit-iphone | Job webkit-iphone |
-| --- | --- | --- | --- | --- |
-| LCP (target ≤2.5 s) | 1,028 / 1,020 ms (plate `span.aspect-[1.52]`) | 1,836 / 1,860 ms (phase-name button) | 1,102 / 1,075 ms | 2,212 / 2,172 ms |
-| Load CLS before scroll (target ≤0.1) | 0.064 / 0.083 | **1.168 / 1.156** | not available (WebKit has no `layout-shift`) | not available |
-| Settled-scroll CLS, paced (contract = 0) | 0 (8 steps) / 0 | **0** (45 steps) / 0 | not available | not available |
-| Settled-scroll CLS, flung | 0 / 0 | 0 (14 steps) / 0 | not available | not available |
-| Requests, cold load: total / Supabase API / dev server / other | 70 / 33 / 27 / 10 Sanity (11 failed: Sanity CDN plus 1) | 225 / 194 / 31 / 0 (1 failed) | 71 / 33 / 28 / 10 Sanity | 226 / 194 / 32 / 0 |
-| Of which `rpc/get_project_ffe_readiness` | 0 | **80** (one per line) | 0 | 80 |
-| Nodes | 571–572 | 1,012 | — | — |
+| Reading                                                        | Studio chromium                                         | Job chromium                         | Studio webkit-iphone                         | Job webkit-iphone  |
+| -------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------ | -------------------------------------------- | ------------------ |
+| LCP (target ≤2.5 s)                                            | 1,028 / 1,020 ms (plate `span.aspect-[1.52]`)           | 1,836 / 1,860 ms (phase-name button) | 1,102 / 1,075 ms                             | 2,212 / 2,172 ms   |
+| Load CLS before scroll (target ≤0.1)                           | 0.064 / 0.083                                           | **1.168 / 1.156**                    | not available (WebKit has no `layout-shift`) | not available      |
+| Settled-scroll CLS, paced (contract = 0)                       | 0 (8 steps) / 0                                         | **0** (45 steps) / 0                 | not available                                | not available      |
+| Settled-scroll CLS, flung                                      | 0 / 0                                                   | 0 (14 steps) / 0                     | not available                                | not available      |
+| Requests, cold load: total / Supabase API / dev server / other | 70 / 33 / 27 / 10 Sanity (11 failed: Sanity CDN plus 1) | 225 / 194 / 31 / 0 (1 failed)        | 71 / 33 / 28 / 10 Sanity                     | 226 / 194 / 32 / 0 |
+| Of which `rpc/get_project_ffe_readiness`                       | 0                                                       | **80** (one per line)                | 0                                            | 80                 |
+| Nodes                                                          | 571–572                                                 | 1,012                                | —                                            | —                  |
 
 Each cell gives run 1 / run 2.
 
@@ -189,12 +191,12 @@ PLAYWRIGHT_OUTPUT_DIR=<scratch>/<run> pnpm exec playwright test -c playwright.ro
   --project=<chromium|webkit-iphone> --workers=1
 ```
 
-| Run | Result |
-| --- | --- |
-| chromium 1 | 13 passed, 1 skipped (`fixme` RC7-E8-1), 3.6 m. The focus-cover probe then sampled only the centre; it was widened to 5 points before run 2. |
-| chromium 2 | 13 passed, 1 skipped, 3.5 m |
-| webkit-iphone 1 | 13 passed, 1 skipped, 4.3 m |
-| webkit-iphone 2 | 13 passed, 1 skipped, 4.3 m |
+| Run             | Result                                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| chromium 1      | 13 passed, 1 skipped (`fixme` RC7-E8-1), 3.6 m. The focus-cover probe then sampled only the centre; it was widened to 5 points before run 2. |
+| chromium 2      | 13 passed, 1 skipped, 3.5 m                                                                                                                  |
+| webkit-iphone 1 | 13 passed, 1 skipped, 4.3 m                                                                                                                  |
+| webkit-iphone 2 | 13 passed, 1 skipped, 4.3 m                                                                                                                  |
 
 `vm_stat` free memory before each run was 6.9–10.3 GB, and `df` showed 290 GiB free.
 
