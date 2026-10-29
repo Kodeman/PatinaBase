@@ -107,7 +107,7 @@ describe('F1: the stale mark belongs to the QueryClient its act ran in', () => {
     await waitFor(() => expect(completeButton()).toBeEnabled());
     // A's act is refused late as stale.
     await act(async () => {
-      refuse({ data: null, error: { code: '40001', message: 'stale_obligations' } });
+      refuse({ data: null, error: { code: 'PT409', message: 'stale_obligations' } });
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     second.rerender(<StudioServiceSection projectId="job-1" />);

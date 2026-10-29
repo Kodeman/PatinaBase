@@ -24,6 +24,10 @@
 -- authenticated. The activation grant plan is appended to C4 §2.8; activation
 -- is a later migration.
 --
+-- Stale refusals (stale_scope, stale_signer_policy, paper_document_changed,
+-- scope_edition_stale, scope_execution_document_moved) use PT409 (HTTP 409),
+-- never 40001/40P01: PostgREST 14 retries those without limit (RC7-e2-2, as 00837).
+--
 -- Lock order (§2.3): projects (FOR SHARE for a response or a paper review,
 -- FOR UPDATE for create, withdraw, replace and supersede), then the scope
 -- edition FOR SHARE, then requests FOR UPDATE, then signers FOR UPDATE by id,
@@ -829,10 +833,10 @@ BEGIN
   IF p_scope_content_hash IS DISTINCT FROM v_request.scope_content_hash
      OR p_evidence_manifest_hash IS DISTINCT FROM v_request.evidence_manifest_hash
      OR (SELECT status FROM public.project_scope_editions WHERE id = v_request.scope_edition_id) <> 'active' THEN
-    RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'PT409';
   END IF;
   IF p_signer_policy_revision IS DISTINCT FROM v_request.signer_policy_revision THEN
-    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'PT409';
   END IF;
   IF EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE signer_id = v_signer.id) THEN
     RAISE EXCEPTION 'already_responded' USING ERRCODE = 'unique_violation';
@@ -897,10 +901,10 @@ BEGIN
      OR p_presented_scope_content_hash IS DISTINCT FROM v_request.scope_content_hash
      OR p_presented_evidence_manifest_hash IS DISTINCT FROM v_request.evidence_manifest_hash
      OR (SELECT status FROM public.project_scope_editions WHERE id = v_request.scope_edition_id) <> 'active' THEN
-    RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'PT409';
   END IF;
   IF p_presented_signer_policy_revision IS DISTINCT FROM v_request.signer_policy_revision THEN
-    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'PT409';
   END IF;
   IF EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE signer_id = v_signer.id) THEN
     RAISE EXCEPTION 'already_responded' USING ERRCODE = 'unique_violation';
@@ -976,7 +980,7 @@ BEGIN
      OR p_object_etag IS DISTINCT FROM v_intake.storage_object_etag
      OR NOT public._service_acceptance_paper_object_unchanged(v_intake.storage_object_id,
        v_intake.storage_object_version, v_intake.storage_object_etag) THEN
-    RAISE EXCEPTION 'paper_document_changed' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'paper_document_changed' USING ERRCODE = 'PT409';
   END IF;
   PERFORM set_config('app.service_acceptance_request_id', v_request_id::text, true);
   UPDATE public.service_acceptance_paper_intakes SET document_sha256 = p_document_sha256,
@@ -1037,7 +1041,7 @@ BEGIN
   IF p_expected_document_sha256 IS DISTINCT FROM v_intake.document_sha256
      OR (p_decision = 'confirmed' AND NOT public._service_acceptance_paper_object_unchanged(v_intake.storage_object_id,
        v_intake.storage_object_version, v_intake.storage_object_etag)) THEN
-    RAISE EXCEPTION 'paper_document_changed' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'paper_document_changed' USING ERRCODE = 'PT409';
   END IF;
   IF p_decision = 'confirmed' THEN
     SELECT * INTO STRICT v_signer FROM public.service_acceptance_signers WHERE id = v_intake.signer_id;
@@ -1048,10 +1052,10 @@ BEGIN
        OR v_intake.presented_scope_content_hash <> v_request.scope_content_hash
        OR v_intake.presented_evidence_manifest_hash <> v_request.evidence_manifest_hash
        OR (SELECT status FROM public.project_scope_editions WHERE id = v_request.scope_edition_id) <> 'active' THEN
-      RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'serialization_failure';
+      RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'PT409';
     END IF;
     IF v_intake.presented_signer_policy_revision <> v_request.signer_policy_revision THEN
-      RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'serialization_failure';
+      RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'PT409';
     END IF;
     IF EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE signer_id = v_signer.id) THEN
       RAISE EXCEPTION 'already_responded' USING ERRCODE = 'unique_violation';
@@ -1112,7 +1116,7 @@ BEGIN
     RAISE EXCEPTION 'request_not_open' USING ERRCODE = 'object_not_in_prerequisite_state';
   END IF;
   IF p_expected_signer_policy_revision IS DISTINCT FROM v_request.signer_policy_revision THEN
-    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'PT409';
   END IF;
   SELECT * INTO v_target FROM public.service_acceptance_signers WHERE id = p_signer_id AND request_id = p_request_id;
   IF v_target.id IS NULL OR v_target.status <> 'active' THEN
@@ -1279,7 +1283,7 @@ BEGIN
   END IF;
   SELECT * INTO doc FROM public.project_commercial_documents
   WHERE id=p_document_id AND project_id=doc.project_id AND proposal_id=proposal.id FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'scope_execution_document_moved' USING ERRCODE = 'serialization_failure'; END IF;
+  IF NOT FOUND THEN RAISE EXCEPTION 'scope_execution_document_moved' USING ERRCODE = 'PT409'; END IF;
   SELECT id INTO v_edition_id FROM public.project_scope_editions WHERE commercial_document_id = doc.id;
   IF FOUND THEN RETURN v_edition_id; END IF;
   v_edition_id := extensions.gen_random_uuid();
@@ -1298,7 +1302,7 @@ BEGIN
   IF NOT doc.is_origin AND (predecessor.id IS NULL OR predecessor.status NOT IN ('active','stale')
      OR (NOT p_reconciled AND (predecessor.status <> 'active'
         OR proposal.drafted_against_scope_edition_id IS DISTINCT FROM predecessor.id))) THEN
-    RAISE EXCEPTION 'scope_edition_stale' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'scope_edition_stale' USING ERRCODE = 'PT409';
   END IF;
   IF doc.is_origin AND EXISTS (SELECT 1 FROM public.project_scope_editions WHERE project_id = doc.project_id) THEN
     RAISE EXCEPTION 'scope_edition_origin_exists' USING ERRCODE = 'check_violation';

@@ -362,9 +362,9 @@ SELECT pg_temp.actor(7);
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x7')$q$,pg_temp.req('r1')),'42501',NULL,'non-signer cannot respond');
 SELECT pg_temp.actor(5);
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-hash',hash=>repeat('0',64))$q$,pg_temp.req('r1')),
-  '40001','stale_scope','respond refuses a stale scope hash');
+  'PT409','stale_scope','respond refuses a stale scope hash');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','x-rev',revision=>2)$q$,pg_temp.req('r1')),
-  '40001','stale_signer_policy','respond refuses a stale signer revision');
+  'PT409','stale_signer_policy','respond refuses a stale signer revision');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept_with_conditions','x-empty')$q$,pg_temp.req('r1')),
   '23514','service_acceptance_response_invalid','conditional response needs conditions');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'return','x-reason')$q$,pg_temp.req('r1')),
@@ -431,7 +431,7 @@ SELECT pg_temp.expect_error(format($q$SELECT public.replace_service_acceptance_s
   pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'23514','signer_policy_duplicate',
   'replacement refuses the optional card already signing');
 SELECT pg_temp.expect_error(format($q$SELECT public.replace_service_acceptance_signer(%L,%L,NULL,'f8866000-0000-4000-8000-000000000004',2,'stale','rp-stale')$q$,
-  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'40001','stale_signer_policy','replacement checks the revision');
+  pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner')),'PT409','stale_signer_policy','replacement checks the revision');
 INSERT INTO sa_results VALUES('rp1',public.replace_service_acceptance_signer(pg_temp.req('r1'),pg_temp.signer(pg_temp.req('r1'),'partner'),
   NULL,'f8866000-0000-4000-8000-000000000004',1,'Partner travelling; second card signs on paper','rp-1'));
 INSERT INTO sa_results VALUES('rp1-replay',public.replace_service_acceptance_signer(
@@ -470,7 +470,11 @@ SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_pa
 SELECT pg_temp.expect_error($q$SELECT pg_temp.stamp('p1')$q$,'55000','request_not_open','a lapsed intake is never stamped');
 SELECT pg_temp.actor(1);
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,%L,pg_temp.paper(2,1),'accept','p-stale',1)$q$,
-  pg_temp.req('r1'),pg_temp.v('rp1')->>'signerId'),'40001','stale_signer_policy','paper presented at the old revision refuses');
+  pg_temp.req('r1'),pg_temp.v('rp1')->>'signerId'),'PT409','stale_signer_policy','paper presented at the old revision refuses');
+SELECT pg_temp.expect_error(format($q$SELECT public.record_service_acceptance_paper_intake(r.id,%L,pg_temp.paper(20,1),current_date,
+  'Signed Name','accept','[]'::jsonb,NULL,r.request_number,repeat('0',64),r.evidence_manifest_hash,r.signer_policy_revision,'p-stale-scope')
+  FROM public.service_acceptance_requests r WHERE r.id=%L$q$,pg_temp.v('rp1')->>'signerId',pg_temp.req('r1')),
+  'PT409','stale_scope','paper presented against another scope refuses');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,%L,pg_temp.paper(3,1),'accept','p-old')$q$,
   pg_temp.req('r1'),(SELECT id FROM public.service_acceptance_signers WHERE replaced_by_signer_id=(pg_temp.v('rp1')->>'signerId')::uuid)),
   '55000','signer_not_active','paper for a replaced signer refuses');
@@ -513,11 +517,11 @@ SELECT pg_temp.expect_error(format($q$SELECT public.stamp_service_acceptance_pap
 SELECT pg_temp.expect_error(format($q$SELECT public.stamp_service_acceptance_paper_hash(%L,repeat('b',63),'v-5','"etag-5"')$q$,
   pg_temp.v('p2')->>'intakeId'),'23514','paper_document_hash_invalid','stamp refuses a short hash');
 SELECT pg_temp.expect_error(format($q$SELECT public.stamp_service_acceptance_paper_hash(%L,repeat('b',64),'v-other','"etag-5"')$q$,
-  pg_temp.v('p2')->>'intakeId'),'40001','paper_document_changed','stamp refuses bytes hashed from another object version');
+  pg_temp.v('p2')->>'intakeId'),'PT409','paper_document_changed','stamp refuses bytes hashed from another object version');
 SET LOCAL session_replication_role=replica;
 UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}','"moved"') WHERE id='f8869000-0000-4000-8000-000000000005';
 SET LOCAL session_replication_role=origin;
-SELECT pg_temp.expect_error($q$SELECT pg_temp.stamp('p2')$q$,'40001','paper_document_changed',
+SELECT pg_temp.expect_error($q$SELECT pg_temp.stamp('p2')$q$,'PT409','paper_document_changed',
   'stamp refuses an object whose eTag moved after the intake recorded it');
 SET LOCAL session_replication_role=replica;
 UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}',to_jsonb('"etag-5"'::text)) WHERE id='f8869000-0000-4000-8000-000000000005';
@@ -540,13 +544,13 @@ SET LOCAL session_replication_role=replica;
 UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}','"changed"') WHERE id='f8869000-0000-4000-8000-000000000005';
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirmed',%L,NULL,'rv-changed')$q$,
-  pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'40001','paper_document_changed',
+  pg_temp.v('p2')->>'intakeId',pg_temp.v('p2')->>'documentSha256'),'PT409','paper_document_changed',
   'paper bytes changed after hashing refuse confirmation');
 SET LOCAL session_replication_role=replica;
 UPDATE storage.objects SET metadata=jsonb_set(metadata,'{eTag}',to_jsonb('"etag-5"'::text)) WHERE id='f8869000-0000-4000-8000-000000000005';
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.expect_error(format($q$SELECT public.review_service_acceptance_paper_intake(%L,'confirmed',%L,NULL,'rv-expect')$q$,
-  pg_temp.v('p2')->>'intakeId',repeat('0',64)),'40001','paper_document_changed','review checks the expected document hash');
+  pg_temp.v('p2')->>'intakeId',repeat('0',64)),'PT409','paper_document_changed','review checks the expected document hash');
 INSERT INTO sa_results VALUES('rv2',public.review_service_acceptance_paper_intake((pg_temp.v('p2')->>'intakeId')::uuid,'confirmed',
   pg_temp.v('p2')->>'documentSha256',NULL,'rv-2'));
 INSERT INTO sa_results VALUES('rv2-replay',public.review_service_acceptance_paper_intake((pg_temp.v('p2')->>'intakeId')::uuid,'confirmed',

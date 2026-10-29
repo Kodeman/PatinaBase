@@ -167,7 +167,7 @@ Constraints:
 - The caller is the designer or a studio owner/admin, using the same identity rule as closing. The `close_project` designer-only rule (`00399:7353-7356`) is kept for closure itself.
 - It re-derives the obligations under the §2.5 protocol and refuses when:
   - any blocker remains;
-  - `p_obligation_hash` differs from the server's current snapshot (`serialization_failure`, `stale_obligations`). The hash proves the designer saw the current state. It is **not** the concurrency control; §2.5 is;
+  - `p_obligation_hash` differs from the server's current snapshot (`PT409`, `stale_obligations`). The hash proves the designer saw the current state. It is **not** the concurrency control; §2.5 is;
   - the request's edition is no longer active.
 - **Replay:** a replay with the same `client_request_id` returns the first effect. The key's receipt is read before step 1 and again after step 5 (§2.5): the same caller and body get the replayed receipt, another caller or body gets `idempotency_key_reused`, and only a different key gets `service_already_completed`.
 
@@ -222,7 +222,7 @@ So a new live studio line could be placed into an included package after the com
   3. `service_acceptance_requests`, FOR SHARE.
   4. `studio_service_completions`, FOR UPDATE (or the insert target).
   5. `pg_advisory_xact_lock(key)`, exclusive. It waits for every in-flight contributing writer to commit, and blocks new ones until completion commits.
-  6. **Then**, in a later statement, the key's receipt is read again (a same-key call that committed during the wait is replayed or refused, §2.4), then the derivation, the hash comparison and the insert. The RPC is VOLATILE and runs under READ COMMITTED, so step 6 reads a snapshot taken after step 5 was granted. If the transaction runs at REPEATABLE READ or above, the RPC refuses (`serialization_failure`), because its snapshot would predate the lock.
+  6. **Then**, in a later statement, the key's receipt is read again (a same-key call that committed during the wait is replayed or refused, §2.4), then the derivation, the hash comparison and the insert. The RPC is VOLATILE and runs under READ COMMITTED, so step 6 reads a snapshot taken after step 5 was granted. If the transaction runs at REPEATABLE READ or above, the RPC refuses (`invalid_transaction_state`, `service_completion_requires_read_committed`), because its snapshot would predate the lock.
 - `resolve_service_acceptance_condition` uses the same order, through step 5, on every call (Option A), before or after completion. Its step 3 is FOR NO KEY UPDATE. `revoke_studio_service_completion` takes steps 1-4, with the same FOR NO KEY UPDATE at step 3.
 
 | Step | Lock | Completion | Resolution | Revocation |

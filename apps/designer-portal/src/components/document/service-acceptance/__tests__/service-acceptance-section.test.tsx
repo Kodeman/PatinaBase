@@ -223,7 +223,7 @@ test('reject needs a note, and a server review refusal is explained as that vali
 
 test('paper is recorded with the binding typed from the paper, never the request on screen', async () => {
   mockRead.mockReturnValue(readOf([sentRequest()]));
-  mockRecord.mockRejectedValueOnce({ code: '40001', message: 'stale_scope' });
+  mockRecord.mockRejectedValueOnce({ code: 'PT409', message: 'stale_scope' });
   render(<ServiceAcceptanceSection projectId="job-1" />);
   fireEvent.click(screen.getByRole('button', { name: 'Record paper' }));
   const form = screen.getByRole('form', { name: 'Record paper for Client' });

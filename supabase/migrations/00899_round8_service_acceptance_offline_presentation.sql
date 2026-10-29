@@ -259,7 +259,7 @@ BEGIN
   IF p_scope_content_hash IS DISTINCT FROM v_request.scope_content_hash
      OR p_evidence_manifest_hash IS DISTINCT FROM v_request.evidence_manifest_hash
      OR (SELECT status FROM public.project_scope_editions WHERE id = v_request.scope_edition_id) <> 'active' THEN
-    RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'PT409';
   END IF;
   v_at := clock_timestamp();
   PERFORM set_config('app.service_acceptance_request_id', p_request_id::text, true);

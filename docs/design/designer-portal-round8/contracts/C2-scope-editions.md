@@ -216,7 +216,7 @@ C4 and C6 must derive exact-scope acceptance and completion from joins, not from
   5. the insert of the execution-order row (§2.8, SQ-1857 T4; on every execution, minting or not), then of the new edition and its packages.
 - **Stale amendment:**
   - Each addendum records the edition it was drafted against. This is the new column `proposals.drafted_against_scope_edition_id`, set by `create_service_addendum`.
-  - At execution, if that id differs from the active edition, execution is refused with `serialization_failure` / `scope_edition_stale`.
+  - At execution, if that id differs from the active edition, execution is refused with `PT409` / `scope_edition_stale`.
   - Today two addenda drafted in parallel would both execute, and the later one would silently supersede the earlier. Under C2 the studio re-bases instead.
   - This refusal applies only while the edition capability is active (§2.8). With the capability inactive, the money rail behaves exactly as it does today, but the edition is still invalidated (§2.8, F8).
 - **Acceptance race (C4):**

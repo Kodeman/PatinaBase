@@ -92,10 +92,10 @@ BEGIN
   IF p_scope_content_hash IS DISTINCT FROM v_request.scope_content_hash
      OR p_evidence_manifest_hash IS DISTINCT FROM v_request.evidence_manifest_hash
      OR (SELECT status FROM public.project_scope_editions WHERE id = v_request.scope_edition_id) <> 'active' THEN
-    RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'PT409';
   END IF;
   IF p_signer_policy_revision IS DISTINCT FROM v_request.signer_policy_revision THEN
-    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'PT409';
   END IF;
   -- 00896 delta: a person who answered any slot of this request answers no other.
   IF EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE signer_id = v_signer.id)
