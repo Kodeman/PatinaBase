@@ -232,7 +232,9 @@ export function householdOwnsGrant(
  * gets a seat".
  *
  * `designerClientId` comes back beside it, resolved the shipped way (the
- * client's auth uid on `projects.client_profile_id`), so opening a household
+ * client's profile id on `projects.client_id`, the id `designer_clients`
+ * holds; `projects.client_profile_id` names a `client_profiles` row, another
+ * id space — RC7-e2-1), so opening a household
  * can point that record at it where one exists. NULL there is a fact, not a
  * failure: the household stands on its own.
  *
@@ -302,21 +304,23 @@ export function useProjectHousehold(projectId: string | null | undefined) {
       const supabase = getSupabase() as any;
       const { data: project, error: projectError } = await supabase
         .from("projects")
-        .select("designer_id, client_profile_id")
+        .select("designer_id, client_id")
         .eq("id", projectId)
         .maybeSingle();
       if (projectError) throw projectError;
       const designerId = (project?.designer_id as string | null) ?? null;
-      const clientProfileId =
-        (project?.client_profile_id as string | null) ?? null;
+      const clientId = (project?.client_id as string | null) ?? null;
 
       let designerClientId: string | null = null;
-      if (designerId && clientProfileId) {
+      if (designerId && clientId) {
+        // Unique per (designer, client) only outside leads
+        // (idx_designer_clients_unique_profile).
         const { data: clientRow, error: clientError } = await supabase
           .from("designer_clients")
           .select("id")
           .eq("designer_id", designerId)
-          .eq("client_id", clientProfileId)
+          .eq("client_id", clientId)
+          .neq("status", "lead")
           .maybeSingle();
         if (clientError) throw clientError;
         designerClientId = (clientRow?.id as string | null) ?? null;

@@ -32,11 +32,16 @@ function builderFor(table: string): Any {
   const note: Recorded = { table, ins: [], orders: [] };
   recorded.push(note);
   const eqs: Array<{ column: string; value: unknown }> = [];
+  const neqs: Array<{ column: string; value: unknown }> = [];
   let single = false;
   const builder: Any = {
     select: () => builder,
     eq: (column: string, value: unknown) => {
       eqs.push({ column, value });
+      return builder;
+    },
+    neq: (column: string, value: unknown) => {
+      neqs.push({ column, value });
       return builder;
     },
     in: (column: string, values: unknown[]) => {
@@ -55,8 +60,10 @@ function builderFor(table: string): Any {
       return builder;
     },
     then: (resolve: Any, reject: Any) => {
-      let rows = (tables[table] ?? []).filter((row) =>
-        eqs.every((f) => row[f.column] === f.value),
+      let rows = (tables[table] ?? []).filter(
+        (row) =>
+          eqs.every((f) => row[f.column] === f.value) &&
+          neqs.every((f) => row[f.column] !== f.value),
       );
       for (const f of note.ins) {
         rows = rows.filter((row) => f.values.includes(row[f.column] as never));
@@ -96,7 +103,7 @@ beforeEach(() => {
   recorded.length = 0;
   for (const key of Object.keys(tables)) delete tables[key];
   tables.projects = [
-    { id: "proj-okonkwo", designer_id: "designer-1", client_profile_id: null },
+    { id: "proj-okonkwo", designer_id: "designer-1", client_id: null },
   ];
   tables.client_households = [
     {
@@ -263,5 +270,42 @@ describe("householdOwnsGrant (00632 §2b)", () => {
       ),
     ).toBe(false);
     expect(householdOwnsGrant(null, "household-okonkwo")).toBe(false);
+  });
+});
+
+describe("useProjectHousehold finds the client record by projects.client_id (RC7-e2-1)", () => {
+  it("resolves the household by the client record's pointer on a job with no client seats", async () => {
+    tables.projects = [
+      {
+        id: "proj-okonkwo",
+        designer_id: "designer-1",
+        client_id: "profile-chidi",
+        // A client_profiles row: another id space, never a designer_clients key.
+        client_profile_id: "client-profile-9",
+      },
+    ];
+    tables.designer_clients = [
+      {
+        id: "dc-lead",
+        designer_id: "designer-1",
+        client_id: "profile-chidi",
+        status: "lead",
+        household_id: null,
+      },
+      {
+        id: "dc-chidi",
+        designer_id: "designer-1",
+        client_id: "profile-chidi",
+        status: "active",
+        household_id: "household-okonkwo",
+      },
+    ];
+    tables.project_parties = [];
+
+    const result = await queryFnOf(useProjectHousehold("proj-okonkwo"))();
+
+    expect(result.designerClientId).toBe("dc-chidi");
+    expect(result.household?.id).toBe("household-okonkwo");
+    expect(result.household?.member_person_ids).toEqual(["card-chidi"]);
   });
 });
