@@ -1,3 +1,5 @@
+export { fetchAllRows } from './lib/fetch-all-rows';
+export { boundedIn } from './lib/bounded-in';
 export { calendarDaysPast } from './utils/calendar-days';
 export * from './query-keys';
 

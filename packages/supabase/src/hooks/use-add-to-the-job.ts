@@ -6,6 +6,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { fetchAllRows } from '../lib/fetch-all-rows';
 import { invalidateFfeCaches } from './use-procurement';
 
 const getSupabase = () => createBrowserClient();
@@ -190,15 +191,16 @@ export function useProjectFfeImportRows(batchId: string | null | undefined) {
     enabled: !!batchId,
     queryFn: async (): Promise<ProjectFfeImportRow[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (getSupabase() as any)
+      const data = await fetchAllRows<Record<string, unknown>>((from, to) => (getSupabase() as any)
         .from('project_ffe_import_rows')
         .select(
           'id,row_ordinal,raw_row,normalized_row,project_room_id,assignment_scope,validation_errors,committed_ffe_item_id',
         )
         .eq('batch_id', batchId)
-        .order('row_ordinal', { ascending: true });
-      if (error) throw error;
-      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+        .order('row_ordinal', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to));
+      return data.map((row) => ({
         id: String(row.id),
         rowOrdinal: Number(row.row_ordinal),
         raw: (row.raw_row ?? {}) as Record<string, unknown>,

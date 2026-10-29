@@ -9,6 +9,8 @@ import { getSessionUserId } from '../auth/session-user';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { fetchAllRows } from '../lib/fetch-all-rows';
+import { boundedIn } from '../lib/bounded-in';
 import { pricingApprovalKeys } from '../query-keys/pricing';
 import { invalidateProjectWorkflow } from './use-project-workflow';
 
@@ -490,7 +492,8 @@ export function useProcurementItems(filters?: ProcurementItemFilters) {
         `
         )
         .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
 
       if (filters?.projectId) query = query.eq('project_id', filters.projectId);
       if (filters?.vendorId) query = query.eq('vendor_id', filters.vendorId);
@@ -498,9 +501,7 @@ export function useProcurementItems(filters?: ProcurementItemFilters) {
         query = query.eq('purchase_order_id', filters.purchaseOrderId);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as ProcurementItemRow[];
+      return fetchAllRows<ProcurementItemRow>((from, to) => query.range(from, to));
     },
   });
 }
@@ -1568,12 +1569,6 @@ export interface UpdateDamageClaimInput {
   resolution_notes?: string;
 }
 
-export interface TodayProcurementCounts {
-  arrivingThisWeek: number;
-  inspectionsPending: number;
-  damageClaimsOpen: number;
-}
-
 // ─── HELPERS ───────────────────────────────────────────────────────────────
 
 /**
@@ -1614,13 +1609,17 @@ export function useFfePlacementReceipts(placementIds: string[]) {
     queryKey: ['ffe-placement-receipts', placementIds],
     queryFn: async (): Promise<Record<string, number>> => {
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('project_ffe_placement_receipts')
-        .select('placement_id, quantity')
-        .in('placement_id', placementIds);
-      if (error) throw error;
+      const data = await boundedIn<{ id: string; placement_id: string; quantity: number }>(
+        placementIds,
+        (chunk) => fetchAllRows<{ id: string; placement_id: string; quantity: number }>((from, to) => supabase
+          .from('project_ffe_placement_receipts')
+          .select('id, placement_id, quantity')
+          .in('placement_id', chunk)
+          .order('id', { ascending: true })
+          .range(from, to)).then(data => ({ data, error: null })),
+      );
       const received: Record<string, number> = {};
-      for (const row of (data ?? []) as Array<{ placement_id: string; quantity: number }>) {
+      for (const row of data) {
         received[row.placement_id] = (received[row.placement_id] ?? 0) + row.quantity;
       }
       return received;
@@ -1748,134 +1747,6 @@ export function useDeliveryCalendar(rangeStart: string, rangeEnd: string) {
       return (data ?? []) as DeliveryEvent[];
     },
     enabled: !!rangeStart && !!rangeEnd,
-  });
-}
-
-/**
- * Lightweight Today-tab counters: deliveries arriving in the next 7 days,
- * inspections logged in the last 7 days, and open damage claims (drafted
- * or vendor_notified). Sub-queries run independently — if any one fails,
- * the others still resolve and the failing rollup falls back to zero.
- *
- * Query key: `['today-procurement-counts']`. Stale time: 5 minutes.
- */
-export function useTodayProcurementCounts() {
-  return useQuery({
-    queryKey: ['today-procurement-counts'],
-    queryFn: async (): Promise<TodayProcurementCounts> => {
-      const supabase = getSupabase() as any;
-      const today = new Date().toISOString().slice(0, 10);
-      const sevenDaysAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
-
-      // Each sub-query is wrapped so a single failure never poisons the
-      // whole rollup. The Today tab degrades gracefully — a stale or
-      // missing count is preferable to an entirely broken tile.
-      const arrivingThisWeekP = (async (): Promise<number> => {
-        try {
-          const { count, error } = await supabase
-            .from('purchase_orders')
-            .select('id', { count: 'exact', head: true })
-            .gte('confirmed_eta', today)
-            .lte('confirmed_eta', sevenDaysAhead)
-            .not('status', 'in', '("cancelled","delivered")');
-          if (error) {
-            console.warn('useTodayProcurementCounts: arrivingThisWeek failed', error);
-            return 0;
-          }
-          return count ?? 0;
-        } catch (e) {
-          console.warn('useTodayProcurementCounts: arrivingThisWeek threw', e);
-          return 0;
-        }
-      })();
-
-      // `inspectionsPending` = POs in status 'delivered' WITHOUT a matching
-      // row in `receiving_inspections` (i.e., the work the designer still has
-      // to log). This mirrors the client-side filter used by the Receiving
-      // page's "Pending Inspection" tab — replicated here so the Today
-      // Dashboard tile and the Receiving tab agree.
-      //
-      // We compute the set difference client-side from two small queries:
-      //   1. delivered PO ids
-      //   2. distinct purchase_order_id from receiving_inspections (any age —
-      //      we don't want a single old inspection on a re-delivered PO to
-      //      flip back to "pending" when the next delivery arrives).
-      //
-      // The delivered-PO query is capped at DELIVERED_PO_LIMIT — designers
-      // with thousands of historical delivered POs would never see them all
-      // in a Today tile, and PostgREST `.limit()` keeps the response bounded.
-      const DELIVERED_PO_LIMIT = 500;
-      const inspectionsPendingP = (async (): Promise<number> => {
-        try {
-          const [deliveredRes, inspectedRes] = await Promise.all([
-            supabase
-              .from('purchase_orders')
-              .select('id')
-              .eq('status', 'delivered')
-              .limit(DELIVERED_PO_LIMIT),
-            supabase
-              .from('receiving_inspections')
-              .select('purchase_order_id'),
-          ]);
-          if (deliveredRes.error) {
-            console.warn(
-              'useTodayProcurementCounts: inspectionsPending delivered query failed',
-              deliveredRes.error,
-            );
-            return 0;
-          }
-          if (inspectedRes.error) {
-            console.warn(
-              'useTodayProcurementCounts: inspectionsPending inspections query failed',
-              inspectedRes.error,
-            );
-            return 0;
-          }
-          const inspectedIds = new Set(
-            ((inspectedRes.data ?? []) as Array<{ purchase_order_id: string }>).map(
-              (r) => r.purchase_order_id,
-            ),
-          );
-          const delivered = (deliveredRes.data ?? []) as Array<{ id: string }>;
-          let pending = 0;
-          for (const po of delivered) {
-            if (!inspectedIds.has(po.id)) pending++;
-          }
-          return pending;
-        } catch (e) {
-          console.warn('useTodayProcurementCounts: inspectionsPending threw', e);
-          return 0;
-        }
-      })();
-
-      const damageClaimsOpenP = (async (): Promise<number> => {
-        try {
-          const { count, error } = await supabase
-            .from('damage_claims')
-            .select('id', { count: 'exact', head: true })
-            .in('state', ['drafted', 'vendor_notified']);
-          if (error) {
-            console.warn('useTodayProcurementCounts: damageClaimsOpen failed', error);
-            return 0;
-          }
-          return count ?? 0;
-        } catch (e) {
-          console.warn('useTodayProcurementCounts: damageClaimsOpen threw', e);
-          return 0;
-        }
-      })();
-
-      const [arrivingThisWeek, inspectionsPending, damageClaimsOpen] = await Promise.all([
-        arrivingThisWeekP,
-        inspectionsPendingP,
-        damageClaimsOpenP,
-      ]);
-
-      return { arrivingThisWeek, inspectionsPending, damageClaimsOpen };
-    },
-    staleTime: 5 * 60 * 1000,
   });
 }
 
