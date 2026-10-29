@@ -403,9 +403,7 @@
               },
               "obligationHash": "9b5cec5090fa2822408156b14c55d75eec44f4c75839d946874539c2c89b310c",
               "scopeEditionId": "c2e09d5c-8ab6-46cd-be62-d1d51fe06000",
-              "openConditionIds": [
-                "4b4f55ed-9789-49d4-b32a-f59ace6be235"
-              ],
+              "openConditionIds": ["4b4f55ed-9789-49d4-b32a-f59ace6be235"],
               "conditionsClosedAt": null,
               "obligationSnapshot": {
                 "blockers": [],
@@ -1193,10 +1191,7 @@
           {
             "id": "2751c8e4-24c4-4226-80b2-e54e7c3b71ef",
             "kind": "client_furnishing",
-            "units": [
-              "chair",
-              "table"
-            ],
+            "units": ["chair", "table"],
             "status": "contracted",
             "reading": {
               "events": [
@@ -1249,10 +1244,7 @@
           {
             "id": "979ce4d8-6d55-4b4f-8b8a-11e6ad321c29",
             "kind": "gc_cabinetry",
-            "units": [
-              "k-1",
-              "k-2"
-            ],
+            "units": ["k-1", "k-2"],
             "status": "planned",
             "reading": {
               "events": [],
@@ -1946,9 +1938,7 @@
               },
               "obligationHash": "9b5cec5090fa2822408156b14c55d75eec44f4c75839d946874539c2c89b310c",
               "scopeEditionId": "c2e09d5c-8ab6-46cd-be62-d1d51fe06000",
-              "openConditionIds": [
-                "4b4f55ed-9789-49d4-b32a-f59ace6be235"
-              ],
+              "openConditionIds": ["4b4f55ed-9789-49d4-b32a-f59ace6be235"],
               "conditionsClosedAt": null,
               "obligationSnapshot": {
                 "blockers": [],
@@ -2736,10 +2726,7 @@
           {
             "id": "2751c8e4-24c4-4226-80b2-e54e7c3b71ef",
             "kind": "client_furnishing",
-            "units": [
-              "chair",
-              "table"
-            ],
+            "units": ["chair", "table"],
             "status": "contracted",
             "reading": {
               "events": [
@@ -2792,10 +2779,7 @@
           {
             "id": "979ce4d8-6d55-4b4f-8b8a-11e6ad321c29",
             "kind": "gc_cabinetry",
-            "units": [
-              "k-1",
-              "k-2"
-            ],
+            "units": ["k-1", "k-2"],
             "status": "planned",
             "reading": {
               "events": [],
@@ -3489,9 +3473,7 @@
               },
               "obligationHash": "9b5cec5090fa2822408156b14c55d75eec44f4c75839d946874539c2c89b310c",
               "scopeEditionId": "c2e09d5c-8ab6-46cd-be62-d1d51fe06000",
-              "openConditionIds": [
-                "4b4f55ed-9789-49d4-b32a-f59ace6be235"
-              ],
+              "openConditionIds": ["4b4f55ed-9789-49d4-b32a-f59ace6be235"],
               "conditionsClosedAt": null,
               "obligationSnapshot": {
                 "blockers": [],
@@ -4279,10 +4261,7 @@
           {
             "id": "2751c8e4-24c4-4226-80b2-e54e7c3b71ef",
             "kind": "client_furnishing",
-            "units": [
-              "chair",
-              "table"
-            ],
+            "units": ["chair", "table"],
             "status": "contracted",
             "reading": {
               "events": [
@@ -4335,10 +4314,7 @@
           {
             "id": "979ce4d8-6d55-4b4f-8b8a-11e6ad321c29",
             "kind": "gc_cabinetry",
-            "units": [
-              "k-1",
-              "k-2"
-            ],
+            "units": ["k-1", "k-2"],
             "status": "planned",
             "reading": {
               "events": [],
