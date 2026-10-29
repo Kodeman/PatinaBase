@@ -101,7 +101,11 @@ test.describe('RC-7 E4 GC cabinetry transitions', () => {
   test.beforeAll(() => {
     if (['54321', '54322'].includes(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port) ||
       ['54321', '54322'].includes(new URL(process.env.SUPABASE_DB_URL!).port)) throw new Error('E4 refuses the shared stack');
-    psqlRun(readFileSync(path.join(__dirname, 'rc7-e4-cabinetry-fixture.sql'), 'utf8'));
+    // The fixture also requires this stack's supabase_admin-provisioned rc7_owned.stack row.
+    const stack = process.env.RC7_E4_STACK ?? '';
+    if (!/^[a-z0-9-]+$/.test(stack)) throw new Error('E4 needs RC7_E4_STACK naming the owned stack');
+    psqlRun(`SELECT set_config('rc7.stack', '${stack}', false);\n`
+      + readFileSync(path.join(__dirname, 'rc7-e4-cabinetry-fixture.sql'), 'utf8'));
     seeded = true;
   });
   test.afterAll(() => {

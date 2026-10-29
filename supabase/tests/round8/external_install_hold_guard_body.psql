@@ -206,3 +206,26 @@ SELECT pg_temp.ih_hold(ARRAY['chair-2'],'ih-chair-hold','ih-chair-held');
 SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_install('ih-chair-held-install','ih-chair-held')$q$,'55000','fulfilment_hold_open',
  'client furnishing with an open hold is refused');
 SELECT pg_temp.ih_assert(pg_temp.ih_status('ih-chair-held')<>'installed','held client furnishing never reaches installed');
+
+-- 9. No fabrication contract, hold after the install report: verification is
+-- refused and writes nothing until the hold is released by its approved decision.
+SELECT public.create_external_fulfilment(pg_temp.ih_id(201),pg_temp.ih_id(301),'pkg.client','client_furnishing',ARRAY['chair-3'],NULL,NULL,'ih-chair-late');
+SELECT public.bind_fulfilment_evidence(pg_temp.ih_fid('ih-chair-late'),pg_temp.ih_id(602),ARRAY['chair-3'],'ih-chair-late-bind');
+SELECT pg_temp.ih_install('ih-chair-late-install','ih-chair-late');
+SELECT public.record_external_fulfilment_event(pg_temp.ih_fid('ih-chair-late'),'hold',
+ jsonb_build_object('decisionId',pg_temp.ih_id(602)),ARRAY['chair-3'],'ih-chair-late-hold');
+SELECT pg_temp.ih_actor(2);
+SELECT pg_temp.ih_error($q$SELECT public.verify_external_fulfilment_event(pg_temp.ih_event('ih-chair-late-install','ih-chair-late'),'ih-chair-late-verify-held')$q$,
+ '55000','fulfilment_hold_open','client furnishing verification refused while a later hold is open');
+SELECT pg_temp.ih_assert(NOT EXISTS(SELECT 1 FROM public.project_external_fulfilment_verifications WHERE fulfilment_id=pg_temp.ih_fid('ih-chair-late'))
+ AND (SELECT evidence_level='reported' FROM public.project_external_fulfilment_events WHERE id=pg_temp.ih_event('ih-chair-late-install','ih-chair-late'))
+ AND pg_temp.ih_status('ih-chair-late')<>'installed','refused verification leaves no receipt and the status unchanged');
+SELECT pg_temp.ih_actor(1);
+SELECT public._resolve_coordination_item_authorized(pg_temp.ih_id(602),NULL,NULL,pg_temp.ih_id(702),NULL,pg_temp.ih_id(1));
+SELECT public.record_external_fulfilment_event(pg_temp.ih_fid('ih-chair-late'),'release_hold',
+ jsonb_build_object('releasesEventId',pg_temp.ih_event('ih-chair-late-hold','ih-chair-late'),'decisionId',pg_temp.ih_id(602)),NULL,'ih-chair-late-release');
+SELECT pg_temp.ih_actor(2);
+SELECT pg_temp.ih_assert(public.verify_external_fulfilment_event(pg_temp.ih_event('ih-chair-late-install','ih-chair-late'),'ih-chair-late-verify')->>'status'='installed',
+ 'after the release, verification installs the client furnishing');
+SELECT pg_temp.ih_assert(pg_temp.ih_status('ih-chair-late')='installed','the client furnishing reads installed');
+SELECT pg_temp.ih_actor(1);

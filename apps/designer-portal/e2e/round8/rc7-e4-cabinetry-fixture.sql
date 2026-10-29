@@ -3,8 +3,18 @@
 -- The fixture activates the inactive C2/C3/C5 surfaces itself and records what it
 -- changed in schema rc7_e4_activation. That schema is the marker the spec's
 -- teardown requires before it reverts the activation and deletes anything.
+-- It runs only on a stack whose owner provisioned rc7_owned.stack as
+-- supabase_admin, naming the stack the spec was handed (rc7.stack); the
+-- shared stack never carries that marker.
 BEGIN;
-DO $$ BEGIN
+DO $$ DECLARE owned boolean; BEGIN
+ IF to_regclass('rc7_owned.stack') IS NULL
+   OR (SELECT c.relowner FROM pg_class c WHERE c.oid = to_regclass('rc7_owned.stack')) <> 'supabase_admin'::regrole THEN
+  RAISE EXCEPTION 'E4 refuses a stack without its supabase_admin ownership marker'; END IF;
+ EXECUTE 'SELECT EXISTS (SELECT 1 FROM rc7_owned.stack WHERE project_id = $1)' INTO owned
+   USING current_setting('rc7.stack', true);
+ IF owned IS NOT TRUE THEN
+  RAISE EXCEPTION 'E4 refuses: the ownership marker does not name this stack'; END IF;
  IF to_regnamespace('rc7_e4_activation') IS NOT NULL
    OR EXISTS (SELECT 1 FROM public.projects WHERE id::text LIKE 'e4070000-%') THEN
   RAISE EXCEPTION 'E4 fixture residue'; END IF;

@@ -19,6 +19,20 @@ Ratings are covered, weak or defect.
 
 ## Activation, exact SQL
 
+The fixture runs only on a stack its owner has marked. Before the spec runs, the stack owner provisions the marker as `supabase_admin`, and the spec is handed the same name in `RC7_E4_STACK` (after it refuses ports 54321/54322):
+
+```sql
+-- docker exec -e PGPASSWORD=postgres supabase_db_patina-rc7-fix psql -h 127.0.0.1 -U supabase_admin -d postgres
+CREATE SCHEMA rc7_owned;
+CREATE TABLE rc7_owned.stack(project_id text PRIMARY KEY);
+INSERT INTO rc7_owned.stack VALUES ('patina-rc7-fix');
+REVOKE ALL ON SCHEMA rc7_owned FROM PUBLIC;
+GRANT USAGE ON SCHEMA rc7_owned TO postgres;
+GRANT SELECT ON rc7_owned.stack TO postgres;
+```
+
+The fixture refuses unless `rc7_owned.stack` exists, is owned by `supabase_admin`, and holds the row the spec named. On the owned stack, a rolled-back run without the marker refused, a run naming another stack refused, and a run naming `patina-rc7-fix` proceeded. The marker is not E4 residue; it goes with the stack at teardown.
+
 The fixture activates in its own transaction and records what it changed:
 - creates schema `rc7_e4_activation` with table `prior(capability_enabled, granted regprocedure[])`;
 - grants EXECUTE to `authenticated` on each of these that `authenticated` could not already execute:
@@ -35,7 +49,7 @@ PENDING-PHASE-2.
 
 ## Defects / not verified
 
-**RC7-E4-1 — fixed by `00900_round8_external_install_hold_guard.sql`.** The defect: with K3/K4 held and K1/K2 instructed, a verified installation set the whole fulfilment `installed`, and `installed` is terminal, so the hold could never be released. 00900 refuses an `installed` event in `record_external_fulfilment_event` and in `verify_external_fulfilment_event` while any hold is unreleased, or while a unit of a fulfilment with a fabrication contract (`contracting_party_kind <> 'none'`) has no fabrication instruction. `_external_refresh_status` never derives `installed` in either case. The `RC7-E4-1` test, formerly `test.fixme`, now runs and passes; SQL coverage is `supabase/tests/round8/external_install_hold_guard_test.sql`.
+**RC7-E4-1 — fixed by `00900_round8_external_install_hold_guard.sql`.** The defect: with K3/K4 held and K1/K2 instructed, a verified installation set the whole fulfilment `installed`, and `installed` is terminal, so the hold could never be released. 00900 refuses an `installed` event in `record_external_fulfilment_event` and in `verify_external_fulfilment_event` while any hold is unreleased, or while a unit of a fulfilment with a fabrication contract (`contracting_party_kind <> 'none'`) has no fabrication instruction. `_external_refresh_status` never derives `installed` in either case. The `RC7-E4-1` test, formerly `test.fixme`, is enabled; execution pending; SQL coverage is `supabase/tests/round8/external_install_hold_guard_test.sql`.
 
 A16 sample, hardware/appliance interface and site verification are reported facts, not individually protected transitions. Maker verification identity of designer detail is not proven. A17 external estimate acceptance, procurement release and paid closeout remain unverified; zero payable is inferred from absent invoices, not a payable-total reader. A18 substitution recipient acknowledgement and price/time approval are not enacted; the release is the designer's approval of the bound submittal.
 
