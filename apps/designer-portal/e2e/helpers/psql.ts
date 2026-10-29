@@ -38,13 +38,14 @@ function localConnection(raw: string): string | null {
   return `postgresql://${auth}${url.hostname}:${url.port || '5432'}${url.pathname}`;
 }
 
-const CONNECTION = localConnection(DB_URL);
-if (!CONNECTION) {
+const checked = localConnection(DB_URL);
+if (!checked) {
   throw new Error(
     `REFUSING to run psql e2e helpers against a non-local Postgres URL: "${DB_URL}". ` +
       `This module only ever talks to the local Supabase stack.`,
   );
 }
+const CONNECTION: string = checked;
 
 // libpq reads these from the environment and they can redirect the connection.
 const PSQL_ENV = { ...process.env };
