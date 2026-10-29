@@ -102,6 +102,9 @@ test.describe("Desk — whole-desk error state", () => {
   test("20 consecutive desk loads each reach a complete state with zero half-states", async ({
     authenticatedPage: page,
   }) => {
+    // 20 loads on `next dev` take 44–84 s at ~2–5 s a load on main and on this
+    // branch alike (RC-3d), past the config's 60 s default.
+    test.setTimeout(180_000);
     const RUNS = 20;
     for (let i = 1; i <= RUNS; i++) {
       await page.goto("/desk", { waitUntil: "domcontentloaded" });
