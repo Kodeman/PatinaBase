@@ -3,16 +3,19 @@
 ## Header
 
 - Worktree `/Users/kody/Code/patina-r8-rc7-e2`, branch `r8-rc7-e2`. Counted runs c1/c2 tested tip `47d500f1e` (base `3cf79663c` + lane commits `56bbb23cf`, `7ca21c5dc`, `28f3bf3e9`, `47d500f1e`); their stack receipts record head `47d500f1e`.
-- Review fixes (Opus cross-provider review, fix-then-accept) land after `037952e6b`. Their counted runs r1/r2 are under Commands → Review-fix runs; until those pass, every row's Runs column shows only c1/c2, which predate the fixes.
+- Review fixes (Opus cross-provider review, fix-then-accept) land after `037952e6b`: `5912de176`, `9b7be17fe`, then `86c8f482a` (DEFECT RC7-e2-2 repro). The review-fix counted runs r2 and r3 tested tip `86c8f482a`; their receipts record that head. Development runs r1 (at `9b7be17fe`) and r1b (at `86c8f482a`) failed and are recorded under Commands.
 - Owned stack: `project_id` `patina-rc7-e2`; API 57121, DB 57122, shadow 57120, pooler 57129, inspector 57183. Designer portal 3110, client portal 3112. `edge-runtime` kept; `EMAIL_DEV_MODE=dry_run`.
 - Counted-run stacks: one fresh stack per run, started and stopped by the runner (receipts under Commands).
-- Migration head applied: numbered head `00899` (`00899_round8_service_acceptance_offline_presentation`). The ledger also holds `20260910152111_create_contact_messages`, and `max(version)` sorts as text, so the c1/c2 receipts' `ledgerMax 20260910152111` is not the head. From the review-fix runs on, `rc7-e2-run.mjs` writes `numberedHead` (`SELECT max(version) FROM supabase_migrations.schema_migrations WHERE version ~ '^[0-9]{5}$'`) and `migration00899` (`SELECT version || ' ' || name … WHERE version = '00899'`) into the receipt.
+- Migration head applied: numbered head `00899` (`00899_round8_service_acceptance_offline_presentation`). Proven by query in every review-fix receipt: `numberedHead: "00899"`, `migration00899: "00899 round8_service_acceptance_offline_presentation"`. The ledger also holds `20260910152111_create_contact_messages`, and `max(version)` sorts as text, so the c1/c2 receipts' `ledgerMax 20260910152111` is not the head. From the review-fix runs on, `rc7-e2-run.mjs` writes `numberedHead` (`SELECT max(version) FROM supabase_migrations.schema_migrations WHERE version ~ '^[0-9]{5}$'`) and `migration00899` (`SELECT version || ' ' || name … WHERE version = '00899'`) into the receipt.
 - `cron.launch_active_jobs = off` on the owned DB (receipt `cronLaunchActiveJobs: off`). No step needed a scheduled job.
 - Date: 2026-10-29.
 
 ## Files
 
-- `apps/designer-portal/e2e/round8/rc7-e2-consumer-journey.journey.ts`: three legs with 7 tests, a file-level `test.afterAll` cleanup, and one repro (`@rc7-e2-defect`, outside the counted legs) for DEFECT RC7-e2-1. The repro is `test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '1', …)`: fixme unless `rc7-e2-run.mjs --defect-probe` lifts it.
+- `apps/designer-portal/e2e/round8/rc7-e2-consumer-journey.journey.ts`: three legs with 7 tests, a file-level `test.afterAll` cleanup, and two repros outside the counted legs:
+  - `@rc7-e2-defect-1` (DEFECT RC7-e2-1);
+  - `@rc7-e2-defect-2` (DEFECT RC7-e2-2).
+  - Each is `test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '<n>', …)`: fixme unless `rc7-e2-run.mjs --defect-probe <n>` lifts it.
 - `apps/designer-portal/e2e/round8/rc7-e2-consumer-journey.spec.ts`: lane entry for `playwright.round8.config.ts` (projects `chromium`, `webkit-iphone`). It registers the journey only when `RC7_E2_ROUND8=1`. `--list` shows 14 tests with the flag and 0 without.
 - `apps/designer-portal/e2e/round8/rc7-e2-fixture.sql`:
   - `\ir consumer-journey-fixture.sql` (job A for the RC-2 household)
@@ -30,7 +33,9 @@
 - `apps/designer-portal/e2e/round8/rc7-e2-run.mjs` and `rc7-e2-run.unit.mjs` (lane-local runner, new in the review fixes):
   - Derived from the RC-2 runner. It runs only the rc7-e2 legs: no RC-2 legs, and no refusal-check mode.
   - One round-8 invocation per run (`--project chromium --project webkit-iphone --workers=1`), expecting 14 passed.
-  - `--defect-probe` runs only `@rc7-e2-defect` on chromium with `RC7_E2_DEFECT_PROBE=1`. It passes only on exit 1 with exactly `1 failed`, and only when the log carries the defect-step text `No other household member is on file for this job.`
+  - `--defect-probe <1|2>` runs only `@rc7-e2-defect-<n>` on chromium with `RC7_E2_DEFECT_PROBE=<n>`. It passes only on exit 1 with exactly `1 failed`, and only when the log carries that defect's step text:
+    - 1: `No other household member is on file for this job.`
+    - 2: `The upstream server is timing out`
   - It copies every `[RC7 e2 review-and-send]` tap line into the run log.
   - Disk floor of 20 GiB.
   - Awaited client-portal stop: SIGTERM, then SIGKILL; the run fails on any process or port residue. The run also fails if 3110 is still listening afterwards.
@@ -48,49 +53,59 @@ Before = the R3b rating (`evidence/rc/rc6-reviews/r3b-evidence-full.md` rows A20
 - psql as `postgres` only applies fixtures, reads back, records the GC's cabinetry delivery on job F (an act outside the studio's), and runs the cleanup.
 - Every transition is followed by a DB readback.
 
-Runs: c1 = counted run 1, c2 = counted run 2, both at `47d500f1e`, before the review fixes. Each is `14 passed`, 7 on `chromium` and 7 on `webkit-iphone`, with runner exit 0. r1 and r2 are the review-fix runs (`rc7-e2-run.mjs`), still pending.
+Runs:
+- c1 and c2: the counted runs at `47d500f1e`, before the review fixes.
+- r2 and r3: the review-fix counted runs at `86c8f482a` (`rc7-e2-run.mjs`).
+- Each of the four is `14 passed`, 7 on `chromium` and 7 on `webkit-iphone`, with runner exit 0.
+- The failed development runs r1 and r1b are under Commands.
 
-A clause marked **covered (re-run pending)** has a negative branch that the review fixes added. It counts as covered only once r1 and r2 pass. Lines below are in the review-fix tree.
+Lines below are at `86c8f482a`.
 
 | ID / clause | Before | Now | Spec | Asserted | Readback | Runs |
 |---|---|---|---|---|---|---|
-| A20 agreed scope edition + required signer policy | weak | covered | R1 :594, R2 :627, R3 :700, paper :786 | client sees `What you’re accepting` for the active edition; evidence buttons disabled until loaded; issued PDF bytes fetched from the popup's signed URL equal `plan_prints.sha256` | `service_acceptance_requests` edition / `scope_content_hash` / `evidence_manifest_hash` / `signer_policy_revision`; `service_acceptance_evidence_snapshots` members | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A20 one required accepted, another pending = incomplete | weak | covered | R2 :627, R3 :700 | partner accepts in their own context; the card still reads waiting | request `sent / pending`, one `service_acceptance_responses` row | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A20 rejection requires new evidence | weak | **weak** | R1 :594 → R2 :627 | Client returns with a reason. The returned request stays `closed/returned`, and request 2 freezes its own snapshot.<br>Request 2 binds a different manifest (`rc2-sa-2`) only because the journey chose it. The product does not require it: `create_service_acceptance_request` (00889:446, 00891:47) has no check against a returned request's manifest. A draft on the returned `rc2-sa-1` would be accepted, so no refusal branch exists to assert (RC7-E2-OBS-2). | R1 `closed/returned`, response `return` with reason; R2 `evidenceHash ≠` R1's; R2 frozen members = revised drawing set only | c1 ✓✓, c2 ✓✓ (positive path only) |
-| A20 signer replacement requires new evidence | weak | defect | R3 :700; repro :1209 | The card's Replace form cannot offer the household (DEFECT RC7-e2-1), so the designer's own session calls `replace_service_acceptance_signer`. The card shows `was replaced` and the new signer `Waiting`.<br>The old signer gets no form. Their REST respond is refused with exactly `{status 500, code 55000, message signer_not_active}` (:761; RC7-E2-OBS-3).<br>The replacement gets their own V22 notice and accepts with a condition. | signer row `replaced`, with reason, `replaced_by` = designer, revision 2; successor card active and required; request revision 2; R3 `closed/accepted_with_conditions` with 2 responses | c1 ✓✓, c2 ✓✓ (RPC path); UI path: repro fails at the defect step |
-| A20 superseded scope requires new evidence | weak | covered (re-run pending) | R2 :627, R3 :700 | While R2 is pending, the real actors execute an amendment over HTTP.<br>Designer: `create_service_addendum`, `copy_agreement_parts_from_authority`, `upsert_agreement_parts`, `send_commercial_document`. Client: `sign_design_services_agreement`. Designer: `countersign_design_services_agreement`.<br>The card reads `Replaced` / `the agreed scope changed`. The client's respond is refused with exactly `{500, 55000, request_not_open}` (:668). The old evidence stays readable, with no answer offered.<br>**New:** the designer's `create_service_acceptance_request` on the superseded edition is refused with exactly `{500, 55000, scope_edition_not_active}`, and the request count is unchanged (:696).<br>R3 binds edition 2. Its manifest hash equals R2's (same `rc2-sa-2`, asserted at :711). What is new is the scope edition and request 3's own send-time freeze. | R2 `superseded`, `scope_edition_superseded`; edition 1 `superseded`, edition 2 active; frozen snapshot unchanged; refused draft writes no request; R3 edition = edition 2, `scopeHash ≠` R2's | c1 ✓✓, c2 ✓✓ (without the refused draft); r1/r2 pending |
-| A20 designer request follows V22 | weak | covered (re-run pending) | `sendNotices` :405 (R1–R3, F, D) | `Review and send` sheet; each notice checked by recipient; `Send the N checked`; the row reads `Sent` or leaves the sheet.<br>**New:** the tap count goes in a `review-and-send-taps` annotation and a `taps=N` log line. A send that needed the one allowed retap fails the test (`expect.soft(taps).toBe(1)`, :430; RC7-E2-OBS-1).<br>**New:** exact notice counts per request. After a send, `sent` = sent before + the N checked, and the total rows are unchanged, so a duplicate send or a duplicate draft fails. | `outbound_drafts.status sent`, `delivery_message_id ~ ^dryrun_\d+$`; request `sent`; per-request `{sent, total}` | c1 ✓✓, c2 ✓✓ (0 retaps); r1/r2 pending |
-| A20 authenticated client-portal response | weak | covered | R1–R3, F :1002, D :1093 | each signer answers in their own browser context on 3112, with the project's device (Desktop Chrome / iPhone 14) | `responses.method portal_authenticated`, `responder` = signer profile | c1 ✓✓, c2 ✓✓; r1/r2 pending |
+| A20 agreed scope edition + required signer policy | weak | covered | R1 :620, R2 :653, R3 :726, paper :812 | client sees `What you’re accepting` for the active edition; evidence buttons disabled until loaded; issued PDF bytes fetched from the popup's signed URL equal `plan_prints.sha256` | `service_acceptance_requests` edition / `scope_content_hash` / `evidence_manifest_hash` / `signer_policy_revision`; `service_acceptance_evidence_snapshots` members | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A20 one required accepted, another pending = incomplete | weak | covered | R2 :653, R3 :726 | partner accepts in their own context; the card still reads waiting | request `sent / pending`, one `service_acceptance_responses` row | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A20 rejection requires new evidence | weak | **weak** | R1 :620 → R2 :653 | Client returns with a reason. The returned request stays `closed/returned`, and request 2 freezes its own snapshot.<br>Request 2 binds a different manifest (`rc2-sa-2`) only because the journey chose it. The product does not require it: `create_service_acceptance_request` (00889:446, 00891:47) has no check against a returned request's manifest. A draft on the returned `rc2-sa-1` would be accepted, so no refusal branch exists to assert (RC7-E2-OBS-2). | R1 `closed/returned`, response `return` with reason; R2 `evidenceHash ≠` R1's; R2 frozen members = revised drawing set only | c1 ✓✓, c2 ✓✓, r2 ✓✓, r3 ✓✓ (positive path only) |
+| A20 signer replacement requires new evidence | weak | defect | R3 :726; repro :1218 | The card's Replace form cannot offer the household (DEFECT RC7-e2-1), so the designer's own session calls `replace_service_acceptance_signer`. The card shows `was replaced` and the new signer `Waiting`.<br>The old signer gets no form. Their REST respond is refused with exactly `{status 500, code 55000, message signer_not_active}` (:787; RC7-E2-OBS-3).<br>The replacement gets their own V22 notice and accepts with a condition. | signer row `replaced`, with reason, `replaced_by` = designer, revision 2; successor card active and required; request revision 2; R3 `closed/accepted_with_conditions` with 2 responses | c1 ✓✓, c2 ✓✓ (RPC path); UI path: `--defect-probe 1` failed at the defect step :1232 (`86c8f482a`) |
+| A20 superseded scope requires new evidence | weak | covered | R2 :653, R3 :726 | While R2 is pending, the real actors execute an amendment over HTTP.<br>Designer: `create_service_addendum`, `copy_agreement_parts_from_authority`, `upsert_agreement_parts`, `send_commercial_document`. Client: `sign_design_services_agreement`. Designer: `countersign_design_services_agreement`.<br>The card reads `Replaced` / `the agreed scope changed`. The client's respond is refused with exactly `{500, 55000, request_not_open}` (:694). The old evidence stays readable, with no answer offered.<br>**New:** the designer's `create_service_acceptance_request` on the superseded edition is refused with exactly `{500, 55000, scope_edition_not_active}`, and the request count is unchanged (:722).<br>R3 binds edition 2. Its manifest hash equals R2's (same `rc2-sa-2`, asserted at :737). What is new is the scope edition and request 3's own send-time freeze. | R2 `superseded`, `scope_edition_superseded`; edition 1 `superseded`, edition 2 active; frozen snapshot unchanged; refused draft writes no request; R3 edition = edition 2, `scopeHash ≠` R2's | c1 ✓✓, c2 ✓✓ (without the refused draft); r2 ✓✓, r3 ✓✓ |
+| A20 designer request follows V22 | weak | covered | `sendNotices` :431 (R1–R3, F, D) | `Review and send` sheet; each notice checked by recipient; `Send the N checked`; the row reads `Sent` or leaves the sheet.<br>**New:** the tap count goes in a `review-and-send-taps` annotation and a `taps=N` log line. A send that needed the one allowed retap fails the test (`expect.soft(taps).toBe(1)`, :456; RC7-E2-OBS-1). It did so once, in development run r1b (WebKit, R1).<br>**New:** exact notice counts per request. After a send, `sent` = sent before + the N checked, and the total rows are unchanged, so a duplicate send or a duplicate draft fails. | `outbound_drafts.status sent`, `delivery_message_id ~ ^dryrun_\d+$`; request `sent`; per-request `{sent, total}` | c1 ✓✓, c2 ✓✓ (0 retaps); r2 ✓✓, r3 ✓✓ (`taps=1` on all 12 sends in each); r1b ✘ on WebKit (`taps=2`) |
+| A20 authenticated client-portal response | weak | covered | R1–R3, F :1011, D :1102 | each signer answers in their own browser context on 3112, with the project's device (Desktop Chrome / iPhone 14) | `responses.method portal_authenticated`, `responder` = signer profile | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
 | A20 iOS response | weak | weak | — | not run (no simulator or device in this lane; `webkit-iphone` is a browser emulation, not the iOS app) | — | — |
-| A20 permitted paper intake → same scoped truth | weak | covered (re-run pending) | paper :786 | All-paper household: the notices are address-less holds (00891). The studio marks the request presented on paper (00899). Paper is uploaded per slot (`Record paper for <Slot>`), stamped, and confirmed by a second admin. The client sees `Reviewed paper response` and has no answer of their own.<br>**New (:821–:835):** the designer's `record_service_acceptance_paper_intake` with a mismatched scope code, then with a mismatched evidence code, is refused each time with code `40001` and message `stale_scope`. 0 intakes are written.<br>**New (:870–:888):** the recorder (the designer; their `organization_members` role on the recorded studio reads `owner`/`admin`) calls `review_service_acceptance_paper_intake` `confirmed` on their own stamped intake. It is refused with code `42501` and message `insufficient_privilege`. The intake stays `pending_review` with no reviewer, and there are 0 responses. | request `sent` via offline presentation, 0 sent drafts; intakes `pending_review` → `confirmed` with stored sha, `reviewed_by` = the second admin; responses `paper_intake`, `responder NULL`, same edition / scope / evidence hashes; `closed/accepted` | c1 ✓✓, c2 ✓✓ (without the refusals); r1/r2 pending |
-| A21 full-service obligations | weak | covered | job F :1002 | blockers `studio_line_open`, `studio_installation_open`, `agreed_phase_open` shown; excluded `Cabinetry` is informational; Complete is disabled. After `record_project_ffe_installed` and `advance_project_phase` (designer session), Complete is enabled, then completed | `_derive_studio_service_obligations()` before and after; `studio_service_completions` `completed` | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A21 design-only obligations | weak | covered | job D :1093 | phases, then acceptance only; complete; care `pkg.design` | blockers `acceptance_not_accepted:-` → none; completion `completed` | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A21 client-buy obligations | weak | covered | job A :924 | the client-bought `pkg.living` line and the external fulfilment are informational (`Outside work still in progress`) | info `external_fulfilment_open:pkg.living` | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A21 service / financial closeout / closure distinct | weak | covered | job F :1002 (:1039–:1090); service ≠ closure also job A :965/:977, job D :1152 | Only job F asserts the financial line. `[data-financial-hold]` reads `holds project closure, not service completion` while Complete is enabled (:1039), and completing the service leaves closure unchanged (:1047). Job F, step by step:<br>1. `close_project` → 400 `1 FF&E item(s) are not installed` (cabinetry run).<br>2. GC delivery recorded (fixture; see GC delivery below), then `record_project_ffe_installed` (designer); 0 lines not installed.<br>3. `close_project` → 400 `contract total is not fully collected`.<br>4. Separate step: `compose_project_invoice`, `issue_invoice`, `record_invoice_payment` (cheque).<br>5. `close_project` → 200.<br>Jobs A and D assert only that completing the service leaves closure unchanged (A), and that closing leaves the completion unchanged (D). They show no financial line. | `projects.status`, `closure_checklist` and `portfolio_snapshot` identical through completion and both refusals. `_service_completion_financial_hold()` `{0, 0, 500000}` → issued `{1, 500000, …}` → paid `{0, 0, 0}`. F ends `completed`; the completion row is unchanged throughout | c1 ✓✓, c2 ✓✓; r1/r2 pending |
+| A20 permitted paper intake → same scoped truth | weak | covered | paper :812 | All-paper household: the notices are address-less holds (00891). The studio marks the request presented on paper (00899). Paper is uploaded per slot (`Record paper for <Slot>`), stamped, and confirmed by a second admin. The client sees `Reviewed paper response` and has no answer of their own.<br>**New (:879–:895):** the recorder (the designer; their `organization_members` role on the recorded studio reads `owner`/`admin`) calls `review_service_acceptance_paper_intake` `confirmed` on their own stamped intake. It is refused with HTTP 403, code `42501`, message `insufficient_privilege` (r2, r3). The intake stays `pending_review` with no reviewer, and there are 0 responses. | request `sent` via offline presentation, 0 sent drafts; intakes `pending_review` → `confirmed` with stored sha, `reviewed_by` = the second admin; responses `paper_intake`, `responder NULL`, same edition / scope / evidence hashes; `closed/accepted` | c1 ✓✓, c2 ✓✓ (without the self-review refusal); r2 ✓✓, r3 ✓✓ |
+| A20 paper with a mismatched scope / evidence code refused | weak | defect | repro :1250 (`@rc7-e2-defect-2`) | The database refuses the designer's `record_service_acceptance_paper_intake` with a mismatched scope code at once: `ERROR: stale_scope`, 37 ms, as `authenticated` in a rolled-back transaction.<br>The same call through the API gets HTTP 504 `The upstream server is timing out` after 60 004 ms, and 1 backend is still running the call after the 504 (DEFECT RC7-e2-2). | 0 intakes written | r1 ✘✘ (in the paper journey at `9b7be17fe`; moved out); `--defect-probe 2` failed at the defect step :1286 |
+| A21 full-service obligations | weak | covered | job F :1011 | blockers `studio_line_open`, `studio_installation_open`, `agreed_phase_open` shown; excluded `Cabinetry` is informational; Complete is disabled. After `record_project_ffe_installed` and `advance_project_phase` (designer session), Complete is enabled, then completed | `_derive_studio_service_obligations()` before and after; `studio_service_completions` `completed` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A21 design-only obligations | weak | covered | job D :1102 | phases, then acceptance only; complete; care `pkg.design` | blockers `acceptance_not_accepted:-` → none; completion `completed` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A21 client-buy obligations | weak | covered | job A :933 | the client-bought `pkg.living` line and the external fulfilment are informational (`Outside work still in progress`) | info `external_fulfilment_open:pkg.living` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A21 service / financial closeout / closure distinct | weak | covered | job F :1011 (:1048–:1099); service ≠ closure also job A :974/:986, job D :1161 | Only job F asserts the financial line. `[data-financial-hold]` reads `holds project closure, not service completion` while Complete is enabled (:1048), and completing the service leaves closure unchanged (:1056). Job F, step by step:<br>1. `close_project` → 400 `1 FF&E item(s) are not installed` (cabinetry run).<br>2. GC delivery recorded (fixture; see GC delivery below), then `record_project_ffe_installed` (designer); 0 lines not installed.<br>3. `close_project` → 400 `contract total is not fully collected`.<br>4. Separate step: `compose_project_invoice`, `issue_invoice`, `record_invoice_payment` (cheque).<br>5. `close_project` → 200.<br>Jobs A and D assert only that completing the service leaves closure unchanged (A), and that closing leaves the completion unchanged (D). They show no financial line. | `projects.status`, `closure_checklist` and `portfolio_snapshot` identical through completion and both refusals. `_service_completion_financial_hold()` `{0, 0, 500000}` → issued `{1, 500000, …}` → paid `{0, 0, 0}`. F ends `completed`; the completion row is unchanged throughout | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
 | A21 GC trade acceptance distinct | weak | weak | — | not run (no trade-scope fixture in the composed jobs) | — | — |
-| A21 close_project semantics preserved | weak | covered (re-run pending) | job F :1002, job D :1093 | F: refused on the uninstalled cabinetry line, then on the uncollected fee, then closes.<br>**New (:1133–:1142):** D's `close_project` with the walkthrough unticked is refused with exactly `{400, 23514, project closeout checklist must include every required item as completed}`.<br>D then closes with a portfolio snapshot. | Each refusal leaves closure state unchanged. The incomplete-checklist refusal also leaves the completion unchanged.<br>D: `status completed`, `closure_checklist` = the six required items completed, `portfolio_snapshot` = the snapshot sent (`[RC7 e2 D closed]`). | c1 ✓✓, c2 ✓✓ (without the checklist refusal); r1/r2 pending |
-| A21 close freezes the closeout | weak | covered | job D :1093 (:1155–:1175) | after close: the designer's REST PATCH of `closure_checklist` → 400 `project closeout evidence may only change through close_project`; the client's `create_client_scope_change_request` → 400 `create_client_scope_change_request: completed_project` | closure state and ledger (invoices, requests, scope changes, completions) unchanged | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A22 delivery / opening / reading evidence record nothing | weak | covered | R1 :594 | checked after send, after the client opens the request, and after reading the evidence and opening its file | 0 responses at each step; request `sent/pending` | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A22 silence / walkthrough record nothing | weak | covered | job D :1093 | Design and Final walkthrough phases completed (designer session); the client is silent | 0 responses; `sent/pending`; blocker `acceptance_not_accepted:-`; Complete disabled | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A22 conditional + unresolved included obligation visibly held | weak | covered | job A :924 | `[data-blocker="agreed_phase_open"]` on `Living room`, the open condition text shown, Complete disabled; after phases → `completed_with_conditions`; condition resolved → `completed` | blockers `agreed_phase_open:pkg.living` → none; completion `completed_with_conditions` → `completed`, `revoked null` | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A22 informational external punch item not a blocker | weak | covered | job A :924 | `upsert_install_punch_item` (designer session) → `Open install punch items` is informational; Complete is enabled while it is open | info `punch_item_open:-`, blockers `[]` | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A23 care retains the accepted edition + responsible party | weak | covered | job A :924, F :1002, D :1093 | `scope edition N, in force from`, `accepted on request N`; `{label}: bought by …, installed by …`; the excluded package is absent | edition id = the accepted request's edition | c1 ✓✓, c2 ✓✓; r1/r2 pending |
+| A21 close_project semantics preserved | weak | covered | job F :1011, job D :1102 | F: refused on the uninstalled cabinetry line, then on the uncollected fee, then closes.<br>**New (:1142–:1151):** D's `close_project` with the walkthrough unticked is refused with exactly `{400, 23514, project closeout checklist must include every required item as completed}`.<br>D then closes with a portfolio snapshot. | Each refusal leaves closure state unchanged. The incomplete-checklist refusal also leaves the completion unchanged.<br>D: `status completed`, `closure_checklist` = the six required items completed, `portfolio_snapshot` = the snapshot sent (`[RC7 e2 D closed]`). | c1 ✓✓, c2 ✓✓ (without the checklist refusal); r2 ✓✓, r3 ✓✓ |
+| A21 close freezes the closeout | weak | covered | job D :1102 (:1164–:1184) | after close: the designer's REST PATCH of `closure_checklist` → 400 `project closeout evidence may only change through close_project`; the client's `create_client_scope_change_request` → 400 `create_client_scope_change_request: completed_project` | closure state and ledger (invoices, requests, scope changes, completions) unchanged | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A22 delivery / opening / reading evidence record nothing | weak | covered | R1 :620 | checked after send, after the client opens the request, and after reading the evidence and opening its file | 0 responses at each step; request `sent/pending` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A22 silence / walkthrough record nothing | weak | covered | job D :1102 | Design and Final walkthrough phases completed (designer session); the client is silent | 0 responses; `sent/pending`; blocker `acceptance_not_accepted:-`; Complete disabled | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A22 conditional + unresolved included obligation visibly held | weak | covered | job A :933 | `[data-blocker="agreed_phase_open"]` on `Living room`, the open condition text shown, Complete disabled; after phases → `completed_with_conditions`; condition resolved → `completed` | blockers `agreed_phase_open:pkg.living` → none; completion `completed_with_conditions` → `completed`, `revoked null` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A22 informational external punch item not a blocker | weak | covered | job A :933 | `upsert_install_punch_item` (designer session) → `Open install punch items` is informational; Complete is enabled while it is open | info `punch_item_open:-`, blockers `[]` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A23 care retains the accepted edition + responsible party | weak | covered | job A :933, F :1011, D :1102 | `scope edition N, in force from`, `accepted on request N`; `{label}: bought by …, installed by …`; the excluded package is absent | edition id = the accepted request's edition | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
 | A23 purchase / warranty records on care | weak | weak | — | not run (no purchase or warranty records on the composed jobs) | — | — |
-| A23 deep reference returns to closeout | weak | covered | job A :924 | `?unfold=pieces` on `/doc/<id>`; focus lands inside the unfold; on close the opener is focused | — (UI focus) | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A23 later care question does not reopen or bill | weak | covered | job D :1093 | the client posts on the project thread (REST, own JWT) after close; the client sees `The studio’s service is complete` and `Care questions are still welcome.` | `comms_messages` +1 from the client; invoices, requests, scope changes and completions unchanged; project `completed` | c1 ✓✓, c2 ✓✓; r1/r2 pending |
-| A23 controlled post-close edition behavior | weak | weak | job D :1093 | after close the active edition is still the accepted one and care reads it; a client scope change is refused. No studio post-close edit (amendment) is exercised, so the clause is only partly run | edition id = request edition | c1 ✓✓, c2 ✓✓ (partial) |
+| A23 deep reference returns to closeout | weak | covered | job A :933 | `?unfold=pieces` on `/doc/<id>`; focus lands inside the unfold; on close the opener is focused | — (UI focus) | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A23 later care question does not reopen or bill | weak | covered | job D :1102 | the client posts on the project thread (REST, own JWT) after close; the client sees `The studio’s service is complete` and `Care questions are still welcome.` | `comms_messages` +1 from the client; invoices, requests, scope changes and completions unchanged; project `completed` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
+| A23 controlled post-close edition behavior | weak | weak | job D :1102 | after close the active edition is still the accepted one and care reads it; a client scope change is refused. No studio post-close edit (amendment) is exercised, so the clause is only partly run | edition id = request edition | c1 ✓✓, c2 ✓✓, r2 ✓✓, r3 ✓✓ (partial) |
 
 ✓✓ = passed on `chromium` and on `webkit-iphone` in that run.
 
 ### Observations (not defects)
 
-**RC7-E2-OBS-1: the WebKit `Review and send` first tap missed in development runs.** Confidence that this is a product defect: low.
+**RC7-E2-OBS-1: the WebKit `Review and send` first tap sometimes misses.** Confidence that this is a product defect: low to medium.
 
 - Development run `r8dev1`, R2 on `webkit-iphone`: the iPhone-emulated tap focused the button (`[active]` in the snapshot) but opened no sheet within 30 s. The run failed.
 - Development run `dev2`: one WebKit send opened only on a second tap (`[RC7 e2 review-and-send] webkit-iphone: sheet opened on tap 2`).
 - Counted runs c1 and c2: the first tap opened the sheet in every send on both projects, with 0 retap lines in either log. Those runs used an unbounded retap loop that absorbed misses without failing.
-- Cause not established. The button's handler is a plain `onClick` (`service-acceptance-section.tsx:323-325`). `DocSheet` has a backdrop button with `onClick={onClose}` (`overlays/doc-sheet.tsx:425-431`). A touch ghost click landing on the fresh backdrop is one candidate; it is not demonstrated.
-- Since the review fixes (`sendNotices` :405), the journey makes one tap and waits 20 s. On a miss it logs what the tap left behind (backdrops, dialogs, focused element) and retaps once. It records `taps=N` as a log line and a `review-and-send-taps` annotation, then fails the test through `expect.soft(taps).toBe(1)`. A missed first tap is now a visible failure, not absorbed.
+- Cause not established before r1b. The button's handler is a plain `onClick` (`service-acceptance-section.tsx:323-325`). `DocSheet` has a backdrop button with `onClick={onClose}` (`overlays/doc-sheet.tsx:425-431`). A touch ghost click landing on the fresh backdrop is one candidate; it is not demonstrated.
+- Development run r1b (`86c8f482a`), R1 on `webkit-iphone`: the first tap opened nothing within 20 s and the retap opened the sheet (`taps=2`). The new check failed the test, so the leg stopped: 7 passed, 1 failed, 6 did not run.
+  - The missed tap left `{"backdrops":0,"dialogs":0,"active":"(self.__next_s=self.__next_s||[]).push(["}`. No sheet or backdrop was open, and the focused element was not the button: its text is Next's inline bootstrap script, so it was the document body.
+  - That fits a tap landing before the card hydrated (a server-rendered button with no handler yet) better than a ghost click on a backdrop. It is not demonstrated.
+  - Log: `/Users/kody/.claude/rc7-evidence/e2/review-r8/r1b/run1/e2-rc7.log` (lines 84-85).
+- Counted runs r2 and r3 (`86c8f482a`): `taps=1` on all 12 sends in each run, on both projects.
+- Since the review fixes (`sendNotices` :431), the journey makes one tap and waits 20 s. On a miss it logs what the tap left behind (backdrops, dialogs, focused element) and retaps once. It records `taps=N` as a log line and a `review-and-send-taps` annotation, then fails the test through `expect.soft(taps).toBe(1)`. A missed first tap is now a visible failure, not absorbed.
 
 **RC7-E2-OBS-2: a returned request's evidence can be re-requested unchanged.** Severity: low to medium, pending a ruling. Confidence: high (read from source; not run).
 
@@ -109,7 +124,7 @@ A clause marked **covered (re-run pending)** has a negative branch that the revi
   - A PO receipt needs a studio purchase order the designer can access, in `confirmed`/`in_production`/`shipped`/`delivered`, with line vendors matching the PO (00861:72-78, :129, :201).
   - A studio-purchase receipt needs a `studio_purchases` row in `recorded`/`billed` and `can_buy_for_project`, and it refuses a line that carries a PO (00861:81-87, :202).
 - `complete_receiving_inspection` (latest body `00865:97`) completes an inspection row that a receipt batch created. It resolves the same PO or studio purchase.
-- Job F's `RC7 kitchen run` is `pkg.cabinetry`, excluded from the studio's service: purchasing by the client, fabrication contract and installation by the GC. It has neither a PO nor a studio purchase. Reaching either RPC would mean inventing a studio purchase for goods the studio did not buy, which misstates who is responsible. So neither 00861 RPC applies to a GC-installed line, and the delivery stays fixture SQL (`status 'ordered' → 'delivered'`, :1061). The install that follows goes through the real `record_project_ffe_installed`.
+- Job F's `RC7 kitchen run` is `pkg.cabinetry`, excluded from the studio's service: purchasing by the client, fabrication contract and installation by the GC. It has neither a PO nor a studio purchase. Reaching either RPC would mean inventing a studio purchase for goods the studio did not buy, which misstates who is responsible. So neither 00861 RPC applies to a GC-installed line, and the delivery stays fixture SQL (`status 'ordered' → 'delivered'`, :1070). The install that follows goes through the real `record_project_ffe_installed`.
 - Product path not used: round 8's outside-work rail (`create_external_fulfilment`, `set_ffe_item_external_fulfilment`, `record_external_fulfilment_event` and `verify_external_fulfilment_event`; 00875/00876) is how outside work is recorded. A verified `installed` event sets the bound lines `installed` (00876:512-517).
   - Using it would rebind job F's cabinetry line to an external fulfilment. That adds `external_fulfilment_open:pkg.cabinetry` to job F's informational obligations and changes the fixture and the expectations.
   - It is recorded here as the stronger path; it is not done in this lane.
@@ -148,15 +163,40 @@ Readbacks printed in each run, once per project (identical in c1 and c2):
 [RC7 e2 cleanup] {"tables" : 52, "rows" : 305, "projects" : 4, "f01NonDraftProposals" : 0}
 ```
 
-Review-fix runs (pending). Commands, one fresh owned stack per invocation:
+Review-fix runs. One fresh owned stack per invocation; `sysctl vm.swapusage` and `df` were recorded before each (`review-r8/<label>.pre.txt`), and swap free never fell below 500 MB, so there was no wait. The sequence script is `/private/tmp/claude-501/-Users-kody-Code-patina-merged/1460bfe7-3b74-49b1-b90e-b7c7dd33fdc9/scratchpad/e2-phase2.sh`.
 
 ```
-node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence /Users/kody/.claude/rc7-evidence/e2/review-r8/r1 --runs 1 \
-  --workdir /private/tmp/claude-501/-Users-kody-Code-patina-merged/1460bfe7-3b74-49b1-b90e-b7c7dd33fdc9/scratchpad
-node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence /Users/kody/.claude/rc7-evidence/e2/review-r8/r2 --runs 1 \
-  --workdir /private/tmp/claude-501/-Users-kody-Code-patina-merged/1460bfe7-3b74-49b1-b90e-b7c7dd33fdc9/scratchpad
-node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence /Users/kody/.claude/rc7-evidence/e2/review-r8/probe --runs 1 \
-  --defect-probe --workdir /private/tmp/claude-501/-Users-kody-Code-patina-merged/1460bfe7-3b74-49b1-b90e-b7c7dd33fdc9/scratchpad
+W=/private/tmp/claude-501/-Users-kody-Code-patina-merged/1460bfe7-3b74-49b1-b90e-b7c7dd33fdc9/scratchpad
+E=/Users/kody/.claude/rc7-evidence/e2/review-r8
+node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence $E/<r1|r1b|r2|r3> --runs 1 --workdir $W
+node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence $E/probe1 --runs 1 --workdir $W --defect-probe 1
+node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence $E/probe2 --runs 1 --workdir $W --defect-probe 2
+# a counted run executes:
+RC7_E2_ROUND8=1 playwright test --config playwright.round8.config.ts e2e/round8/rc7-e2-consumer-journey.spec.ts \
+  --grep '@rc7-e2-acceptance|@rc7-e2-paper|@rc7-e2-completion' --project chromium --project webkit-iphone --workers=1
+# a probe executes (RC7_E2_DEFECT_PROBE=<n>):
+RC7_E2_ROUND8=1 playwright test … --grep '@rc7-e2-defect-<n> ' --project chromium --workers=1
+```
+
+| Run | Head | Pre-run (UTC, swap used / total, disk free) | Stack receipt (system id, server) | Result | Runner |
+|---|---|---|---|---|---|
+| r1 (dev) | `9b7be17fe` | 17:35:41Z, 17903.75M / 19456.00M, 294 GiB | `7702144851786608682`, 172.24.0.2 | `6 passed, 2 failed, 6 did not run (7.9m)`. Paper failed on both projects: the mismatch call got 504 `The upstream server is timing out` (→ DEFECT RC7-e2-2; the branch moved to a repro) | `RESULT: FAILED`, exit 1; client stop clean; containers 0, volumes 0 |
+| r1b (dev) | `86c8f482a` | 17:47:41Z, 17040.06M / 18432.00M, 295 GiB | `7702147940398026795`, 172.24.0.2 | `7 passed, 1 failed, 6 did not run (7.5m)`. WebKit R1 `taps=2` (RC7-E2-OBS-1) | `RESULT: FAILED`, exit 1; client stop clean; containers 0, volumes 0 |
+| **r2** | `86c8f482a` | 17:56:03Z, 21999.19M / 23552.00M, 290 GiB | `7702150098791886889`, 172.24.0.2 | **`14 passed (10.8m)`**, exit 0; 0 failed, 0 flaky, 0 skipped; `taps=1` × 12 | `RESULT: PASSED`; SIGTERM, process group gone, port 3112 free; `supabase stop --no-backup exit=0; containers left 0; volumes left 0` |
+| **r3** | `86c8f482a` | 18:13:01Z, 19386.38M / 20480.00M, 293 GiB | `7702154467906760746`, 172.24.0.2 | **`14 passed (11.4m)`**, exit 0; 0 failed, 0 flaky, 0 skipped; `taps=1` × 12 | `RESULT: PASSED`; same stop and teardown lines |
+| probe1 | `86c8f482a` | 18:07:45Z, 19690.38M / 20480.00M, 293 GiB | `7702153111913160746`, 172.24.0.2 | `1 failed` at :1232 (`Expected: 0 Received: 1`), as required | `RESULT: PASSED`; clean stop and teardown |
+| probe2 | `86c8f482a` | 18:09:40Z, 19626.38M / 20480.00M, 293 GiB | `7702153607434137642`, 172.24.0.2 | `1 failed` at :1286: direct `ERROR: stale_scope` in 37 ms; API 504 after 60004 ms; 1 backend still running the call afterwards | `RESULT: PASSED`; clean stop and teardown |
+
+All review-fix receipts (`<label>/stack-receipt.json`): `cronLaunchActiveJobs: off`, `numberedHead: 00899`, `migration00899: 00899 round8_service_acceptance_offline_presentation`, `ledgerMax 20260910152111`. No run was infra-interrupted: there was no exit 2 and no PGRST002. Logs are under `/Users/kody/.claude/rc7-evidence/e2/review-r8/<label>.log` and `<label>/run1/e2-*.log`.
+
+New readbacks in r2 and r3, once per project:
+
+```
+[RC7 e2 R2 draft on the superseded edition] 500 {"code":"55000",…,"message":"scope_edition_not_active"}
+[RC7 e2 old signer refusal] 500 {"code":"55000",…,"message":"signer_not_active"}
+[RC7 e2 paper own review] 403 {"code":"42501",…,"message":"insufficient_privilege"}
+[RC7 e2 D close: incomplete checklist] 400 {"code":"23514",…,"message":"project closeout checklist must include every required item as completed"}
+[RC7 e2 cleanup] {"tables" : 52, "rows" : 305, "projects" : 4, "f01NonDraftProposals" : 0}
 ```
 
 DEFECT RC7-e2-1 confirmation at `47d500f1e` (before the repro was extended): one chromium run of the defect test with `test.fixme(` changed locally to `test(`, on the kept development stack. The change was restored with `sed`; `git diff` shows no change on that line.
@@ -171,10 +211,10 @@ RC7_E2_ROUND8=1 playwright test --config playwright.round8.config.ts e2e/round8/
 
 The same run also showed the second teardown refusal (`last_owner_protected`), which led to the `-07` unseat in `rc7-e2-cleanup.sql`. Log: `/Users/kody/.claude/rc7-evidence/e2/r8dev/fixme-forced.log`.
 
-Gates for the review fixes (edit-only phase):
+Gates at `86c8f482a`:
 
 ```
-node --test apps/designer-portal/e2e/round8/rc7-e2-run.unit.mjs             # 26 pass, 0 fail
+node --test apps/designer-portal/e2e/round8/rc7-e2-run.unit.mjs             # 27 pass, 0 fail
 node --test apps/designer-portal/e2e/round8/run-consumer-journey.unit.mjs   # 15 pass, 0 fail (restored to base 3cf79663c)
 pnpm --filter @patina/designer-portal type-check                            # exit 0 (its program includes rc7-e2-consumer-journey.journey.ts)
 tsc --noEmit -p <temp tsconfig extending apps/designer-portal/tsconfig.json, including the lane .spec.ts and .journey.ts>  # exit 0
@@ -204,21 +244,43 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
 
 - Severity: medium. A20 signer replacement cannot be reached from the designer UI on composed jobs; the RPC and its audit are correct. Confidence: high.
 - Repro:
-  - The test is `@rc7-e2-defect the Replace form offers the job household's other members and replaces the signer` in `rc7-e2-consumer-journey.journey.ts:1209`, in describe `RC-7 e2 defects`, outside the counted legs.
-  - It is `test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '1', 'DEFECT RC7-e2-1')`. `rc7-e2-run.mjs --defect-probe` lifts it, and nothing else does.
+  - The test is `@rc7-e2-defect-1 the Replace form offers the job household's other members and replaces the signer` in `rc7-e2-consumer-journey.journey.ts:1218`, in describe `RC-7 e2 defects`, outside the counted legs.
+  - It is `test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '1', 'DEFECT RC7-e2-1')`. `rc7-e2-run.mjs --defect-probe 1` lifts it, and nothing else does.
   - Steps:
     1. Job A: draft request `rc2-sa-1`, then click `Replace this person` on `(Client)`.
-    2. The defect step (:1223): the form must not say `No other household member is on file for this job.`, and must offer the third household card.
+    2. The defect step (:1232): the form must not say `No other household member is on file for this job.`, and must offer the third household card.
     3. Past the offer, the designer chooses the third card in `New person`, gives a reason, and submits `Replace`.
     4. The card shows `was replaced` and the active `RC7 Fictional Third`.
     5. `replacementAudit()` reads back the replaced row: reason, `replaced_by` = designer, revision + 1, and the successor card active and required.
   - Result on this base: the form shows `No other household member is on file for this job.` (`service-acceptance-section.tsx:434`) instead of offering the third household card. The test fails at step 2.
-  - Confirmed failing at that step on 2026-10-29 at `47d500f1e` (Commands). The extended repro's probe run is pending; it must fail at :1223.
+  - Confirmed failing at that step: at `47d500f1e` (Commands), and again with the extended repro at `86c8f482a` (probe1: `1 failed` at :1232, `Expected: 0 Received: 1`).
 - Root cause:
   - `packages/supabase/src/hooks/use-households.ts:303-322` (`useProjectHousehold`) reads `projects.client_profile_id` and matches it to `designer_clients.client_id`.
   - `client_profile_id` is FK'd to `client_profiles(id)`, a disjoint uuid space (`supabase/migrations/00555_*.sql:523-528` says so). It is NULL on every local project (58/58).
   - Composed jobs carry no `project_parties` client seats, so the seat fallback (:325-330) is empty too. No household means no cards.
 - Proposed fix: at :305 / :311, select `projects.client_id` (the auth uid that `designer_clients.client_id` holds) instead of `client_profile_id`. Codex review confirmed the root cause; per the orchestrator, the fix lane fixed it in `1028ea50c`. The fixme stays here until that lands on this base.
+
+### DEFECT RC7-e2-2 — a `40001` refusal hangs through the API instead of reaching the caller
+
+- Severity: medium to high.
+  - Every refusal raised with `ERRCODE = 'serialization_failure'` is affected. That is 19 raises across 00886–00899 (by grep):
+    - `stale_signer_policy` ×7 and `stale_scope` ×6;
+    - `paper_document_changed` ×2;
+    - `scope_edition_stale`, `scope_execution_document_moved`, `stale_obligations` and `service_completion_requires_read_committed` ×1 each.
+  - They cover the client respond, paper record and review, signer replacement and service completion paths. Only `stale_scope` on paper record was exercised; the others are inferred from the same raise.
+  - The intended stale-page message never arrives. The caller waits 60 s for a gateway 504, and the database keeps working on the call after the 504.
+  - Confidence: high on the symptom (r1 on both projects, probe2). Medium to high on the mechanism.
+- Repro:
+  - `@rc7-e2-defect-2 a paper with a mismatched scope code is refused promptly with stale_scope through the API`, `rc7-e2-consumer-journey.journey.ts:1250`, fixme unless `--defect-probe 2`.
+  - Steps: job P; draft `rc7-sa-1` in the UI; the designer's `present_service_acceptance_offline`; then `record_service_acceptance_paper_intake` with the scope hash's last digit changed.
+  - The database refuses at once as the designer (`authenticated`, rolled back): `ERROR: stale_scope`, 37 ms.
+  - The same call through `/rest/v1/rpc` as the designer returns HTTP 504 `The upstream server is timing out` after 60 004 ms. `pg_stat_activity` then still shows 1 backend running the call. 0 intakes are written.
+  - Probe2 failed at :1286, as required.
+- Root cause (mechanism inferred, not traced in PostgREST source):
+  - The RPCs raise a deterministic refusal with SQLSTATE `40001` (for example `00886_round8_service_acceptance.sql:900`, inside `record_service_acceptance_paper_intake` (:856): `RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'serialization_failure'`).
+  - PostgREST's transaction layer treats `40001` as a transient serialization failure and retries the transaction. The refusal recurs on every retry, so the loop runs until Kong's 60 s upstream timeout, and past it.
+- Proposed fix: raise these refusals with a non-retryable SQLSTATE that PostgREST maps to a client error. Examples are `check_violation` (23514 → 400), or a custom `P0001` with the message kept. Keep the message strings (`stale_scope`, …) that the portal maps to copy. Then re-run this repro and expect `{code, message: 'stale_scope'}` within 10 s.
+- Earlier review-fix tree: the same branch sat inside the paper journey at `9b7be17fe`. Run r1 failed there, which is how the defect was found; the branch was then moved to this repro.
 
 ## Harness debt (not fixed; not owned)
 
@@ -241,7 +303,8 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
 - The WebKit first-tap miss (RC7-E2-OBS-1): not root-caused. It now fails the test whenever it recurs.
 - A20 rejection → new evidence: there is no product refusal to assert (RC7-E2-OBS-2); it needs a ruling.
 - The GC's cabinetry delivery on job F: recorded by fixture SQL. The 00861 receiving RPCs need a studio PO or studio purchase, which a client-bought, GC-installed line does not have (see GC delivery). Only the install that follows goes through the real RPC.
-- The review-fix negative branches (superseded-edition draft, paper mismatch, self-review, incomplete checklist, tap count, notice counts) are written but not yet run. r1/r2 are pending.
+- A paper with a mismatched code refused through the API: DEFECT RC7-e2-2. The database refusal is shown; the API path hangs.
+- WebKit first-tap stability: the miss recurred in 1 of 3 review-fix journeys (r1b). r2 and r3 had none. Not root-caused (RC7-E2-OBS-1).
 - Screen reader: no assistive-technology pass.
 
 ## Teardown
@@ -249,6 +312,7 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
 - Each counted run (runner): client portal stopped with process group gone and port 3112 free. Then `supabase stop --no-backup exit=0; containers left 0; volumes left 0`, and the scratch workdir was removed.
 - The kept development stack (`patina-rc2-journey-huY6f2`) was stopped with `supabase stop --workdir <kept> --no-backup` before the counted runs. Dev ports 3110/3112 were killed and the workdir removed.
 - 2026-10-29T17:13:43Z: `lsof -iTCP:<p> -sTCP:LISTEN` shows 3110, 3112, 57120, 57121, 57122, 57129 and 57183 all free. `docker ps -a` / `docker volume ls` with label `com.supabase.cli.project=patina-rc7-e2`: 0 / 0.
+- Review-fix runs (r1, r1b, r2, r3, probe1, probe2): each logged a clean client stop and `supabase stop --no-backup exit=0; containers left 0; volumes left 0`. Census at 2026-10-29T18:25:27Z: 3110, 3112, 57120, 57121, 57122, 57123, 57124, 57127, 57129 and 57183 all free; containers 0 and volumes 0 for label `patina-rc7-e2`.
 - Shared stack:
   - No write to 54321/54322 and no connection to them.
   - Correction: the counted run at `56bbb23cf` did read the shared stack once per journey. The runner's identity proof ran `docker exec supabase_db_supabase psql … -c 'SELECT system_identifier FROM pg_control_system();'` inside the shared DB container. It was read-only and recorded `sharedSystemId` `7701004642274893866` in the receipt.
