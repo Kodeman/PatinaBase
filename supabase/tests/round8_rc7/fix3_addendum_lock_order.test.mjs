@@ -144,7 +144,7 @@ test(`addendum creation vs reconcile on one job: ${negativeControl ? 'pre-fix bo
       ${section('assertion helpers')}${section('fixture')}${section('native helpers')}
       ${section('reconciliation helpers')}${section('reconciliation scenario')}
       UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
-      GRANT EXECUTE ON FUNCTION public.reconcile_scope_edition(uuid,uuid,uuid) TO authenticated;
+      ${owned.granted ? 'GRANT EXECUTE ON FUNCTION public.reconcile_scope_edition(uuid,uuid,uuid) TO authenticated;' : ''}
       COMMIT;`, 90000);
     const [job, doc4, source, inSet] = (await setup.query(`SELECT pg_temp.fixture('job'), pg_temp.fixture('doc4'),
       a.source_proposal_id, EXISTS(SELECT 1 FROM public.project_commercial_documents d
