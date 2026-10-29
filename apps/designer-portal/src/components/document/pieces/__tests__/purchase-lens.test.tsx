@@ -18,6 +18,7 @@ const mockLines = {
   data: [] as PurchaseLensLine[] | undefined,
   isError: false,
   isPending: false,
+  isFetching: false,
   refetch: jest.fn(),
 };
 const mockRooms = {
@@ -27,16 +28,18 @@ const mockRooms = {
   ] as { id: string; name: string }[] | undefined,
   isError: false,
   isPending: false,
+  isFetching: false,
   refetch: jest.fn(),
 };
 const mockPurchases = {
   data: [] as unknown[] | undefined,
   isError: false,
   isPending: false,
+  isFetching: false,
   refetch: jest.fn(),
 };
 function settledRead(data: unknown) {
-  return { data, isPending: false, isError: false, refetch: jest.fn() };
+  return { data, isPending: false, isError: false, isFetching: false, refetch: jest.fn() };
 }
 const mockAuthority = settledRead(null);
 const mockAgreement = settledRead({ state: "missing", evidence: null });
@@ -240,11 +243,16 @@ describe("PurchaseLens", () => {
     mockLines.data = ALL;
     mockLines.isError = false;
     mockLines.isPending = false;
+    mockLines.isFetching = false;
     mockLines.refetch.mockClear();
     mockRooms.data = ROOMS;
     mockRooms.isError = false;
     mockRooms.isPending = false;
+    mockRooms.isFetching = false;
     mockRooms.refetch.mockClear();
+    mockAuthority.isFetching = false;
+    mockAgreement.isFetching = false;
+    mockInstruments.isFetching = false;
     mockPurchases.data = [
       {
         id: "sp-1",
@@ -340,8 +348,10 @@ describe("PurchaseLens", () => {
     expect(mockLines.refetch).not.toHaveBeenCalled();
   });
 
-  it("waits for the schedule and rooms before grouping cached lines", () => {
+  it("waits for the schedule and rooms before grouping lines", () => {
+    mockLines.data = undefined;
     mockLines.isPending = true;
+    mockRooms.data = undefined;
     mockRooms.isPending = true;
     render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
     expect(document.querySelector("[data-purchase-row]")).toBeNull();
@@ -354,6 +364,36 @@ describe("PurchaseLens", () => {
     render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
     expect(document.querySelector("[data-purchase-row]")).toBeNull();
     expect(screen.getByText("Reading the rooms…")).toBeInTheDocument();
+  });
+
+  it("retries all failed reads, announces refetch, and focuses the recovered schedule", () => {
+    mockLines.isError = true;
+    mockRooms.isError = true;
+    mockAuthority.isError = true;
+    try {
+      const { rerender } = render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+      fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Try again" }));
+      expect(mockLines.refetch).toHaveBeenCalledTimes(1);
+      expect(mockRooms.refetch).toHaveBeenCalledTimes(1);
+      expect(mockAuthority.refetch).toHaveBeenCalledTimes(1);
+      expect(mockAgreement.refetch).not.toHaveBeenCalled();
+      mockLines.isFetching = true;
+      mockRooms.isFetching = true;
+      mockAuthority.isFetching = true;
+      rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+      expect(screen.getByRole("status")).toHaveTextContent("Reading the schedule…");
+      expect(document.querySelector("[data-purchase-row]")).toBeNull();
+      mockLines.isError = false;
+      mockRooms.isError = false;
+      mockAuthority.isError = false;
+      mockLines.isFetching = false;
+      mockRooms.isFetching = false;
+      mockAuthority.isFetching = false;
+      rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+      expect(screen.getByRole("table", { name: "Purchasing" })).toHaveFocus();
+    } finally {
+      mockAuthority.isError = false;
+    }
   });
 
   it("a refused studio-purchases read says so and retries", () => {

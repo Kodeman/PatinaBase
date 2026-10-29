@@ -17,7 +17,7 @@
  * sent from the line and the Orders book, draft first (V22).
  */
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   useProjectFFEItems,
   useStudioPurchases,
@@ -266,6 +266,8 @@ export function PurchaseLens({
 }: PurchaseLensProps) {
   const filterId = useId();
   const [filter, setFilter] = useState<PurchaseFilter>("all");
+  const tableRef = useRef<HTMLTableElement>(null);
+  const retryFocus = useRef(false);
   const schedule = useProjectFFEItems(projectId);
   const roomRead = useDocumentRooms(projectId);
   const rooms = useMemo(
@@ -273,7 +275,6 @@ export function PurchaseLens({
     [roomRead.data],
   );
   const scheduleFailed = schedule.isError || roomRead.isError;
-  const schedulePending = schedule.isPending || roomRead.isPending;
   // The job's purchasing context, read the way the FF&E section reads it for
   // the line's own gate: one project read each, shared with the paper.
   const authority = useProjectBillingAuthority(projectId);
@@ -281,6 +282,13 @@ export function PurchaseLens({
   const instruments = useProjectInstruments(projectId);
   const contextReads = [authority, agreement, instruments];
   const contextFailed = contextReads.some((read) => read.isError);
+  const readingAgain = schedule.isFetching || roomRead.isFetching || contextReads.some((read) => read.isFetching);
+  const retryFailed = () => {
+    retryFocus.current = true;
+    for (const read of [schedule, roomRead, ...contextReads]) {
+      if (read.isError) void read.refetch();
+    }
+  };
   const context = useMemo<PurchaseContext | null>(() => {
     if (authority.isPending || agreement.isPending || instruments.isPending) return null;
     return {
@@ -296,9 +304,18 @@ export function PurchaseLens({
     instruments.isPending,
     instruments.data,
   ]);
+  useEffect(() => {
+    if (
+      retryFocus.current && !readingAgain && !scheduleFailed && !contextFailed &&
+      schedule.data && roomRead.data && context
+    ) {
+      retryFocus.current = false;
+      tableRef.current?.focus();
+    }
+  }, [readingAgain, scheduleFailed, contextFailed, schedule.data, roomRead.data, context]);
   const groups = useMemo(
     () =>
-      context && schedule.data && roomRead.data && !contextFailed && !scheduleFailed && !schedulePending
+      context && schedule.data && roomRead.data && !contextFailed && !scheduleFailed
         ? derivePurchaseGroups(
             schedule.data as unknown as PurchaseLensLine[],
             rooms,
@@ -307,7 +324,7 @@ export function PurchaseLens({
             context,
           )
         : [],
-    [schedule.data, rooms, room, filter, context, contextFailed, scheduleFailed, schedulePending],
+    [schedule.data, roomRead.data, rooms, room, filter, context, contextFailed, scheduleFailed],
   );
 
   if (room === REMOVED_PLACE) {
@@ -350,7 +367,7 @@ export function PurchaseLens({
         </select>
       </label>
       <div className="max-w-full overflow-x-auto">
-        <table aria-label="Purchasing" className="w-full min-w-[760px] border-collapse">
+        <table ref={tableRef} tabIndex={-1} aria-label="Purchasing" className="w-full min-w-[760px] border-collapse">
           <thead>
             <tr className="border-b border-[var(--sheet-rule-strong)]">
               {columns.map((label) => (
@@ -364,7 +381,9 @@ export function PurchaseLens({
             <tbody>
               <tr>
                 <td colSpan={columns.length} className={CELL}>
-                  {scheduleFailed ? (
+                  {readingAgain && (scheduleFailed || contextFailed) ? (
+                    <span role="status">Reading the schedule…</span>
+                  ) : scheduleFailed ? (
                     <span role="alert">
                       {schedule.isError && roomRead.isError
                         ? "The schedule and rooms could not be read."
@@ -374,10 +393,7 @@ export function PurchaseLens({
                       <button
                         type="button"
                         className={ACT_CLS}
-                        onClick={() => {
-                          if (schedule.isError) void schedule.refetch();
-                          if (roomRead.isError) void roomRead.refetch();
-                        }}
+                        onClick={retryFailed}
                       >
                         Try again
                       </button>
@@ -388,11 +404,7 @@ export function PurchaseLens({
                       <button
                         type="button"
                         className={ACT_CLS}
-                        onClick={() => {
-                          for (const read of contextReads) {
-                            if (read.isError) void read.refetch();
-                          }
-                        }}
+                        onClick={retryFailed}
                       >
                         Try again
                       </button>
