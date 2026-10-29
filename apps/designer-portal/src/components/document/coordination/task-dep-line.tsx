@@ -15,9 +15,8 @@
  * sheet (the prototype's `blockedClick` → `openItem`).
  *
  * Zero shadows (D4): depth is the dot's value contrast + the mono ink color.
- * The due-soon/blocked ink is --color-terracotta-ink (F56); #7E8F76 dep-ready
- * is still the pre-approved prototype literal used in item-type.ts /
- * work-block.tsx.
+ * The due-soon/blocked ink is --color-terracotta-ink (F56); ready text
+ * uses --color-sage-ink on paper.
  */
 
 import { isBlocked } from '@/lib/document/coordination-derivation';
@@ -26,9 +25,8 @@ import { courtToken } from './party';
 import type { CoordinationItem, ProjectParty } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
 
-//   .dep-ready #7e8f76 is a prototype literal  ·  .dep-seq uses aged-oak.
 const DEP_BLOCKED_INK = 'var(--color-terracotta-ink)';
-const DEP_READY_INK = '#7E8F76';
+const DEP_READY_INK = 'var(--color-sage-ink)';
 
 export interface TaskDepLineProps {
   task: SectionTask;
@@ -83,7 +81,7 @@ export function TaskDepLine({ task, items, tasks, onOpenBlocker }: TaskDepLinePr
     return (
       <div
         className="mt-[3px] flex items-center gap-1 text-[11px] leading-snug"
-        style={{ color: 'var(--color-aged-oak)' }}
+        style={{ color: 'var(--color-quiet-ink)' }}
       >
         <span aria-hidden>↳</span>
         <span>
@@ -136,7 +134,7 @@ export function OwnerChip({
     base.label;
 
   return (
-    <span className="mt-px inline-flex flex-shrink-0 items-center gap-1 font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+    <span className="mt-px inline-flex flex-shrink-0 items-center gap-1 font-mono text-[11px] uppercase tracking-[0.04em] text-[var(--color-quiet-ink)]">
       <span
         aria-hidden
         className="inline-block h-1.5 w-1.5 rounded-full"

@@ -88,7 +88,7 @@ export interface CloseoutState {
 const FIELD_CLS =
   'w-full rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-1.5 text-[11.5px] text-[var(--color-charcoal)] placeholder:italic placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none';
 const LABEL_CLS =
-  'mb-1 block font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]';
 
 function closeErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -483,7 +483,7 @@ export function CareBand({
       {operational.blockers.length > 0 && (
         <div
           role="status"
-          className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)] px-3.5 py-2.5"
+          className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] px-3.5 py-2.5"
         >
           <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
             Closeout tasks outstanding
@@ -591,7 +591,7 @@ export function CareBand({
           <label className="block">
             <span className={LABEL_CLS}>Project value</span>
             <div className="relative">
-              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11.5px] text-[var(--color-aged-oak)]">
+              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11.5px] text-[var(--color-quiet-ink)]">
                 $
               </span>
               <input
