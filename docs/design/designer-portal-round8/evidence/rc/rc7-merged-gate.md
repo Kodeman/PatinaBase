@@ -7,6 +7,7 @@
 | Worktree / branch | `/Users/kody/Code/patina-r8-evidence` / `r8-evidence` |
 | Start tip | `751c916ef` |
 | Phase A tip | `bc3864984` (FIX3 merge `30ea65c40` included) |
+| Phase B tip | `c6434e3dd` (E8 merge) → `882b52b22` (RC7-GATE-2 spec fix) |
 | Owned stack | `project_id` `patina-rc7-gate`; block 651 (API 65121, DB 65122, shadow 65120, pooler 65129, studio 65123, inbucket 65124, analytics 65127, inspector 65183); dev port 3910 |
 | Migration head | `00902`, 828 ledger rows (every fresh stack) |
 | Stack recipe | `supabase start -x studio,mailpit,logflare,vector,edge-runtime,imgproxy,postgres-meta`; `cron.launch_active_jobs = off` (as `supabase_admin`, own container); `rc7_owned.stack('patina-rc7-gate')` marker |
@@ -30,6 +31,8 @@ Fresh stacks, all at head 00902 with cron off:
 | `b62f0b1c7` | `test(rc7)`: made the `note_context_labels_test.sql` withheld-capture setup reachable (RC7-GATE-1) |
 | `e0a4c46c8` | `test(rc7)`: flipped RC7-e2-1, RC7-e2-2 and RC7-E3-3 to normal tests; E2 runner port block from env |
 | `bc3864984` | `test(rc7)`: E3/E5 owned-port guards follow env (`RC7_E3_*`, `RC7_E5_*`); E3 preflight refuses 54321/54322 |
+| `1b4a7512a` | `docs(evidence)`: this doc, Phase A |
+| `882b52b22` | `test(rc7)`: E6 A06 h3-scoped room toggle and awaited retry response before the write count (RC7-GATE-2) |
 
 ## Flips (Phase A step 1)
 
@@ -199,21 +202,67 @@ The threshold body is identical (`selections: []`, external `E7 client-bought ch
 | ID | Severity / confidence | Kind | Root cause | Disposition |
 |---|---|---|---|---|
 | RC7-GATE-1 | low / high | test defect, not product | `supabase/tests/round8/note_context_labels_test.sql:47`. The hidden setup re-authored capture XB to designer D, a studio co-member of A1, so `field_captures_studio_select` (`is_studio_comember`, 00584) correctly showed it; the "withheld" case was unreachable | Fixed in the test (`b62f0b1c7`): visible and hidden setups split (hidden routes XB into A's project under `session_replication_role = replica`), plus two non-vacuity asserts. Exits 0. 00902 is unchanged |
+| RC7-GATE-2 | medium (blocked E6 A06 on both engines) / high | test defect, not product | (a) `apps/designer-portal/e2e/round8/rc7-e6-ffe.spec.ts:25` (at `c6434e3dd`): `room.getByRole('button', { name: /Living Room/ })` also matched the room's line buttons after the reload, because `pieces-overview.tsx:63,80` remembers the open room per job in localStorage, so 37 elements matched (strict mode). (b) `:102` at `c6434e3dd` (`:104` with the locator fix): `psqlScalar` uses `execFileSync` and blocks the event loop, so the `request` listener counted the retry PATCH only during the reload, giving "expected 1, received 2". The diagnostic run proved there were two PATCHes in total (stale 406, then retry 200 at the peer `row_version`) and no replay | Fixed in the spec (`882b52b22`): the toggle is scoped to the room's h3, and the test awaits the retry `waitForResponse` (200) before the count. E6 r5 and r6: 12/12 each |
 
-There are no product defects from Phase A. The `public_sd_hardening` drift is an integration re-pin, not a defect (see above).
+There are no product defects from Phase A or Phase B. RC7-E2-OBS-1 recurred (see Phase B); it was already recorded and is not a new gate defect. The `public_sd_hardening` drift is an integration re-pin, not a defect (see above).
 
 ## Phase B (browser)
 
-Pending.
+Tip `c6434e3dd` (E8 merge), plus the RC7-GATE-2 spec fix for E6 runs 3–6 (committed as `882b52b22`). Every lane ran on chromium (1440×900) and webkit-iphone with `--workers=1` on a **fresh** owned stack per run (block 651, head 00902, 828 rows, cron off, `scope_editions` false at start), with the dev server on 3910. Resources across all runs: df 277–287 GiB free; vm_stat free 10.1–22.5 GB (no low checks).
+
+Lane runner `$SP/rc7-gate/run-lane.sh <lane> <run>`. It checks df and vm_stat, refuses a busy 3910, calls `restart.sh` (stop `--no-backup`, then start `-x …`, with edge-runtime only for E3), turns cron off, sets the owned marker, takes the keys from `supabase status -o env` (never printed), checks the URLs are 65121/65122, applies the lane fixtures and then runs:
+
+```
+pnpm exec playwright test -c playwright.round8.config.ts <specs> --project=chromium --project=webkit-iphone --workers=1 --reporter=list
+```
+
+E2 runs only through its own runner, which starts, proves and tears down its own stack each time:
+
+```
+RC7_E2_PORT_BLOCK=651 RC7_E2_PROJECT=patina-rc7-gate-e2 RC7_E2_DESIGNER_PORT=3910 RC7_E2_CLIENT_PORT=3912 \
+  node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence $SP/rc7-gate/phaseB/e2-r<n> --runs 1 --workdir $SP/rc7-gate/phaseB/e2-work
+```
+
+| Lane / specs | Run | sysid | Result | Notes |
+|---|---|---|---|---|
+| E2 `rc7-e2-consumer-journey` (runner) | r1 | 7702187157217886249 | 18 passed (13.7m) | teardown: containers 0, volumes 0 |
+| E2 | r2 | 7702191048214806570 | 9 passed, **1 failed**, 8 did not run | webkit `@rc7-e2-acceptance R1` (`journey.ts:630`). RC7-E2-OBS-1 at `journey.ts:465` |
+| E2 | r3 | 7702207241791442986 | 15 passed, **1 failed**, 2 did not run (12.0m) | webkit `@rc7-e2-completion job D` (`journey.ts:1111`). RC7-E2-OBS-1 at `journey.ts:465` |
+| E3 `rc7-e3-{agreement-lineage,lineage,arrangements,audience,field}` | r1 | 7702193303215837225 | 10 passed, 8 skipped (2.3m) | edge-runtime on (`EMAIL_DEV_MODE=dry_run`); arrangements fixture exit 0; preflight ok; 8 skips = 4 fixmes × 2 |
+| E3 | r2 | 7702194097726787626 | 10 passed, 8 skipped (2.1m) | as r1 |
+| E4 `rc7-e4-cabinetry` | r1 / r2 | 7702194845759545386 / 7702195352338661418 | 4 passed / 4 passed | `RC7_E4_STACK=patina-rc7-gate` |
+| E5 `rc7-e5-hours-claim` | r1 / r2 | 7702195859439235114 / 7702196325893648426 | 2 passed / 2 passed | `RC7_E5_*` = 65121/65122 |
+| E6 `rc7-e6-{entry,ffe,maker,nested,role-read}` | r1 / r2 | 7702196828057473065 / 7702197723879677994 | 10 passed, **2 failed** / same | A06 (`rc7-e6-ffe.spec.ts:36`) on both engines: strict-mode locator (RC7-GATE-2a) |
+| E6 + locator fix | r3 / r4 | 7702205391606362154 / 7702206317119701034 | 10 passed, **2 failed** / same | A06 `:104` "reload cannot replay either write", expected 1 received 2 (RC7-GATE-2b) |
+| E6 diagnostic (`GATE-DIAG` copy of A06, not committed) | d1 | 7702210586924531755 | 2 failed (by design) | Exactly 2 PATCHes per engine: stale `row_version=eq.3` → 406 PGRST116; retry `row_version=eq.4` (peer's) → 200. No replay |
+| E6 + both fixes (`882b52b22`) | r5 / r6 | 7702211585571774505 / 7702212500921475114 | **12 passed / 12 passed** (2.8m each) | — |
+| E8 `rc7-e8-{visual,a11y,zoom,perf}` | r1 | 7702198626246217769 | 26 passed, 2 skipped (7.2m) | activation fixture exit 0; E7 `mixed-fixture.sql` (`owned_port=65122`, `owned_system_id`) exit 0, 0 errors. Skips = RC7-E8-1 fixme (`rc7-e8-a11y.spec.ts:513`) × 2; `[rc7-e8 cancel focus]` still `body` |
+| E8 | r2 | 7702200678806155306 | 26 passed, 2 skipped (7.3m) | as r1 |
+| C03 `phone-line-editor` | r1 / r2 | 7702202745204248618 / 7702204017764409387 | 18 passed / 18 passed (4.2m / 4.4m) | — |
+
+Coverage: every tracked `e2e/**/rc7-*.spec.ts` (18 files, with `rc7-e2-consumer-journey.spec.ts` declaring tests only under the runner) plus `phone-line-editor.spec.ts`.
+
+E8 harness debt: `rc7-e8-activation-fixture.sql` hard-codes the E8 lane's marker `patina-rc7-e8`. The gate applied a scratch copy that substitutes `patina-rc7-gate` (`$SP/rc7-gate/phaseB/e8-activation-gate.sql`). The repo fixture is unchanged.
+
+E8's visual spec rewrites the committed `evidence/rc/visual-rc7/*` captures (and `next-env.d.ts`). The gate's copies are kept in `$SP/rc7-gate/phaseB/visual-rc7-gate-r2/`. The E8 lane's committed set was restored unchanged.
+
+### RC7-E2-OBS-1 recurrence (WebKit first tap)
+
+In 2 of 3 runs, one WebKit "Review and send" first tap did not open the sheet. The soft assert at `rc7-e2-consumer-journey.journey.ts:465` ("the first Review and send tap opens the sheet") logged `taps=2`, and the serial describe block skipped the rest (the "did not run" counts above). On each miss the diagnostic recorded `{"backdrops":0,"dialogs":0,"active":"(self.__next_s=…"}`: the active element was the Next bootstrap script, so the tap probably landed before hydration. Request ids: `95e1183a…` (r2) and `cc7ed6ac…` (r3). Across the three runs, 2 of 14 logged WebKit first taps missed. Chromium was 9/9 on every run. This is not a new defect: the observation is already open as RC7-E2-OBS-1. Confidence that it is a product (pre-hydration tap) issue rather than harness timing is low-to-medium. It needs a ruling on whether the button should be inert or deferred until hydration.
 
 ## Not verified
 
 - `platform_acl_compatibility_test.sql` stays red on its documented, un-ruled `$auth_helpers$` block; this is outside round 8.
 - The FK-orphan residue from `public_sd_hardening_contract_test.sql` was not fixed (test hygiene, pre-existing).
+- E2 had no fully green rerun after r1. Runs r2 and r3 each stopped one WebKit serial block at OBS-1, so the 8 + 2 tests that did not run were not re-observed in those runs. They passed in r1.
+- RC7-E8-1 (cancel focus to `body`) and the four E3 fixmes remain fixme. No fix lane ran during the gate.
 
 ## Teardown
 
-Pending.
+- Last lane stack: `supabase stop --workdir <rc7-gate workdir> --no-backup` exit 0, after E6 r6 at 22:01:42Z. Every lane run started and stopped its own stack, and the E2 runner reported containers 0 and volumes 0 after each of its three runs.
+- No listeners on 3910, 3912, 65120–65124, 65127, 65129 or 65183.
+- `docker ps -a`: 0 `patina-rc7-gate*` containers and 0 `sidequest.owner=r8-rc7-gate` containers. `docker volume ls`: 0 `patina-rc7-gate*` volumes.
+- The temporary `rc7-gate-diag-ffe.spec.ts` was deleted and never committed. The worktree is clean apart from this doc's commit.
 
 ## Appendix: SQL pass 2 table (stack 7702171865069850667)
 
