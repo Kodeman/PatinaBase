@@ -68,8 +68,8 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
   const studio = useProjectRecordedStudio(projectId);
   const seat = useIsStudioReleaser(studio.data);
   const organization = useOrganization(studio.data ?? '');
-  const canPresent = seat.data === true && organization.data?.status === 'active';
   const studioHeld = seat.data === true && organization.data != null && organization.data.status !== 'active';
+  const canPresent = seat.data === true && !studioHeld;
   const openNotices = (requestId: string) => (outbound.data ?? []).filter((draft) =>
     draft.ref_type === 'service_acceptance_request' && draft.ref_id === requestId
     && OPEN_STATUSES.has(draft.status)).map((draft) => draft.status);
@@ -204,6 +204,11 @@ function CreateRequest({ projectId, hasOpen, report }: { projectId: string; hasO
   );
 }
 
+function awaitsPaper(request: ServiceAcceptanceRequest, signer: ServiceAcceptanceSigner, justPresented = false): boolean {
+  return (request.lifecycle === 'sent' || justPresented) && signer.status === 'active' && !signer.response
+    && !request.paperIntakes.some((intake) => intake.signerId === signer.signerId && intake.reviewState === 'pending_review');
+}
+
 function RequestCard({ projectId, request, openNotices, predecessor, canPresent, studioHeld, report, onInactive }: {
   projectId: string;
   request: ServiceAcceptanceRequest;
@@ -273,7 +278,8 @@ function RequestCard({ projectId, request, openNotices, predecessor, canPresent,
       {presented && (
         <p ref={presentedRef} tabIndex={-1} role="status" className="t-body-sm mt-2">
           Request {request.requestNumber} is marked as presented on paper.
-          {open && active.some((signer) => !signer.response) && ' Record the signed paper for each signer still waiting.'}
+          {open && active.some((signer) => signer.required && awaitsPaper(request, signer, presented))
+            && ' Record the signed paper for each signer still waiting.'}
         </p>
       )}
       {request.lifecycle === 'draft' && (canPresent || studioHeld) && !presented && (
@@ -343,12 +349,10 @@ function SignerRow({ projectId, request, signer, open, report, onInactive }: {
 }) {
   const [act, setAct] = useState<'replace' | 'paper' | null>(null);
   const response = signer.response;
-  const pendingPaper = request.paperIntakes.some(
-    (intake) => intake.signerId === signer.signerId && intake.reviewState === 'pending_review');
   // 00886: a signer can be replaced while the request is draft or sent, even
   // after they answered; paper is taken only on a sent request, once per signer.
   const canReplace = open;
-  const canRecordPaper = request.lifecycle === 'sent' && !response && !pendingPaper;
+  const canRecordPaper = awaitsPaper(request, signer);
   return (
     <li data-signer-status="active" className="t-body-sm">
       <SignerName signer={signer} /> · {signer.required ? 'Required' : 'Optional'} ·{' '}
@@ -474,6 +478,12 @@ function PresentOnPaper({ projectId, request, studioHeld, onInactive, onPresente
       launchRef.current?.focus();
     }
   }, [opened]);
+  useEffect(() => {
+    if (studioHeld && opened) {
+      backToLaunch.current = true;
+      setOpened(false);
+    }
+  }, [studioHeld, opened]);
   if (!opened) {
     return (
       <div className="mt-2">
@@ -484,7 +494,7 @@ function PresentOnPaper({ projectId, request, studioHeld, onInactive, onPresente
             Presented on paper
           </DocumentAction>
         </DocumentActionRow>
-        {studioHeld && <p id={`${id}-studio-held`} className="t-body-sm">The recorded studio is not active, so this action is held.</p>}
+        {studioHeld && <p id={`${id}-studio-held`} className="t-body-sm">This studio isn't active, so the request can't be marked as presented on paper.</p>}
       </div>
     );
   }

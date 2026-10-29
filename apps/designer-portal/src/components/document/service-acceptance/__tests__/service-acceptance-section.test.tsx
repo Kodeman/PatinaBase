@@ -457,10 +457,53 @@ test('a suspended recorded studio holds the presentation for its owner, with the
   render(<ServiceAcceptanceSection projectId="job-1" />);
   const held = screen.getByRole('button', { name: 'Presented on paper' });
   expect(held).toHaveAttribute('aria-disabled', 'true');
-  expect(held).toHaveAccessibleDescription('The recorded studio is not active, so this action is held.');
+  expect(held).toHaveAccessibleDescription("This studio isn't active, so the request can't be marked as presented on paper.");
   fireEvent.click(held);
   expect(screen.queryByRole('group', { name: 'Present request 2 on paper' })).toBeNull();
   expect(mockPresent).not.toHaveBeenCalled();
+});
+
+test.each([
+  ['loading', { data: undefined, isPending: true, isError: false }],
+  ['failed', { data: undefined, isPending: false, isError: true }],
+])('an owner can try presenting while the studio status read is %s', (_state, organization) => {
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  mockOrganization.mockReturnValue(organization);
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const launch = screen.getByRole('button', { name: 'Presented on paper' });
+  expect(launch).not.toHaveAttribute('aria-disabled', 'true');
+  fireEvent.click(launch);
+  expect(screen.getByRole('group', { name: 'Present request 2 on paper' })).toBeInTheDocument();
+});
+
+test('a studio status change closes the open confirm and returns focus to its held launch', async () => {
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  const { rerender } = render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Presented on paper' }));
+  expect(screen.getByRole('group', { name: 'Present request 2 on paper' })).toBeInTheDocument();
+  mockOrganization.mockReturnValue({ data: { id: 'studio-1', status: 'suspended' } });
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  const held = screen.getByRole('button', { name: 'Presented on paper' });
+  expect(held).toHaveAttribute('aria-disabled', 'true');
+  await waitFor(() => expect(held).toHaveFocus());
+  expect(screen.queryByRole('group', { name: 'Present request 2 on paper' })).toBeNull();
+});
+
+test('the presentation note omits paper already awaiting review and optional signers', async () => {
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  mockPresent.mockResolvedValue({ requestId: 'request-2', lifecycle: 'sent', replayed: false });
+  const { rerender } = render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Presented on paper' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Mark presented' }));
+  const note = await screen.findByRole('status');
+  mockRead.mockReturnValue(readOf([sentRequest({
+    signers: [signer(), signer({ signerId: 'signer-2', required: false })],
+    paperIntakes: [intake({ signerId: 'signer-1' })],
+  })]));
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(note).toHaveTextContent('Request 2 is marked as presented on paper.');
+  expect(note).not.toHaveTextContent('Record the signed paper');
+  expect(screen.getAllByRole('button', { name: 'Record paper' })).toHaveLength(1);
 });
 
 test('the presentation note follows outstanding responses and closed lifecycle without losing focus target', async () => {
