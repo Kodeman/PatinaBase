@@ -25578,6 +25578,36 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00896_round8_service_acceptance_signer_collision.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00896_round8_service_acceptance_signer_collision.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_my_service_acceptance_requests() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00896_round8_service_acceptance_signer_collision.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_my_service_acceptance_requests() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00899_round8_service_acceptance_offline_presentation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._freeze_service_acceptance_evidence(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00899_round8_service_acceptance_offline_presentation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.present_service_acceptance_offline(uuid,text,text,text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

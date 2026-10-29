@@ -989,12 +989,13 @@ DO $$ DECLARE c record; got text; BEGIN
        AND (SELECT count(*)=2 FROM public.outbound_drafts WHERE ref_id=($1->>'requestId')::uuid))::text$q$,
     'true','a retried create replays its receipt and never duplicates a signer''s draft'),
    (NULL,'projection',$q$SELECT (SELECT pg_temp.keys(j)=(SELECT array_agg(k ORDER BY k) FROM unnest(ARRAY['aggregateOutcome','closedAt','closedReason','createdAt',
-       'evidenceManifestHash','evidenceManifestId','lifecycle','outboundDraftId','paperIntakes','predecessorRequestId',
+       'evidenceManifestHash','evidenceManifestId','lifecycle','offlinePresentedAt','offlinePresentedBy',
+       'outboundDraftId','paperIntakes','predecessorRequestId',
        'projectId','requestId','requestNumber','scopeContentHash','scopeEditionId','sentAt','signerPolicyRevision',
        'signers','supersededAt','supersededReason','withdrawReason','withdrawnAt']) k) AND j->>'outboundDraftId'=$1->>'outboundDraftId'
      FROM jsonb_array_elements(public.get_project_service_acceptance(pg_temp.project())->'requests') j
      WHERE j->>'requestId'=$1->>'requestId')::text$q$,
-    'true','the studio projection is unchanged: same keys, outboundDraftId is the recorded draft')
+    'true','the studio projection keeps its keys (plus 00899''s offline presentation), outboundDraftId is the recorded draft')
  ) v(setup,k,result,expected,name) LOOP
   got:=pg_temp.signer_probe(c.setup,c.k,c.result);
   PERFORM pg_temp.assert_true(got=c.expected,c.name||' ['||COALESCE(got,'<null>')||']');

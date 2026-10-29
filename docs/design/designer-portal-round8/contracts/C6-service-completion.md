@@ -18,6 +18,10 @@ Source inspected at `0fabcadf2`. Names without a file:line are **proposed**.
 - §2.5 step 1 takes `projects` FOR KEY SHARE, not FOR SHARE. Both modes exclude the FOR UPDATE that `close_project` and the C2, C4 and C5 paths take. The writer census found two paths that UPDATE `projects` after a contributing write (`settle_section_on_gate_approval` and `_activate_proposal_as_project_impl`). Against FOR SHARE each would be a hard 40P01. The census is in the 00888 header. It leaves no residual path (corrected by SQ-2257 below).
 - The activation grant plan is in §2.7.
 
+**Revision 2026-10-28 (US-52 release review, lane F-A, 00897/00898).**
+- **Excluded packages (00898, K3).** `_service_obligation_items` evaluated every package-bound phase of the edition, so an amendment that excluded a package left that package's open phase blocking completion. Package-bound phases now count only when their package is `included` in the same edition. A phase whose key names no package of the edition fails closed and still counts. Phases with no package key are unchanged.
+- **Active studio (00897).** The C4 studio-admin predicate that `_can_complete_studio_service` and revocation use now requires the recorded studio to be `active`. A suspended, deactivated or pending studio's owner or admin cannot complete or revoke. The designer-of-record branch is unchanged.
+
 **Revision 2026-10-28 (SQ-2264, 00888).** Repairs the SQ-2263 F1 finding on the SQ-2257 candidate:
 - **Evidence visibility** (§2.2, §2.4): `resolve_service_acceptance_condition` runs as its definer, so the project binding alone let a studio owner or admin cite an artifact they cannot read. One case is the acceptance paper after the designer of record has left the studio. Each reference must now also pass the SELECT policy that governs it for the acting user. Otherwise the resolution refuses with `service_acceptance_evidence_unbound`.
 
