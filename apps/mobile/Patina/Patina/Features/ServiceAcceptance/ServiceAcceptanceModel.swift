@@ -112,6 +112,7 @@ final class ServiceAcceptanceModel {
     private(set) var presentedEvidence: RemoteServiceAcceptanceEvidence?
     private(set) var evidenceLoading = false
     private(set) var evidenceFailed = false
+    private(set) var evidenceChanged = false
     private var evidenceGeneration = 0
 
     /// The request the sheet shows. Opening another drops the last one's
@@ -123,6 +124,7 @@ final class ServiceAcceptanceModel {
                 evidenceGeneration += 1
                 presentedEvidence = nil
                 evidenceFailed = false
+                evidenceChanged = false
             }
         }
     }
@@ -189,12 +191,13 @@ final class ServiceAcceptanceModel {
         presentedEvidence = nil
         evidenceLoading = true
         evidenceFailed = false
+        evidenceChanged = false
         do {
             let read = try await service.fetchMyServiceAcceptanceEvidence(requestId: request.requestId)
             guard generation == evidenceGeneration, presentedRequestId == request.requestId else { return }
             evidenceLoading = false
             if read.matches(request) { presentedEvidence = read }
-            else { evidenceFailed = true }
+            else { evidenceChanged = true }
         } catch {
             guard generation == evidenceGeneration, presentedRequestId == request.requestId else { return }
             evidenceLoading = false

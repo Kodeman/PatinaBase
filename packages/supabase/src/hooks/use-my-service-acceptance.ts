@@ -49,6 +49,17 @@ function text(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) throw new Error('Malformed acceptance text');
   return value;
 }
+function issuedDate(value: unknown): string {
+  const date = text(value);
+  const day = date.slice(0, 10);
+  const parsed = new Date(date);
+  const calendar = new Date(`${day}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(parsed.getTime()) ||
+      !Number.isFinite(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== day) {
+    throw new Error('Malformed acceptance date');
+  }
+  return date;
+}
 function integer(value: unknown, minimum = 1): number {
   if (!Number.isSafeInteger(value) || (value as number) < minimum) throw new Error('Malformed acceptance number');
   return value as number;
@@ -281,7 +292,7 @@ export function readMyServiceAcceptanceEvidence(value: unknown): MyServiceAccept
       members: list(evidence.members).map((m) => {
         const kind = choice(m.kind, evidenceKinds);
         return {
-          kind, title: text(m.title), issuedAt: m.issuedAt == null ? null : text(m.issuedAt),
+          kind, title: text(m.title), issuedAt: m.issuedAt == null ? null : issuedDate(m.issuedAt),
           content: readEvidenceContent(kind, m.content),
           documents: list(m.documents).map((d) => ({
             bucket: choice(d.bucket, ['project-documents'] as const), path: text(d.path), title: text(d.title),

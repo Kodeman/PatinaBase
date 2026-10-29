@@ -206,7 +206,20 @@ public actor DocumentsAPIClient {
         guard let path = document.storage_path, !path.isEmpty else {
             throw DocumentError.missingPath
         }
-        let url = try await signedURL(storagePath: path)
+        return try await downloadedFileURL(storagePath: path, destination: Self.cacheFileURL(for: document, storagePath: path))
+    }
+
+    public func downloadedFileURL(storagePath: String, title: String) async throws -> URL {
+        guard !storagePath.isEmpty else { throw DocumentError.missingPath }
+        let ext = (storagePath as NSString).pathExtension
+        let name = Self.sanitizedFilename(title) + (ext.isEmpty ? "" : ".\(ext)")
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let destination = caches.appendingPathComponent("PatinaDocuments/Acceptance/\(UUID().uuidString)/\(name)")
+        return try await downloadedFileURL(storagePath: storagePath, destination: destination)
+    }
+
+    private func downloadedFileURL(storagePath: String, destination: URL) async throws -> URL {
+        let url = try await signedURL(storagePath: storagePath)
 
         let data: Data
         do {
@@ -221,7 +234,6 @@ public actor DocumentsAPIClient {
             throw DocumentError.downloadFailed
         }
 
-        let destination = Self.cacheFileURL(for: document, storagePath: path)
         do {
             try FileManager.default.createDirectory(
                 at: destination.deletingLastPathComponent(),

@@ -296,7 +296,8 @@ struct ServiceAcceptanceRespondTests {
         model.presentedRequestId = request.requestId
         model.choose(.accept)
         await model.loadEvidence(for: request)
-        #expect(model.evidenceFailed)
+        #expect(model.evidenceChanged)
+        #expect(!model.evidenceFailed)
         #expect(!model.canSubmit)
         await model.submit(for: request)
         #expect(await fake.sent.isEmpty)

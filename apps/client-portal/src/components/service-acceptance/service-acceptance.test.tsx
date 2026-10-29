@@ -139,6 +139,17 @@ it('discovers only required unanswered sent requests in the current house', () =
   expect(screen.getAllByRole('link')).toHaveLength(1);
   expect(screen.getByRole('link')).toHaveAttribute('href', '/acceptance/r1');
 });
+it('labels allowed product facts and pairs dimension values with their unit', () => {
+  mockEvidenceQuery = { ...mockEvidenceQuery, data: { ...evidence, evidence: { ...evidence.evidence,
+    members: [{ ...evidence.evidence.members[0], kind: 'product_configuration', content: {
+      productName: 'Dining table', dimensions: { width: 81.25, unit: 'in' }, leadTimeWeeks: 8,
+    } }] } } };
+  render(<ServiceAcceptanceReading request={request({ lifecycle: 'closed', aggregateOutcome: 'accepted' })} reload={mockQuery.refetch} />);
+  expect(screen.getByText('Request 4 · Closed · Accepted')).toBeInTheDocument();
+  expect(screen.getByText('Furniture')).toBeInTheDocument();
+  expect(screen.getByText('81.25 in')).toBeInTheDocument();
+  expect(screen.queryByText('Unit')).not.toBeInTheDocument();
+});
 it('opens a blank document window in the click gesture before signing, then navigates it', async () => {
   let finishSigning!: (url: string) => void;
   mockSignedUrl.mockImplementation(() => new Promise<string>((resolve) => { finishSigning = resolve; }));
@@ -153,12 +164,13 @@ it('opens a blank document window in the click gesture before signing, then navi
   finishSigning('https://signed.example/room.pdf');
   await waitFor(() => expect(popup.location.replace).toHaveBeenCalledWith('https://signed.example/room.pdf'));
 });
-it('shows an inline failure if the document window is blocked', () => {
+it('offers a signed link if the document window is blocked', async () => {
   jest.spyOn(window, 'open').mockReturnValue(null);
   render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
   click('Room plan PDF');
-  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t open this file. Try again.');
-  expect(mockSignedUrl).not.toHaveBeenCalled();
+  const link = await screen.findByRole('link', { name: 'Open Room plan PDF in a new tab' });
+  expect(link).toHaveAttribute('href', 'https://signed.example/room.pdf');
+  expect(link).toHaveAttribute('target', '_blank');
 });
 it('keeps response controls off until matching evidence loads and retries a failed read', () => {
   mockEvidenceQuery = { data: undefined, isSuccess: false, isError: false, refetch: jest.fn().mockResolvedValue({ data: undefined }) };
@@ -179,11 +191,15 @@ it('keeps response controls off until matching evidence loads and retries a fail
 it.each([
   ['request', { ...evidence, requestId: 'other' }],
   ['edition', { ...evidence, scope: { ...evidence.scope, editionId: 'other' } }],
+  ['request number', { ...evidence, requestNumber: 5 }],
+  ['manifest hash', { ...evidence, evidence: { ...evidence.evidence, manifestHash: 'different' } }],
 ])('holds controls when evidence has a different %s', (_name, data) => {
   mockEvidenceQuery = { data, isError: false, isSuccess: true, refetch: jest.fn() };
   render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
   expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeDisabled();
-  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load the agreed scope');
+  expect(screen.getByRole('alert')).toHaveTextContent('This request changed');
+  click('Reload request');
+  expect(mockQuery.refetch).toHaveBeenCalledTimes(1);
 });
 it('keeps a matching snapshot and draft usable when background refresh fails', () => {
   mockEvidenceQuery = { data: evidence, isError: true, isSuccess: false, refetch: jest.fn() };
@@ -206,10 +222,11 @@ it('focuses the scope heading after a successful evidence retry', async () => {
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Agreed scope' })).toHaveFocus());
   expect(fieldset).not.toHaveAttribute('aria-describedby');
 });
-it('shows a pending door read rather than claiming there are no requests', () => {
+it('keeps the door invisible during an initial pending read', () => {
   mockQuery = { data: undefined, isPending: true, isError: false, refetch: jest.fn() };
   render(<ServiceAcceptanceDoor projectId="p1" />);
-  expect(screen.getByRole('status')).toHaveTextContent('Checking for acceptance requests');
+  expect(screen.queryByText('Checking for acceptance requests…')).not.toBeInTheDocument();
+  expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
 });
 it('uses a read-only evidence error without response language for observers', () => {
   mockEvidenceQuery = { data: undefined, isError: true, isSuccess: false, refetch: jest.fn() };
@@ -225,10 +242,56 @@ it('shows the entrance read error even without cached requests and offers retry'
   expect(mockQuery.refetch).toHaveBeenCalledTimes(1);
 });
 
-it('does not hide a failed refresh when cached acceptance requests are empty', () => {
+it('keeps cached actionable requests visible without a refresh error', () => {
+  mockQuery = { data: [request()], isPending: false, isError: true, refetch: jest.fn() };
+  render(<ServiceAcceptanceDoor projectId="p1" />);
+  expect(screen.getByRole('link', { name: /Waiting for your acceptance/ })).toBeInTheDocument();
+  expect(screen.queryByText(/could not be refreshed|Couldn’t load acceptance/)).not.toBeInTheDocument();
+});
+it('keeps a failed refresh over cached empty requests silent', () => {
   mockQuery = { data: [], isPending: false, isError: true, refetch: jest.fn() };
   render(<ServiceAcceptanceDoor projectId="p1" />);
-  expect(screen.getByRole('status')).toHaveTextContent('Couldn’t load acceptance requests');
+  expect(screen.queryByText('Couldn’t load acceptance requests.')).not.toBeInTheDocument();
+  expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+});
+it.each(['null', 'throws'])('closes a blank document window when signing %s', async (failure) => {
+  const popup = { opener: null, close: jest.fn(), location: { replace: jest.fn() } };
+  jest.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+  if (failure === 'null') mockSignedUrl.mockResolvedValue(null);
+  else mockSignedUrl.mockRejectedValue(new Error('offline'));
+  render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
+  click('Room plan PDF');
+  await waitFor(() => expect(popup.close).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t open this file');
+});
+it('isolates document errors per button and clears one after success', async () => {
+  const popup = { opener: null, close: jest.fn(), location: { replace: jest.fn() } };
+  jest.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+  mockSignedUrl.mockRejectedValueOnce(new Error('offline')).mockResolvedValue('https://signed.example/room.pdf');
+  const withDocuments = { ...evidence, evidence: { ...evidence.evidence, members: [{ ...evidence.evidence.members[0],
+    documents: [...evidence.evidence.members[0].documents, { bucket: 'project-documents' as const, path: 'plans/second.pdf', title: 'Second PDF' }] }] } };
+  mockEvidenceQuery = { ...mockEvidenceQuery, data: withDocuments };
+  render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
+  click('Room plan PDF');
+  await waitFor(() => expect(within(screen.getByRole('button', { name: 'Room plan PDF' }).closest('li')!).getByRole('alert')).toBeInTheDocument());
+  expect(within(screen.getByRole('button', { name: 'Second PDF' }).closest('li')!).queryByRole('alert')).not.toBeInTheDocument();
+  click('Room plan PDF');
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(popup.location.replace).toHaveBeenCalledWith('https://signed.example/room.pdf');
+});
+it('blocks an open confirmation if evidence changes before submit', () => {
+  const { rerender } = render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
+  click('Accept'); click('Review response');
+  mockEvidenceQuery = { ...mockEvidenceQuery, data: { ...evidence, requestNumber: 5 } };
+  rerender(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
+  expect(screen.getByRole('button', { name: 'Confirm response' })).toBeDisabled();
+  click('Confirm response');
+  expect(mockMutate).not.toHaveBeenCalled();
+});
+it('shows no door refresh error when cached requests have no actionable request', () => {
+  mockQuery = { data: [request({ viewerRole: 'observer' })], isPending: false, isError: true, refetch: jest.fn() };
+  render(<ServiceAcceptanceDoor projectId="p1" />);
+  expect(screen.queryByText(/refresh|load acceptance/i)).not.toBeInTheDocument();
 });
 it('maps each authoritative refusal to calm copy', () => {
   for (const message of ['permission denied for function respond_service_acceptance', 'scope_editions_inactive']) expect(acceptanceRefusal({ message })).toMatch(/paused/);

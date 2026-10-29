@@ -63,8 +63,9 @@ struct ServiceAcceptanceDetailView: View {
 /// The scrolling body of the sheet, split out so it renders on its own.
 struct ServiceAcceptanceDetailContent: View {
     @Bindable var model: ServiceAcceptanceModel
-    @Environment(\.openURL) private var openURL
     @State private var documentError: String?
+    @State private var documentLoading: String?
+    @State private var previewURL: IdentifiableURL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -96,6 +97,7 @@ struct ServiceAcceptanceDetailContent: View {
         // Re-read when another request opens or this one's outcome lands.
         .task(id: evidenceKey) {
             documentError = nil
+            documentLoading = nil
             if let request = model.presentedRequest { await model.loadEvidence(for: request) }
         }
         .onChange(of: model.evidenceFailed) { _, failed in
@@ -106,6 +108,10 @@ struct ServiceAcceptanceDetailContent: View {
         }
         .task(id: studioServiceKey) {
             if let request = model.presentedRequest { await model.loadStudioService(for: request) }
+        }
+        .fullScreenCover(item: $previewURL) { item in
+            DocumentQuickLook(fileURL: item.url) { previewURL = nil }
+                .ignoresSafeArea()
         }
     }
 
@@ -185,30 +191,35 @@ struct ServiceAcceptanceDetailContent: View {
                         .background(package.inclusion == "excluded" ? PatinaColors.Background.secondary : PatinaColors.Background.primary)
                     }
                     MonoLabel(text: "Issued evidence")
-                    ForEach(Array(evidence.evidence.members.enumerated()), id: \.offset) { _, member in
+                    ForEach(Array(evidence.evidence.members.enumerated()), id: \.offset) { index, member in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(member.title).font(PatinaTypography.bodySmallMedium)
                             help(ServiceAcceptanceCopy.source(member.kind))
                             if let issuedAt = member.issuedAt { help("Issued \(DateDisplay.fromTimestamp(issuedAt))") }
                             if let content = member.content { AcceptanceEvidenceValue(value: content) }
-                            ForEach(member.documents) { document in
+                            ForEach(Array(member.documents.enumerated()), id: \.offset) { documentIndex, document in
+                                let documentKey = "\(index)|\(documentIndex)"
                                 Button(document.title) {
+                                    documentLoading = documentKey
+                                    documentError = nil
                                     Task {
+                                        defer { documentLoading = nil }
                                         do {
-                                            let url = try await DocumentsAPIClient.shared.signedURL(storagePath: document.path)
-                                            documentError = nil
-                                            openURL(url)
+                                            let url = try await DocumentsAPIClient.shared.downloadedFileURL(
+                                                storagePath: document.path, title: document.title)
+                                            previewURL = IdentifiableURL(url: url)
                                         } catch {
-                                            documentError = document.path
+                                            documentError = documentKey
                                             AccessibilityNotification.Announcement(ServiceAcceptanceCopy.documentError(document.title)).post()
                                         }
                                     }
                                 }
+                                .disabled(documentLoading != nil)
                                 .font(PatinaTypography.bodySmallMedium)
                                 .foregroundStyle(PatinaColors.Text.interactive)
-                                .accessibilityHint(documentError == document.path
+                                .accessibilityHint(documentError == documentKey
                                     ? ServiceAcceptanceCopy.documentError(document.title) : "Opens this issued document.")
-                                if documentError == document.path {
+                                if documentError == documentKey {
                                     help(ServiceAcceptanceCopy.documentError(document.title))
                                 }
                             }
@@ -216,12 +227,28 @@ struct ServiceAcceptanceDetailContent: View {
                     }
                 }
                 .accessibilityIdentifier("serviceAcceptance.evidence")
+            } else if model.evidenceChanged {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(ServiceAcceptanceCopy.evidenceChanged)
+                        .font(PatinaTypography.bodySmall)
+                        .foregroundStyle(PatinaColors.Text.error)
+                    Button(ServiceAcceptanceCopy.reviewAgain) { Task { await model.reload() } }
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                }
             } else if model.evidenceFailed {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(ServiceAcceptanceCopy.evidenceError(canRespond: model.presentedRequest.map(model.canRespond) ?? false))
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.error)
-                    Button(ServiceAcceptanceCopy.tryAgain) { Task { await model.retryEvidence() } }
+                    Button(ServiceAcceptanceCopy.tryAgain) {
+                        Task {
+                            await model.retryEvidence()
+                            if model.evidenceReady {
+                                AccessibilityNotification.Announcement(ServiceAcceptanceCopy.evidenceLoaded).post()
+                            }
+                        }
+                    }
                         .font(PatinaTypography.bodySmallMedium)
                         .foregroundStyle(PatinaColors.Text.interactive)
                         .accessibilityIdentifier("serviceAcceptance.evidence.retry")
@@ -475,10 +502,20 @@ private struct AcceptanceEvidenceValue: View {
         VStack(alignment: .leading, spacing: 4) {
             switch value {
             case .object(let facts):
-                ForEach(facts.keys.sorted(), id: \.self) { key in
+                ForEach(facts.keys.sorted().filter { $0 != "unit" }, id: \.self) { key in
                     HStack(alignment: .top) {
-                        Text(key.replacingOccurrences(of: "([A-Z])", with: " $1", options: .regularExpression).capitalized + ":")
-                        if let fact = facts[key] { AcceptanceEvidenceValue(value: fact) }
+                        Text(ServiceAcceptanceCopy.factLabel(key) + ":")
+                        if let fact = facts[key] {
+                            if case .some(.string(let unit)) = facts["unit"],
+                               case .int(let number) = fact {
+                                Text("\(number) \(unit)")
+                            } else if case .some(.string(let unit)) = facts["unit"],
+                                      case .double(let number) = fact {
+                                Text("\(number) \(unit)")
+                            } else {
+                                AcceptanceEvidenceValue(value: fact)
+                            }
+                        }
                     }
                 }
             case .array(let values):

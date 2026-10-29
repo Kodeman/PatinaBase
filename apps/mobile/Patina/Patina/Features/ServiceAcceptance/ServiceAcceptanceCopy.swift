@@ -48,7 +48,7 @@ enum ServiceAcceptanceCopy {
         case "gc": return "your general contractor"
         case "other": return "another party"
         case "none": return nil
-        default: return nil
+        default: return "another party"
         }
     }
 
@@ -72,6 +72,26 @@ enum ServiceAcceptanceCopy {
         default: return "Service"
         }
     }
+
+    static let evidenceChanged = "This request changed. Reload to see the current version."
+    static let evidenceLoaded = "Agreed scope and evidence loaded."
+
+    private static let factLabels: [String: String] = [
+        "productName": "Furniture", "leadTimeWeeks": "Lead time (weeks)", "dimensions": "Dimensions",
+        "fabric": "Fabric", "fabricName": "Fabric", "pattern": "Pattern", "selections": "Selections",
+        "components": "Components", "groupName": "Group", "valueLabel": "Selection", "name": "Name",
+        "quantity": "Quantity", "handedness": "Handedness", "width": "Width", "depth": "Depth",
+        "height": "Height", "length": "Length", "diameter": "Diameter", "seatHeight": "Seat height",
+        "armHeight": "Arm height", "summary": "Summary", "intent": "Intent", "siteConditions": "Site conditions",
+        "finish": "Finish", "targetDate": "Target date", "revision": "Revision",
+        "requirements": "Requirements", "materials": "Materials", "measurements": "Measurements",
+        "label": "Measurement", "value": "Value", "drawings": "Drawings", "docCode": "Document code",
+        "category": "Category", "room": "Room", "details": "Details", "description": "Description",
+        "material": "Material", "color": "Color", "leadTime": "Lead time", "care": "Care",
+        "source": "Source", "question": "Question"
+    ]
+
+    static func factLabel(_ key: String) -> String { factLabels[key] ?? "Detail" }
 
     static func evidenceError(canRespond: Bool) -> String {
         "Couldn’t load the agreed scope and evidence."

@@ -24,9 +24,13 @@ const changedCopy = 'This request changed — reload to see the current version'
 const invalidCopy = 'Check your conditions: use 1–20 conditions, each 1–2000 characters, or a return reason of up to 2000 characters.';
 const retryCopy = 'Your response could not be confirmed. Your words are kept here; try again.';
 const pausedCopy = "Responses are paused for now. Nothing you've seen is lost.";
-const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 const inclusionCopy = { included: 'Included', excluded: 'Not included', conditional: 'Included if conditions are met' } as const;
 const partyCopy = { studio: 'your studio', client: 'you', gc: 'your general contractor', other: 'another party' } as const;
+const lifecycleCopy = { sent: 'Awaiting responses', closed: 'Closed', withdrawn: 'Withdrawn', superseded: 'Replaced', draft: 'Draft' } as const;
+const outcomeCopy = { pending: 'Pending', accepted: 'Accepted', accepted_with_conditions: 'Accepted with conditions', returned: 'Returned' } as const;
+const slotCopy: Record<string, string> = { client: 'Client', household_partner: 'Household partner', partner: 'Partner', homeowner: 'Homeowner' };
+const factCopy: Record<string, string> = { productName: 'Furniture', leadTimeWeeks: 'Lead time (weeks)', dimensions: 'Dimensions', fabric: 'Fabric', fabricName: 'Fabric', pattern: 'Pattern', selections: 'Selections', components: 'Components', groupName: 'Group', valueLabel: 'Selection', name: 'Name', quantity: 'Quantity', handedness: 'Handedness', width: 'Width', depth: 'Depth', height: 'Height', length: 'Length', diameter: 'Diameter', seatHeight: 'Seat height', armHeight: 'Arm height', summary: 'Summary', intent: 'Intent', siteConditions: 'Site conditions', finish: 'Finish', targetDate: 'Target date', revision: 'Revision', requirements: 'Requirements', materials: 'Materials', measurements: 'Measurements', label: 'Measurement', value: 'Value', drawings: 'Drawings', docCode: 'Document code', category: 'Category', room: 'Room', details: 'Details', description: 'Description', material: 'Material', color: 'Color', leadTime: 'Lead time', care: 'Care', source: 'Source', question: 'Question' };
 const kindCopy = {
   plan_issue: 'Issued plan', plan_issue_print: 'Issued plan print', plan_print: 'Plan print',
   product_configuration: 'Furniture selection', custom_commission_revision: 'Custom piece',
@@ -53,26 +57,33 @@ export function acceptanceRefusal(error: unknown): string {
 }
 
 function EvidenceFacts({ content }: { content: Record<string, unknown> }) {
-  return <dl className="space-y-1">{Object.entries(content).map(([key, value]) =>
-    <div key={key}><dt className="font-medium">{key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())}</dt>
-      <dd>{Array.isArray(value) ? value.map((item, index) => <div key={index}>{typeof item === 'object' ? <EvidenceFacts content={item} /> : String(item)}</div>)
-        : value !== null && typeof value === 'object' ? <EvidenceFacts content={value as Record<string, unknown>} /> : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</dd></div>)}</dl>;
+  return <dl className="space-y-1">{Object.entries(content).filter(([key]) => key !== 'unit').map(([key, value]) =>
+    <div key={key}><dt className="font-medium">{factCopy[key] ?? 'Detail'}</dt>
+      <dd>{Array.isArray(value) ? value.map((item, index) => <div key={index}>{item !== null && typeof item === 'object' ? <EvidenceFacts content={item as Record<string, unknown>} /> : String(item)}</div>)
+        : value !== null && typeof value === 'object' ? <EvidenceFacts content={value as Record<string, unknown>} /> : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : `${String(value)}${typeof value === 'number' && typeof content.unit === 'string' ? ` ${content.unit}` : ''}`}</dd></div>)}</dl>;
 }
 
 function IssuedDocument({ path, title }: { path: string; title: string }) {
   const [failed, setFailed] = useState(false);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
   async function open() {
+    if (opening) return;
+    setOpening(true);
+    setFailed(false);
+    setFallbackUrl(null);
     const popup = window.open('about:blank', '_blank');
-    if (!popup) { setFailed(true); return; }
-    popup.opener = null;
+    if (popup) popup.opener = null;
     try {
       const url = await documentSignedUrl(path);
-      if (!url) { popup.close(); setFailed(true); return; }
-      setFailed(false);
-      popup.location.replace(url);
-    } catch { popup.close(); setFailed(true); }
+      if (!url) { popup?.close(); setFailed(true); return; }
+      if (popup) popup.location.replace(url);
+      else setFallbackUrl(url);
+    } catch { popup?.close(); setFailed(true); }
+    finally { setOpening(false); }
   }
-  return <li><button type="button" className="underline" onClick={() => void open()}>{title}</button>
+  return <li><button type="button" className="underline" disabled={opening} onClick={() => void open()}>{title}</button>
+    {fallbackUrl && <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className="underline">Open {title} in a new tab</a>}
     {failed && <p role="alert">Couldn’t open this file. Try again.</p>}</li>;
 }
 
@@ -100,7 +111,7 @@ export function ServiceAcceptanceEvidence({ request, evidence, headingId }: {
           {pkg.phases.map((phase, index) => <p key={index}>{phase.name} · {phase.service === 'design' ? 'Design' : 'Installation'}</p>)}</li>)}</ul></div>
       <div><h3 className="font-serif text-xl">Issued evidence</h3><ul className="space-y-4">{evidence.evidence.members.map((member, index) =>
         <li key={index}><h4 className="font-medium">{member.title}</h4>
-          <p>{kindCopy[member.kind]}{member.issuedAt && ` · Issued ${dateFormat.format(new Date(member.issuedAt))}`}</p>
+          <p>{kindCopy[member.kind]}{member.issuedAt && ` · Issued ${dateFormat.format(new Date(member.issuedAt.length === 10 ? `${member.issuedAt}T12:00:00` : member.issuedAt))}`}</p>
           {member.content && <EvidenceFacts content={member.content} />}
           {member.documents.length > 0 && <ul>{member.documents.map((doc) => <IssuedDocument key={doc.path} path={doc.path} title={doc.title} />)}</ul>}
         </li>)}</ul></div>
@@ -218,11 +229,13 @@ export function ServiceAcceptanceReading({ request, reload }: {
   const pending = request.signers.filter((s) => s.required && !s.response).length;
   return <article className="mx-auto max-w-2xl space-y-8 px-4 py-10">
     <Link href={`/projects/${encodeURIComponent(request.projectId)}`}>Return to your house</Link>
-    <header><h1 className="font-serif text-3xl">Service acceptance</h1><p>Request {request.requestNumber} · {request.lifecycle} · {request.aggregateOutcome.replaceAll('_', ' ')}</p></header>
+    <header><h1 className="font-serif text-3xl">Service acceptance</h1><p>Request {request.requestNumber} · {lifecycleCopy[request.lifecycle] ?? 'Unavailable'} · {outcomeCopy[request.aggregateOutcome] ?? 'Unavailable'}</p></header>
     <ServiceAcceptanceEvidence request={request} evidence={evidenceReady ? evidence : undefined} headingId={evidenceHeadingId} />
     {evidenceQuery.isError && evidenceReady && <p role="status">Couldn’t refresh the agreed scope and evidence. You can still review what was loaded.</p>}
-    {!evidenceReady && <div className="space-y-2">{evidenceQuery.isError || !!evidence
-      ? <><p id={evidenceReasonId} role="alert">Couldn’t load the agreed scope and evidence.{canRespond ? ' Your response is unavailable until you can review them.' : ''}</p>
+    {!evidenceReady && <div className="space-y-2">{evidence
+      ? <><p id={evidenceReasonId} role="alert">{changedCopy}</p>
+          <button type="button" className={control} onClick={() => void reload().catch(() => {})}>Reload request</button></>
+      : evidenceQuery.isError ? <><p id={evidenceReasonId} role="alert">Couldn’t load the agreed scope and evidence.{canRespond ? ' Your response is unavailable until you can review them.' : ''}</p>
           <button type="button" className={control} onClick={() => void retryEvidence()}>Try again</button></>
       : <p id={evidenceReasonId} role="status">Loading the agreed scope and evidence…</p>}</div>}
     <StudioServiceCompletion projectId={request.projectId} requestId={request.requestId} aggregateOutcome={request.aggregateOutcome} />
@@ -230,7 +243,7 @@ export function ServiceAcceptanceReading({ request, reload }: {
     {own && <section aria-label="Your recorded response"><h2>Your response</h2><ResponseReading response={own} /></section>}
     {canRespond && <ResponseForm request={request} reload={reload} evidenceReady={evidenceReady} evidenceReasonId={evidenceReasonId} />}
     <section aria-label="Responses"><h2>Responses</h2><ul className="space-y-4">{request.signers.map((s) => <li key={s.signerId}>
-      <h3>{s.slot}{s.signerId === request.viewerSignerId ? ' · You' : ''} · {s.required ? 'Required' : 'Optional'}</h3>
+      <h3>{slotCopy[s.slot] ?? s.slot.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase())}{s.signerId === request.viewerSignerId ? ' · You' : ''} · {s.required ? 'Required' : 'Optional'}</h3>
       {s.response ? <ResponseReading response={s.response} /> : <p>Waiting for response</p>}
     </li>)}</ul></section>
   </article>;

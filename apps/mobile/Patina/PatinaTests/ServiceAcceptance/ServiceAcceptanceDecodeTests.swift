@@ -122,6 +122,24 @@ struct ServiceAcceptanceDecodeTests {
         #expect(ServiceAcceptanceCopy.inclusion("excluded") == "Not included")
     }
 
+    @Test("unknown evidence kind and party stay readable without exposing wire tokens")
+    func unknownEvidenceCopy() throws {
+        let request = try ServiceAcceptanceFixture.request(ServiceAcceptanceFixture.row())
+        let json = """
+        {"requestId":"\(request.requestId)","requestNumber":2,
+         "scope":{"editionId":"ed-1","contentHash":"sha-scope-1",
+                  "packages":[{"key":"design","label":"Design","inclusion":"included",
+                    "conditionText":null,"responsibilities":{"design":"future_party","purchasing":"none","installation":"none"},
+                    "phases":[]}]},
+         "evidence":{"manifestId":"m-1","manifestHash":"sha-evidence-1",
+                     "members":[{"kind":"future_kind","title":"Drawing","issuedAt":null,
+                                 "content":null,"documents":[]}]}}
+        """
+        let read = try JSONDecoder().decode(RemoteServiceAcceptanceEvidence.self, from: Data(json.utf8))
+        #expect(ServiceAcceptanceCopy.source(try #require(read.evidence.members.first).kind) == "Issued item")
+        #expect(ServiceAcceptanceCopy.party(try #require(read.scope.packages.first).responsibilities.design) == "another party")
+    }
+
     // MARK: - viewerRole fails closed
 
     @Test("an unknown viewerRole decodes as observer and is offered no act")
