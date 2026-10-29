@@ -266,12 +266,14 @@ export function PurchaseLens({
 }: PurchaseLensProps) {
   const filterId = useId();
   const [filter, setFilter] = useState<PurchaseFilter>("all");
-  const { data: rawLines } = useProjectFFEItems(projectId);
-  const { data: roomRows } = useDocumentRooms(projectId);
+  const schedule = useProjectFFEItems(projectId);
+  const roomRead = useDocumentRooms(projectId);
   const rooms = useMemo(
-    () => (roomRows ?? []).map((r) => ({ id: r.id, name: r.name })),
-    [roomRows],
+    () => (roomRead.data ?? []).map((r) => ({ id: r.id, name: r.name })),
+    [roomRead.data],
   );
+  const scheduleFailed = schedule.isError || roomRead.isError;
+  const schedulePending = schedule.isPending || roomRead.isPending;
   // The job's purchasing context, read the way the FF&E section reads it for
   // the line's own gate: one project read each, shared with the paper.
   const authority = useProjectBillingAuthority(projectId);
@@ -296,16 +298,16 @@ export function PurchaseLens({
   ]);
   const groups = useMemo(
     () =>
-      context && !contextFailed
+      context && schedule.data && roomRead.data && !contextFailed && !scheduleFailed && !schedulePending
         ? derivePurchaseGroups(
-            (rawLines ?? []) as unknown as PurchaseLensLine[],
+            schedule.data as unknown as PurchaseLensLine[],
             rooms,
             room,
             filter,
             context,
           )
         : [],
-    [rawLines, rooms, room, filter, context, contextFailed],
+    [schedule.data, rooms, room, filter, context, contextFailed, scheduleFailed, schedulePending],
   );
 
   if (room === REMOVED_PLACE) {
@@ -362,7 +364,25 @@ export function PurchaseLens({
             <tbody>
               <tr>
                 <td colSpan={columns.length} className={CELL}>
-                  {contextFailed ? (
+                  {scheduleFailed ? (
+                    <span role="alert">
+                      {schedule.isError && roomRead.isError
+                        ? "The schedule and rooms could not be read."
+                        : schedule.isError
+                          ? "The schedule could not be read."
+                          : "The rooms could not be read."}{" "}
+                      <button
+                        type="button"
+                        className={ACT_CLS}
+                        onClick={() => {
+                          if (schedule.isError) void schedule.refetch();
+                          if (roomRead.isError) void roomRead.refetch();
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </span>
+                  ) : contextFailed ? (
                     <span role="alert">
                       The job’s purchasing authority could not be read, so no line is shown as ready to order.{" "}
                       <button
@@ -377,10 +397,14 @@ export function PurchaseLens({
                         Try again
                       </button>
                     </span>
-                  ) : rawLines && context ? (
+                  ) : schedule.isPending || !schedule.data ? (
+                    "Reading the schedule…"
+                  ) : roomRead.isPending || !roomRead.data ? (
+                    "Reading the rooms…"
+                  ) : context ? (
                     "No lines match this view. Change the room or the purchasing filter."
                   ) : (
-                    "Reading the schedule…"
+                    "Reading the purchasing authority…"
                   )}
                 </td>
               </tr>

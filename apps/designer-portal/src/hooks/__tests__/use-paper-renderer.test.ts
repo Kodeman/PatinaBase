@@ -175,6 +175,17 @@ describe('usePaperRenderer', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  it('anonymous true stays pending until the identified false answer', async () => {
+    mockDistinctId = 'anonymous';
+    const { result } = renderHook(() => usePaperRenderer());
+    initializeAnalytics();
+    await answer(true);
+    expect(result.current.renderer).toBe('pending');
+    act(() => { mockDistinctId = 'designer-a'; reload(); });
+    await answer(false);
+    expect(result.current).toEqual({ renderer: 'legacy', source: 'flag' });
+  });
+
   it('anonymous false stays pending through identify and reload until true', async () => {
     mockDistinctId = 'anonymous';
     const renders: string[] = [];

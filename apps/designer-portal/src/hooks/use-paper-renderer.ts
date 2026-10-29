@@ -99,12 +99,13 @@ function watchFlags(): void {
       return;
     }
     const value = posthog.isFeatureEnabled(FLAG);
-    if (value === true) decide('round8', 'flag');
-    if (value !== false) return;
+    if (value === undefined) return;
     const generation = reloadGeneration;
-    // Let identify/reload notifications in this turn invalidate a provisional false.
+    // Let identify/reload notifications in this turn invalidate a provisional answer.
     void Promise.resolve().then(() => {
-      if (generation === reloadGeneration && isIdentified()) decide('legacy', 'flag');
+      if (generation === reloadGeneration && isIdentified()) {
+        decide(value ? 'round8' : 'legacy', 'flag');
+      }
     });
   }));
 }
