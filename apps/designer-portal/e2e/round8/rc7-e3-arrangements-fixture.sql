@@ -1,9 +1,15 @@
--- This activation belongs only to the isolated RC-7 E3 cluster. The spec checks
--- the external DB port before invoking this file; the system identifier checks
--- the actual Postgres cluster, not its forwarded container port.
+-- Supply -v e3_system_identifier="$RC7_E3_SYSTEM_IDENTIFIER" after validating
+-- SUPABASE_DB_URL port 56122. No identifier or a different cluster refuses writes.
+\if :{?e3_system_identifier}
+\else
+\echo 'RC7-E3 requires the cluster identifier captured at stack start'
+\quit 1
+\endif
 BEGIN;
+SELECT set_config('rc7_e3.expected_cluster', :'e3_system_identifier', true);
 DO $$ BEGIN
-  IF (SELECT system_identifier::text FROM pg_control_system()) <> '7702055901180289066' THEN
+  IF (SELECT system_identifier::text FROM pg_control_system())
+      IS DISTINCT FROM current_setting('rc7_e3.expected_cluster', true) THEN
     RAISE EXCEPTION 'RC7-E3 refuses non-owned cluster';
   END IF;
 END $$;

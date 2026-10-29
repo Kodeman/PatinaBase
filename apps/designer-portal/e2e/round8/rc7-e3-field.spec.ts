@@ -21,9 +21,15 @@ function ownedStack() {
   ) {
     throw new Error("RC7-E3 refuses a database outside its owned stack");
   }
+  const expected = process.env.RC7_E3_SYSTEM_IDENTIFIER;
+  if (!expected || !/^\d+$/.test(expected)) {
+    throw new Error(
+      "RC7-E3 requires the cluster identifier captured at stack start",
+    );
+  }
   expect(
     psqlScalar("SELECT system_identifier::text FROM pg_control_system()"),
-  ).toBe("7702055901180289066");
+  ).toBe(expected);
 }
 
 function removeObservation() {
@@ -88,13 +94,12 @@ test("A15 real Field RPC and Field note write retain room, author and private sc
     expect(
       JSON.parse(
         psqlScalar(`SELECT jsonb_build_object('project',project_id,'author',designer_id,
-      'capture',field_capture_id,'subject',subject_kind,'body',body)::text FROM margin_notes WHERE id='${NOTE}'`),
+      'capture',field_capture_id,'body',body)::text FROM margin_notes WHERE id='${NOTE}'`),
       ),
     ).toMatchObject({
       project: JOB,
       author: DESIGNER,
       capture: captureId,
-      subject: null,
       body: BODY,
     });
     await page.goto(`/doc/${JOB}`, { waitUntil: "domcontentloaded" });
@@ -129,9 +134,11 @@ test("A15 real Field RPC and Field note write retain room, author and private sc
     await expect(
       page.locator("p").filter({ hasText: BODY }).last(),
     ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: `Return to room · ${ROOM}` }),
-    ).toBeVisible();
+    expect(
+      psqlScalar(
+        `SELECT project_room_id FROM field_captures WHERE id='${captureId}'`,
+      ),
+    ).toBe(ROOM);
     expect(
       psqlScalar(`SELECT jsonb_build_object(
       'tasks', (SELECT count(*) FROM project_tasks WHERE project_id='${JOB}' AND status='completed'),
@@ -144,7 +151,82 @@ test("A15 real Field RPC and Field note write retain room, author and private sc
   }
 });
 
-// DEFECT RC7-e3-2: Field's note writer cannot carry a typed source print/issue or review owner.
-test.fixme("A15 Field observation records source print, review assignment and explicit client share", async () => {
-  // MarginNoteWriteRequest has no subject_kind, subject_id or next-owner field.
+function seedDefectObservation() {
+  removeObservation();
+  psqlAsUser(
+    DESIGNER,
+    `SELECT public.commit_field_capture('${TOKEN}', 'library',
+      '{"schemaVersion":4,"captureKind":"note","title":"RC7 E3 field observation","notes":"${BODY}","photos":[],"confirmations":{},"proposals":{}}'::jsonb,
+      '${JOB}', '${ROOM}', NULL, '${STUDIO}');`,
+  );
+  const captureId = psqlScalar(
+    `SELECT id FROM field_captures WHERE client_capture_id='${TOKEN}'`,
+  );
+  psqlAsUser(
+    DESIGNER,
+    `INSERT INTO public.margin_notes
+      (id,project_id,designer_id,body,anchor_kind,field_capture_id)
+      VALUES ('${NOTE}','${JOB}','${DESIGNER}','${BODY}','letterhead','${captureId}');`,
+  );
+}
+
+// DEFECT RC7-E3-2: the Field writer cannot carry subject, scope or next owner.
+test.fixme("A15 Field observation records a typed source, scope and review owner", async () => {
+  ownedStack();
+  seedDefectObservation();
+  try {
+    const note = JSON.parse(
+      psqlScalar(`SELECT jsonb_build_object(
+      'subject',subject_kind,'subjectId',subject_id,
+      'scope',to_jsonb(n)->>'scope','nextOwner',to_jsonb(n)->>'next_owner_id')::text
+      FROM public.margin_notes n WHERE id='${NOTE}'`),
+    );
+    expect(note.subject).toBe("plan_print");
+    expect(note.subjectId).toMatch(/^[a-f0-9-]{36}$/);
+    expect(note.scope).toBe("studio");
+    expect(note.nextOwner).toBe(DESIGNER);
+  } finally {
+    removeObservation();
+  }
+});
+
+// DEFECT RC7-E3-3: the room link prints a raw UUID, not its human label.
+test.fixme("A15 Field observation links to the room by its human name", async ({
+  authenticatedPage: page,
+}) => {
+  ownedStack();
+  seedDefectObservation();
+  try {
+    await page.goto(`/doc/${JOB}`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("[data-document-shell]")).toHaveAttribute(
+      "data-arrival-ready",
+      "",
+      { timeout: 60_000 },
+    );
+    if ((page.viewportSize()?.width ?? 1440) < 1180) {
+      await page.getByRole("button", { name: "More studio actions" }).click();
+      await page
+        .getByRole("group", { name: "In this document" })
+        .getByRole("button", { name: /^Margin/ })
+        .click();
+      const row = page
+        .locator("[data-margin-row]")
+        .filter({ hasText: "RC7 E3 fictional field observation" });
+      await expect(row).toBeVisible({ timeout: 30_000 });
+      await row.getByRole("button").first().click();
+    } else {
+      const note = page
+        .getByRole("complementary", { name: /^(?:In the margin|Margin)$/ })
+        .getByRole("button", {
+          name: /Note RC7 E3 fictional field observation/,
+        });
+      await expect(note).toBeVisible({ timeout: 30_000 });
+      await note.click();
+    }
+    await expect(
+      page.getByRole("link", { name: "Return to room · Living Room" }),
+    ).toBeVisible();
+  } finally {
+    removeObservation();
+  }
 });

@@ -5,6 +5,8 @@ const DESIGNER = "f0180000-0000-4000-8000-000000000002";
 const INQUIRY = "RC7 E3 fictional inquiry";
 const NOTES = "Keep the piano alcove and original survey notes.";
 const DIRECT = "RC7 E3 fictional direct project";
+const CLIENT = "a0000000-0000-0000-0000-000000000005";
+const CLIENT_EMAIL = "client@patina.dev";
 
 function ownedStack() {
   const api = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
@@ -17,9 +19,15 @@ function ownedStack() {
   ) {
     throw new Error("RC7-E3 refuses an unowned lineage stack");
   }
+  const expected = process.env.RC7_E3_SYSTEM_IDENTIFIER;
+  if (!expected || !/^\d+$/.test(expected)) {
+    throw new Error(
+      "RC7-E3 requires the cluster identifier captured at stack start",
+    );
+  }
   expect(
     psqlScalar("SELECT system_identifier::text FROM pg_control_system()"),
-  ).toBe("7702055901180289066");
+  ).toBe(expected);
 }
 
 function removeLineage() {
@@ -166,9 +174,12 @@ test("A03 inquiry reaches a draft proposal with source notes; direct project kee
     await expect(page.getByRole("region", { name: "Direction" })).toContainText(
       "DRAFT",
     );
-    expect(
-      psqlScalar(`SELECT project_description FROM leads WHERE id='${lead}'`),
-    ).toBe(NOTES);
+    await page.getByRole("button", { name: "Open project record" }).click();
+    await page
+      .locator("[data-settled-heading]")
+      .filter({ hasText: /^Brief/ })
+      .click();
+    await expect(page.getByText(`“${NOTES}”`)).toBeVisible();
 
     await page.goto("/desk", { waitUntil: "domcontentloaded" });
     await expect(page.locator('[data-studio="round8"]')).toHaveAttribute(
@@ -210,6 +221,106 @@ test("A03 inquiry reaches a draft proposal with source notes; direct project kee
   }
 });
 
-// The full proposal → signed commission → project chain requires real client
-// acceptance and is not claimed by the inquiry/relationship transition above.
-test.fixme("A03 proposal agreement activation preserves lead notes and all former aliases", async () => {});
+// DEFECT RC7-E3-4: Discovery seeds an earlier-format Direction that has no
+// agreement-send act; the separate design-agreement opener creates another row.
+test.fixme("A03 inquiry-born Direction can send an agreement without losing its lead lineage", async ({
+  authenticatedPage: page,
+}) => {
+  test.setTimeout(240_000);
+  removeLineage();
+  try {
+    await page.goto("/desk", { waitUntil: "domcontentloaded" });
+    await expect(page.locator('[data-studio="round8"]')).toHaveAttribute(
+      "data-arrival-ready",
+      "",
+      { timeout: 60_000 },
+    );
+    await page
+      .getByRole("button", { name: "Record an inquiry", exact: true })
+      .click();
+    await page.getByLabel("Client name").fill(INQUIRY);
+    await page.getByLabel("Email address (optional)").fill(CLIENT_EMAIL);
+    await page.getByLabel("Project summary").fill(NOTES);
+    await page.getByRole("button", { name: "Create inquiry brief" }).click();
+    await expect
+      .poll(() =>
+        psqlScalar(
+          `SELECT id FROM leads WHERE designer_id='${DESIGNER}' AND contact_name='${INQUIRY}'`,
+        ),
+      )
+      .toMatch(/^[a-f0-9-]{36}$/);
+    const leadId = psqlScalar(
+      `SELECT id FROM leads WHERE designer_id='${DESIGNER}' AND contact_name='${INQUIRY}'`,
+    );
+    await page.goto(`/doc/${leadId}`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("[data-document-shell]")).toHaveAttribute(
+      "data-arrival-ready",
+      "",
+      { timeout: 60_000 },
+    );
+    await page.getByRole("button", { name: "Accept · begin" }).click();
+    await expect
+      .poll(() => psqlScalar(`SELECT status FROM leads WHERE id='${leadId}'`))
+      .toBe("accepted");
+    const relationship = psqlScalar(
+      `SELECT id FROM designer_clients WHERE lead_id='${leadId}' AND designer_id='${DESIGNER}'`,
+    );
+    psqlRun(`INSERT INTO client_discovery
+      (designer_client_id,designer_id,project_type,rooms,budget_max_cents,target_date,style_keywords,lifestyle)
+      VALUES ('${relationship}','${DESIGNER}','full_room',
+        '[{"name":"Piano room","notes":"Keep the piano alcove"}]'::jsonb,
+        5000000,'2027-06-01',ARRAY['warm'],'[{"room":"Piano room","who":"family"}]'::jsonb);`);
+    const [proposal] = psqlAsUserRow(
+      DESIGNER,
+      `SELECT public.begin_direction_from_discovery('${relationship}');`,
+    );
+    expect(
+      psqlScalar(`SELECT client_id FROM proposals WHERE id='${proposal}'`),
+    ).toBe("");
+    expect(
+      psqlScalar(
+        `SELECT client_id FROM designer_clients WHERE id='${relationship}'`,
+      ),
+    ).toBe("");
+    await page.goto(`/doc/${proposal}`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("[data-document-shell]")).toHaveAttribute(
+      "data-arrival-ready",
+      "",
+      { timeout: 60_000 },
+    );
+    const response = await page.request.post("/api/clients/invite", {
+      data: {
+        designerClientId: relationship,
+        clientEmail: CLIENT_EMAIL,
+        invite: true,
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    expect((await response.json()).profileId).toBe(CLIENT);
+    expect(
+      psqlScalar(
+        `SELECT client_id FROM designer_clients WHERE id='${relationship}'`,
+      ),
+    ).toBe(CLIENT);
+    await page
+      .getByRole("button", {
+        name: "View or change the client this document is for",
+      })
+      .click();
+    await page.getByTestId("client-picker-trigger").click();
+    await page.getByTestId(`client-picker-option-${CLIENT}`).click();
+    await expect
+      .poll(() =>
+        psqlScalar(`SELECT client_id FROM proposals WHERE id='${proposal}'`),
+      )
+      .toBe(CLIENT);
+    await expect(page.getByRole("region", { name: "Direction" })).toContainText(
+      "DRAFT",
+    );
+    await expect(
+      page.getByRole("button", { name: "Review & send" }),
+    ).toBeVisible();
+  } finally {
+    removeLineage();
+  }
+});
