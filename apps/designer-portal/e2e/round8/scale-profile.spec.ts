@@ -14,6 +14,7 @@ for (const key of ['NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_DB_URL']) {
   const url = process.env[key] ?? (key === 'SUPABASE_DB_URL' ? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' : '');
   if (new URL(url).hostname !== '127.0.0.1') throw new Error('Scale fixture requires loopback');
 }
+const supabaseOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin;
 const sheet = (page: Page) => page.locator('[data-unfold-instrument="pieces"]');
 const pane = (page: Page) => sheet(page).getByTestId('spec-fields-pane');
 const lineControl = (page: Page, id: string) => sheet(page).getByTestId('spec-lens').locator(`[data-line-id="${id}"] > button`);
@@ -31,7 +32,7 @@ function capture(page: Page) {
   const pending = new Set<Promise<void>>();
   const records: Array<Record<string, unknown>> = [];
   page.on('request', request => {
-    if (new URL(request.url()).origin !== 'http://127.0.0.1:54321') return;
+    if (new URL(request.url()).origin !== supabaseOrigin) return;
     active.set(request, phase); last = Date.now();
     const readiness = [...active.keys()].filter(r => new URL(r.url()).pathname.endsWith('/rpc/get_project_ffe_readiness')).length;
     readinessPeak[phase] = Math.max(readinessPeak[phase] ?? 0, readiness);
@@ -49,7 +50,7 @@ function capture(page: Page) {
   page.on('response', response => {
     const request = response.request();
     const url = new URL(response.url());
-    if (url.origin !== 'http://127.0.0.1:54321') return;
+    if (url.origin !== supabaseOrigin) return;
     const atPhase = active.get(request) ?? phase;
     const work = (async () => {
       let bytes = 0;
