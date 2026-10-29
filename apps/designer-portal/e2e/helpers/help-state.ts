@@ -8,7 +8,8 @@
  *
  * ── DATABASE SAFETY ────────────────────────────────────────────────────────
  * These helpers MUST target the LOCAL Supabase stack. The guard below aborts
- * the whole run if the URL is anything but 127.0.0.1:54321 / localhost:54321 —
+ * the whole run if the URL is anything but a loopback host (127.0.0.1 /
+ * localhost, any port, so an owned stack off 54321 also qualifies) —
  * a fresh, loud stop rather than a silent write against Strata prod (whose
  * ref is bkvcixdmuyejfzcijpdg.supabase.co).
  */
@@ -16,10 +17,10 @@ import { psqlAsUser } from './psql';
 import { adminDb, getUserIdByEmail } from './supabase-admin';
 
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-if (!/^https?:\/\/(127\.0\.0\.1|localhost):54321(\/|$)/.test(SUPA_URL)) {
+if (!/^https?:\/\/(127\.0\.0\.1|localhost):\d+(\/|$)/.test(SUPA_URL)) {
   throw new Error(
     `REFUSING to run help-state e2e against a non-local Supabase URL: "${SUPA_URL}". ` +
-      `Point apps/designer-portal/.env.local at http://127.0.0.1:54321 (the local stack).`,
+      `Point NEXT_PUBLIC_SUPABASE_URL at a local stack (http://127.0.0.1:<port>).`,
   );
 }
 
