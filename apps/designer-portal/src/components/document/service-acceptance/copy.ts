@@ -39,6 +39,11 @@ export const LIFECYCLE: Record<ServiceAcceptanceLifecycle, string> = {
   closed: 'Closed',
 };
 
+/** A request presented on paper (00899) is 'sent' in the record but never reached the client by email. */
+export function lifecycleLabel(request: { lifecycle: ServiceAcceptanceLifecycle; offlinePresentedAt: string | null }): string {
+  return request.lifecycle === 'sent' && request.offlinePresentedAt ? 'Presented on paper' : LIFECYCLE[request.lifecycle];
+}
+
 export const OUTCOME: Record<ServiceAcceptanceOutcome, string> = {
   pending: 'Waiting on responses',
   accepted: 'Accepted',

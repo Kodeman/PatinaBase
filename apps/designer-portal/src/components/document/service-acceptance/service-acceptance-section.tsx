@@ -9,12 +9,14 @@
  * act is denied; that reads as one calm note and the record stays readable.
  */
 
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Send } from 'lucide-react';
 import {
   useCreateServiceAcceptanceRequest,
+  useIsStudioReleaser,
   useOutboundDrafts,
   usePresentServiceAcceptanceOffline,
+  useProjectRecordedStudio,
   useProjectHousehold,
   useReplaceServiceAcceptanceSigner,
   useReviewServiceAcceptancePaperIntake,
@@ -35,8 +37,8 @@ import { DocumentAction, DocumentActionRow } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
 import { OPEN_STATUSES, ReadyToSendSheet } from '../outbound/ready-to-send-sheet';
 import {
-  INACTIVE_NOTE, LIFECYCLE, OUTCOME, SUPERSEDED, answerLabel, presentRefusalCopy, refusalCopy, responseLabel, shortDate,
-  slotLabel,
+  INACTIVE_NOTE, OUTCOME, SUPERSEDED, answerLabel, lifecycleLabel, presentRefusalCopy, refusalCopy, responseLabel,
+  shortDate, slotLabel,
 } from './copy';
 import { PaperIntakeForm } from './paper-intake-form';
 
@@ -59,6 +61,12 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
   // retry, so the hand-off stays too. Each open notice's status is kept so
   // the hand-off can say whether it waits on review or is already sending.
   const outbound = useOutboundDrafts({ projectId });
+  // Presenting on paper is an owner/admin act of the job's recorded studio
+  // (00899); the same server seat check the release slot reads. The RPC still
+  // decides, and also refuses a studio that is not active.
+  const studio = useProjectRecordedStudio(projectId);
+  const seat = useIsStudioReleaser(studio.data);
+  const canPresent = seat.data === true;
   const openNotices = (requestId: string) => (outbound.data ?? []).filter((draft) =>
     draft.ref_type === 'service_acceptance_request' && draft.ref_id === requestId
     && OPEN_STATUSES.has(draft.status)).map((draft) => draft.status);
@@ -66,7 +74,9 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
   return (
     <section aria-labelledby={`service-acceptance-${projectId}`} data-service-acceptance className="mt-6">
       <h3 id={`service-acceptance-${projectId}`} className="t-body font-semibold">Service acceptance</h3>
-      <p className="t-meta mt-1">The client accepts the agreed services. Nothing reaches them until you send it.</p>
+      <p className="t-meta mt-1">
+        The client accepts the agreed services. Nothing reaches them until you send it or hand it to them on paper.
+      </p>
       {inactive && (
         <p role="status" data-service-acceptance-inactive className="t-body-sm mt-3">{INACTIVE_NOTE}</p>
       )}
@@ -89,7 +99,7 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
               {requests.map((request) => (
                 <RequestCard key={request.requestId} projectId={projectId} request={request}
                   openNotices={openNotices(request.requestId)} predecessor={request.predecessorRequestId ? byId.get(request.predecessorRequestId) : undefined}
-                  report={report} onInactive={() => setInactive(true)} />
+                  canPresent={canPresent} report={report} onInactive={() => setInactive(true)} />
               ))}
             </ol>
           )}
@@ -191,15 +201,21 @@ function CreateRequest({ projectId, hasOpen, report }: { projectId: string; hasO
   );
 }
 
-function RequestCard({ projectId, request, openNotices, predecessor, report, onInactive }: {
+function RequestCard({ projectId, request, openNotices, predecessor, canPresent, report, onInactive }: {
   projectId: string;
   request: ServiceAcceptanceRequest;
   openNotices: string[];
   predecessor?: ServiceAcceptanceRequest;
+  canPresent: boolean;
   report: Report;
   onInactive: () => void;
 }) {
   const open = isOpen(request);
+  // After a presentation the confirm is gone; focus lands on this note, which
+  // stays while the refreshed request takes the card over.
+  const [presented, setPresented] = useState(false);
+  const presentedRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (presented) presentedRef.current?.focus(); }, [presented]);
   const active = request.signers.filter((signer) => signer.status === 'active');
   const replaced = request.signers.filter((signer) => signer.status === 'replaced');
 
@@ -207,7 +223,7 @@ function RequestCard({ projectId, request, openNotices, predecessor, report, onI
     <li data-service-acceptance-request={request.requestId} data-lifecycle={request.lifecycle}
       className="border-t border-[var(--color-pearl)] pt-3">
       <p className="t-body-sm font-semibold">
-        Request {request.requestNumber} · {LIFECYCLE[request.lifecycle]} · {OUTCOME[request.aggregateOutcome]}
+        Request {request.requestNumber} · {lifecycleLabel(request)} · {OUTCOME[request.aggregateOutcome]}
       </p>
       {predecessor && <p className="t-meta">Follows request {predecessor.requestNumber}.</p>}
       {request.lifecycle === 'superseded' && (
@@ -250,7 +266,15 @@ function RequestCard({ projectId, request, openNotices, predecessor, report, onI
         </ul>
       )}
 
-      {request.lifecycle === 'draft' && <PresentOnPaper projectId={projectId} request={request} onInactive={onInactive} />}
+      {presented && (
+        <p ref={presentedRef} tabIndex={-1} role="status" className="t-body-sm mt-2">
+          Request {request.requestNumber} is marked as presented on paper. Record the signed paper for each signer.
+        </p>
+      )}
+      {request.lifecycle === 'draft' && canPresent && !presented && (
+        <PresentOnPaper projectId={projectId} request={request} onInactive={onInactive}
+          onPresented={() => setPresented(true)} />
+      )}
       {open && <WithdrawRequest projectId={projectId} request={request} report={report} />}
     </li>
   );
@@ -428,38 +452,51 @@ function ReplaceSigner({ projectId, request, signer, report, onDone }: {
 // 00899: a request whose signers have no account to email reaches paper intake
 // only when the studio says it handed the request over in person. Nothing is
 // sent and no answer is recorded; the signed paper is still recorded and reviewed.
-function PresentOnPaper({ projectId, request, onInactive }: {
-  projectId: string; request: ServiceAcceptanceRequest; onInactive: () => void;
+function PresentOnPaper({ projectId, request, onInactive, onPresented }: {
+  projectId: string; request: ServiceAcceptanceRequest; onInactive: () => void; onPresented: () => void;
 }) {
+  const id = useId();
   const present = usePresentServiceAcceptanceOffline(projectId);
   const [opened, setOpened] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const launchRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const confirmRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const backToLaunch = useRef(false);
+  useEffect(() => {
+    if (opened) confirmRef.current?.focus();
+    else if (backToLaunch.current) {
+      backToLaunch.current = false;
+      launchRef.current?.focus();
+    }
+  }, [opened]);
   if (!opened) {
     return (
       <DocumentActionRow surfaceKey="service-acceptance" regionKey="present-on-paper">
-        <DocumentAction actionKey="present-acceptance-on-paper" variant="tertiary" onClick={() => setOpened(true)}>
+        <DocumentAction ref={launchRef} actionKey="present-acceptance-on-paper" variant="tertiary"
+          onClick={() => setOpened(true)}>
           Presented on paper
         </DocumentAction>
       </DocumentActionRow>
     );
   }
+  const described = error ? `${id}-consequence ${id}-error` : `${id}-consequence`;
   return (
     <div className="mt-2 space-y-2" role="group" aria-label={`Present request ${request.requestNumber} on paper`}>
-      <p className="t-body-sm">
+      <p id={`${id}-consequence`} className="t-body-sm">
         Mark request {request.requestNumber} as handed to the client on paper? Nothing is emailed and no answer is
         recorded. You can then record the signed paper for each signer.
       </p>
-      {error && <p role="alert" className="t-body-sm">{error}</p>}
+      {error && <p id={`${id}-error`} role="alert" className="t-body-sm">{error}</p>}
       <DocumentActionRow surfaceKey="service-acceptance" regionKey="present-on-paper">
-        <DocumentAction actionKey="confirm-present-acceptance-on-paper" variant="secondary"
-          disabled={present.isPending} loading={present.isPending}
+        <DocumentAction ref={confirmRef} actionKey="confirm-present-acceptance-on-paper" variant="secondary"
+          aria-describedby={described} disabled={present.isPending} loading={present.isPending}
           onClick={async () => {
             if (present.isPending) return;
             setError(null);
             try {
               await present.mutateAsync({ requestId: request.requestId, scopeContentHash: request.scopeContentHash,
                 evidenceManifestHash: request.evidenceManifestHash });
-              setOpened(false);
+              onPresented();
             } catch (failure) {
               const copy = presentRefusalCopy(failure);
               if (copy == null) onInactive();
@@ -468,7 +505,8 @@ function PresentOnPaper({ projectId, request, onInactive }: {
           }}>
           Mark presented
         </DocumentAction>
-        <DocumentAction actionKey="cancel-present-acceptance-on-paper" variant="tertiary" onClick={() => setOpened(false)}>
+        <DocumentAction actionKey="cancel-present-acceptance-on-paper" variant="tertiary" aria-describedby={described}
+          onClick={() => { backToLaunch.current = true; setOpened(false); }}>
           Not yet
         </DocumentAction>
       </DocumentActionRow>

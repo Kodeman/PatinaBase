@@ -13,6 +13,7 @@ const mockManifests = jest.fn();
 const mockPaper = jest.fn();
 const mockDrafts = jest.fn();
 const mockPresent = jest.fn();
+const mockSeat = jest.fn();
 const mockUser = { id: 'owner-1' };
 jest.mock('@patina/supabase', () => ({
   useServiceAcceptance: () => mockRead(),
@@ -22,6 +23,8 @@ jest.mock('@patina/supabase', () => ({
   useCreateServiceAcceptanceRequest: () => ({ mutateAsync: mockCreate, isPending: false }),
   useWithdrawServiceAcceptanceRequest: () => ({ mutateAsync: jest.fn(), isPending: false }),
   usePresentServiceAcceptanceOffline: () => ({ mutateAsync: mockPresent, isPending: false }),
+  useProjectRecordedStudio: (projectId: string) => ({ data: projectId ? 'studio-1' : undefined }),
+  useIsStudioReleaser: (studioId: string | undefined) => mockSeat(studioId),
   useReplaceServiceAcceptanceSigner: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useRecordServiceAcceptancePaperIntake: () => ({ mutateAsync: mockRecord, isPending: false }),
   useReviewServiceAcceptancePaperIntake: () => ({ mutateAsync: mockReview, isPending: false }),
@@ -80,6 +83,7 @@ const settled = (data: unknown) => ({ data, isPending: false, isError: false, re
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSeat.mockReturnValue({ data: true });
   mockUser.id = 'owner-1';
   mockEditions.mockReturnValue(settled([{ id: 'edition-1', status: 'active', editionNumber: 2 }]));
   mockDrafts.mockReturnValue({ data: undefined });
@@ -419,35 +423,73 @@ test('a draft is marked presented on paper only after a confirm, binding its has
   mockRead.mockReturnValue(readOf([request({ scopeContentHash: SCOPE, evidenceManifestHash: EVIDENCE, outboundDraftId: null })]));
   mockPresent.mockResolvedValue({ requestId: 'request-2', lifecycle: 'sent', replayed: false });
   render(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(mockSeat).toHaveBeenCalledWith('studio-1');
   const card = screen.getByText(/Request 2 · Drafted, not sent/).closest('li')!;
   fireEvent.click(within(card).getByRole('button', { name: 'Presented on paper' }));
   expect(mockPresent).not.toHaveBeenCalled();
   const confirm = within(card).getByRole('group', { name: 'Present request 2 on paper' });
-  expect(confirm).toHaveTextContent('Nothing is emailed and no answer is recorded.');
-  fireEvent.click(within(confirm).getByRole('button', { name: 'Mark presented' }));
+  const mark = within(confirm).getByRole('button', { name: 'Mark presented' });
+  // Focus moves into the confirm, and both controls carry the consequence.
+  await waitFor(() => expect(mark).toHaveFocus());
+  expect(mark).toHaveAccessibleDescription(/Nothing is emailed and no answer is recorded\./);
+  expect(within(confirm).getByRole('button', { name: 'Not yet' }))
+    .toHaveAccessibleDescription(/Nothing is emailed and no answer is recorded\./);
+  fireEvent.click(mark);
   await waitFor(() => expect(mockPresent).toHaveBeenCalledWith({
     requestId: 'request-2', scopeContentHash: SCOPE, evidenceManifestHash: EVIDENCE,
   }));
+  // Focus lands on a status that outlives the closed confirm.
+  const note = await within(card).findByRole('status');
+  expect(note).toHaveTextContent('Request 2 is marked as presented on paper.');
+  await waitFor(() => expect(note).toHaveFocus());
+  expect(within(card).queryByRole('button', { name: 'Presented on paper' })).toBeNull();
   expect(screen.queryByTestId('ready-to-send')).toBeNull();
 });
 
-test('a request presented on paper says so instead of "Sent", and offers no second presentation', () => {
+test('"Not yet" closes the confirm and returns focus to the launch button', async () => {
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Presented on paper' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Mark presented' })).toHaveFocus());
+  fireEvent.click(screen.getByRole('button', { name: 'Not yet' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Presented on paper' })).toHaveFocus());
+  expect(screen.queryByRole('group', { name: 'Present request 2 on paper' })).toBeNull();
+  expect(mockPresent).not.toHaveBeenCalled();
+});
+
+test('a seat that is not the studio\'s owner or admin is not offered the presentation', () => {
+  mockSeat.mockReturnValue({ data: false });
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.getByText(/Request 2 · Drafted, not sent/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Presented on paper' })).toBeNull();
+  // While the seat is still being read, the act stays hidden too.
+  mockSeat.mockReturnValue({ data: undefined });
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.queryByRole('button', { name: 'Presented on paper' })).toBeNull();
+});
+
+test('a request presented on paper reads as presented, never as sent to the client', () => {
   mockRead.mockReturnValue(readOf([sentRequest({
     outboundDraftId: null, offlinePresentedAt: '2026-10-27T11:00:00Z', offlinePresentedBy: 'owner-1',
   })]));
   render(<ServiceAcceptanceSection projectId="job-1" />);
-  const card = screen.getByText(/Request 2 · Sent to the client/).closest('li')!;
+  expect(screen.queryByText(/Sent to the client/)).toBeNull();
+  const card = screen.getByText(/Request 2 · Presented on paper · Waiting on responses/).closest('li')!;
   expect(within(card).getByText(/^Presented on paper .+2026\.$/)).toBeInTheDocument();
   expect(within(card).queryByText(/^Sent /)).toBeNull();
   expect(within(card).queryByRole('button', { name: 'Presented on paper' })).toBeNull();
+  expect(screen.getByText(/Nothing reaches them until you send it or hand it to them on paper\./)).toBeInTheDocument();
 });
 
-test('a seat without studio authority hears why it cannot present on paper', async () => {
+test('a seat the server refuses hears why it cannot present on paper', async () => {
   mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
   mockPresent.mockRejectedValue({ code: '42501', message: 'insufficient_privilege' });
   render(<ServiceAcceptanceSection projectId="job-1" />);
   fireEvent.click(screen.getByRole('button', { name: 'Presented on paper' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Mark presented' }));
-  expect(await screen.findByRole('alert'))
-    .toHaveTextContent('Marking a request presented on paper needs an owner or admin of an active studio.');
+  const mark = screen.getByRole('button', { name: 'Mark presented' });
+  fireEvent.click(mark);
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Marking a request presented on paper needs an owner or admin of an active studio.');
+  expect(mark).toHaveAccessibleDescription(/needs an owner or admin of an active studio/);
 });
