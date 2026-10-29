@@ -59,6 +59,42 @@ Deno.test("sendOutboundDraft releases a claim when the claimed row is invalid", 
   assertEquals(admin.calls, ["claim_outbound_draft_for_send", "release_outbound_draft_claim"]);
 });
 
+Deno.test("service acceptance validates a newly linked card before the missing-address guard", async () => {
+  const calls: string[] = [];
+  const draft = {
+    id: "draft-card", organization_id: "studio", project_id: "project",
+    kind: "service_acceptance_request", channel: "email", recipient_kind: "client",
+    to_contact_id: "card", to_client_id: null, to_party_id: null,
+    to_address: null, subject: "Review the agreed services", body: "Review", payload: {},
+    ref_type: "service_acceptance_request", ref_id: "request", status: "sending", sent_by: null,
+  } as OutboundDraft;
+  const admin = {
+    rpc: async (name: string) => {
+      calls.push(name);
+      return { data: name === "claim_outbound_draft_for_send" ? draft : null, error: null };
+    },
+    from: (table: string) => {
+      calls.push(table);
+      const query = {
+        select: () => query,
+        eq: () => query,
+        single: async () => ({ data: {
+          id: "request", project_id: "project", lifecycle: "draft",
+          service_acceptance_signers: [{ profile_id: null, household_person_id: "card", status: "active", required: true }],
+        }, error: null }),
+        maybeSingle: async () => ({ data: { profile_id: "new-profile" }, error: null }),
+      };
+      return query;
+    },
+  } as never;
+  const result = await sendOutboundDraft(admin, draft.id, { kind: "designer", userId: "designer" });
+  assertEquals(result.code, "service_acceptance_recipient_changed");
+  assertEquals(result.error?.startsWith("The acceptance recipient changed."), true);
+  assertEquals(calls, [
+    "claim_outbound_draft_for_send", "service_acceptance_requests", "studio_contacts", "release_outbound_draft_claim",
+  ]);
+});
+
 // ── Delivery finalization (00782, SQ-905 F11; 00785, F19/F20/F21) ────────────
 // The rpc handlers model the 00775/00780/00782/00784/00785 draft lifecycle; the
 // SQL guards themselves are proven in supabase/tests/outbound/.

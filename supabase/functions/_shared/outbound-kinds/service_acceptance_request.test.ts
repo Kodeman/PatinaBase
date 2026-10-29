@@ -6,7 +6,7 @@ import {
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { OutboundDraft } from "../outbound-send.ts";
 import { outboundKinds } from "./index.ts";
-import { renderEmail } from "./service_acceptance_request.ts";
+import { AcceptanceRecipientChanged, renderEmail } from "./service_acceptance_request.ts";
 
 const draft: OutboundDraft = {
   id: "draft",
@@ -39,6 +39,15 @@ function signer(overrides: Record<string, unknown>) {
 function admin(
   overrides: Record<string, unknown> = {},
   error: unknown = null,
+  binding: {
+    profileId: string | null;
+    email: string | null;
+    deletedCard?: boolean;
+    readError?: "studio_contacts" | "profiles";
+  } = {
+    profileId: "card-profile",
+    email: "client@example.test",
+  },
 ): SupabaseClient {
   return {
     from: (table: string) => {
@@ -46,12 +55,23 @@ function admin(
         select: () => query,
         eq: (column: string, value: unknown) => {
           assertEquals(column, "id");
-          assertEquals(value, table === "projects" ? "project" : "request");
+          if (table === "profiles") {
+            assertEquals(["client", "partner", binding.profileId].includes(value as string), true);
+          } else {
+            assertEquals(value, table === "projects" ? "project" : table === "studio_contacts" ? "card" : "request");
+          }
           return query;
         },
+        maybeSingle: () => query.single(),
         single: () =>
           Promise.resolve({
-            data: table === "projects" ? { name: "Oak & <House>" } : {
+            data: table === "projects"
+              ? { name: "Oak & <House>" }
+              : table === "studio_contacts"
+              ? binding.deletedCard ? null : { profile_id: binding.profileId }
+              : table === "profiles"
+              ? { email: binding.email }
+              : {
               id: "request",
               project_id: "project",
               lifecycle: "draft",
@@ -62,7 +82,7 @@ function admin(
               ],
               ...overrides,
             },
-            error,
+            error: binding.readError === table ? new Error(`${table} read failed`) : error,
           }),
       };
       return query;
@@ -142,12 +162,13 @@ Deno.test("service acceptance renderer sends each active required signer's sibli
   assertEquals(partner.userId, "partner");
   assertStringIncludes(partner.text!, "/acceptance/request");
   const card = await renderEmail({
-    admin: admin(),
+    admin: admin({}, null, { profileId: null, email: null }),
     draft: {
       ...draft,
       id: "card-draft",
       to_contact_id: "card",
       to_client_id: null,
+      to_address: null,
     },
   });
   assertEquals(card.userId, undefined);
@@ -157,6 +178,48 @@ Deno.test("service acceptance renderer sends each active required signer's sibli
     draft: { ...draft, to_contact_id: "card", to_client_id: "card-profile" },
   });
   assertEquals(linkedCard.userId, "card-profile");
+});
+Deno.test("service acceptance renderer refuses stale household and profile signer recipients", async () => {
+  const linkedDraft = { ...draft, to_contact_id: "card", to_client_id: "card-profile" };
+  const unchanged = await renderEmail({ admin: admin(), draft: linkedDraft });
+  assertEquals(unchanged.userId, "card-profile");
+  for (const binding of [
+    { profileId: "different-profile", email: "client@example.test" },
+    { profileId: null, email: null },
+    { profileId: "card-profile", email: "new@example.test" },
+    { profileId: "card-profile", email: "client@example.test", deletedCard: true },
+  ]) {
+    const refusal = await assertRejects(
+      () => renderEmail({ admin: admin({}, null, binding), draft: linkedDraft }),
+      AcceptanceRecipientChanged,
+    );
+    assertEquals(refusal.code, "service_acceptance_recipient_changed");
+    assertStringIncludes(refusal.message, "Replace the signer");
+  }
+  const staleProfile = await assertRejects(
+    () => renderEmail({
+      admin: admin({}, null, { profileId: "card-profile", email: "new@example.test" }),
+      draft,
+    }),
+    AcceptanceRecipientChanged,
+  );
+  assertEquals(staleProfile.code, "service_acceptance_recipient_changed");
+});
+Deno.test("service acceptance renderer matches SQL-trimmed email and propagates contact/profile read errors", async () => {
+  const linkedDraft = { ...draft, to_contact_id: "card", to_client_id: "card-profile" };
+  const whitespace = admin({}, null, {
+    profileId: "card-profile",
+    email: "  client@example.test  ",
+  });
+  assertEquals((await renderEmail({ admin: whitespace, draft: linkedDraft })).userId, "card-profile");
+  assertEquals((await renderEmail({ admin: whitespace, draft })).userId, "client");
+  for (const readError of ["studio_contacts", "profiles"] as const) {
+    await assertRejects(
+      () => renderEmail({ admin: admin({}, null, { profileId: "card-profile", email: "client@example.test", readError }), draft: linkedDraft }),
+      Error,
+      `${readError} read failed`,
+    );
+  }
 });
 Deno.test("service acceptance renderer refuses a foreign draft on the request (draft binding differs)", async () => {
   const foreign: {
