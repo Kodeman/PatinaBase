@@ -223,7 +223,7 @@ describe('studio service obligations', () => {
     render(<StudioServiceSection projectId="job-1" />);
     expect(screen.queryByText(INACTIVE_NOTE)).toBeNull();
     fireEvent.click(completeButton());
-    expect(await screen.findByRole('status')).toHaveTextContent(INACTIVE_NOTE);
+    expect(await screen.findByRole('status')).toHaveTextContent("Studio service completion isn't switched on for this studio.");
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

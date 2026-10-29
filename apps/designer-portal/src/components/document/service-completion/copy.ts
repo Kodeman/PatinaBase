@@ -8,7 +8,7 @@ import {
 
 /** C6 §2.7: a denied act while completion is off reads as a calm note (the
  *  same register as service acceptance's). */
-export const INACTIVE_NOTE = "Studio service completion isn't switched on for this studio yet.";
+export const INACTIVE_NOTE = "Studio service completion isn't switched on for this studio.";
 
 /** The ticket's stale path: the server's reading moved under the studio. */
 export const STALE_NOTE = 'Something changed — review the updated list.';
