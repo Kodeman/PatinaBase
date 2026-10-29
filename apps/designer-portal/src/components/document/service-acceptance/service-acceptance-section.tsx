@@ -14,6 +14,7 @@ import { Send } from 'lucide-react';
 import {
   useCreateServiceAcceptanceRequest,
   useIsStudioReleaser,
+  useOrganization,
   useOutboundDrafts,
   usePresentServiceAcceptanceOffline,
   useProjectRecordedStudio,
@@ -66,7 +67,9 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
   // decides, and also refuses a studio that is not active.
   const studio = useProjectRecordedStudio(projectId);
   const seat = useIsStudioReleaser(studio.data);
-  const canPresent = seat.data === true;
+  const organization = useOrganization(studio.data ?? '');
+  const canPresent = seat.data === true && organization.data?.status === 'active';
+  const studioHeld = seat.data === true && organization.data != null && organization.data.status !== 'active';
   const openNotices = (requestId: string) => (outbound.data ?? []).filter((draft) =>
     draft.ref_type === 'service_acceptance_request' && draft.ref_id === requestId
     && OPEN_STATUSES.has(draft.status)).map((draft) => draft.status);
@@ -99,7 +102,7 @@ export function ServiceAcceptanceSection({ projectId }: { projectId: string }) {
               {requests.map((request) => (
                 <RequestCard key={request.requestId} projectId={projectId} request={request}
                   openNotices={openNotices(request.requestId)} predecessor={request.predecessorRequestId ? byId.get(request.predecessorRequestId) : undefined}
-                  canPresent={canPresent} report={report} onInactive={() => setInactive(true)} />
+                  canPresent={canPresent} studioHeld={studioHeld} report={report} onInactive={() => setInactive(true)} />
               ))}
             </ol>
           )}
@@ -201,12 +204,13 @@ function CreateRequest({ projectId, hasOpen, report }: { projectId: string; hasO
   );
 }
 
-function RequestCard({ projectId, request, openNotices, predecessor, canPresent, report, onInactive }: {
+function RequestCard({ projectId, request, openNotices, predecessor, canPresent, studioHeld, report, onInactive }: {
   projectId: string;
   request: ServiceAcceptanceRequest;
   openNotices: string[];
   predecessor?: ServiceAcceptanceRequest;
   canPresent: boolean;
+  studioHeld: boolean;
   report: Report;
   onInactive: () => void;
 }) {
@@ -268,11 +272,12 @@ function RequestCard({ projectId, request, openNotices, predecessor, canPresent,
 
       {presented && (
         <p ref={presentedRef} tabIndex={-1} role="status" className="t-body-sm mt-2">
-          Request {request.requestNumber} is marked as presented on paper. Record the signed paper for each signer.
+          Request {request.requestNumber} is marked as presented on paper.
+          {open && active.some((signer) => !signer.response) && ' Record the signed paper for each signer still waiting.'}
         </p>
       )}
-      {request.lifecycle === 'draft' && canPresent && !presented && (
-        <PresentOnPaper projectId={projectId} request={request} onInactive={onInactive}
+      {request.lifecycle === 'draft' && (canPresent || studioHeld) && !presented && (
+        <PresentOnPaper projectId={projectId} request={request} studioHeld={studioHeld} onInactive={onInactive}
           onPresented={() => setPresented(true)} />
       )}
       {open && <WithdrawRequest projectId={projectId} request={request} report={report} />}
@@ -452,8 +457,8 @@ function ReplaceSigner({ projectId, request, signer, report, onDone }: {
 // 00899: a request whose signers have no account to email reaches paper intake
 // only when the studio says it handed the request over in person. Nothing is
 // sent and no answer is recorded; the signed paper is still recorded and reviewed.
-function PresentOnPaper({ projectId, request, onInactive, onPresented }: {
-  projectId: string; request: ServiceAcceptanceRequest; onInactive: () => void; onPresented: () => void;
+function PresentOnPaper({ projectId, request, studioHeld, onInactive, onPresented }: {
+  projectId: string; request: ServiceAcceptanceRequest; studioHeld: boolean; onInactive: () => void; onPresented: () => void;
 }) {
   const id = useId();
   const present = usePresentServiceAcceptanceOffline(projectId);
@@ -471,12 +476,16 @@ function PresentOnPaper({ projectId, request, onInactive, onPresented }: {
   }, [opened]);
   if (!opened) {
     return (
-      <DocumentActionRow surfaceKey="service-acceptance" regionKey="present-on-paper">
-        <DocumentAction ref={launchRef} actionKey="present-acceptance-on-paper" variant="tertiary"
-          onClick={() => setOpened(true)}>
-          Presented on paper
-        </DocumentAction>
-      </DocumentActionRow>
+      <div className="mt-2">
+        <DocumentActionRow surfaceKey="service-acceptance" regionKey="present-on-paper">
+          <DocumentAction ref={launchRef} actionKey="present-acceptance-on-paper" variant="tertiary"
+            disabled={studioHeld} held={studioHeld} aria-describedby={studioHeld ? `${id}-studio-held` : undefined}
+            onClick={() => setOpened(true)}>
+            Presented on paper
+          </DocumentAction>
+        </DocumentActionRow>
+        {studioHeld && <p id={`${id}-studio-held`} className="t-body-sm">The recorded studio is not active, so this action is held.</p>}
+      </div>
     );
   }
   const described = error ? `${id}-consequence ${id}-error` : `${id}-consequence`;
@@ -506,7 +515,7 @@ function PresentOnPaper({ projectId, request, onInactive, onPresented }: {
           Mark presented
         </DocumentAction>
         <DocumentAction actionKey="cancel-present-acceptance-on-paper" variant="tertiary" aria-describedby={described}
-          onClick={() => { backToLaunch.current = true; setOpened(false); }}>
+          disabled={present.isPending} onClick={() => { backToLaunch.current = true; setOpened(false); }}>
           Not yet
         </DocumentAction>
       </DocumentActionRow>

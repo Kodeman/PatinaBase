@@ -14,6 +14,8 @@ const mockPaper = jest.fn();
 const mockDrafts = jest.fn();
 const mockPresent = jest.fn();
 const mockSeat = jest.fn();
+const mockOrganization = jest.fn();
+const mockPending = { value: false };
 const mockUser = { id: 'owner-1' };
 jest.mock('@patina/supabase', () => ({
   useServiceAcceptance: () => mockRead(),
@@ -22,8 +24,9 @@ jest.mock('@patina/supabase', () => ({
   useServiceAcceptanceManifests: () => mockManifests(),
   useCreateServiceAcceptanceRequest: () => ({ mutateAsync: mockCreate, isPending: false }),
   useWithdrawServiceAcceptanceRequest: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  usePresentServiceAcceptanceOffline: () => ({ mutateAsync: mockPresent, isPending: false }),
+  usePresentServiceAcceptanceOffline: () => ({ mutateAsync: mockPresent, isPending: mockPending.value }),
   useProjectRecordedStudio: (projectId: string) => ({ data: projectId ? 'studio-1' : undefined }),
+  useOrganization: (studioId: string) => mockOrganization(studioId),
   useIsStudioReleaser: (studioId: string | undefined) => mockSeat(studioId),
   useReplaceServiceAcceptanceSigner: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useRecordServiceAcceptancePaperIntake: () => ({ mutateAsync: mockRecord, isPending: false }),
@@ -84,6 +87,8 @@ const settled = (data: unknown) => ({ data, isPending: false, isError: false, re
 beforeEach(() => {
   jest.clearAllMocks();
   mockSeat.mockReturnValue({ data: true });
+  mockOrganization.mockReturnValue({ data: { id: 'studio-1', status: 'active' } });
+  mockPending.value = false;
   mockUser.id = 'owner-1';
   mockEditions.mockReturnValue(settled([{ id: 'edition-1', status: 'active', editionNumber: 2 }]));
   mockDrafts.mockReturnValue({ data: undefined });
@@ -119,7 +124,7 @@ test('a denied act while switched off reads as one calm note, and the record sta
   render(<ServiceAcceptanceSection projectId="job-1" />);
   fireEvent.click(screen.getByRole('button', { name: 'Draft the request' }));
   const note = await screen.findByRole('status');
-  expect(note).toHaveTextContent("Service acceptance isn't switched on for this studio yet.");
+  expect(note).toHaveTextContent("Service acceptance isn't switched on for this studio.");
   expect(screen.queryByRole('alert')).toBeNull();
   expect(screen.getByText(/Request 2 · Closed · Accepted/)).toBeInTheDocument();
 });
@@ -444,6 +449,52 @@ test('a draft is marked presented on paper only after a confirm, binding its has
   await waitFor(() => expect(note).toHaveFocus());
   expect(within(card).queryByRole('button', { name: 'Presented on paper' })).toBeNull();
   expect(screen.queryByTestId('ready-to-send')).toBeNull();
+});
+
+test('a suspended recorded studio holds the presentation for its owner, with the reason beside it', () => {
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  mockOrganization.mockReturnValue({ data: { id: 'studio-1', status: 'suspended' } });
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const held = screen.getByRole('button', { name: 'Presented on paper' });
+  expect(held).toHaveAttribute('aria-disabled', 'true');
+  expect(held).toHaveAccessibleDescription('The recorded studio is not active, so this action is held.');
+  fireEvent.click(held);
+  expect(screen.queryByRole('group', { name: 'Present request 2 on paper' })).toBeNull();
+  expect(mockPresent).not.toHaveBeenCalled();
+});
+
+test('the presentation note follows outstanding responses and closed lifecycle without losing focus target', async () => {
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  mockPresent.mockResolvedValue({ requestId: 'request-2', lifecycle: 'sent', replayed: false });
+  const { rerender } = render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Presented on paper' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Mark presented' }));
+  const note = await screen.findByRole('status');
+  expect(note).toHaveTextContent('Record the signed paper for each signer still waiting.');
+  mockRead.mockReturnValue(readOf([sentRequest({ signers: [signer({ response: {
+    responseId: 'answer-1', response: 'accept', method: 'paper_intake', conditions: [], returnReason: null,
+    respondedAt: '2026-10-27T12:00:00Z',
+  } })] })]));
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(note).toHaveTextContent('Request 2 is marked as presented on paper.');
+  expect(note).not.toHaveTextContent('Record the signed paper');
+  mockRead.mockReturnValue(readOf([request({ lifecycle: 'closed', aggregateOutcome: 'accepted' })]));
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(note).toBeInTheDocument();
+  expect(note).not.toHaveTextContent('Record the signed paper');
+});
+
+test('Not yet cannot dismiss a presentation while the mutation is pending', () => {
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  mockPresent.mockReturnValue(new Promise(() => {}));
+  const { rerender } = render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Presented on paper' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Mark presented' }));
+  mockPending.value = true;
+  rerender(<ServiceAcceptanceSection projectId="job-1" />);
+  expect(screen.getByRole('button', { name: 'Not yet' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Not yet' }));
+  expect(screen.getByRole('group', { name: 'Present request 2 on paper' })).toBeInTheDocument();
 });
 
 test('"Not yet" closes the confirm and returns focus to the launch button', async () => {
