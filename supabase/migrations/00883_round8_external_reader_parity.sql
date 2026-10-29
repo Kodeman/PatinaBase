@@ -1215,6 +1215,8 @@ BEGIN
      AND EXISTS(SELECT 1 FROM public.server_capabilities WHERE key='scope_editions' AND enabled) THEN
     SELECT doc.project_id INTO v_scope_current_project_id
     FROM public.project_commercial_documents doc WHERE doc.proposal_id=p_proposal_id FOR UPDATE;
+    -- 40001 on purpose: the document changed after the project-first read;
+    -- PostgREST's retry re-reads both, bounded: each further attempt needs another concurrent commit (RC7-e2-2).
     IF v_scope_current_project_id IS DISTINCT FROM v_scope_project_id THEN
       RAISE EXCEPTION 'scope_execution_document_moved' USING ERRCODE='serialization_failure';
     END IF;

@@ -301,11 +301,13 @@ BEGIN
   RAISE EXCEPTION 'external_presence_binding_mismatch' USING ERRCODE='check_violation';
  END IF;
  SELECT * INTO STRICT old_item FROM public.project_ffe_items WHERE id=p_item_id FOR UPDATE;
+ -- 40001 on purpose: the item moved after the unlocked read above; PostgREST's
+ -- retry re-reads it, bounded: each further attempt needs another concurrent commit (RC7-e2-2).
  IF old_item.project_id IS DISTINCT FROM project OR old_item.external_fulfilment_id IS DISTINCT FROM old_fid THEN
   RAISE EXCEPTION 'external_conversion_item_changed' USING ERRCODE='serialization_failure';
  END IF;
  IF p_row_version IS DISTINCT FROM old_item.row_version THEN
-  RAISE EXCEPTION 'external_conversion_version_conflict' USING ERRCODE='serialization_failure';
+  RAISE EXCEPTION 'external_conversion_version_conflict' USING ERRCODE='PT409';
  END IF;
  IF p_fulfilment_id IS NOT NULL THEN
   IF old_fid IS NOT NULL THEN

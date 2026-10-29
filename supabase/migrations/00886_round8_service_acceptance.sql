@@ -25,8 +25,9 @@
 -- is a later migration.
 --
 -- Stale refusals (stale_scope, stale_signer_policy, paper_document_changed,
--- scope_edition_stale, scope_execution_document_moved) use PT409 (HTTP 409),
--- never 40001/40P01: PostgREST 14 retries those without limit (RC7-e2-2, as 00837).
+-- scope_edition_stale) use PT409 (HTTP 409), never 40001/40P01: PostgREST 14
+-- retries those without limit (RC7-e2-2, as 00837). Only the transient
+-- scope_execution_document_moved keeps 40001; see its comment.
 --
 -- Lock order (§2.3): projects (FOR SHARE for a response or a paper review,
 -- FOR UPDATE for create, withdraw, replace and supersede), then the scope
@@ -1283,7 +1284,9 @@ BEGIN
   END IF;
   SELECT * INTO doc FROM public.project_commercial_documents
   WHERE id=p_document_id AND project_id=doc.project_id AND proposal_id=proposal.id FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'scope_execution_document_moved' USING ERRCODE = 'PT409'; END IF;
+  -- 40001 on purpose: the document moved after the unlocked read; PostgREST's
+  -- retry re-reads it, bounded: each further attempt needs another concurrent commit (RC7-e2-2).
+  IF NOT FOUND THEN RAISE EXCEPTION 'scope_execution_document_moved' USING ERRCODE = 'serialization_failure'; END IF;
   SELECT id INTO v_edition_id FROM public.project_scope_editions WHERE commercial_document_id = doc.id;
   IF FOUND THEN RETURN v_edition_id; END IF;
   v_edition_id := extensions.gen_random_uuid();

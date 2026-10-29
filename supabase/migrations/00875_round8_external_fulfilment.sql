@@ -142,7 +142,7 @@ BEGIN
  END IF;
  PERFORM public._external_assert_access(p_project_id);
  IF p_hash IS DISTINCT FROM p_stored_hash THEN
-  RAISE EXCEPTION 'external_request_changed' USING ERRCODE='serialization_failure';
+  RAISE EXCEPTION 'external_request_changed' USING ERRCODE='PT409';
  END IF;
 END $$;
 

@@ -132,6 +132,8 @@ BEGIN
   PERFORM 1 FROM public.proposals WHERE id = doc.proposal_id FOR UPDATE;
   SELECT * INTO doc FROM public.project_commercial_documents
   WHERE id = p_document_id AND project_id = doc.project_id AND proposal_id = doc.proposal_id FOR UPDATE;
+  -- 40001 on purpose: the document moved after the unlocked read; PostgREST's
+  -- retry re-reads it, bounded: each further attempt needs another concurrent commit (RC7-e2-2).
   IF NOT FOUND THEN RAISE EXCEPTION 'scope_execution_document_moved' USING ERRCODE = 'serialization_failure'; END IF;
   IF doc.document_kind NOT IN ('design_services','design_build','service_addendum')
      OR doc.executed_at IS NULL OR NOT EXISTS (

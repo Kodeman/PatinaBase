@@ -418,7 +418,7 @@ BEGIN
       RAISE EXCEPTION 'arrangement_already_applied' USING ERRCODE = 'check_violation';
     END IF;
     IF receipt.effect_hash IS DISTINCT FROM public._scope_arrangement_effect(p_proposal_id,receipt.phase_ids) THEN
-      RAISE EXCEPTION 'arrangement_effect_changed' USING ERRCODE = 'serialization_failure';
+      RAISE EXCEPTION 'arrangement_effect_changed' USING ERRCODE = 'PT409';
     END IF;
     phase_ids := receipt.phase_ids; part_keys := receipt.part_keys; effect := receipt.effect_hash;
     replayed := true;

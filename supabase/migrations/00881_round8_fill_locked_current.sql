@@ -107,7 +107,7 @@ BEGIN
     END IF;
     IF v_response IS NULL THEN
       RAISE EXCEPTION 'idempotent command is still in progress'
-        USING ERRCODE = 'serialization_failure';
+        USING ERRCODE = 'PT409';
     END IF;
     PERFORM set_config('patina.configuration_spec_workflow', COALESCE(v_previous, ''), true);
     RETURN v_response;

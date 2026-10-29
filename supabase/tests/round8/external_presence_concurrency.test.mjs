@@ -195,7 +195,7 @@ test('C5 conversion serializes pricing, retries, cancellation and installation',
    FROM public.project_ffe_items WHERE id='${id(100)}';`),'t','conversion-first refuses blocked native pricing without lost zero state');
 
   await a.query(`${begin(6)} SELECT public.set_ffe_line_pricing('${id(101)}','quantity',3);`);
-  await contended(a,b,pid,`${begin(6)} ${expected(convert(101,501,1,'price-first'),'40001','external_conversion_version_conflict')} COMMIT;`);
+  await contended(a,b,pid,`${begin(6)} ${expected(convert(101,501,1,'price-first'),'PT409','external_conversion_version_conflict')} COMMIT;`);
   assert.equal(await a.query(`SELECT quantity=3 AND external_fulfilment_id IS NULL AND row_version=2 FROM public.project_ffe_items WHERE id='${id(101)}';`),
    't','pricing-first preserves native edit and rejects stale conversion');
 
@@ -250,7 +250,7 @@ test('C5 conversion serializes pricing, retries, cancellation and installation',
   // contender must hold the conversion project prelock while waiting for it;
   // the purchase's immediate project FK must still be able to take KEY SHARE.
   await a.query(`${begin(6)} SELECT id FROM public.project_ffe_items WHERE id='${id(106)}' FOR UPDATE;`);
-  const afterPurchase = b.query(`${begin(6)} ${expected(convert(106,506,1,'purchase-first'),'40001','external_conversion_version_conflict')} COMMIT;`);
+  const afterPurchase = b.query(`${begin(6)} ${expected(convert(106,506,1,'purchase-first'),'PT409','external_conversion_version_conflict')} COMMIT;`);
   afterPurchase.catch(() => {});
   try {
    await waitForBlock(a,pid);
