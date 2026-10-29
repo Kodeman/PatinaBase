@@ -7,8 +7,9 @@
  *
  * Payloads: e2e/round8/rc7-e7-fixtures/payloads/mixed-payloads.json, written
  * by export-payloads.mjs after mixed-fixture.sql (real GoTrue sessions, real
- * PostgREST reads). "Older" = the file at `main`, transpiled and evaluated
- * with its relative imports resolved into this tree.
+ * PostgREST reads). "Older" = the file at pre-round-8 main (pinned commit
+ * 9a686cecd), transpiled and evaluated with its relative imports resolved
+ * into this tree.
  */
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -28,7 +29,9 @@ const actors = payloads.actors as unknown as Record<string, Actor>;
 const { project, request } = payloads.meta;
 
 const repoRoot = path.resolve(__dirname, "../../../../..");
-const BASE_REF = "main";
+// The older consumer is main's tip before round 8 merges (9a686cecd), pinned to
+// the full commit SHA so this baseline cannot move once round 8 lands on main.
+const BASE_REF = "9a686cecddd4a45b74e1e971d23ccdc3fd9fe0cb";
 function git(args: string[]): string | null {
   try {
     return execFileSync("git", args, {
@@ -40,8 +43,15 @@ function git(args: string[]): string | null {
     return null;
   }
 }
-const baseSha = git(["rev-parse", BASE_REF])?.trim() ?? null;
-const describeBase = baseSha ? describe : describe.skip;
+const baseSha =
+  git(["rev-parse", "--verify", "--quiet", `${BASE_REF}^{commit}`])?.trim() ??
+  null;
+if (baseSha !== BASE_REF) {
+  throw new Error(
+    `RC7-E7: the older-consumer baseline commit ${BASE_REF} is not in this clone; fetch it (git fetch origin ${BASE_REF}) before running this suite.`,
+  );
+}
+const BASE_LABEL = BASE_REF.slice(0, 9);
 
 /** Evaluate `<BASE_REF>:<rel>` as CommonJS; relative imports resolve into this tree. */
 function loadBase<T>(rel: string): T {
@@ -95,11 +105,12 @@ describe("RC7-E7 X08 recorded payloads", () => {
   it("come from the owned rc7-e7 stack and cover all ten actors", () => {
     expect(payloads.meta.api).toBe("http://127.0.0.1:59121");
     expect(Object.keys(actors)).toHaveLength(10);
-    expect(approvalLists().length).toBeGreaterThanOrEqual(10 + 3 * 3 + 1);
+    // 10 inboxes + 3 studio readers x 3 jobs + the client lead on job 1.
+    expect(approvalLists()).toHaveLength(10 + 3 * 3 + 1);
   });
 });
 
-describeBase(`RC7-E7 X08 older approval parser (${BASE_REF})`, () => {
+describe(`RC7-E7 X08 older approval parser (${BASE_LABEL})`, () => {
   const base = loadBase<{
     parseProjectApprovalReview: typeof parseProjectApprovalReview;
   }>(APPROVALS_REL);

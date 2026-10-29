@@ -3,8 +3,8 @@
  * payloads the owned stack returned for one mixed project (legacy Stage-2
  * approvals, C4 requests, C6 completions, C5 external presence).
  * Payloads: apps/designer-portal/e2e/round8/rc7-e7-fixtures/payloads/.
- * "Older" = the file at `main`, transpiled and evaluated with its relative
- * imports resolved into this tree.
+ * "Older" = the file at pre-round-8 main (pinned commit 9a686cecd),
+ * transpiled and evaluated with its relative imports resolved into this tree.
  */
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -44,7 +44,9 @@ const decision = (n: number) =>
   `e7e7a000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 const repoRoot = path.resolve(__dirname, "../../../../..");
-const BASE_REF = "main";
+// The older consumer is main's tip before round 8 merges (9a686cecd), pinned to
+// the full commit SHA so this baseline cannot move once round 8 lands on main.
+const BASE_REF = "9a686cecddd4a45b74e1e971d23ccdc3fd9fe0cb";
 function git(args: string[]): string | null {
   try {
     return execFileSync("git", args, {
@@ -56,8 +58,15 @@ function git(args: string[]): string | null {
     return null;
   }
 }
-const baseSha = git(["rev-parse", BASE_REF])?.trim() ?? null;
-const describeBase = baseSha ? describe : describe.skip;
+const baseSha =
+  git(["rev-parse", "--verify", "--quiet", `${BASE_REF}^{commit}`])?.trim() ??
+  null;
+if (baseSha !== BASE_REF) {
+  throw new Error(
+    `RC7-E7: the older-consumer baseline commit ${BASE_REF} is not in this clone; fetch it (git fetch origin ${BASE_REF}) before running this suite.`,
+  );
+}
+const BASE_LABEL = BASE_REF.slice(0, 9);
 
 function loadBase<T>(rel: string): T {
   const source = git(["show", `${BASE_REF}:${rel}`]);
@@ -72,10 +81,8 @@ function loadBase<T>(rel: string): T {
   });
   const dir = path.join(repoRoot, path.dirname(rel));
   const mod = { exports: {} as Record<string, unknown> };
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const req = (spec: string) =>
     require(spec.startsWith(".") ? path.join(dir, spec) : spec);
-  // eslint-disable-next-line no-new-func
   new Function("exports", "require", "module", outputText)(
     mod.exports,
     req,
@@ -134,7 +141,7 @@ describe("RC7-E7 X08 client approval inbox over the mixed project", () => {
     }
   });
 
-  it("client-attention and the approval parser are the shipped (main) files", () => {
+  it("client-attention and the approval parser are the shipped (pre-round-8 main) files", () => {
     expect(sameBlob("apps/client-portal/src/lib/client-attention.ts")).toBe(
       true,
     );
@@ -211,33 +218,37 @@ describe("RC7-E7 X08 client threshold selections with an external line", () => {
     });
   });
 
-  describeBase(`older adapter (${BASE_REF})`, () => {
+  describe(`older adapter (${BASE_LABEL})`, () => {
     const rel = "apps/client-portal/src/lib/commercial-documents.ts";
     it("differs from the current file (it predates the external kind)", () => {
       expect(sameBlob(rel)).toBe(false);
     });
 
-    // DEFECT RC7-e7-1: the older client page reads the C5 external line as an
-    // ordinary studio furnishing priced at $0 (main commercial-documents.ts
-    // adaptClientSelections: oneOf(row.kind, ['furnishings','trade'], 'furnishings')
-    // and number(undefined) -> 0), because get_client_project_threshold emits
-    // kind 'external' rows inside the same unversioned `selections` array.
-    // The assertion records what the older reader does today.
-    it("records what the older client page would render for the external line", () => {
+    // DEFECT RC7-e7-1 (MEDIUM): get_client_project_threshold appends C5
+    // external lines (kind 'external', no studio price) to the unversioned
+    // legacy `selections` array (00883:773). The pre-round-8 adapter
+    // (commercial-documents.ts adaptClientSelections: oneOf(row.kind,
+    // ['furnishings','trade'], 'furnishings') and number(undefined) -> 0) then
+    // draws the client-bought piece as an ordinary studio furnishing at $0.
+    // A client-portal rollback after C5 activation is a supported path
+    // (ROLLOUT.md), so this is reachable. Intended behaviour, asserted below:
+    // legacy `selections` never carries an external line (they move to a new
+    // additive field), so the older adapter never sees one. Skipped until the
+    // fix lane lands; then re-export the payloads and un-skip.
+    it.skip("DEFECT RC7-e7-1: the older adapter never sees an external line in legacy selections", () => {
+      const rows = (threshold as { selections: Record<string, unknown>[] })
+        .selections;
+      expect(rows.filter((row) => row.kind === "external")).toEqual([]);
       const base = loadBase<{
         adaptClientSelections: typeof adaptClientSelections;
       }>(rel);
       const adapted = base.adaptClientSelections(threshold);
       expect(adapted.origin).toBe("commercial");
-      const external =
+      const ids =
         adapted.origin === "commercial"
-          ? adapted.selections.find((s) => s.id === externalId)
-          : undefined;
-      expect(external).toMatchObject({
-        kind: "furnishings",
-        clientUnitPriceCents: 0,
-        clientLineTotalCents: 0,
-      });
+          ? adapted.selections.map((s) => s.id)
+          : [];
+      expect(ids).not.toContain(externalId);
     });
   });
 });

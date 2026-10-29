@@ -2,7 +2,7 @@
  * @jest-environment node
  *
  * RC-7 E7 (X08): the client project list's attention counts (projects.ts,
- * the same blob as main) over the reads the owned stack returned for the
+ * the same blob as pre-round-8 main, pinned commit 9a686cecd) over the reads the owned stack returned for the
  * client lead on the mixed project. Only the Supabase client is substituted;
  * every row it hands back is a recorded payload except the project list
  * itself and the proposal/comms reads, which the fixture does not exercise.
@@ -74,14 +74,18 @@ function client(stage2Rows: unknown) {
   };
 }
 
+// Pre-round-8 main tip, pinned so the baseline cannot move when round 8 merges.
+const BASE_REF = "9a686cecddd4a45b74e1e971d23ccdc3fd9fe0cb";
+
 describe("RC7-E7 X08 client project counts", () => {
-  it("projects.ts is the shipped (main) file", () => {
+  it("projects.ts is the shipped (pre-round-8 main) file", () => {
     const root = path.resolve(__dirname, "../../../../..");
     const rel = "apps/client-portal/src/lib/data/projects.ts";
     const git = (args: string[]) =>
       execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+    expect(git(["cat-file", "-t", BASE_REF])).toBe("commit");
     expect(git(["hash-object", path.join(root, rel)])).toBe(
-      git(["rev-parse", `main:${rel}`]),
+      git(["rev-parse", `${BASE_REF}:${rel}`]),
     );
   });
 
