@@ -26,6 +26,14 @@ interface RequestRow {
 // superseded and withdrawn requests take no answer (00893).
 const OPEN_LIFECYCLES = new Set(["draft", "sent"]);
 
+export class AcceptanceRecipientChanged extends Error {
+  readonly code = "service_acceptance_recipient_changed";
+
+  constructor() {
+    super("The acceptance recipient changed. Replace the signer (using the same household card if applicable), or withdraw and recreate the request before sending.");
+  }
+}
+
 function bindsOpenRequest(
   request: RequestRow | null,
   draft: OutboundDraft,
@@ -71,23 +79,25 @@ export async function renderEmail(
   ) {
     throw new Error("service_acceptance_request draft binding differs");
   }
+  let profileId = draft.to_client_id;
   if (draft.to_contact_id) {
     const { data: card, error: cardError } = await admin.from("studio_contacts")
       .select("profile_id").eq("id", draft.to_contact_id).maybeSingle();
     if (cardError) throw cardError;
-    let email: string | null = null;
-    if (card?.profile_id) {
-      const { data: profile, error: profileError } = await admin.from("profiles")
-        .select("email").eq("id", card.profile_id).maybeSingle();
-      if (profileError) throw profileError;
-      email = profile?.email ?? null;
-    }
-    if (card?.profile_id !== draft.to_client_id || email !== draft.to_address) {
-      throw new Error(
-        "service_acceptance_recipient_changed_regenerate_draft: The household recipient changed. Regenerate the acceptance draft for designer review before sending.",
-      );
+    profileId = card?.profile_id ?? null;
+    if (!card || profileId !== draft.to_client_id) {
+      throw new AcceptanceRecipientChanged();
     }
   }
+  const { data: profile, error: profileError } = profileId
+    ? await admin.from("profiles").select("email").eq("id", profileId)
+      .maybeSingle()
+    : { data: null, error: null };
+  if (profileError) throw profileError;
+  if ((profile?.email?.trim() || null) !== draft.to_address) {
+    throw new AcceptanceRecipientChanged();
+  }
+  // The check/send window is accepted: 00894 response authority follows the live link.
   const { data: project, error: projectError } = await admin.from("projects")
     .select("name").eq("id", request.project_id).single();
   if (projectError) throw projectError;

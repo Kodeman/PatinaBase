@@ -4,6 +4,7 @@ import { sendPartySms, sendClientSms } from "./sms.ts";
 import { renderBrandedShell } from "./branded-email.ts";
 import { resolveStudioIdentity, studioCobrand } from "./studio-identity.ts";
 import { outboundKinds } from "./outbound-kinds/index.ts";
+import { AcceptanceRecipientChanged } from "./outbound-kinds/service_acceptance_request.ts";
 import type { SendAuthority, OutboundKind } from "./send-authority.ts";
 import type { OutboundKindContext } from "./outbound-kinds/types.ts";
 
@@ -17,20 +18,20 @@ export interface OutboundDraft {
   send_attempted_at?: string | null; finalizing_at?: string | null;
   after_send_done_at?: string | null; last_send_outcome?: "rejected" | "unknown" | null;
 }
-export type OutboundSendResult = { id: string; ok: boolean; messageId?: string; error?: string };
+export type OutboundSendResult = { id: string; ok: boolean; messageId?: string; error?: string; code?: string };
 
 export async function sendOutboundDraft(
   admin: SupabaseClient,
   draftId: string,
   authority: SendAuthority,
 ): Promise<OutboundSendResult> {
-  const fail = async (message: string): Promise<OutboundSendResult> => {
+  const fail = async (message: string, code?: string): Promise<OutboundSendResult> => {
     try {
       await admin.rpc("release_outbound_draft_claim", { p_id: draftId });
     } catch (releaseError) {
       console.error("outbound draft claim release failed", releaseError);
     }
-    return { id: draftId, ok: false, error: message };
+    return { id: draftId, ok: false, error: message, ...(code ? { code } : {}) };
   };
   let draft: OutboundDraft;
   let messageId: string | undefined;
@@ -52,16 +53,19 @@ export async function sendOutboundDraft(
     // recipient. Only the studio decides to send it again; automation never does.
     if (draft.last_send_outcome === "unknown" && authority.kind !== "designer") return await fail("send_outcome_unknown");
     if (draft.channel === "email") {
-      if (!draft.to_address || !draft.subject) return await fail("email recipient or subject missing");
       const kind = outboundKinds[draft.kind];
-      const rendered = await kind?.renderEmail?.({ admin, draft });
+      const rendered = draft.kind === "service_acceptance_request"
+        ? await kind?.renderEmail?.({ admin, draft })
+        : undefined;
+      if (!draft.to_address || !draft.subject) return await fail("email recipient or subject missing");
+      const emailRender = rendered ?? await kind?.renderEmail?.({ admin, draft });
       let html: string;
       let text: string | undefined;
       let replyTo: string | undefined;
       let from: string | undefined;
       let userId: string | undefined;
-      if (rendered) {
-        ({ html, text, replyTo, from, userId } = rendered);
+      if (emailRender) {
+        ({ html, text, replyTo, from, userId } = emailRender);
       } else {
         const identity = await resolveStudioIdentity(admin, { projectId: draft.project_id, studioId: draft.organization_id });
         html = renderBrandedShell({
@@ -143,6 +147,9 @@ export async function sendOutboundDraft(
       messageId = outcome.messageId;
     }
   } catch (error) {
+    if (error instanceof AcceptanceRecipientChanged) {
+      return await fail(error.message, error.code);
+    }
     return await fail(error instanceof Error ? error.message : "send_failed");
   }
   // The provider has the message. From here the draft is never released to review:

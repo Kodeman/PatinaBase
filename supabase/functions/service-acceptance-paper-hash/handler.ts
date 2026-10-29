@@ -57,6 +57,7 @@ async function objectPath(
   objectId: string,
 ): Promise<string> {
   const bucket = admin.storage.from(bucketName);
+  let previousName: string | undefined;
   for (let page = 0;; page++) {
     const { data, error } = await bucket.list(projectId, {
       limit: pageSize,
@@ -64,6 +65,11 @@ async function objectPath(
       sortBy: { column: "name", order: "asc" },
     });
     if (error) throw error;
+    const lastName = data?.at(-1)?.name;
+    if (lastName && previousName && lastName <= previousName) {
+      throw new Refusal("paper_document_listing_stalled", 502);
+    }
+    previousName = lastName;
     const object = data?.find((entry) => entry.id === objectId);
     if (object) {
       if (!/^[0-9a-f-]+\.pdf$/i.test(object.name)) {

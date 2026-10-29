@@ -21,6 +21,7 @@ interface Options {
   notFound?: boolean;
   paged?: boolean;
   beyondTwoThousand?: boolean;
+  nonAdvancing?: boolean;
   exhausted?: boolean;
   replayed?: boolean;
   stampError?: { code: string; message: string };
@@ -98,12 +99,16 @@ function harness(options: Options = {}) {
       if (
         (options.exhausted && body.offset < 2100) ||
         (options.beyondTwoThousand && body.offset < 2100) ||
+        (options.nonAdvancing && body.offset < 200) ||
         (options.paged && body.offset === 0)
       ) {
         return reply(
           Array.from(
             { length: 100 },
-            (_, i) => ({ id: `other-${i}`, name: `${i}.pdf` }),
+            (_, i) => ({
+              id: `other-${i}`,
+              name: `${String(options.nonAdvancing ? i : body.offset + i).padStart(6, "0")}.pdf`,
+            }),
           ),
         );
       }
@@ -254,6 +259,14 @@ Deno.test("native Storage listing follows multiple pages", async () => {
   assertEquals(r.status, 200);
   await r.body?.cancel();
   assertEquals(h.calls.filter((c) => c.includes("/object/list/")).length, 2);
+});
+Deno.test("non-advancing Storage pages fail distinctly instead of looping or returning not-found", async () => {
+  const h = harness({ nonAdvancing: true });
+  const r = await h.post();
+  assertEquals(r.status, 502);
+  assertEquals(await r.json(), { code: "paper_document_listing_stalled" });
+  assertEquals(h.calls.filter((c) => c.includes("/object/list/")).length, 2);
+  assertEquals(h.stampBody(), undefined);
 });
 Deno.test("missing object returns clear 404 without download or stamp", async () => {
   const h = harness({ notFound: true });
