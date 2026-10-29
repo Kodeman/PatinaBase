@@ -757,10 +757,10 @@ test.describe('RC-7 e2 acceptance — job A', () => {
     expect(request(r3.id), 'one of two: incomplete').toMatchObject({ lifecycle: 'sent', outcome: 'pending' });
 
     // A20 replacement: the studio replaces the client's slot with the third
-    // household member. The card's Replace form cannot offer the household on
-    // this job (DEFECT RC7-e2-1, see the fixme below), so the designer sends the
-    // same RPC the form's hook sends (useReplaceServiceAcceptanceSigner), with
-    // their own session; the card then shows the replaced row.
+    // household member. Here the designer sends the RPC the card's Replace form
+    // hook sends (useReplaceServiceAcceptanceSigner), with their own session; the
+    // form itself is covered by @rc7-e2-replace-form below. The card then shows
+    // the replaced row.
     const clientSigner = sql(`SELECT id FROM public.service_acceptance_signers WHERE request_id='${r3.id}'
       AND slot='client' AND status='active';`);
     await actAs(DESIGNER_EMAIL, 'replace_service_acceptance_signer', { p_request_id: r3.id, p_signer_id: clientSigner,
@@ -849,9 +849,8 @@ test.describe('RC-7 e2 paper — job P', () => {
     expect(sent.scopeHash).toBe(edition.hash);
     expect(frozen(row.id).members).toEqual(['plan_issue:RC7 fictional drawing set']);
 
-    // A paper whose scope or evidence code does not match the request: the
-    // database refuses it (stale_scope, 40001), but through the API the call
-    // hangs until the gateway times out (DEFECT RC7-e2-2, repro below).
+    // A paper whose scope or evidence code does not match the request is
+    // refused with stale_scope (PT409, HTTP 409): @rc7-e2-paper-mismatch below.
 
     const admin = await designer(browser, ADMIN_EMAIL);
     for (const [index, name] of [PAPER_CARDS.one, PAPER_CARDS.two].entries()) {
@@ -1223,11 +1222,9 @@ test.describe('RC-7 e2 completion and care', () => {
   });
 });
 
-test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () => {
-  // DEFECT RC7-e2-1: the request card's Replace form finds no household on a composed job: useProjectHousehold reads projects.client_profile_id (FK to client_profiles, never set) instead of projects.client_id.
-  test('@rc7-e2-defect-1 the Replace form offers the job household\'s other members and replaces the signer', async ({ browser }) => {
-    // Fixme unless rc7-e2-run.mjs --defect-probe 1 lifts it (RC7_E2_DEFECT_PROBE=1).
-    test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '1', 'DEFECT RC7-e2-1');
+test.describe('RC-7 e2 signer replacement form and paper mismatch', () => {
+  // Was DEFECT RC7-e2-1 (fixed by 1028ea50c: useProjectHousehold resolves the job's client by projects.client_id).
+  test('@rc7-e2-replace-form the Replace form offers the job household\'s other members and replaces the signer', async ({ browser }) => {
     await applyFixtures();
     const project = jobOf(ACTOR.client.id);
     const studio = await designer(browser);
@@ -1238,7 +1235,6 @@ test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () =>
     await signers.locator('li[data-signer-status="active"]').filter({ hasText: '(Client)' })
       .getByRole('button', { name: 'Replace this person' }).click();
     const replace = card.getByRole('form', { name: 'Replace Client' });
-    // The defect step: on this base the form says no household member is on file.
     await expect(replace.getByText('No other household member is on file for this job.')).toHaveCount(0);
     await expect(replace.getByLabel('New person').locator(`option[value="${THIRD_CARD}"]`)).toHaveCount(1);
 
@@ -1251,15 +1247,13 @@ test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () =>
     await expect(signers.locator('li[data-signer-status="active"]').filter({ hasText: 'RC7 Fictional Third' }))
       .toBeVisible({ timeout: 60_000 });
     const audit = replacementAudit(row.id);
-    console.log('[RC7 e2 defect replacement audit]', JSON.stringify(audit));
+    console.log('[RC7 e2 replace-form audit]', JSON.stringify(audit));
     expect(audit).toMatchObject({ status: 'replaced', reason, by: DESIGNER, at: true, successorCard: THIRD_CARD,
       successorStatus: 'active', successorRequired: true, requestRevision: row.revision + 1, revision: row.revision + 1 });
   });
 
-  // DEFECT RC7-e2-2: a stale_scope refusal (RAISE ... ERRCODE serialization_failure, SQLSTATE 40001) never reaches the caller through PostgREST: the call hangs until the gateway answers 504.
-  test('@rc7-e2-defect-2 a paper with a mismatched scope code is refused promptly with stale_scope through the API', async ({ browser }) => {
-    // Fixme unless rc7-e2-run.mjs --defect-probe 2 lifts it (RC7_E2_DEFECT_PROBE=2).
-    test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '2', 'DEFECT RC7-e2-2');
+  // Was DEFECT RC7-e2-2 (fixed by 59d35b07d/f6870be8f: stale refusals raise PT409, which PostgREST does not retry).
+  test('@rc7-e2-paper-mismatch a paper with a mismatched scope code is refused promptly with stale_scope through the API', async ({ browser }) => {
     await applyFixtures();
     const project = jobOf(ACTOR.paper.id);
     const studio = await designer(browser);
@@ -1279,7 +1273,7 @@ test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () =>
     const named = Object.entries(args).map(([key, value]) => `${key} => ${value === null ? 'NULL'
       : Array.isArray(value) ? `'${JSON.stringify(value)}'::jsonb` : typeof value === 'number' ? value : `'${value}'`}`).join(', ');
     const direct = dbAs(DESIGNER, `SELECT public.record_service_acceptance_paper_intake(${named})`);
-    console.log('[RC7 e2 defect-2 direct]', direct.ok, `${direct.ms}ms`, direct.out.trim());
+    console.log('[RC7 e2 paper-mismatch direct]', direct.ok, `${direct.ms}ms`, direct.out.trim());
     expect(direct.ok).toBe(false);
     expect(direct.out).toMatch(/ERROR:\s+stale_scope/);
     expect(direct.ms).toBeLessThan(10_000);
@@ -1288,19 +1282,9 @@ test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () =>
     const started = Date.now();
     const viaApi = await rpcAs(DESIGNER_EMAIL, 'record_service_acceptance_paper_intake', args);
     const ms = Date.now() - started;
-    console.log('[RC7 e2 defect-2 api]', viaApi.status, `${ms}ms`, viaApi.body);
-    // Diagnostic only: an idle pooled connection keeps its last query, so read
-    // each matching backend's state, age and wait, not a bare count.
-    console.log('[RC7 e2 defect-2 backends after]', sql(`SELECT coalesce(json_agg(json_build_object(
-      'pid', pid, 'application', application_name, 'state', state,
-      'queryAgeS', round(extract(epoch FROM now() - query_start)::numeric, 1),
-      'xactAgeS', round(extract(epoch FROM now() - xact_start)::numeric, 1),
-      'waitEventType', wait_event_type, 'waitEvent', wait_event) ORDER BY pid), '[]'::json)
-      FROM pg_stat_activity
-      WHERE query ILIKE '%record_service_acceptance_paper_intake%' AND pid <> pg_backend_pid();`));
+    console.log('[RC7 e2 paper-mismatch api]', viaApi.status, `${ms}ms`, viaApi.body);
     expect(sql(`SELECT count(*) FROM public.service_acceptance_paper_intakes WHERE request_id='${row.id}';`)).toBe('0');
-    // The defect step: on this base the gateway answers 504 "The upstream server is timing out".
-    expect(refusal(viaApi), viaApi.body).toMatchObject({ code: '40001', message: 'stale_scope' });
+    expect(refusal(viaApi), viaApi.body).toEqual({ status: 409, code: 'PT409', message: 'stale_scope' });
     expect(ms).toBeLessThan(10_000);
   });
 });

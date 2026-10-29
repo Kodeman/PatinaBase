@@ -6,7 +6,6 @@
  *
  *   node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence <dir> [--runs 2]
  *       --workdir <existing scratch parent> [--pins-from <dir with the .temp version pins>] [--keep-stack]
- *       [--defect-probe <1|2>]
  *
  * It starts ONE owned Supabase stack (project patina-rc7-e2, RC-7 lane e2 port
  * block 571: API 57121, DB 57122, shadow 57120, pooler 57129, inspector 57183;
@@ -21,14 +20,12 @@
  * rc7-e2-consumer-journey.spec.ts in one playwright.round8.config.ts run on the
  * round-8 projects chromium and webkit-iphone, each driving every actor in its
  * own browser context: @rc7-e2-acceptance (applies the base and rc7-e2
- * fixtures: fresh jobs per project), @rc7-e2-paper, @rc7-e2-completion.
+ * fixtures: fresh jobs per project), @rc7-e2-paper, @rc7-e2-completion,
+ * @rc7-e2-replace-form and @rc7-e2-paper-mismatch (the RC7-e2-1 and RC7-e2-2
+ * regressions; each applies fresh fixtures).
  *
- * --defect-probe <n> instead runs the @rc7-e2-defect-<n> repro once on chromium
- * with RC7_E2_DEFECT_PROBE=<n> (its fixme lifted) and passes only when
- * Playwright's JSON report shows that test alone failing, once, with one error
- * first located at its defect step and carrying the defect's actual value
- * (1: the Replace form offers no household member; 2: the stale_scope refusal
- * times out at the gateway).
+ * Another lane's block: RC7_E2_PORT_BLOCK=<3 digits> (ports <block>20-<block>29,
+ * inspector <block>83), RC7_E2_PROJECT, RC7_E2_DESIGNER_PORT, RC7_E2_CLIENT_PORT.
  *
  * --workdir is required: an existing scratch directory outside home, / and any
  * checkout, under which the run creates and later removes its own child.
@@ -54,10 +51,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DESIGNER = path.resolve(HERE, '../..');
 const ROOT = path.resolve(DESIGNER, '../..');
 const CLIENT_APP = path.join(ROOT, 'apps/client-portal');
-const PROJECT = 'patina-rc7-e2';
-const OFFSET = 2800;
-const INSPECTOR_PORT = '57183';
-const PORTS = { designer: '3110', client: '3112' };
+const BLOCK = process.env.RC7_E2_PORT_BLOCK ?? '571';
+if (!/^[1-6]\d\d$/.test(BLOCK) || BLOCK === '543') throw new Error(`RC7_E2_PORT_BLOCK ${BLOCK} is not an owned port block`);
+const PROJECT = process.env.RC7_E2_PROJECT ?? 'patina-rc7-e2';
+const OFFSET = Number(`${BLOCK}21`) - 54321;
+const INSPECTOR_PORT = `${BLOCK}83`;
+const PORTS = { designer: process.env.RC7_E2_DESIGNER_PORT ?? '3110', client: process.env.RC7_E2_CLIENT_PORT ?? '3112' };
 const SHARED = { api: '54321', db: '54322' };
 const OWNED = { api: String(54321 + OFFSET), db: String(54322 + OFFSET) };
 const PINS = ['gotrue-version', 'postgres-version', 'rest-version', 'storage-migration', 'storage-version'];
@@ -66,38 +65,18 @@ const EXCLUDED_SERVICES = 'studio,mailpit,logflare,vector,imgproxy,postgres-meta
 // entry on both round-8 projects, so round 8's global setup and teardown run
 // once around all three legs (its teardown removes the F01 studio the legs
 // share), with the client portal this runner keeps up on PORTS.client.
-const E2_LEGS = [['@rc7-e2-acceptance', 3], ['@rc7-e2-paper', 1], ['@rc7-e2-completion', 3]];
+const E2_LEGS = [['@rc7-e2-acceptance', 3], ['@rc7-e2-paper', 1], ['@rc7-e2-completion', 3],
+  ['@rc7-e2-replace-form', 1], ['@rc7-e2-paper-mismatch', 1]];
 const E2_PROJECTS = ['chromium', 'webkit-iphone'];
 const E2_EXPECTED = E2_LEGS.reduce((sum, [, tests]) => sum + tests, 0) * E2_PROJECTS.length;
 const E2_ARGS = ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
   '--grep', E2_LEGS.map(([tag]) => tag).join('|'), ...E2_PROJECTS.flatMap((name) => ['--project', name]), '--workers=1'];
-// --defect-probe <n>: the DEFECT RC7-e2-<n> repro alone, fixme lifted, on chromium.
-// Judged from Playwright's JSON report (classifyProbe), never from log text: the
-// one test must fail once, with one error, first located at the defect step's
-// line, carrying the defect's actual value.
-const JOURNEY_FILE = 'rc7-e2-consumer-journey.journey.ts';
-const DEFECT_PROBES = {
-  1: {
-    title: '@rc7-e2-defect-1 the Replace form offers the job household\'s other members and replaces the signer',
-    line: 1242,
-    step: "await expect(replace.getByText('No other household member is on file for this job.')).toHaveCount(0);",
-    actual: [/^\s*Expected: 0\s*$/m, /^\s*Received: 1\s*$/m],
-  },
-  2: {
-    title: '@rc7-e2-defect-2 a paper with a mismatched scope code is refused promptly with stale_scope through the API',
-    line: 1303,
-    step: "expect(refusal(viaApi), viaApi.body).toMatchObject({ code: '40001', message: 'stale_scope' });",
-    actual: [/^\s*\+\s+"code": undefined,\s*$/m, /^\s*\+\s+"message": "The upstream server is timing out",\s*$/m],
-  },
-};
-const probeArgs = (n) => ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
-  '--grep', `@rc7-e2-defect-${n} `, '--project', 'chromium', '--workers=1', '--reporter=list,json'];
 // RC-7 common rule: stop below 20 GiB free.
 const MIN_FREE_KIB = 20 * 1024 * 1024;
 const PROVIDER_KEY = /RESEND|SMTP|SENDGRID|POSTMARK|MAILGUN|SES_|TWILIO/i;
 
 function parseArgs(argv) {
-  const args = { runs: 2, keepStack: false, defectProbe: null };
+  const args = { runs: 2, keepStack: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => {
@@ -111,10 +90,6 @@ function parseArgs(argv) {
     else if (flag === '--workdir') args.workdir = path.resolve(value());
     else if (flag === '--pins-from') args.pinsFrom = path.resolve(value());
     else if (flag === '--keep-stack') args.keepStack = true;
-    else if (flag === '--defect-probe') {
-      args.defectProbe = value();
-      if (!DEFECT_PROBES[args.defectProbe]) throw new Error(`--defect-probe takes ${Object.keys(DEFECT_PROBES).join(' or ')}`);
-    }
     else throw new Error(`unknown argument ${flag}`);
   }
   if (!args.evidence) throw new Error('--evidence <dir> is required');
@@ -297,69 +272,21 @@ function functionsReceipt() {
   return { container: edge, EMAIL_DEV_MODE: mode, providerKeyNames, envNameCount: names.length };
 }
 
-const ANSI = /\u001b\[[0-9;]*m/g;
-
-/**
- * A defect probe's verdict from Playwright's JSON report: no other error
- * anywhere, exactly one test (the probe's, on chromium) run once and failed
- * with exactly one error, located first at the defect step, whose message
- * carries the defect's actual value. Returns the reasons it is not the defect.
- */
-function classifyProbe(report, probe) {
-  const want = DEFECT_PROBES[probe];
-  const reasons = [];
-  if (!report || typeof report !== 'object') return ['no JSON report'];
-  if ((report.errors ?? []).length !== 0) reasons.push(`${report.errors.length} error(s) outside the test`);
-  const stats = report.stats ?? {};
-  for (const [key, value] of [['expected', 0], ['unexpected', 1], ['flaky', 0], ['skipped', 0]]) {
-    if (stats[key] !== value) reasons.push(`stats.${key} ${stats[key]} (want ${value})`);
-  }
-  const specs = [];
-  const walk = (suite) => {
-    for (const spec of suite.specs ?? []) specs.push(spec);
-    for (const child of suite.suites ?? []) walk(child);
-  };
-  for (const suite of report.suites ?? []) walk(suite);
-  const tests = specs.flatMap((spec) => (spec.tests ?? []).map((entry) => ({ spec, entry })));
-  if (tests.length !== 1) return [...reasons, `${tests.length} tests (want 1)`];
-  const [{ spec, entry }] = tests;
-  if (spec.title !== want.title) reasons.push(`title ${JSON.stringify(spec.title)}`);
-  if (path.posix.basename(spec.file ?? '') !== JOURNEY_FILE) reasons.push(`file ${spec.file}`);
-  if (entry.projectName !== 'chromium') reasons.push(`project ${entry.projectName}`);
-  const results = entry.results ?? [];
-  if (results.length !== 1) return [...reasons, `${results.length} results (want 1)`];
-  const [result] = results;
-  if (result.status !== 'failed') reasons.push(`status ${result.status} (want failed)`);
-  const errors = result.errors ?? [];
-  if (errors.length !== 1) reasons.push(`${errors.length} errors (want 1)`);
-  const at = errors[0]?.location;
-  if (!at || path.basename(at.file ?? '') !== JOURNEY_FILE || at.line !== want.line) {
-    reasons.push(`first error at ${at ? `${path.basename(at.file ?? '')}:${at.line}` : 'no location'} (want ${JOURNEY_FILE}:${want.line})`);
-  }
-  // The assertion's own message, without the source excerpt that quotes the step.
-  const message = String(result.error?.message ?? '').replace(ANSI, '');
-  for (const pattern of want.actual) if (!pattern.test(message)) reasons.push(`actual value missing ${pattern}`);
-  return reasons;
-}
-
 /**
  * One playwright.round8.config.ts run in the designer portal. Counted runs pass
- * on exit 0 with exactly `${expected} passed`; the defect probe passes on exit 1
- * when classifyProbe finds the defect in the JSON report. Review-and-send tap
- * lines are returned for the run log (the journey fails any send that needed a retap).
+ * on exit 0 with exactly `${expected} passed`. Review-and-send tap lines are
+ * returned for the run log (the journey fails any send that needed a retap).
  */
-function runLeg(evidence, label, legEnv, { args, expected, probe = null }) {
+function runLeg(evidence, label, legEnv, { args, expected }) {
   const dir = path.join(evidence, label);
   fs.mkdirSync(dir, { recursive: true });
-  const name = probe ? `e2-defect-probe-${probe}` : 'e2-rc7';
+  const name = 'e2-rc7';
   const report = path.join(dir, name);
   const logPath = path.join(dir, `${name}.log`);
-  const jsonPath = path.join(dir, `${name}.json`);
   const out = fs.openSync(logPath, 'w');
   const result = spawnSync('pnpm', ['exec', 'playwright', 'test', ...args], {
     cwd: DESIGNER,
-    env: { ...legEnv, PLAYWRIGHT_OUTPUT_DIR: report, PLAYWRIGHT_EVIDENCE_DIR: report,
-      ...(probe ? { PLAYWRIGHT_JSON_OUTPUT_FILE: jsonPath } : {}) },
+    env: { ...legEnv, PLAYWRIGHT_OUTPUT_DIR: report, PLAYWRIGHT_EVIDENCE_DIR: report },
     stdio: ['ignore', out, out],
     timeout: 75 * 60 * 1000,
     killSignal: 'SIGTERM',
@@ -372,19 +299,8 @@ function runLeg(evidence, label, legEnv, { args, expected, probe = null }) {
   const summary = lines.filter((line) => /^\s*\d+ (passed|failed|flaky|skipped|did not run|interrupted)\b/.test(line))
     .map((line) => line.trim().replace(/ \(.*\)$/, ''));
   const taps = text.split('\n').filter((line) => line.includes('[RC7 e2 review-and-send]')).map((line) => line.trim());
-  let verdict = [];
-  if (probe) {
-    let parsed = null;
-    try { parsed = JSON.parse(fs.readFileSync(jsonPath, 'utf8')); } catch { /* judged as no report */ }
-    verdict = classifyProbe(parsed, probe);
-    if (result.status !== 1) verdict.unshift(`exit ${result.status ?? result.signal} (want 1)`);
-    verdict = verdict.length ? verdict.map((reason) => `probe NOT the defect: ${reason}`)
-      : [`probe is the defect: 1 failed at ${JOURNEY_FILE}:${DEFECT_PROBES[probe].line} (json ${jsonPath})`];
-  }
-  const ok = probe
-    ? verdict.length === 1 && verdict[0].startsWith('probe is the defect')
-    : result.status === 0 && summary.length === 1 && summary[0] === `${expected} passed`;
-  return { ok, status: result.status ?? result.signal, logPath, lines: [...lines, ...verdict], taps };
+  const ok = result.status === 0 && summary.length === 1 && summary[0] === `${expected} passed`;
+  return { ok, status: result.status ?? result.signal, logPath, lines, taps };
 }
 
 /**
@@ -553,13 +469,9 @@ async function journey(args) {
       const client = await startClientServer(evidence, label, legEnv);
       try {
         requireDisk(evidence);
-        const legArgs = args.defectProbe ? { args: probeArgs(args.defectProbe), expected: 1, probe: args.defectProbe }
-          : { args: E2_ARGS, expected: E2_EXPECTED };
         const leg = runLeg(evidence, label, { ...legEnv, RC7_E2_ROUND8: '1',
-          ...(args.defectProbe ? { RC7_E2_DEFECT_PROBE: args.defectProbe } : {}),
-          SUPABASE_INTERNAL_URL: legEnv.NEXT_PUBLIC_SUPABASE_URL }, legArgs);
-        log(evidence, `== ${label} ${args.defectProbe ? `defect probe @rc7-e2-defect-${args.defectProbe} on chromium`
-          : `e2 ${E2_LEGS.map(([tag]) => tag).join('|')} on ${E2_PROJECTS.join(' + ')}`} exit=${leg.status} log=${leg.logPath}`);
+          SUPABASE_INTERNAL_URL: legEnv.NEXT_PUBLIC_SUPABASE_URL }, { args: E2_ARGS, expected: E2_EXPECTED });
+        log(evidence, `== ${label} e2 ${E2_LEGS.map(([tag]) => tag).join('|')} on ${E2_PROJECTS.join(' + ')} exit=${leg.status} log=${leg.logPath}`);
         for (const line of leg.lines) log(evidence, `   ${line.trim()}`);
         for (const line of leg.taps) log(evidence, `   ${line}`);
         if (!leg.ok) ok = false;

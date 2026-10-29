@@ -20,9 +20,9 @@ function ownedStack() {
   const db = new URL(process.env.SUPABASE_DB_URL ?? "");
   if (
     api.hostname !== "127.0.0.1" ||
-    api.port !== "56121" ||
+    api.port !== (process.env.RC7_E3_API_PORT ?? "56121") ||
     db.hostname !== "127.0.0.1" ||
-    db.port !== "56122"
+    db.port !== (process.env.RC7_E3_DB_PORT ?? "56122")
   ) {
     throw new Error("RC7-E3 refuses a database outside its owned stack");
   }
@@ -226,8 +226,9 @@ test.fixme("A15 Field observation records a typed source, scope and review owner
   }
 });
 
-// DEFECT RC7-E3-3: the room link prints a raw UUID, not its human label.
-test.fixme("A15 Field observation links to the room by its human name", async ({
+// Was DEFECT RC7-E3-3 (raw UUID room link); fixed by f9e2c941d and
+// 00902_round8_note_context_labels.sql, which label the room by its name.
+test("A15 Field observation links to the room by its human name", async ({
   authenticatedPage: page,
 }) => {
   ownedStack();
