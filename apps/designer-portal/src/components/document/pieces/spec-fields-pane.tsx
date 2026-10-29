@@ -326,7 +326,9 @@ interface SpecEdit {
  * One spec field's edit: { base, draft, gen }. A clean field (no draft)
  * shows, and so follows, its row. The first keystroke after clean takes the
  * row value as base; each keystroke is a generation, and only a save of the
- * current generation makes the field clean.
+ * current generation makes the field clean. A field in conflict commits only
+ * on its explicit save (Enter) or once it is edited again: leaving it, even
+ * by a focus the pane moves, saves nothing over the peer.
  */
 function useSpecEdit<T>(column: SpecColumn, value: T, version: number) {
   const [draft, setDraft] = useState<{ value: T } | null>(null);
@@ -335,8 +337,10 @@ function useSpecEdit<T>(column: SpecColumn, value: T, version: number) {
   const row = saved && saved.version > version ? saved.value : value;
   const gen = useRef(0);
   const base = useRef(row);
+  const conflicted = useRef(false);
   const change = (next: T) => {
     if (!draft) base.current = row;
+    conflicted.current = false;
     gen.current += 1;
     setDraft({ value: next });
   };
@@ -348,15 +352,22 @@ function useSpecEdit<T>(column: SpecColumn, value: T, version: number) {
       base: () => ({ [column]: base.current }) as SpecChanges,
       ack: (next) => {
         base.current = next[column] as T;
+        conflicted.current = false;
         setSaved({ value: next[column] as T, version: next.row_version });
         if (gen.current === at) setDraft(null);
       },
       rebase: (next) => {
         base.current = next[column] as T;
+        conflicted.current = true;
       },
     };
   };
-  return { shown: draft ? draft.value : row, change, edit };
+  return {
+    shown: draft ? draft.value : row,
+    change,
+    edit,
+    conflicted: () => conflicted.current,
+  };
 }
 
 /** A text field written on blur or Enter; the pane decides if it changed. */
@@ -381,7 +392,7 @@ function SpecText({
   /** The value the field shows now, handed over on blur or Enter. */
   onCommit: (next: string | null, edit: SpecEdit) => void;
 }) {
-  const { shown, change, edit } = useSpecEdit(column, value ?? null, version);
+  const { shown, change, edit, conflicted } = useSpecEdit(column, value ?? null, version);
   const draft = shown ?? "";
   const commit = () => {
     const next = draft.trim();
@@ -392,7 +403,9 @@ function SpecText({
     "aria-invalid": unsaved || undefined,
     value: draft,
     placeholder,
-    onBlur: commit,
+    onBlur: () => {
+      if (!conflicted()) commit();
+    },
     onKeyDown: (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       // Empty fields let Esc leave the shell; commit their clear before its hold runs.
       if (event.key === "Escape" && event.currentTarget.value === "") {
@@ -747,12 +760,12 @@ export function SpecFieldsPane({
   }
   type SpecWrite = {
     changes: SpecChanges;
-    /** Absent for a write with no draft of its own (Image). */
-    edit: SpecEdit | null;
+    edit: SpecEdit;
     sticky: boolean;
   };
   /** Each field's latest commit; an answer to an older one changes nothing. */
   const latestSpec = useRef(new Map<string, SpecWrite>());
+  const imageGen = useRef(0);
   const pendingSpec = useRef(new Map<string, SpecWrite>());
   const sendingSpec = useRef<Map<string, SpecWrite> | null>(null);
 
@@ -766,7 +779,7 @@ export function SpecFieldsPane({
     setError(message);
     hold.failed(fields[0][0], message);
     for (const [field, write] of fields) {
-      write.edit?.rebase(row);
+      write.edit.rebase(row);
       if (write.sticky) hold.mark(field, message);
     }
   };
@@ -774,7 +787,7 @@ export function SpecFieldsPane({
   /** What a commit does against `row`: nothing, an alert, or a write. */
   const check = (field: string, write: SpecWrite, row: SpecLensSpec) => {
     if (sameColumns(write.changes, row)) {
-      write.edit?.ack(row);
+      write.edit.ack(row);
       revert(field);
       return "same" as const;
     }
@@ -816,7 +829,7 @@ export function SpecFieldsPane({
             if (!alive.current) return;
             acked.current = saved;
             onSpecSaved(saved);
-            for (const [, write] of fields) write.edit?.ack(saved);
+            for (const [, write] of fields) write.edit.ack(saved);
             for (const [field] of latest()) revert(field);
           },
           (e: unknown) => {
@@ -844,13 +857,8 @@ export function SpecFieldsPane({
               acked.current = peer;
               onSpecSaved(peer);
             }
-            // Each field is checked again when the queue sends; a write with
-            // no draft of its own (Image) cannot tell what moved, so it alerts.
-            const blind = sent.filter(([, write]) => !write.edit);
-            if (blind.length > 0) conflict(blind, peer);
-            for (const [field, write] of sent) {
-              if (write.edit) pendingSpec.current.set(field, write);
-            }
+            // Each field is checked again when the queue sends.
+            for (const [field, write] of sent) pendingSpec.current.set(field, write);
           },
         )
         .finally(() => {
@@ -861,15 +869,14 @@ export function SpecFieldsPane({
   };
 
   /**
-   * A field hands over the spec columns it shows and, for a field with a
-   * draft, its edit. `field` is its label; a field whose draft stays on
+   * A field hands over the spec columns it shows and its edit. `field` is its label; a field whose draft stays on
    * screen (`sticky`) holds the unfolded sheet open until it saves or is put
    * back (WP-01.6).
    */
   const writeSpec = (
     field: string,
     changes: SpecChanges,
-    edit: SpecEdit | null,
+    edit: SpecEdit,
     sticky = true,
   ) => {
     const row = acked.current;
@@ -877,8 +884,7 @@ export function SpecFieldsPane({
     const last = latestSpec.current.get(field);
     // The same keystroke generation is already handed over: it decides.
     if (
-      edit &&
-      last?.edit?.gen === edit.gen &&
+      last?.edit.gen === edit.gen &&
       (pendingSpec.current.get(field) === last ||
         sendingSpec.current?.get(field) === last)
     ) {
@@ -1093,8 +1099,25 @@ export function SpecFieldsPane({
     }
     setImageNote(null);
     setLink("");
-    // The link field empties as it sends, so a refusal leaves no draft.
-    writeSpec("Image", { selected_media: [{ url }] }, null, false);
+    // The link field empties as it sends, so a refusal leaves no draft. Its
+    // base is the image the row held when this one was chosen.
+    let base: SpecChanges = { selected_media: acked.current?.selected_media };
+    imageGen.current += 1;
+    writeSpec(
+      "Image",
+      { selected_media: [{ url }] },
+      {
+        gen: imageGen.current,
+        base: () => base,
+        ack: (row) => {
+          base = { selected_media: row.selected_media };
+        },
+        rebase: (row) => {
+          base = { selected_media: row.selected_media };
+        },
+      },
+      false,
+    );
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -1597,11 +1620,16 @@ function DimensionsField({
   unsaved?: boolean;
   onCommit: (next: Record<string, unknown> | null, edit: SpecEdit) => void;
 }) {
-  const { shown, change, edit } = useSpecEdit("selected_dimensions", value, version);
+  const { shown, change, edit, conflicted } = useSpecEdit(
+    "selected_dimensions",
+    value,
+    version,
+  );
   return (
     <div
       onBlur={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        if (conflicted()) return;
         onCommit(shown, edit());
       }}
     >

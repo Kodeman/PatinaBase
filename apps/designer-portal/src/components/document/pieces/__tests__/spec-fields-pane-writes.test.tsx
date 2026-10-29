@@ -404,7 +404,7 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     },
   );
 
-  it("Notes, written on blur, keeps its draft and saves again on the refreshed row_version", async () => {
+  it("Notes, written on blur, keeps its draft and saves once edited again on the refreshed row_version", async () => {
     render(<Harness />);
     peerSaves({ trade_notes: null, finish: "Peer finish" });
     peerSaves({ trade_notes: "Peer note" });
@@ -420,15 +420,25 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     await type("Finish", "Peer finish");
     expect(mockSpecCalls).toHaveLength(1);
 
+    // In conflict, leaving Notes saves nothing over the peer.
     await act(async () => {
       fireEvent.blur(field("Notes"));
     });
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(field("Notes")).toHaveValue("My note");
+
+    // Edited again, it saves on blur against the peer's row.
+    await type("Notes", "My note, kept");
     expect(mockSpecCalls[1].input).toMatchObject({
       expectedRowVersion: 3,
-      changes: { trade_notes: "My note" },
+      changes: { trade_notes: "My note, kept" },
     });
     await answer(1);
-    expect(server).toMatchObject({ trade_notes: "My note", finish: "Peer finish", row_version: 4 });
+    expect(server).toMatchObject({
+      trade_notes: "My note, kept",
+      finish: "Peer finish",
+      row_version: 4,
+    });
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -529,9 +539,14 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     await act(async () => {
       fireEvent.blur(width());
     });
+    expect(mockSpecCalls).toHaveLength(1);
+    fireEvent.change(width(), { target: { value: "74" } });
+    await act(async () => {
+      fireEvent.blur(width());
+    });
     expect(mockSpecCalls[1].input).toMatchObject({
       expectedRowVersion: 2,
-      changes: { selected_dimensions: { width: "72" } },
+      changes: { selected_dimensions: { width: "74" } },
     });
   });
 
@@ -635,6 +650,78 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
       expectedRowVersion: 4,
       changes: { selected_dimensions: { width: "72", unit: "in" } },
     });
+  });
+
+  it("an image chosen while another write is out is checked against the image it replaced", async () => {
+    render(<Harness />);
+    await enter("Finish", "Mine");
+    const link = screen.getByRole("textbox", { name: "Paste an image link" });
+    fireEvent.change(link, { target: { value: "https://example.com/mine.jpg" } });
+    await act(async () => {
+      fireEvent.keyDown(link, { key: "Enter" });
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    peerSaves({
+      finish: "Peer oak",
+      selected_media: [{ url: "https://example.com/peer.jpg" }] as never,
+    });
+    await answer(0);
+
+    // Neither write goes over the peer.
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(server).toMatchObject({
+      finish: "Peer oak",
+      selected_media: [{ url: "https://example.com/peer.jpg" }],
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Image changed in another session. Finish changed in another session to “Peer oak”. Save again to replace them.",
+    );
+  });
+
+  it("a focus the pane moves after a conflict never commits another conflicted field", async () => {
+    render(<Harness />);
+    // Material is in conflict, its draft kept.
+    peerSaves({ material: "Peer ash" });
+    await enter("Material", "Ash");
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent("Material changed in another session");
+    expect(mockSpecCalls).toHaveLength(1);
+
+    // Finish holds a draft begun before a peer changed it.
+    act(() => field("Finish").focus());
+    fireEvent.change(field("Finish"), { target: { value: "Mine" } });
+    peerSaves({ finish: "Peer oak" });
+    // Notes began from a value the peer left alone: it lands on the peer's row.
+    await type("Notes", "Note");
+    await answer(1);
+    await answer(2);
+    expect(server).toMatchObject({ trade_notes: "Note", finish: "Peer oak", row_version: 4 });
+
+    // Tab from Finish into Material: Finish alerts and takes focus back,
+    // which leaves Material; Material's draft is not sent.
+    await act(async () => {
+      field("Material").focus();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(field("Finish")).toHaveFocus();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Finish changed in another session to “Peer oak”.",
+    );
+    expect(mockSpecCalls).toHaveLength(3);
+    expect(server).toMatchObject({ material: "Peer ash", finish: "Peer oak" });
+    expect(field("Material")).toHaveValue("Ash");
+    expect(field("Material")).toHaveAttribute("aria-invalid", "true");
+
+    // Each saves only on its own explicit save.
+    await act(async () => {
+      fireEvent.keyDown(field("Finish"), { key: "Enter" });
+    });
+    expect(mockSpecCalls[3].input).toMatchObject({
+      expectedRowVersion: 4,
+      changes: { finish: "Mine" },
+    });
+    await answer(3);
+    expect(server).toMatchObject({ finish: "Mine", material: "Peer ash" });
   });
 
   it("A, then B sent, then A typed again before B lands: the new A stays and saves (new)", async () => {
