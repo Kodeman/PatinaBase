@@ -267,6 +267,44 @@ describe('form dismissals', () => {
   });
 });
 
+describe('completed form submissions', () => {
+  it('keeps focus on the studio service heading after a resolved condition disappears', async () => {
+    mockObligations.mockReturnValue(read(reading({ conditions: [CONDITION] })));
+    mockCompletion.mockReturnValue(record([completion({ state: 'completed_with_conditions', openConditionIds: ['condition-1'] })]));
+    mockResolve.mockResolvedValueOnce({ resolutionId: 'resolution-1' });
+    const { rerender } = render(<StudioServiceSection projectId="job-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve this condition' }));
+    fireEvent.change(screen.getByLabelText('How it was resolved'), { target: { value: 'Repainted the hall' } });
+    fireEvent.change(screen.getByLabelText('What shows it'), { target: { value: 'issue:issue-1' } });
+    const submit = screen.getByRole('button', { name: 'Record the resolution' });
+    submit.focus();
+    fireEvent.click(submit);
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Resolve: Touch up the hall' })).not.toBeInTheDocument());
+    mockObligations.mockReturnValue(read(reading({ conditions: [] })));
+    mockCompletion.mockReturnValue(record([completion({ state: 'completed', openConditionIds: [] })], [resolution()]));
+    rerender(<StudioServiceSection projectId="job-1" />);
+    expect(screen.queryByRole('button', { name: 'Resolve this condition' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Studio service' }));
+  });
+
+  it('keeps focus on the studio service heading after a revoked completion disappears', async () => {
+    mockObligations.mockReturnValue(read(reading()));
+    mockCompletion.mockReturnValue(record([completion()]));
+    mockRevoke.mockResolvedValueOnce({ completionId: 'completion-1' });
+    const { rerender } = render(<StudioServiceSection projectId="job-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke this completion' }));
+    fireEvent.change(screen.getByLabelText('Why it is revoked'), { target: { value: 'Recorded in error' } });
+    const submit = screen.getByRole('button', { name: 'Revoke' });
+    submit.focus();
+    fireEvent.click(submit);
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Revoke this completion' })).not.toBeInTheDocument());
+    mockCompletion.mockReturnValue(record([completion({ revokedAt: '2026-10-28T10:00:00Z', revokeReason: 'Recorded in error' })]));
+    rerender(<StudioServiceSection projectId="job-1" />);
+    expect(screen.queryByRole('button', { name: 'Revoke this completion' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Studio service' }));
+  });
+});
+
 describe('conditions (K3 option A)', () => {
   it('completes with conditions open, resolves one with a reference, and reads complete once the last closes', async () => {
     mockObligations.mockReturnValue(read(reading({

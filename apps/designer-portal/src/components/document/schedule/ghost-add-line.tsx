@@ -223,7 +223,7 @@ export function GhostAddLine({
           placeholder="Name a phase…"
           onChange={(e) => setName(e.target.value)}
           onKeyDown={onNameKeyDown}
-          className="min-w-[280px] max-w-full border-b border-dashed border-[var(--color-clay)] bg-transparent pb-[2px] font-heading text-[1.2rem] text-[var(--color-quiet-ink)] placeholder:text-[var(--color-quiet-ink)] placeholder:opacity-100 focus:outline-none"
+          className="min-w-[280px] max-w-full border-b border-dashed border-[var(--color-clay)] bg-transparent pb-[2px] font-heading text-[1.2rem] text-[var(--color-quiet-ink)] placeholder:italic placeholder:text-[var(--color-quiet-ink)] placeholder:opacity-100 focus:outline-none"
         />
 
         {/* the duration field appears once a name is being typed (`.date-entry`) */}

@@ -483,9 +483,9 @@ export function CareBand({
       {operational.blockers.length > 0 && (
         <div
           role="status"
-          className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.08)] px-3.5 py-2.5"
+          className="mt-3 rounded-[3px] border-l-2 border-[var(--color-terracotta)] px-3.5 py-2.5"
         >
-          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-mocha)]">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
             Closeout tasks outstanding
           </p>
           <ul className="mt-1 space-y-0.5 text-[11.5px] text-[var(--color-charcoal)]">

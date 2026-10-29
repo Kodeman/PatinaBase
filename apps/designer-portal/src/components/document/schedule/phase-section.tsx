@@ -94,7 +94,7 @@ export interface PhaseSectionProps {
 /** Heading weight/size/ink per state (`.mb-entry h3` + state variants). */
 const HEADING_CLS: Record<SpinePhaseState, string> = {
   active: 'text-[1.28rem] font-semibold text-[var(--color-charcoal)]',
-  closed: 'text-[1.02rem] font-normal text-[var(--color-aged-oak)]',
+  closed: 'text-[1.02rem] font-normal text-[var(--color-quiet-ink)]',
   future: 'text-[1.1rem] font-normal text-[var(--color-quiet-ink)]',
 };
 

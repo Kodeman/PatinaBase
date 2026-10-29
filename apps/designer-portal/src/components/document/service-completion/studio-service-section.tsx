@@ -71,7 +71,7 @@ export function StudioServiceSection({ projectId }: { projectId: string }) {
   return (
     <section aria-labelledby={`${studioServiceAnchorId(projectId)}-heading`} id={studioServiceAnchorId(projectId)}
       data-studio-service className="mt-8">
-      <h3 id={`${studioServiceAnchorId(projectId)}-heading`} className="t-body font-semibold">Studio service</h3>
+      <h3 id={`${studioServiceAnchorId(projectId)}-heading`} tabIndex={-1} className="t-body font-semibold">Studio service</h3>
       <p className="t-meta mt-1">Whether the studio has delivered the services it agreed. Project closure is separate.</p>
       {inactive && <p role="status" data-studio-service-inactive className="t-body-sm mt-3">{INACTIVE_NOTE}</p>}
       {failed && (
@@ -329,7 +329,8 @@ function RevokeCompletion({ projectId, completion, report, label = 'Revoke this 
     setError(null);
     try {
       await revoke.mutateAsync({ completionId: completion.completionId, reason: reason.trim() });
-      close();
+      document.getElementById(`${studioServiceAnchorId(projectId)}-heading`)?.focus();
+      setOpened(false);
     } catch (failure) {
       setError(report(failure));
     }
@@ -460,7 +461,10 @@ function OpenCondition({ projectId, requestId, conditionId, text, report }: {
       <p>{text} · Open</p>
       {opened ? (
         <ResolveCondition projectId={projectId} requestId={requestId} conditionId={conditionId} text={text}
-          report={report} onDone={close} />
+          report={report} onDone={() => {
+            document.getElementById(`${studioServiceAnchorId(projectId)}-heading`)?.focus();
+            setOpened(false);
+          }} onCancel={close} />
       ) : (
         <DocumentActionRow surfaceKey="studio-service" regionKey="condition">
           <DocumentAction ref={openerRef} actionKey="resolve-service-condition" variant="tertiary" onClick={() => setOpened(true)}>
@@ -472,8 +476,9 @@ function OpenCondition({ projectId, requestId, conditionId, text, report }: {
   );
 }
 
-function ResolveCondition({ projectId, requestId, conditionId, text, report, onDone }: {
-  projectId: string; requestId: string; conditionId: string; text: string; report: Report; onDone: () => void;
+function ResolveCondition({ projectId, requestId, conditionId, text, report, onDone, onCancel }: {
+  projectId: string; requestId: string; conditionId: string; text: string; report: Report;
+  onDone: () => void; onCancel: () => void;
 }) {
   const id = useId();
   const resolve = useResolveServiceAcceptanceCondition(projectId);
@@ -513,7 +518,7 @@ function ResolveCondition({ projectId, requestId, conditionId, text, report, onD
           disabled={resolve.isPending} loading={resolve.isPending}>
           Record the resolution
         </DocumentAction>
-        <DocumentAction actionKey="cancel-condition-resolution" variant="tertiary" onClick={onDone}>
+        <DocumentAction actionKey="cancel-condition-resolution" variant="tertiary" onClick={onCancel}>
           Cancel
         </DocumentAction>
       </DocumentActionRow>
