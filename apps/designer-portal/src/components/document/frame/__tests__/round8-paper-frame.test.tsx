@@ -1,12 +1,24 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Round8PaperFrame, { type Round8Pieces, type Round8PaperFrameProps } from '../round8-paper-frame';
 import type { DocumentFrameSlots } from '../frame-slots';
 import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 
 import { rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-origin';
+import { LENS_RESOLVE_MAX_MS, LENS_RESOLVE_STABLE_FRAMES } from '@/lib/document/lens-constants';
+import { UNFOLD_REGION_EVENT } from '@/lib/document/document-index';
+import {
+  REVEAL_FAILSAFE_MS,
+  revealStep,
+  scrollIntoRevealed,
+  SHOWN_ATTRIBUTE,
+  useChapterReveal,
+  type RevealState,
+} from '../use-chapter-reveal';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // The Closeout chapter's acceptance instrument reads its own data; its
 // behaviour is proven in service-acceptance/__tests__.
@@ -391,4 +403,279 @@ it('refreshes the mounted JobHead from People to same-job Accounts without repla
   expect(container.querySelector('[data-job-head-return]')).toHaveAttribute('href', '/desk');
   fireEvent.click(screen.getByRole('link', { name: 'Studio' }));
   expect(takeDeskReturn()?.studioOverlay).toMatchObject({ overlay: 'books', filter: 'receivables', focusKey: 'invoice-1:open-invoice-document', scrollTop: 67 });
+});
+
+/*
+ * RC7-E8-4 — the paper body reveals chapter by chapter, top down. jsdom
+ * evaluates no stylesheet, so the hold is read from round8.css and its selector
+ * run against the frame's real DOM; the reveal order is driven frame by frame.
+ */
+describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
+  const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const round8Css = strip(readFileSync(join(__dirname, '..', '..', 'paper', 'round8.css'), 'utf8'));
+  const globalsCss = strip(readFileSync(join(__dirname, '..', '..', '..', '..', 'app', 'globals.css'), 'utf8'));
+  const holds = [...round8Css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, selector, body]) => ({ selector: selector.trim().replace(/\s+/g, ' '), body: body.trim() }))
+    .filter(({ selector }) => selector.includes(':not([data-lens-resolved])'));
+  const HOLD =
+    '[data-paper-renderer="round8"][data-document-shell]:not([data-lens-resolved]) [data-document-paper] > :not([data-paper-cover]):not([data-paper-shown])';
+
+  it('is one rule on the round-8 shell, released per child or by the lens', () => {
+    expect(holds).toHaveLength(1);
+    expect(holds[0]!.selector).toBe(HOLD);
+  });
+
+  it('holds paint only, with a per-child failsafe past the lens deadline', () => {
+    const properties = holds[0]!.body.split(';').map((decl) => decl.split(':')[0]!.trim()).filter(Boolean);
+    expect(properties).toEqual(['opacity', 'animation']);
+    const failsafe = /animation:\s*doc-fade 1ms linear (\d+)ms both/.exec(holds[0]!.body);
+    expect(Number(failsafe?.[1])).toBeGreaterThan(LENS_RESOLVE_MAX_MS);
+    // The sampler gives up exactly when the CSS would have shown everything anyway.
+    expect(Number(failsafe?.[1])).toBe(REVEAL_FAILSAFE_MS);
+    expect(globalsCss).toMatch(
+      /@keyframes doc-fade\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}\s*to\s*\{\s*opacity:\s*1;\s*\}\s*\}/,
+    );
+  });
+
+  const heldIn = (container: HTMLElement) => (el: Element) =>
+    Array.from(container.querySelectorAll(HOLD)).some((root) => root.contains(el));
+  const chapter = (container: HTMLElement, key: string) =>
+    container.querySelector(`[data-paper-chapter="${key}"]`)!;
+  // The page's schedule scope is providers only (no element), so each chapter
+  // is its own child of the paper; the harness default wraps them in a div.
+  const asOnPage = () => renderFrame({ slots: slots({ scheduleScope: (children) => <>{children}</> }) });
+
+  it('mounts holding every chapter and the colophon, never the cover, head or margin', () => {
+    roomFilesReady = true;
+    visitsReady = true;
+    const { container } = renderFrame();
+    const isHeld = heldIn(container);
+    const chapters = Array.from(container.querySelectorAll('[data-paper-chapter]'));
+    expect(chapters.length).toBeGreaterThan(0);
+    expect(chapters.every(isHeld)).toBe(true);
+    expect(isHeld(container.querySelector('[data-slot="colophon"]')!)).toBe(true);
+    expect(isHeld(container.querySelector('[data-paper-cover] [data-slot="letterhead"]')!)).toBe(false);
+    expect(isHeld(container.querySelector('[data-job-head]')!)).toBe(false);
+    expect(isHeld(container.querySelector('[data-slot="margin"]')!)).toBe(false);
+    container.querySelector('[data-document-shell]')!.setAttribute('data-lens-resolved', 'true');
+    expect(container.querySelectorAll(HOLD)).toHaveLength(0);
+  });
+
+  /** A paper of four children whose tops the test sets, frame by frame. */
+  function paperOf(keys: string[]) {
+    const paper = document.createElement('main');
+    paper.innerHTML =
+      '<div data-paper-cover=""></div>' +
+      keys.map((key) => `<section data-paper-chapter="${key}" data-index-region="${key}"></section>`).join('');
+    const tops = new Map<Element, number>();
+    for (const el of [paper, ...Array.from(paper.children)]) {
+      el.getBoundingClientRect = () => ({ top: tops.get(el) ?? 0 }) as DOMRect;
+    }
+    const shown = () =>
+      Array.from(paper.querySelectorAll(`[${SHOWN_ATTRIBUTE}]`)).map((el) => el.getAttribute('data-paper-chapter'));
+    const at = (key: string) => paper.querySelector(`[data-paper-chapter="${key}"]`)!;
+    return { paper, tops, shown, at };
+  }
+  const frames = (paper: Element, state: RevealState, n: number) => {
+    for (let i = 0; i < n; i++) revealStep(paper, state);
+  };
+
+  it('reveals in paper order once the tops have held for the lens frame count', () => {
+    const { paper, shown } = paperOf(['brief', 'design', 'schedule']);
+    const state: RevealState = { tops: new WeakMap() };
+    frames(paper, state, LENS_RESOLVE_STABLE_FRAMES);
+    expect(shown()).toEqual([]);
+    frames(paper, state, 1);
+    expect(shown()).toEqual(['brief', 'design', 'schedule']);
+  });
+
+  it('stops at the first chapter below a loading register, and at a top still moving', () => {
+    const { paper, tops, shown, at } = paperOf(['brief', 'design', 'schedule', 'ffe']);
+    const busy = document.createElement('p');
+    busy.setAttribute('aria-busy', 'true');
+    at('design').appendChild(busy);
+    const state: RevealState = { tops: new WeakMap() };
+    frames(paper, state, LENS_RESOLVE_STABLE_FRAMES + 1);
+    // design is revealed (nothing above it is loading); what it pushes is not.
+    expect(shown()).toEqual(['brief', 'design']);
+
+    busy.remove();
+    let y = 400;
+    tops.set(at('schedule'), y);
+    tops.set(at('ffe'), y + 100);
+    for (let i = 0; i < LENS_RESOLVE_STABLE_FRAMES + 1; i++) {
+      // design is still growing: schedule's top moves every frame.
+      y += 50;
+      tops.set(at('schedule'), y);
+      tops.set(at('ffe'), y + 100);
+      revealStep(paper, state);
+    }
+    expect(shown()).toEqual(['brief', 'design']);
+    frames(paper, state, LENS_RESOLVE_STABLE_FRAMES);
+    expect(shown()).toEqual(['brief', 'design', 'schedule', 'ffe']);
+  });
+
+  it('holds what lies below a region the lens still holds quiet, until it resolves', () => {
+    const { paper, shown, at } = paperOf(['design', 'approvals', 'schedule']);
+    const quiet = document.createElement('section');
+    quiet.setAttribute('data-density', 'quiet');
+    at('approvals').appendChild(quiet);
+    const state: RevealState = { tops: new WeakMap() };
+    frames(paper, state, LENS_RESOLVE_STABLE_FRAMES + 1);
+    // At resolution a quiet region whose own data reads full takes its height at once.
+    expect(shown()).toEqual(['design', 'approvals']);
+    quiet.setAttribute('data-density', 'full');
+    revealStep(paper, state);
+    expect(shown()).toEqual(['design', 'approvals', 'schedule']);
+  });
+
+  it('holds everything while the cover itself is still loading', () => {
+    const { paper, shown } = paperOf(['brief', 'design']);
+    paper.querySelector('[data-paper-cover]')!.innerHTML = '<span class="animate-pulse"></span>';
+    frames(paper, { tops: new WeakMap() }, LENS_RESOLVE_STABLE_FRAMES + 2);
+    expect(shown()).toEqual([]);
+  });
+
+  it('reveals a jumped-to chapter and every chapter above it at once', () => {
+    roomFilesReady = true;
+    visitsReady = true;
+    const { container } = asOnPage();
+    const isHeld = heldIn(container);
+    act(() => {
+      window.dispatchEvent(new CustomEvent(UNFOLD_REGION_EVENT, { detail: { region: 'schedule' } }));
+    });
+    for (const key of ['design', 'approvals', 'schedule']) expect(isHeld(chapter(container, key))).toBe(false);
+    expect(isHeld(chapter(container, 'ffe'))).toBe(true);
+    // A legacy region key lands on the chapter that carries it (money → 08 Financials).
+    act(() => {
+      window.dispatchEvent(new CustomEvent(UNFOLD_REGION_EVENT, { detail: { region: 'money' } }));
+    });
+    for (const key of ['ffe', 'site', 'financials']) expect(isHeld(chapter(container, key))).toBe(false);
+    expect(isHeld(chapter(container, 'closeout'))).toBe(true);
+  });
+
+  it('reveals the chapter a landing focuses, and every chapter above it', () => {
+    const { container } = asOnPage();
+    const isHeld = heldIn(container);
+    const heading = container.querySelector<HTMLElement>('#closeout-chapter-heading')!;
+    act(() => heading.focus());
+    expect(document.activeElement).toBe(heading);
+    for (const key of ['approvals', 'schedule', 'ffe', 'financials', 'closeout']) {
+      expect(isHeld(chapter(container, key))).toBe(false);
+    }
+    expect(isHeld(chapter(container, 'record'))).toBe(true);
+  });
+
+  /**
+   * The hook on a hand-built round-8 shell. Each chapter is laid out at a page
+   * offset, and its rect follows `window.scrollY`. The sampler's frames run
+   * only when the test flushes them.
+   */
+  function mounted(layout: Record<string, [top: number, height: number]>) {
+    const shell = document.createElement('div');
+    shell.setAttribute('data-document-shell', '');
+    shell.setAttribute('data-paper-renderer', 'round8');
+    const grid = document.createElement('div');
+    const { paper, shown, at } = paperOf(Object.keys(layout));
+    paper.setAttribute('data-document-paper', '');
+    grid.appendChild(paper);
+    shell.appendChild(grid);
+    document.body.appendChild(shell);
+    for (const [key, [top, height]] of Object.entries(layout)) {
+      at(key).getBoundingClientRect = () =>
+        ({ top: top - window.scrollY, bottom: top + height - window.scrollY }) as DOMRect;
+    }
+    const queue: FrameRequestCallback[] = [];
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => queue.push(cb));
+    jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const hook = renderHook(() => useChapterReveal({ current: grid }));
+    const flush = () => queue.splice(0).forEach((cb) => cb(performance.now()));
+    const scrollTo = (y: number) => {
+      Object.defineProperty(window, 'scrollY', { value: y, configurable: true });
+      act(() => {
+        window.dispatchEvent(new Event('scroll'));
+      });
+    };
+    return { shell, paper, shown, at, queue, flush, scrollTo, hook };
+  }
+  afterEach(() => {
+    jest.restoreAllMocks();
+    Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
+    document.body.innerHTML = '';
+  });
+  const LAYOUT: Record<string, [number, number]> = {
+    brief: [300, 300],
+    design: [600, 400],
+    schedule: [1000, 600],
+    ffe: [1600, 600],
+    record: [2200, 400],
+  };
+
+  it('stops sampling once every chapter shows', () => {
+    const { shown, queue, flush } = mounted(LAYOUT);
+    for (let i = 0; i <= LENS_RESOLVE_STABLE_FRAMES; i++) flush();
+    expect(shown()).toEqual(Object.keys(LAYOUT));
+    expect(queue).toHaveLength(0);
+  });
+
+  it('stops sampling at the CSS failsafe when the lens never resolves', () => {
+    const { paper, shown, queue, flush } = mounted(LAYOUT);
+    paper.querySelector('[data-paper-cover]')!.innerHTML = '<span aria-busy="true"></span>';
+    const now = jest.spyOn(performance, 'now').mockReturnValue(performance.now());
+    for (let i = 0; i < 10; i++) flush();
+    expect(queue).toHaveLength(1);
+    now.mockReturnValue(now() + REVEAL_FAILSAFE_MS);
+    flush();
+    expect(queue).toHaveLength(0);
+    expect(shown()).toEqual([]);
+  });
+
+  it('stops sampling at lens resolution', () => {
+    const { shell, queue, flush } = mounted(LAYOUT);
+    flush();
+    shell.setAttribute('data-lens-resolved', 'true');
+    flush();
+    expect(queue).toHaveLength(0);
+  });
+
+  it('leaves the first screen to the sampler while nobody has scrolled', () => {
+    const { shown, scrollTo } = mounted(LAYOUT);
+    // A scroll event at the opening position (a layout nudge, a no-op scrollTo).
+    scrollTo(0);
+    expect(shown()).toEqual([]);
+  });
+
+  it('reveals what a scroll away from the opening reaches, and everything above it', () => {
+    const { shown, scrollTo } = mounted(LAYOUT);
+    // find-in-page / a screen reader's cursor: the viewport now spans 1100–1868.
+    scrollTo(1100);
+    expect(window.innerHeight).toBe(768);
+    expect(shown()).toEqual(['brief', 'design', 'schedule', 'ffe']);
+  });
+
+  it('a returning reader is landed on a chapter that is already revealed', () => {
+    const { at, shown } = mounted(LAYOUT);
+    const target = at('ffe');
+    let shownAtScroll: (string | null)[] = [];
+    target.scrollIntoView = jest.fn(() => {
+      shownAtScroll = shown();
+    });
+    scrollIntoRevealed(target, { block: 'start' });
+    expect(target.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    expect(shownAtScroll).toEqual(['brief', 'design', 'schedule', 'ffe']);
+  });
+
+  it('page.tsx scrolls to a chapter only through the reveal', () => {
+    const page = readFileSync(
+      join(__dirname, '..', '..', '..', '..', 'app', '(document)', 'doc', '[id]', 'page.tsx'),
+      'utf8',
+    );
+    // The returning reader's landing reveals before it scrolls.
+    expect(page).toMatch(/scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
+    // The one bare scroll left lands on the letterhead, which is never held.
+    expect(page.match(/\.scrollIntoView\(/g)).toEqual(['.scrollIntoView(']);
+    expect(page).toMatch(/head\.scrollIntoView\(/);
+    expect(page).not.toMatch(/window\.scroll(To|By)?\(/);
+    expect(page).toMatch(/revealPaperThrough\(section\);\s*landSection\(/);
+  });
 });
