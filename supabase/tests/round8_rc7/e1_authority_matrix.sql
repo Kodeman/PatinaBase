@@ -175,8 +175,8 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.assert_true((SELECT count(*) FROM storage.objects WHERE id::text LIKE 'e1000000-%')=0
  AND (pg_temp.listed(pg_temp.req('r4'))->>'count')::int=0,
  'X02 linked but nonsigner household member has no bytes or acceptance list');
-SELECT pg_temp.assert_true((public.get_studio_service_completion(pg_temp.project())->>'audience')='client',
- 'X02 prior-request signer reads only the client C6 projection');
+-- DEFECT RC7-E1-1: positive cross-request C6 result is excluded from passing
+-- authority gates; e1_household_privacy_defect.sql asserts the desired denial.
 RESET ROLE;
 
 SELECT pg_temp.actor(10);
