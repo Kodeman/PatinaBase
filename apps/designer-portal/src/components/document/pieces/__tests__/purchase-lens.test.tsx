@@ -372,7 +372,9 @@ describe("PurchaseLens", () => {
     mockAuthority.isError = true;
     try {
       const { rerender } = render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
-      fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Try again" }));
+      const retry = within(screen.getByRole("alert")).getByRole("button", { name: "Try again" });
+      retry.focus();
+      fireEvent.click(retry);
       expect(mockLines.refetch).toHaveBeenCalledTimes(1);
       expect(mockRooms.refetch).toHaveBeenCalledTimes(1);
       expect(mockAuthority.refetch).toHaveBeenCalledTimes(1);
@@ -381,7 +383,9 @@ describe("PurchaseLens", () => {
       mockRooms.isFetching = true;
       mockAuthority.isFetching = true;
       rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
-      expect(screen.getByRole("status")).toHaveTextContent("Reading the schedule…");
+      expect(screen.getByRole("status")).toHaveTextContent("Reading again…");
+      expect(screen.getByRole("button", { name: "Try again" })).toBe(retry);
+      expect(retry).toBeDisabled();
       expect(document.querySelector("[data-purchase-row]")).toBeNull();
       mockLines.isError = false;
       mockRooms.isError = false;
@@ -394,6 +398,27 @@ describe("PurchaseLens", () => {
     } finally {
       mockAuthority.isError = false;
     }
+  });
+
+  it("retains the retry button after failure without stealing focus on later recovery", () => {
+    mockRooms.isError = true;
+    const { rerender } = render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    const retry = within(screen.getByRole("alert")).getByRole("button", { name: "Try again" });
+    retry.focus();
+    fireEvent.click(retry);
+    mockRooms.isFetching = true;
+    rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(screen.getByRole("status")).toHaveTextContent("Reading again…");
+    expect(screen.getByRole("button", { name: "Try again" })).toBe(retry);
+    expect(retry).toBeDisabled();
+    mockRooms.isFetching = false;
+    rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(screen.getByRole("button", { name: "Try again" })).toBe(retry);
+    expect(retry).toBeEnabled();
+    expect(retry).toHaveFocus();
+    mockRooms.isError = false;
+    rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(screen.getByRole("table", { name: "Purchasing" })).not.toHaveFocus();
   });
 
   it("a refused studio-purchases read says so and retries", () => {

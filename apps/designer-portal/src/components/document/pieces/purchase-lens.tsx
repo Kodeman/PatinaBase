@@ -305,17 +305,16 @@ export function PurchaseLens({
     instruments.data,
   ]);
   useEffect(() => {
-    if (
-      retryFocus.current && !readingAgain && !scheduleFailed && !contextFailed &&
-      schedule.data && roomRead.data && context
-    ) {
-      retryFocus.current = false;
+    if (!retryFocus.current || readingAgain) return;
+    retryFocus.current = false;
+    if (!scheduleFailed && !contextFailed && schedule.data && roomRead.data && context) {
       tableRef.current?.focus();
     }
   }, [readingAgain, scheduleFailed, contextFailed, schedule.data, roomRead.data, context]);
+  const retryVisible = scheduleFailed || contextFailed || (retryFocus.current && readingAgain);
   const groups = useMemo(
     () =>
-      context && schedule.data && roomRead.data && !contextFailed && !scheduleFailed
+      context && schedule.data && roomRead.data && !retryVisible
         ? derivePurchaseGroups(
             schedule.data as unknown as PurchaseLensLine[],
             rooms,
@@ -324,7 +323,7 @@ export function PurchaseLens({
             context,
           )
         : [],
-    [schedule.data, roomRead.data, rooms, room, filter, context, contextFailed, scheduleFailed],
+    [schedule.data, roomRead.data, rooms, room, filter, context, retryVisible],
   );
 
   if (room === REMOVED_PLACE) {
@@ -381,31 +380,18 @@ export function PurchaseLens({
             <tbody>
               <tr>
                 <td colSpan={columns.length} className={CELL}>
-                  {readingAgain && (scheduleFailed || contextFailed) ? (
-                    <span role="status">Reading the schedule…</span>
-                  ) : scheduleFailed ? (
-                    <span role="alert">
-                      {schedule.isError && roomRead.isError
-                        ? "The schedule and rooms could not be read."
-                        : schedule.isError
-                          ? "The schedule could not be read."
-                          : "The rooms could not be read."}{" "}
-                      <button
-                        type="button"
-                        className={ACT_CLS}
-                        onClick={retryFailed}
-                      >
-                        Try again
-                      </button>
-                    </span>
-                  ) : contextFailed ? (
-                    <span role="alert">
-                      The job’s purchasing authority could not be read, so no line is shown as ready to order.{" "}
-                      <button
-                        type="button"
-                        className={ACT_CLS}
-                        onClick={retryFailed}
-                      >
+                  {retryVisible ? (
+                    <span role={readingAgain ? "status" : "alert"}>
+                      {readingAgain
+                        ? "Reading again…"
+                        : scheduleFailed
+                          ? schedule.isError && roomRead.isError
+                            ? "The schedule and rooms could not be read."
+                            : schedule.isError
+                              ? "The schedule could not be read."
+                              : "The rooms could not be read."
+                          : "The job’s purchasing authority could not be read, so no line is shown as ready to order."}{" "}
+                      <button type="button" className={ACT_CLS} onClick={retryFailed} disabled={readingAgain}>
                         Try again
                       </button>
                     </span>

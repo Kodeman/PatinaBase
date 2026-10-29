@@ -23,9 +23,6 @@ const overrides: Record<string, PaperRendererState> = {
 let state: PaperRendererState = pending;
 let started = false;
 let userId: string | null = null;
-let reloadGeneration = 0;
-let reloadOutstanding = false;
-let recordedAnswer: { value: boolean; distinctId: string; generation: number } | null = null;
 const listeners = new Set<() => void>();
 const cleanups: Array<() => void> = [];
 
@@ -82,18 +79,6 @@ function isIdentified(): boolean {
   return userId !== null && posthog.get_distinct_id() === userId;
 }
 
-function decideRecordedAnswer(): void {
-  if (
-    state.renderer !== 'pending' ||
-    !recordedAnswer ||
-    reloadOutstanding ||
-    recordedAnswer.generation !== reloadGeneration ||
-    recordedAnswer.distinctId !== userId ||
-    !isIdentified()
-  ) return;
-  decide(recordedAnswer.value ? 'round8' : 'legacy', 'flag');
-}
-
 function readCachedAnswer(): boolean {
   const value = posthog.isFeatureEnabled(FLAG);
   if (value === undefined || !isIdentified()) return false;
@@ -103,11 +88,8 @@ function readCachedAnswer(): boolean {
 
 function watchFlags(): void {
   if (readCachedAnswer()) return;
-  addCleanup(posthog.on('featureFlagsReloading', () => {
-    reloadGeneration += 1;
-    reloadOutstanding = true;
-    recordedAnswer = null;
-  }));
+  let reloadGeneration = 0;
+  addCleanup(posthog.on('featureFlagsReloading', () => { reloadGeneration += 1; }));
   addCleanup(posthog.onFeatureFlags((_flags, _variants, context) => {
     // The SDK replays cached flags synchronously without context on subscription.
     // Only an actual flags response can supersede the rejected cached identity.
@@ -116,20 +98,14 @@ function watchFlags(): void {
       fallback('error');
       return;
     }
-    if (reloadOutstanding) {
-      // posthog-js 1.359.1 delivers the old response before its queued identify reload.
-      const flags = posthog.featureFlags as unknown as {
-        _additionalReloadRequested?: boolean;
-        _reloadDebouncer?: ReturnType<typeof setTimeout>;
-      };
-      if (flags?._additionalReloadRequested !== false || flags._reloadDebouncer) return;
-      reloadOutstanding = false;
-    }
     const value = posthog.isFeatureEnabled(FLAG);
-    if (value === undefined) return;
-    recordedAnswer = { value, distinctId: posthog.get_distinct_id(), generation: reloadGeneration };
-    // Let identify/reload notifications in this turn invalidate a provisional answer.
-    void Promise.resolve().then(decideRecordedAnswer);
+    if (value === true) decide('round8', 'flag');
+    if (value !== false) return;
+    const generation = reloadGeneration;
+    // Let identify/reload notifications in this turn invalidate a provisional false.
+    void Promise.resolve().then(() => {
+      if (generation === reloadGeneration && isIdentified()) decide('legacy', 'flag');
+    });
   }));
 }
 
@@ -159,7 +135,6 @@ export function usePaperRenderer(): PaperRendererState {
     if (override !== undefined) return;
     userId = sessionUserId;
     startResolution();
-    decideRecordedAnswer();
   }, [override, sessionUserId]);
 
   return override === undefined ? snapshot : overrides[String(override)];

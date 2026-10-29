@@ -15,14 +15,12 @@ let reloadCallbacks: Set<() => void>;
 const mockOnInit = jest.fn();
 const mockOnFlags = jest.fn();
 const mockOnReload = jest.fn();
-const mockFeatureFlags = { _additionalReloadRequested: false, _reloadDebouncer: undefined as number | undefined };
 
 jest.mock('@patina/supabase', () => ({ useSessionUserId: () => mockUserId }));
 jest.mock('@/lib/analytics/posthog', () => ({
   isAnalyticsPossible: () => mockPossible(),
   onAnalyticsInit: (callback: () => void) => mockOnInit(callback),
   posthog: {
-    featureFlags: mockFeatureFlags,
     isFeatureEnabled: () => mockReadFlag(),
     get_distinct_id: () => mockDistinctId,
     onFeatureFlags: (callback: FlagsCallback) => mockOnFlags(callback),
@@ -65,8 +63,6 @@ beforeEach(() => {
   mockDistinctId = 'designer-a';
   mockPossible.mockReturnValue(true);
   mockReadFlag.mockReturnValue(undefined);
-  mockFeatureFlags._additionalReloadRequested = false;
-  mockFeatureFlags._reloadDebouncer = undefined;
   initCallbacks = new Set();
   flagCallbacks = new Set();
   reloadCallbacks = new Set();
@@ -177,83 +173,6 @@ describe('usePaperRenderer', () => {
       renderer: 'round8', source: 'flag', userId: 'designer-a', decidedAt: Date.now(),
     });
     expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('anonymous true stays pending until the identified false answer', async () => {
-    mockDistinctId = 'anonymous';
-    const { result } = renderHook(() => usePaperRenderer());
-    initializeAnalytics();
-    await answer(true);
-    expect(result.current.renderer).toBe('pending');
-    act(() => { mockDistinctId = 'designer-a'; reload(); });
-    await answer(false);
-    expect(result.current).toEqual({ renderer: 'legacy', source: 'flag' });
-  });
-
-  it('ignores an anonymous in-flight answer after identify queued a follow-up', async () => {
-    mockDistinctId = 'anonymous';
-    const { result } = renderHook(() => usePaperRenderer());
-    initializeAnalytics();
-    act(() => {
-      mockDistinctId = 'designer-a';
-      reload();
-      mockFeatureFlags._additionalReloadRequested = true;
-    });
-    await answer(true);
-    expect(result.current.renderer).toBe('pending');
-    mockFeatureFlags._additionalReloadRequested = false;
-    await answer(false);
-    expect(result.current).toEqual({ renderer: 'legacy', source: 'flag' });
-  });
-
-  it('waits through a debounced reload before accepting the next answer', async () => {
-    const { result } = renderHook(() => usePaperRenderer());
-    initializeAnalytics();
-    act(() => {
-      reload();
-      mockFeatureFlags._reloadDebouncer = 1;
-    });
-    await answer(true);
-    expect(result.current.renderer).toBe('pending');
-    mockFeatureFlags._reloadDebouncer = undefined;
-    await answer(false);
-    expect(result.current).toEqual({ renderer: 'legacy', source: 'flag' });
-  });
-
-  it('settles a recorded identified true when the session identity arrives late', async () => {
-    mockUserId = null;
-    const { result, rerender } = renderHook(() => usePaperRenderer());
-    initializeAnalytics();
-    await answer(true);
-    expect(result.current.renderer).toBe('pending');
-    mockUserId = 'designer-a';
-    rerender();
-    expect(result.current).toEqual({ renderer: 'round8', source: 'flag' });
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it.each([false, true])('unidentified true times out to %s tab fallback at 1500ms', async (hasTab) => {
-    if (hasTab) store('round8');
-    mockDistinctId = 'anonymous';
-    const { result } = renderHook(() => usePaperRenderer());
-    initializeAnalytics();
-    await answer(true);
-    act(() => { jest.advanceTimersByTime(1499); });
-    expect(result.current.renderer).toBe('pending');
-    act(() => { jest.advanceTimersByTime(1); });
-    expect(result.current).toEqual({ renderer: hasTab ? 'round8' : 'legacy', source: hasTab ? 'tab' : 'timeout' });
-  });
-
-  it('null-session true stays pending until the 1500ms fallback', async () => {
-    mockUserId = null;
-    const { result } = renderHook(() => usePaperRenderer());
-    initializeAnalytics();
-    await answer(true);
-    expect(result.current.renderer).toBe('pending');
-    act(() => { jest.advanceTimersByTime(1499); });
-    expect(result.current.renderer).toBe('pending');
-    act(() => { jest.advanceTimersByTime(1); });
-    expect(result.current).toEqual({ renderer: 'legacy', source: 'timeout' });
   });
 
   it('anonymous false stays pending through identify and reload until true', async () => {
