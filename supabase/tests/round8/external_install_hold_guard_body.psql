@@ -1,0 +1,204 @@
+-- Include-only. 00900 (RC7-E4-1): no external installation while a hold is
+-- open, or while a contracted unit is uninstructed. All rows roll back.
+-- BEGIN shared helpers
+CREATE FUNCTION pg_temp.ih_assert(ok boolean,label text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',label; END IF;
+ RAISE NOTICE 'PASS: %',label;
+END $$;
+CREATE FUNCTION pg_temp.ih_error(command text,state text,message text,label text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+ BEGIN EXECUTE command;
+ EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+ END;
+ PERFORM pg_temp.ih_assert(actual_state=state AND (message IS NULL OR actual_message=message),
+ label||format(' expected %s/%s got %s/%s',state,message,actual_state,actual_message));
+END $$;
+CREATE FUNCTION pg_temp.ih_id(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+ SELECT ('e9a00000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.ih_actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM set_config('request.jwt.claim.sub',pg_temp.ih_id(n)::text,true);
+ PERFORM set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.ih_id(n),'role','authenticated')::text,true);
+END $$;
+-- END shared helpers
+SELECT pg_temp.ih_assert(NOT (SELECT enabled FROM public.server_capabilities WHERE key='scope_editions'),'capability remains inactive');
+DO $$ DECLARE signature text; BEGIN
+ FOREACH signature IN ARRAY ARRAY['_external_install_blocker(uuid)','_external_refresh_status(uuid)',
+ 'record_external_fulfilment_event(uuid,text,jsonb,text[],text)','verify_external_fulfilment_event(uuid,text)'] LOOP
+  PERFORM pg_temp.ih_assert(NOT has_function_privilege('anon','public.'||signature,'EXECUTE')
+   AND NOT has_function_privilege('authenticated','public.'||signature,'EXECUTE')
+   AND NOT has_function_privilege('service_role','public.'||signature,'EXECUTE')
+   AND NOT EXISTS(SELECT 1 FROM aclexplode((SELECT proacl FROM pg_proc WHERE oid=('public.'||signature)::regprocedure)) WHERE grantee=0 AND privilege_type='EXECUTE'),
+   'inactive effective ACL '||signature);
+ END LOOP;
+END $$;
+-- BEGIN shared fixture (fabrication_instruction_body's, plus a client-bought package)
+SELECT pg_temp.ih_assert(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'e9a0%'),'fictional fixture namespace starts empty');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT pg_temp.ih_id(n),'ih-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated' FROM generate_series(1,7)n;
+INSERT INTO public.profiles(id,email,full_name,is_designer) SELECT id,email,'00900 fictional fixture',true FROM auth.users WHERE id::text LIKE 'e9a0%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES(pg_temp.ih_id(101),'design_studio','IH A','e9a0-ih-a','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+(pg_temp.ih_id(1),pg_temp.ih_id(101),'owner','active'),(pg_temp.ih_id(2),pg_temp.ih_id(101),'admin','active');
+INSERT INTO public.projects(id,name,designer_id,created_by,client_id,studio_id,status)
+VALUES(pg_temp.ih_id(201),'IH job',pg_temp.ih_id(1),pg_temp.ih_id(1),pg_temp.ih_id(7),pg_temp.ih_id(101),'active');
+INSERT INTO public.project_scope_editions(id,project_id,edition_number,kind,commercial_document_id,source_proposal_id,
+ agreement_fingerprint,effective_at,content,content_hash,status)
+VALUES(pg_temp.ih_id(301),pg_temp.ih_id(201),1,'baseline',pg_temp.ih_id(401),pg_temp.ih_id(501),'fixture',now(),'{}','fixture','active');
+INSERT INTO public.project_scope_edition_packages(edition_id,package_key,label,inclusion,responsibilities) VALUES
+(pg_temp.ih_id(301),'pkg.cabinets','pkg.cabinets','included','{"design":"studio","purchasing":"gc","payer":"gc","fabrication_contract":"gc","installation":"gc"}'),
+(pg_temp.ih_id(301),'pkg.client','pkg.client','included','{"design":"studio","purchasing":"client","payer":"client","fabrication_contract":"none","installation":"client"}');
+INSERT INTO public.designer_clients(id,designer_id,client_id,status)
+VALUES(pg_temp.ih_id(901),pg_temp.ih_id(1),pg_temp.ih_id(7),'active');
+INSERT INTO public.client_decisions(id,designer_client_id,designer_id,project_id,title,status,court,coordination_kind)
+SELECT pg_temp.ih_id(600+n),pg_temp.ih_id(901),pg_temp.ih_id(1),pg_temp.ih_id(201),'IH evidence','pending','designer','submittal'
+FROM generate_series(1,3)n;
+INSERT INTO public.coordination_item_revisions(id,decision_id,rev_number,status)
+SELECT pg_temp.ih_id(700+n),pg_temp.ih_id(600+n),1,'submitted' FROM generate_series(1,3)n;
+INSERT INTO public.project_packages(id,project_id,package_kind,code,title,package_key,created_by,idempotency_key,request_hash)
+VALUES(pg_temp.ih_id(801),pg_temp.ih_id(201),'cabinetry','IH','Fabrication','pkg.cabinets',pg_temp.ih_id(1),'ih','fixture');
+INSERT INTO public.project_parties(id,project_id,profile_id,party_kind,stage,display_name,created_by)
+VALUES(pg_temp.ih_id(811),pg_temp.ih_id(201),pg_temp.ih_id(7),'gc','active','IH seat',pg_temp.ih_id(1));
+INSERT INTO public.plan_sheets(id,project_id,sheet_number,title) VALUES(pg_temp.ih_id(821),pg_temp.ih_id(201),'IH-1','Fabrication');
+INSERT INTO public.plan_prints(id,sheet_id,batch_id,print_number,rev_letter,project_document_id,sha256)
+VALUES(pg_temp.ih_id(822),pg_temp.ih_id(821),pg_temp.ih_id(823),1,'A',pg_temp.ih_id(824),repeat('a',64));
+UPDATE public.plan_sheets SET current_print_id=pg_temp.ih_id(822),current_print_number=1 WHERE id=pg_temp.ih_id(821);
+INSERT INTO public.plan_sheet_packages(sheet_id,package_id) VALUES(pg_temp.ih_id(821),pg_temp.ih_id(801));
+INSERT INTO public.product_configurations(id,product_id,project_id,owner_user_id,version,schema_revision,status,evaluation,snapshot,snapshot_hash,approved_at,approved_by)
+VALUES(pg_temp.ih_id(831),pg_temp.ih_id(832),pg_temp.ih_id(201),pg_temp.ih_id(1),1,1,'approved','{}','{}',public._configuration_snapshot_hash('{}'),now(),pg_temp.ih_id(1));
+SET LOCAL session_replication_role=origin;
+-- END shared fixture
+
+-- BEGIN shared runtime
+CREATE FUNCTION pg_temp.ih_fid(k text DEFAULT 'ih-gc') RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+ SELECT id FROM public.project_external_fulfilments WHERE project_id=pg_temp.ih_id(201) AND client_request_id=k; $$;
+CREATE FUNCTION pg_temp.ih_event(k text,f text DEFAULT 'ih-gc') RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+ SELECT id FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.ih_fid(f) AND client_request_id=k; $$;
+CREATE FUNCTION pg_temp.ih_status(f text DEFAULT 'ih-gc') RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+ SELECT status FROM public.project_external_fulfilments WHERE id=pg_temp.ih_fid(f); $$;
+CREATE FUNCTION pg_temp.ih_manifest() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
+ SELECT manifest_id FROM public.evidence_manifest_requests WHERE project_id=pg_temp.ih_id(201) AND idempotency_key='ih-manifest'; $$;
+CREATE FUNCTION pg_temp.ih_members(issue uuid,revisions uuid[]) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT COALESCE(jsonb_agg(member),'[]'::jsonb) FROM (
+  SELECT jsonb_build_object('kind','plan_issue','id',i.id,'version',i.issue_number,'sha256',i.set_checksum) member FROM public.plan_issues i WHERE i.id=issue
+  UNION ALL SELECT jsonb_build_object('kind','coordination_item_revision','id',c.id,'rev',c.rev_number,'sha256',
+   encode(extensions.digest(public._plan_room_canonical_json(jsonb_build_object('decisionId',c.decision_id,'rev',c.rev_number,'attachments',c.attachments,'note',c.note)),'sha256'),'hex'))
+   FROM public.coordination_item_revisions c WHERE c.id=ANY(revisions)
+  UNION ALL SELECT jsonb_build_object('kind','product_configuration','id',c.id,'version',c.version,'sha256',c.snapshot_hash)
+   FROM public.product_configurations c WHERE c.id=pg_temp.ih_id(831)
+ ) source; $$;
+CREATE FUNCTION pg_temp.ih_instruct(units text[],key text) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.record_external_fulfilment_event(pg_temp.ih_fid(),'fabrication_instruction',
+  jsonb_build_object('manifestId',pg_temp.ih_manifest(),'authorizingPartyId',pg_temp.ih_id(811)),units,key); $$;
+CREATE FUNCTION pg_temp.ih_install(key text,f text DEFAULT 'ih-gc') RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.record_external_fulfilment_event(pg_temp.ih_fid(f),'installed','{}',NULL,key); $$;
+CREATE FUNCTION pg_temp.ih_hold(units text[],key text,f text DEFAULT 'ih-gc') RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.record_external_fulfilment_event(pg_temp.ih_fid(f),'hold',jsonb_build_object('decisionId',pg_temp.ih_id(601)),units,key); $$;
+CREATE FUNCTION pg_temp.ih_release(hold_key text,key text) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT public.record_external_fulfilment_event(pg_temp.ih_fid(),'release_hold',
+  jsonb_build_object('releasesEventId',pg_temp.ih_event(hold_key),'decisionId',pg_temp.ih_id(601)),NULL,key); $$;
+-- END shared runtime
+
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+SELECT pg_temp.ih_actor(1);
+-- BEGIN shared setup (fabrication_instruction_body's: issued set, approved
+-- submittal bound to both units, manifest, verified contract amount)
+SELECT public.create_external_fulfilment(pg_temp.ih_id(201),pg_temp.ih_id(301),'pkg.cabinets','gc_cabinetry',ARRAY['k-1','k-2'],pg_temp.ih_id(811),pg_temp.ih_id(831),'ih-gc');
+SELECT public.grant_fabrication_authority(pg_temp.ih_id(811),current_date,'ih-grant',NULL,250000);
+SELECT public.create_plan_issue(pg_temp.ih_id(201),'Fabrication I1','ih-issue-1');
+SELECT public.bind_fulfilment_evidence(pg_temp.ih_fid(),pg_temp.ih_id(601),ARRAY['k-1','k-2'],'ih-bind-1');
+SELECT public._resolve_coordination_item_authorized(pg_temp.ih_id(601),NULL,NULL,pg_temp.ih_id(701),NULL,pg_temp.ih_id(1));
+SELECT public.create_evidence_manifest(pg_temp.ih_id(201),pg_temp.ih_id(801),'fabrication_instruction',
+ pg_temp.ih_members((SELECT id FROM public.plan_issues WHERE project_id=pg_temp.ih_id(201) AND idempotency_key='ih-issue-1'),ARRAY[pg_temp.ih_id(701)]),'ih-manifest');
+SELECT public.record_external_fulfilment_event(pg_temp.ih_fid(),'contract_reported','{"contractAmountCents":200000}',NULL,'ih-contract');
+SELECT pg_temp.ih_actor(2);
+SELECT public.verify_external_fulfilment_event(pg_temp.ih_event('ih-contract'),'ih-contract-verify');
+SELECT pg_temp.ih_actor(1);
+-- END shared setup
+SELECT pg_temp.ih_assert(pg_temp.ih_status()='issued' AND (SELECT contracting_party_kind='gc' FROM public.project_external_fulfilments WHERE id=pg_temp.ih_fid()),
+ 'contracted GC cabinetry starts issued with nothing instructed');
+
+-- 1. Install refused while any contracted unit is uninstructed.
+SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_install('ih-install-none')$q$,'55000','fulfilment_units_uninstructed',
+ 'install refused with no unit instructed');
+SELECT pg_temp.ih_instruct(ARRAY['k-1'],'ih-instruct-k1');
+SELECT pg_temp.ih_assert(pg_temp.ih_status()='instructed','one instructed unit moves the fulfilment to instructed');
+SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_install('ih-install-partial')$q$,'55000','fulfilment_units_uninstructed',
+ 'install refused with one contracted unit uninstructed');
+
+-- 2. Install refused while a hold is open (the hold check precedes the unit check).
+SELECT pg_temp.ih_hold(ARRAY['k-2'],'ih-hold-1');
+SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_install('ih-install-held')$q$,'55000','fulfilment_hold_open',
+ 'install refused with an open hold');
+SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_instruct(ARRAY['k-2'],'ih-instruct-held')$q$,'23514','fabrication_hold_open',
+ 'the held unit cannot be instructed either');
+
+-- 3. Release, then still refused until the released unit is instructed.
+SELECT pg_temp.ih_release('ih-hold-1','ih-release-1');
+SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_install('ih-install-released')$q$,'55000','fulfilment_units_uninstructed',
+ 'install refused after release while the released unit is uninstructed');
+SELECT pg_temp.ih_instruct(ARRAY['k-2'],'ih-instruct-k2');
+SELECT pg_temp.ih_assert((pg_temp.ih_install('ih-install')->>'replayed')::boolean IS FALSE AND pg_temp.ih_status()='instructed',
+ 'install recorded after release and every unit instructed; reported only, not yet installed');
+
+-- 4. A hold that lands after the install was reported refuses verification.
+SELECT pg_temp.ih_hold(ARRAY['k-1'],'ih-hold-2');
+SELECT pg_temp.ih_actor(2);
+SELECT pg_temp.ih_error($q$SELECT public.verify_external_fulfilment_event(pg_temp.ih_event('ih-install'),'ih-verify-held')$q$,
+ '55000','fulfilment_hold_open','verification refused with an open hold');
+SELECT pg_temp.ih_assert(NOT EXISTS(SELECT 1 FROM public.project_external_fulfilment_verifications WHERE fulfilment_id=pg_temp.ih_fid() AND client_request_id='ih-verify-held')
+ AND pg_temp.ih_status()='instructed','refused verification writes no receipt and no status');
+
+-- 5. Defence in depth: a verified install with an open hold never refreshes to installed.
+SAVEPOINT ih_refresh;
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_external_fulfilment_events SET evidence_level='verified',verified_by=pg_temp.ih_id(2),verified_at=now(),verification_seq=99
+ WHERE id=pg_temp.ih_event('ih-install');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ih_assert(public._external_refresh_status(pg_temp.ih_fid())='instructed' AND pg_temp.ih_status()='instructed',
+ 'refresh with a verified install and an open hold stays instructed');
+ROLLBACK TO ih_refresh;
+SELECT pg_temp.ih_actor(1);
+
+-- 6. Released and fully instructed: verification installs, and installed stays terminal.
+SELECT pg_temp.ih_release('ih-hold-2','ih-release-2');
+SELECT pg_temp.ih_actor(2);
+SELECT pg_temp.ih_assert(public.verify_external_fulfilment_event(pg_temp.ih_event('ih-install'),'ih-verify')->>'status'='installed'
+ AND pg_temp.ih_status()='installed','verification installs after every hold is released and every unit instructed');
+SELECT pg_temp.ih_actor(1);
+SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_hold(ARRAY['k-1'],'ih-hold-late')$q$,'55000','fulfilment_terminal',
+ 'installed stays terminal: a later hold is refused');
+
+-- 7. A pre-00900 reported install on an uninstructed contracted unit cannot be verified.
+SELECT public.create_external_fulfilment(pg_temp.ih_id(201),pg_temp.ih_id(301),'pkg.cabinets','gc_cabinetry',ARRAY['j-1'],pg_temp.ih_id(811),NULL,'ih-legacy');
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.project_external_fulfilment_events(fulfilment_id,event_kind,evidence,recorded_by,event_seq,client_request_id,request_hash)
+VALUES(pg_temp.ih_fid('ih-legacy'),'installed','{}',pg_temp.ih_id(1),
+ (SELECT COALESCE(max(event_seq),0)+1 FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.ih_fid('ih-legacy')),'ih-legacy-install','fixture');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.ih_actor(2);
+SELECT pg_temp.ih_error($q$SELECT public.verify_external_fulfilment_event(pg_temp.ih_event('ih-legacy-install','ih-legacy'),'ih-legacy-verify')$q$,
+ '55000','fulfilment_units_uninstructed','verification refused with an uninstructed contracted unit');
+SELECT pg_temp.ih_actor(1);
+
+-- 8. No fabrication contract (contracting_party_kind 'none'): no instruction is
+-- required, but an open hold still refuses.
+SELECT public.create_external_fulfilment(pg_temp.ih_id(201),pg_temp.ih_id(301),'pkg.client','client_furnishing',ARRAY['chair'],NULL,NULL,'ih-chair');
+SELECT public.create_external_fulfilment(pg_temp.ih_id(201),pg_temp.ih_id(301),'pkg.client','client_furnishing',ARRAY['chair-2'],NULL,NULL,'ih-chair-held');
+SELECT pg_temp.ih_assert((SELECT bool_and(contracting_party_kind='none') FROM public.project_external_fulfilments
+ WHERE id IN (pg_temp.ih_fid('ih-chair'),pg_temp.ih_fid('ih-chair-held'))),'client-bought furnishings carry no fabrication contract');
+SELECT pg_temp.ih_install('ih-chair-install','ih-chair');
+SELECT pg_temp.ih_actor(2);
+SELECT pg_temp.ih_assert(public.verify_external_fulfilment_event(pg_temp.ih_event('ih-chair-install','ih-chair'),'ih-chair-verify')->>'status'='installed'
+ AND pg_temp.ih_status('ih-chair')='installed'
+ AND NOT EXISTS(SELECT 1 FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.ih_fid('ih-chair') AND event_kind='fabrication_instruction'),
+ 'client furnishing with no instructions installs');
+SELECT pg_temp.ih_actor(1);
+SELECT pg_temp.ih_hold(ARRAY['chair-2'],'ih-chair-hold','ih-chair-held');
+SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_install('ih-chair-held-install','ih-chair-held')$q$,'55000','fulfilment_hold_open',
+ 'client furnishing with an open hold is refused');
+SELECT pg_temp.ih_assert(pg_temp.ih_status('ih-chair-held')<>'installed','held client furnishing never reaches installed');

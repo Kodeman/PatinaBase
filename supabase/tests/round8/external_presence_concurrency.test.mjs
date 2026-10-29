@@ -131,13 +131,14 @@ VALUES('${id(21)}','${id(2)}','${id(22)}','design_services',true,'${id(4)}');
 INSERT INTO public.project_scope_editions(id,project_id,edition_number,kind,commercial_document_id,source_proposal_id,
  agreement_fingerprint,effective_at,content,content_hash,status)
 VALUES('${id(20)}','${id(2)}',1,'baseline','${id(21)}','${id(22)}','fixture',now(),'{}','fixture','active');
+-- No fabrication contract: 00900 requires instructed units only where one exists.
 INSERT INTO public.project_scope_edition_packages(edition_id,package_key,label,inclusion,responsibilities)
 VALUES('${id(20)}','pkg.chairs','Chairs','included',
- '{"design":"studio","purchasing":"gc","payer":"gc","fabrication_contract":"gc","installation":"gc"}');
+ '{"design":"studio","purchasing":"gc","payer":"gc","fabrication_contract":"none","installation":"gc"}');
 INSERT INTO public.project_external_fulfilments(id,project_id,scope_edition_id,package_key,units,kind,
  buyer_party_kind,payer_party_kind,contracting_party_kind,created_by,client_request_id,request_hash)
 SELECT ('f87e0000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'${id(2)}','${id(20)}','pkg.chairs',
- ARRAY['chair-'||n],'client_furnishing','gc','gc','gc','${id(4)}','fixture-'||n,'fixture'
+ ARRAY['chair-'||n],'client_furnishing','gc','gc','none','${id(4)}','fixture-'||n,'fixture'
  FROM generate_series(500,508)n;
 INSERT INTO public.project_ffe_selection_threads(id,project_id,primary_ffe_item_id,created_by)
 SELECT ('f87e0000-0000-4000-8000-'||lpad((n+1000)::text,12,'0'))::uuid,'${id(2)}',
