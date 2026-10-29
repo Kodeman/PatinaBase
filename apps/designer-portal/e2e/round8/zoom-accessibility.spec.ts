@@ -2,20 +2,34 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { test as authenticatedTest } from '../fixtures/auth';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
-const HEIGHT = 800;
-const ZOOMED_WIDTHS = [640, 720, 960];
+const ZOOMED_VIEWPORTS = [
+  { width: 512, height: 384 },
+  { width: 640, height: 400 },
+  { width: 720, height: 450 },
+  { width: 960, height: 540 },
+  { width: 1280, height: 720 },
+];
 
 async function fullyInsideViewport(page: Page, control: Locator) {
   await control.focus();
   await expect(control).toBeFocused();
   await expect(control).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect.poll(async () => {
     const box = await control.boundingBox();
     if (!box) return false;
     const hit = await control.evaluate((element) => {
       const rect = element.getBoundingClientRect();
-      const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return target === element || element.contains(target);
+      const corners = [
+        [rect.left + 1, rect.top + 1],
+        [rect.right - 1, rect.top + 1],
+        [rect.left + 1, rect.bottom - 1],
+        [rect.right - 1, rect.bottom - 1],
+      ];
+      return corners.every(([x, y]) => {
+        const target = document.elementFromPoint(x, y);
+        return target === element || element.contains(target);
+      });
     });
     const viewport = page.viewportSize();
     if (!viewport) return false;
@@ -25,9 +39,9 @@ async function fullyInsideViewport(page: Page, control: Locator) {
   }).toBe(true);
 }
 
-for (const width of ZOOMED_WIDTHS) {
-  authenticatedTest.describe(`round-eight paper at ${width}px CSS width (200% zoom)`, () => {
-    authenticatedTest.use({ viewport: { width, height: HEIGHT }, deviceScaleFactor: 2 });
+for (const viewport of ZOOMED_VIEWPORTS) {
+  authenticatedTest.describe(`round-eight paper at ${viewport.width}×${viewport.height} CSS viewport (200% zoom)`, () => {
+    authenticatedTest.use({ viewport, deviceScaleFactor: 2 });
     authenticatedTest.setTimeout(180_000);
 
     for (const route of ['/desk', `/doc/${JOB}`]) {
