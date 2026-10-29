@@ -9,6 +9,7 @@ import { resolveActiveHouse, resolveHouseForInstrument } from '@/lib/data/active
 jest.mock('@patina/supabase/server', () => ({ createServerClient: jest.fn() }));
 jest.mock('@/lib/data/projects', () => ({ fetchClientProjects: jest.fn(), fetchClientProjectView: jest.fn() }));
 jest.mock('@/lib/data/active-project', () => ({ resolveActiveHouse: jest.fn(), resolveHouseForInstrument: jest.fn() }));
+jest.mock('@/components/service-acceptance/service-acceptance-door', () => ({ ServiceAcceptanceDoor: () => null }));
 jest.mock('@/components/threshold/threshold', () => ({
   Threshold: ({ editorial }: { editorial: unknown }) => (
     <div data-testid="surface" data-editorial={editorial ? 'present' : 'null'} />

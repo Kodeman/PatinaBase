@@ -14,6 +14,7 @@ import SwiftUI
 /// tests hand in a fake.
 nonisolated protocol ServiceAcceptanceService: Sendable {
     func fetchMyServiceAcceptanceRequests() async throws -> [RemoteServiceAcceptanceRequest]
+    func fetchMyServiceAcceptanceEvidence(requestId: String) async throws -> RemoteServiceAcceptanceEvidence
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws
     func fetchStudioServiceCompletion(projectId: String) async throws -> RemoteStudioServiceCompletionRead
 }
@@ -108,11 +109,24 @@ final class ServiceAcceptanceModel {
     /// True once any read has succeeded; until then an empty list means
     /// "not known yet", never "no request".
     private(set) var hasLoaded = false
+    private(set) var presentedEvidence: RemoteServiceAcceptanceEvidence?
+    private(set) var evidenceLoading = false
+    private(set) var evidenceFailed = false
+    private(set) var evidenceChanged = false
+    private var evidenceGeneration = 0
 
     /// The request the sheet shows. Opening another drops the last one's
     /// refusal line; drafts stay with the request they were written for.
     var presentedRequestId: String? {
-        didSet { if presentedRequestId != oldValue { refusal = nil } }
+        didSet {
+            if presentedRequestId != oldValue {
+                refusal = nil
+                evidenceGeneration += 1
+                presentedEvidence = nil
+                evidenceFailed = false
+                evidenceChanged = false
+            }
+        }
     }
 
     private(set) var drafts: [ServiceAcceptanceDraftKey: ServiceAcceptanceDraft] = [:]
@@ -165,6 +179,36 @@ final class ServiceAcceptanceModel {
     }
 
     var presentedRequest: RemoteServiceAcceptanceRequest? { presentedRequestId.flatMap(request(id:)) }
+
+    var evidenceReady: Bool {
+        guard let request = presentedRequest, let presentedEvidence else { return false }
+        return !evidenceFailed && presentedEvidence.matches(request)
+    }
+
+    func loadEvidence(for request: RemoteServiceAcceptanceRequest) async {
+        evidenceGeneration += 1
+        let generation = evidenceGeneration
+        presentedEvidence = nil
+        evidenceLoading = true
+        evidenceFailed = false
+        evidenceChanged = false
+        do {
+            let read = try await service.fetchMyServiceAcceptanceEvidence(requestId: request.requestId)
+            guard generation == evidenceGeneration, presentedRequestId == request.requestId else { return }
+            evidenceLoading = false
+            if read.matches(request) { presentedEvidence = read }
+            else { evidenceChanged = true }
+        } catch {
+            guard generation == evidenceGeneration, presentedRequestId == request.requestId else { return }
+            evidenceLoading = false
+            evidenceFailed = true
+        }
+    }
+
+    func retryEvidence() async {
+        guard let request = presentedRequest else { return }
+        await loadEvidence(for: request)
+    }
 
     func load() async {
         readGeneration += 1
@@ -285,7 +329,7 @@ final class ServiceAcceptanceModel {
     }
 
     var canSubmit: Bool {
-        guard !isSubmitting, let request = presentedRequest, canRespond(request), !signersChanged,
+        guard !isSubmitting, evidenceReady, let request = presentedRequest, canRespond(request), !signersChanged,
               let answer = draftAnswer, answer.isComplete else { return false }
         // The server already called this exact answer invalid; she edits it.
         return !(refusal == .invalid && pendingSubmission?.answer == answer)
@@ -306,7 +350,7 @@ final class ServiceAcceptanceModel {
     func submit(for request: RemoteServiceAcceptanceRequest) async {
         let key = ServiceAcceptanceDraftKey(request)
         // Only under the revision she was shown; never stamped with a newer one.
-        guard canRespond(request), !isSubmitting, let draft = drafts[key],
+        guard evidenceReady, presentedRequest == request, canRespond(request), !isSubmitting, let draft = drafts[key],
               draft.presentedRevision == request.signerPolicyRevision,
               let answer = draft.answer, answer.isComplete else { return }
         let submission: ServiceAcceptanceSubmission

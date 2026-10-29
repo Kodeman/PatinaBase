@@ -69,6 +69,11 @@ private actor CompletionService: ServiceAcceptanceService {
 
     func fetchMyServiceAcceptanceRequests() async throws -> [RemoteServiceAcceptanceRequest] { rows }
 
+    func fetchMyServiceAcceptanceEvidence(requestId: String) async throws -> RemoteServiceAcceptanceEvidence {
+        guard let request = rows.first(where: { $0.requestId == requestId }) else { throw URLError(.badServerResponse) }
+        return ServiceAcceptanceFixture.evidence(for: request)
+    }
+
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws {}
 
     func fetchStudioServiceCompletion(projectId: String) async throws -> RemoteStudioServiceCompletionRead {

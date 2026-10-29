@@ -28,6 +28,10 @@ jest.mock('@/lib/data/active-project', () => ({
   resolveHouseForInstrument: jest.fn(),
 }));
 
+jest.mock('@/components/service-acceptance/service-acceptance-door', () => ({
+  ServiceAcceptanceDoor: () => null,
+}));
+
 jest.mock('@/components/threshold/threshold', () => ({
   Threshold: ({
     projectId,

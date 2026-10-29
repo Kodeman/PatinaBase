@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
 import {
-  useMyServiceAcceptanceRequests, useRespondServiceAcceptance,
-  type MyServiceAcceptanceRequest, type MyServiceAcceptanceResponse,
+  useMyServiceAcceptanceRequests, useMyServiceAcceptanceEvidence, useRespondServiceAcceptance,
+  type MyServiceAcceptanceRequest, type MyServiceAcceptanceEvidence as AcceptanceEvidence, type MyServiceAcceptanceResponse,
   type RespondServiceAcceptanceInput, type ServiceAcceptanceAnswer, type MyServiceAcceptanceReceipt,
 } from '@patina/supabase';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { documentSignedUrl } from '@/hooks/use-documents-client';
 import { StudioServiceCompletion } from './studio-service-completion';
 
 const actions: Record<ServiceAcceptanceAnswer, string> = {
@@ -23,6 +24,24 @@ const changedCopy = 'This request changed — reload to see the current version'
 const invalidCopy = 'Check your conditions: use 1–20 conditions, each 1–2000 characters, or a return reason of up to 2000 characters.';
 const retryCopy = 'Your response could not be confirmed. Your words are kept here; try again.';
 const pausedCopy = "Responses are paused for now. Nothing you've seen is lost.";
+const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+const inclusionCopy = { included: 'Included', excluded: 'Not included', conditional: 'Included if conditions are met' } as const;
+const partyCopy = { studio: 'your studio', client: 'you', gc: 'your general contractor', other: 'another party' } as const;
+const lifecycleCopy = { sent: 'Awaiting responses', closed: 'Closed', withdrawn: 'Withdrawn', superseded: 'Replaced', draft: 'Draft' } as const;
+const outcomeCopy = { pending: 'Pending', accepted: 'Accepted', accepted_with_conditions: 'Accepted with conditions', returned: 'Returned' } as const;
+const slotCopy: Record<string, string> = { client: 'Client', household_partner: 'Household partner', partner: 'Partner', homeowner: 'Homeowner' };
+const factCopy: Record<string, string> = { productName: 'Furniture', leadTimeWeeks: 'Lead time (weeks)', dimensions: 'Dimensions', fabric: 'Fabric', fabricName: 'Fabric', pattern: 'Pattern', selections: 'Selections', components: 'Components', groupName: 'Group', valueLabel: 'Selection', name: 'Name', quantity: 'Quantity', handedness: 'Handedness', width: 'Width', depth: 'Depth', height: 'Height', length: 'Length', diameter: 'Diameter', seatHeight: 'Seat height', armHeight: 'Arm height', summary: 'Summary', intent: 'Intent', siteConditions: 'Site conditions', finish: 'Finish', targetDate: 'Target date', revision: 'Revision', requirements: 'Requirements', materials: 'Materials', measurements: 'Measurements', label: 'Measurement', value: 'Value', drawings: 'Drawings', docCode: 'Document code', category: 'Category', room: 'Room', details: 'Details', description: 'Description', material: 'Material', color: 'Color', leadTime: 'Lead time', care: 'Care', source: 'Source', question: 'Question' };
+const kindCopy = {
+  plan_issue: 'Issued plan', plan_issue_print: 'Issued plan print', plan_print: 'Plan print',
+  product_configuration: 'Furniture selection', custom_commission_revision: 'Custom piece',
+  review_item: 'Review item', approval_artifact: 'Approval',
+} as const;
+
+function evidenceMatches(evidence: AcceptanceEvidence | undefined, request: MyServiceAcceptanceRequest): evidence is AcceptanceEvidence {
+  return !!evidence && evidence.requestId === request.requestId && evidence.requestNumber === request.requestNumber
+    && evidence.scope.editionId === request.scopeEditionId && evidence.scope.contentHash === request.scopeContentHash
+    && evidence.evidence.manifestHash === request.evidenceManifestHash;
+}
 
 export function acceptanceRefusal(error: unknown): string {
   const row = error as { code?: string; message?: string } | null;
@@ -37,9 +56,41 @@ export function acceptanceRefusal(error: unknown): string {
   return retryCopy;
 }
 
-export function ServiceAcceptanceEvidence({ request, evidence }: {
+function EvidenceFacts({ content }: { content: Record<string, unknown> }) {
+  return <dl className="space-y-1">{Object.entries(content).filter(([key]) => key !== 'unit').map(([key, value]) =>
+    <div key={key}><dt className="font-medium">{factCopy[key] ?? 'Detail'}</dt>
+      <dd>{Array.isArray(value) ? value.map((item, index) => <div key={index}>{item !== null && typeof item === 'object' ? <EvidenceFacts content={item as Record<string, unknown>} /> : String(item)}</div>)
+        : value !== null && typeof value === 'object' ? <EvidenceFacts content={value as Record<string, unknown>} /> : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : `${String(value)}${typeof value === 'number' && typeof content.unit === 'string' ? ` ${content.unit}` : ''}`}</dd></div>)}</dl>;
+}
+
+function IssuedDocument({ path, title }: { path: string; title: string }) {
+  const [failed, setFailed] = useState(false);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  async function open() {
+    if (opening) return;
+    setOpening(true);
+    setFailed(false);
+    setFallbackUrl(null);
+    const popup = window.open('about:blank', '_blank');
+    if (popup) popup.opener = null;
+    try {
+      const url = await documentSignedUrl(path);
+      if (!url) { popup?.close(); setFailed(true); return; }
+      if (popup) popup.location.replace(url);
+      else setFallbackUrl(url);
+    } catch { popup?.close(); setFailed(true); }
+    finally { setOpening(false); }
+  }
+  return <li><button type="button" className="underline" disabled={opening} onClick={() => void open()}>{title}</button>
+    {fallbackUrl && <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className="underline">Open {title} in a new tab</a>}
+    {failed && <p role="alert">Couldn’t open this file. Try again.</p>}</li>;
+}
+
+export function ServiceAcceptanceEvidence({ request, evidence, headingId }: {
   request: MyServiceAcceptanceRequest;
-  evidence?: ReactNode;
+  evidence: AcceptanceEvidence | undefined;
+  headingId: string;
 }) {
   return <section aria-label="Agreed scope and evidence" className="space-y-4 border-y py-6">
     <h2 className="font-serif text-2xl">{request.viewerRole === 'signer_required' ? 'What you’re accepting' : 'Agreed scope and evidence'}</h2>
@@ -50,7 +101,21 @@ export function ServiceAcceptanceEvidence({ request, evidence }: {
       <div><dt>Scope reference · {request.scopeContentHash.slice(0, 12)}</dt><dd><code className="break-all text-sm">{request.scopeContentHash}</code></dd></div>
       <div><dt>Evidence reference · {request.evidenceManifestHash.slice(0, 12)}</dt><dd><code className="break-all text-sm">{request.evidenceManifestHash}</code></dd></div>
     </dl>
-    {evidence ?? <p>These references identify the agreed scope and evidence. Their contents are not available on this page yet.</p>}
+    {evidence && <div className="space-y-6">
+      <div><h3 id={headingId} tabIndex={-1} className="font-serif text-xl">Agreed scope</h3><ul className="space-y-4">{evidence.scope.packages.map((pkg) =>
+        <li key={pkg.key} className={pkg.inclusion === 'excluded' ? 'border-l-2 border-stone-400 pl-4' : undefined}>
+          <h4 className="font-medium">{pkg.label} · {inclusionCopy[pkg.inclusion]}</h4>
+          {pkg.conditionText && <p>{pkg.conditionText}</p>}
+          {(['design', 'purchasing', 'installation'] as const).filter((slot) => pkg.responsibilities[slot] !== 'none').map((slot) =>
+            <p key={slot}>{slot[0].toUpperCase() + slot.slice(1)}: {partyCopy[pkg.responsibilities[slot] as keyof typeof partyCopy]}</p>)}
+          {pkg.phases.map((phase, index) => <p key={index}>{phase.name} · {phase.service === 'design' ? 'Design' : 'Installation'}</p>)}</li>)}</ul></div>
+      <div><h3 className="font-serif text-xl">Issued evidence</h3><ul className="space-y-4">{evidence.evidence.members.map((member, index) =>
+        <li key={index}><h4 className="font-medium">{member.title}</h4>
+          <p>{kindCopy[member.kind]}{member.issuedAt && ` · Issued ${dateFormat.format(new Date(member.issuedAt.length === 10 ? `${member.issuedAt}T12:00:00` : member.issuedAt))}`}</p>
+          {member.content && <EvidenceFacts content={member.content} />}
+          {member.documents.length > 0 && <ul>{member.documents.map((doc) => <IssuedDocument key={doc.path} path={doc.path} title={doc.title} />)}</ul>}
+        </li>)}</ul></div>
+    </div>}
   </section>;
 }
 
@@ -64,7 +129,7 @@ function ResponseReading({ response }: { response: ResponseReadingValue }) {
   </div>;
 }
 
-function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest; reload: () => Promise<unknown> }) {
+function ResponseForm({ request, reload, evidenceReady, evidenceReasonId }: { request: MyServiceAcceptanceRequest; reload: () => Promise<unknown>; evidenceReady: boolean; evidenceReasonId: string }) {
   const mutation = useRespondServiceAcceptance();
   const [answer, setAnswer] = useState<ServiceAcceptanceAnswer | null>(null);
   const [presented, setPresented] = useState(request);
@@ -81,7 +146,7 @@ function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest
   const needsReload = errorCopy != null && ![pausedCopy, retryCopy, invalidCopy].includes(errorCopy);
 
   async function submit() {
-    if (!answer || !valid || stale || mutation.isPending || needsReload) return;
+    if (!evidenceReady || !answer || !valid || stale || mutation.isPending || needsReload) return;
     const input: RespondServiceAcceptanceInput = {
       request: presented, response: answer,
       conditions: answer === 'accept_with_conditions' ? conditions.map((c) => ({ text: c.text.trim() })) : [],
@@ -102,7 +167,7 @@ function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest
   return <section aria-label="Your response" className="space-y-4">
     <h2 className="font-serif text-2xl">Your response</h2>
     {request.lifecycle === 'sent' && waiting > 0 && <p>Waiting for {waiting} required responses</p>}
-    <fieldset disabled={mutation.isPending || needsReload || stale} className="space-y-4">
+    <fieldset disabled={!evidenceReady || mutation.isPending || needsReload || stale} aria-describedby={!evidenceReady ? evidenceReasonId : undefined} className="space-y-4">
       <legend>How would you like to respond?</legend>
       <div className="flex flex-wrap gap-3">{(Object.keys(actions) as ServiceAcceptanceAnswer[]).map((value) =>
         <button className={control} type="button" aria-pressed={answer === value} key={value} onClick={() => {
@@ -140,21 +205,45 @@ function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest
   </section>;
 }
 
-export function ServiceAcceptanceReading({ request, reload, evidence }: {
-  request: MyServiceAcceptanceRequest; reload: () => Promise<unknown>; evidence?: ReactNode;
+export function ServiceAcceptanceReading({ request, reload }: {
+  request: MyServiceAcceptanceRequest; reload: () => Promise<unknown>;
 }) {
+  const evidenceQuery = useMyServiceAcceptanceEvidence(request.requestId);
+  const evidence = evidenceQuery.data;
+  const evidenceReady = evidenceMatches(evidence, request);
+  const evidenceReasonId = useId();
+  const evidenceHeadingId = useId();
+  const [focusAfterRetry, setFocusAfterRetry] = useState(false);
+  useEffect(() => {
+    if (focusAfterRetry && evidenceReady) {
+      document.getElementById(evidenceHeadingId)?.focus();
+      setFocusAfterRetry(false);
+    }
+  }, [focusAfterRetry, evidenceReady, evidenceHeadingId]);
+  async function retryEvidence() {
+    const result = await evidenceQuery.refetch();
+    if (evidenceMatches(result.data, request)) setFocusAfterRetry(true);
+  }
   const own = request.signers.find((s) => s.signerId === request.viewerSignerId)?.response;
+  const canRespond = request.viewerRole === 'signer_required' && request.lifecycle === 'sent' && !own;
   const pending = request.signers.filter((s) => s.required && !s.response).length;
   return <article className="mx-auto max-w-2xl space-y-8 px-4 py-10">
     <Link href={`/projects/${encodeURIComponent(request.projectId)}`}>Return to your house</Link>
-    <header><h1 className="font-serif text-3xl">Service acceptance</h1><p>Request {request.requestNumber} · {request.lifecycle} · {request.aggregateOutcome.replaceAll('_', ' ')}</p></header>
-    <ServiceAcceptanceEvidence request={request} evidence={evidence} />
+    <header><h1 className="font-serif text-3xl">Service acceptance</h1><p>Request {request.requestNumber} · {lifecycleCopy[request.lifecycle] ?? 'Unavailable'} · {outcomeCopy[request.aggregateOutcome] ?? 'Unavailable'}</p></header>
+    <ServiceAcceptanceEvidence request={request} evidence={evidenceReady ? evidence : undefined} headingId={evidenceHeadingId} />
+    {evidenceQuery.isError && evidenceReady && <p role="status">Couldn’t refresh the agreed scope and evidence. You can still review what was loaded.</p>}
+    {!evidenceReady && <div className="space-y-2">{evidence
+      ? <><p id={evidenceReasonId} role="alert">{changedCopy}</p>
+          <button type="button" className={control} onClick={() => void reload().catch(() => {})}>Reload request</button></>
+      : evidenceQuery.isError ? <><p id={evidenceReasonId} role="alert">Couldn’t load the agreed scope and evidence.{canRespond ? ' Your response is unavailable until you can review them.' : ''}</p>
+          <button type="button" className={control} onClick={() => void retryEvidence()}>Try again</button></>
+      : <p id={evidenceReasonId} role="status">Loading the agreed scope and evidence…</p>}</div>}
     <StudioServiceCompletion projectId={request.projectId} requestId={request.requestId} aggregateOutcome={request.aggregateOutcome} />
     {request.lifecycle === 'sent' && (request.viewerRole !== 'signer_required' || own) && pending > 0 && <p>Waiting for {pending} required responses</p>}
     {own && <section aria-label="Your recorded response"><h2>Your response</h2><ResponseReading response={own} /></section>}
-    {request.viewerRole === 'signer_required' && request.lifecycle === 'sent' && !own && <ResponseForm request={request} reload={reload} />}
+    {canRespond && <ResponseForm request={request} reload={reload} evidenceReady={evidenceReady} evidenceReasonId={evidenceReasonId} />}
     <section aria-label="Responses"><h2>Responses</h2><ul className="space-y-4">{request.signers.map((s) => <li key={s.signerId}>
-      <h3>{s.slot}{s.signerId === request.viewerSignerId ? ' · You' : ''} · {s.required ? 'Required' : 'Optional'}</h3>
+      <h3>{slotCopy[s.slot] ?? s.slot.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase())}{s.signerId === request.viewerSignerId ? ' · You' : ''} · {s.required ? 'Required' : 'Optional'}</h3>
       {s.response ? <ResponseReading response={s.response} /> : <p>Waiting for response</p>}
     </li>)}</ul></section>
   </article>;

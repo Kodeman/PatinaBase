@@ -29,10 +29,80 @@ enum ServiceAcceptanceCopy {
     static let scopeEditionLabel = "Agreed scope edition"
     static func scopeReference(_ hash: String) -> String { "Scope reference · \(shortReference(hash))" }
     static func evidenceReference(_ hash: String) -> String { "Evidence reference · \(shortReference(hash))" }
-    static let referencesNote =
-        "These references identify the agreed scope and evidence. Their contents aren’t available in the app yet."
     /// The web client's short form: the first twelve characters.
     static func shortReference(_ hash: String) -> String { String(hash.prefix(12)) }
+
+    static func inclusion(_ value: String) -> String {
+        switch value {
+        case "included": return "Included"
+        case "excluded": return "Not included"
+        case "conditional": return "Included if conditions are met"
+        default: return "Scope item"
+        }
+    }
+
+    static func party(_ value: String) -> String? {
+        switch value {
+        case "studio": return "your studio"
+        case "client": return "you"
+        case "gc": return "your general contractor"
+        case "other": return "another party"
+        case "none": return nil
+        default: return "another party"
+        }
+    }
+
+    static func source(_ value: String) -> String {
+        switch value {
+        case "plan_issue": return "Issued plan"
+        case "plan_issue_print": return "Issued plan print"
+        case "plan_print": return "Plan print"
+        case "product_configuration": return "Furniture selection"
+        case "custom_commission_revision": return "Custom piece"
+        case "review_item": return "Review item"
+        case "approval_artifact": return "Approval"
+        default: return "Issued item"
+        }
+    }
+
+    static func service(_ value: String) -> String {
+        switch value {
+        case "design": return "Design"
+        case "installation": return "Installation"
+        default: return "Service"
+        }
+    }
+
+    static let evidenceChanged = "This request changed. Reload to see the current version."
+    static let evidenceLoaded = "Agreed scope and evidence loaded."
+
+    private static let factLabels: [String: String] = [
+        "productName": "Furniture", "leadTimeWeeks": "Lead time (weeks)", "dimensions": "Dimensions",
+        "fabric": "Fabric", "fabricName": "Fabric", "pattern": "Pattern", "selections": "Selections",
+        "components": "Components", "groupName": "Group", "valueLabel": "Selection", "name": "Name",
+        "quantity": "Quantity", "handedness": "Handedness", "width": "Width", "depth": "Depth",
+        "height": "Height", "length": "Length", "diameter": "Diameter", "seatHeight": "Seat height",
+        "armHeight": "Arm height", "summary": "Summary", "intent": "Intent", "siteConditions": "Site conditions",
+        "finish": "Finish", "targetDate": "Target date", "revision": "Revision",
+        "requirements": "Requirements", "materials": "Materials", "measurements": "Measurements",
+        "label": "Measurement", "value": "Value", "drawings": "Drawings", "docCode": "Document code",
+        "category": "Category", "room": "Room", "details": "Details", "description": "Description",
+        "material": "Material", "color": "Color", "leadTime": "Lead time", "care": "Care",
+        "source": "Source", "question": "Question"
+    ]
+
+    static func factLabel(_ key: String) -> String { factLabels[key] ?? "Detail" }
+
+    static func evidenceError(canRespond: Bool) -> String {
+        "Couldn’t load the agreed scope and evidence."
+            + (canRespond ? " Your response is unavailable until you can review them." : "")
+    }
+
+    static func documentError(_ title: String) -> String { "Couldn’t open \(title). Try again." }
+
+    static func evidenceHint(ready: Bool) -> String {
+        ready ? "" : "Review the agreed scope and evidence before responding."
+    }
 
     static func issue(_ issue: ServiceAcceptanceAnswerIssue) -> String? {
         switch issue {

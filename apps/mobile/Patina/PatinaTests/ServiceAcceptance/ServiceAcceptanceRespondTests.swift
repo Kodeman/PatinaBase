@@ -15,17 +15,31 @@ import Foundation
 private actor FakeServiceAcceptanceService: ServiceAcceptanceService {
     var rows: [RemoteServiceAcceptanceRequest]
     var failures: [Error]
+    var evidenceFailures: [Error]
+    let mismatchEvidence: Bool
     private(set) var sent: [ServiceAcceptanceSubmission] = []
     private(set) var fetches = 0
 
-    init(rows: [RemoteServiceAcceptanceRequest], failures: [Error] = []) {
+    init(rows: [RemoteServiceAcceptanceRequest], failures: [Error] = [], evidenceFailures: [Error] = [], mismatchEvidence: Bool = false) {
         self.rows = rows
         self.failures = failures
+        self.evidenceFailures = evidenceFailures
+        self.mismatchEvidence = mismatchEvidence
     }
 
     func fetchMyServiceAcceptanceRequests() async throws -> [RemoteServiceAcceptanceRequest] {
         fetches += 1
         return rows
+    }
+
+    func fetchMyServiceAcceptanceEvidence(requestId: String) async throws -> RemoteServiceAcceptanceEvidence {
+        if !evidenceFailures.isEmpty { throw evidenceFailures.removeFirst() }
+        guard let request = rows.first(where: { $0.requestId == requestId }) else { throw URLError(.badServerResponse) }
+        if mismatchEvidence {
+            let changed = try ServiceAcceptanceFixture.request(ServiceAcceptanceFixture.row(scopeContentHash: "other"))
+            return ServiceAcceptanceFixture.evidence(for: changed)
+        }
+        return ServiceAcceptanceFixture.evidence(for: request)
     }
 
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws {
@@ -154,6 +168,7 @@ struct ServiceAcceptanceRespondTests {
         let model = ServiceAcceptanceModel(service: fake)
         await model.load()
         model.presentedRequestId = request.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.accept)
 
         await model.submit(for: request)
@@ -176,6 +191,7 @@ struct ServiceAcceptanceRespondTests {
         let model = ServiceAcceptanceModel(service: fake)
         await model.load()
         model.presentedRequestId = request.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.accept)
         await model.submit(for: request)
         model.choose(.returnToStudio)
@@ -221,6 +237,7 @@ struct ServiceAcceptanceRespondTests {
         let model = ServiceAcceptanceModel(service: fake)
         await model.load()
         model.presentedRequestId = request.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.accept)
         await model.submit(for: request)
         #expect(model.refusal == .stale)
@@ -240,12 +257,50 @@ struct ServiceAcceptanceRespondTests {
             let model = ServiceAcceptanceModel(service: fake)
             await model.load()
             model.presentedRequestId = request.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
             model.choose(.accept)
             await model.submit(for: request)
             #expect(await fake.fetches == 2, "\(message) did not re-read")
             #expect(model.choice == nil)
             #expect(model.pendingSubmission == nil)
         }
+    }
+
+    @Test("response waits for matching evidence and a failed evidence read can retry")
+    func evidenceGatesResponse() async throws {
+        let request = try openRequest()
+        let fake = FakeServiceAcceptanceService(rows: [request], evidenceFailures: [URLError(.notConnectedToInternet)])
+        let model = ServiceAcceptanceModel(service: fake)
+        await model.load()
+        model.presentedRequestId = request.requestId
+        model.choose(.accept)
+        #expect(!model.canSubmit)
+        await model.submit(for: request)
+        #expect(await fake.sent.isEmpty)
+        await model.loadEvidence(for: request)
+        #expect(model.evidenceFailed)
+        #expect(!model.canSubmit)
+        await model.retryEvidence()
+        #expect(model.evidenceReady)
+        #expect(model.presentedEvidence?.scope.packages.first?.label == "Design services")
+        #expect(model.presentedEvidence?.evidence.members.first?.documents.first?.title == "Room plan PDF")
+        #expect(model.canSubmit)
+    }
+
+    @Test("a mismatched evidence response never permits an acceptance")
+    func mismatchedEvidenceStaysReadOnly() async throws {
+        let request = try openRequest()
+        let fake = FakeServiceAcceptanceService(rows: [request], mismatchEvidence: true)
+        let model = ServiceAcceptanceModel(service: fake)
+        await model.load()
+        model.presentedRequestId = request.requestId
+        model.choose(.accept)
+        await model.loadEvidence(for: request)
+        #expect(model.evidenceChanged)
+        #expect(!model.evidenceFailed)
+        #expect(!model.canSubmit)
+        await model.submit(for: request)
+        #expect(await fake.sent.isEmpty)
     }
 
     // MARK: - K5 vocabulary

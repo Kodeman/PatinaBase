@@ -183,6 +183,8 @@ it.each<[string, (e: any) => void]>([
   ['member', (e) => { e.evidence.members[1] = null; }],
   ['member kind', (e) => { e.evidence.members[0].kind = 'invoice'; }],
   ['member title', (e) => { e.evidence.members[0].title = ' '; }],
+  ['invalid issued date', (e) => { e.evidence.members[0].issuedAt = 'not-a-date'; }],
+  ['impossible issued day', (e) => { e.evidence.members[0].issuedAt = '2026-02-30T12:00:00Z'; }],
   ['documents', (e) => { e.evidence.members[1].documents = null; }],
   ['bucket', (e) => { e.evidence.members[0].documents[0].bucket = 'service-acceptance-paper'; }],
   ['path', (e) => { e.evidence.members[0].documents[0].path = ''; }],

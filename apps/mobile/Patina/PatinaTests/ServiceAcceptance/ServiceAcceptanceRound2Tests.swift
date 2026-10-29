@@ -44,6 +44,11 @@ private actor ControlledService: ServiceAcceptanceService {
         return rows
     }
 
+    func fetchMyServiceAcceptanceEvidence(requestId: String) async throws -> RemoteServiceAcceptanceEvidence {
+        guard let request = rows.first(where: { $0.requestId == requestId }) else { throw URLError(.badServerResponse) }
+        return ServiceAcceptanceFixture.evidence(for: request)
+    }
+
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws {
         sent.append(submission)
     }
@@ -82,6 +87,7 @@ struct ServiceAcceptanceRound2Tests {
         let model = ServiceAcceptanceModel(service: service)
         await model.load()
         model.presentedRequestId = open.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.accept)
 
         // Acknowledged, and the re-read still shows the slot unanswered: F4 holds.
@@ -121,6 +127,7 @@ struct ServiceAcceptanceRound2Tests {
         let model = ServiceAcceptanceModel(service: service)
         await model.load()
         model.presentedRequestId = open.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.accept)
 
         // Read A starts (pull-to-refresh) and is held in flight.
@@ -173,6 +180,7 @@ struct ServiceAcceptanceRound2Tests {
         let model = ServiceAcceptanceModel(service: service)
         await model.load()
         model.presentedRequestId = before.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.acceptWithConditions)
         model.conditions = ["Rehang the lamp"]
         #expect(model.canSubmit)

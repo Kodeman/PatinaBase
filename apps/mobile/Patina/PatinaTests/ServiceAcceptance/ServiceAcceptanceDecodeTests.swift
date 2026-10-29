@@ -62,6 +62,21 @@ enum ServiceAcceptanceFixture {
         try JSONDecoder().decode(RemoteServiceAcceptanceRequest.self, from: Data(json.utf8))
     }
 
+    static func evidence(for request: RemoteServiceAcceptanceRequest) -> RemoteServiceAcceptanceEvidence {
+        let json = """
+        {"requestId":"\(request.requestId)","requestNumber":\(request.requestNumber),
+         "scope":{"editionId":"\(request.scopeEditionId)","contentHash":"\(request.scopeContentHash)",
+                  "packages":[{"key":"design","label":"Design services","inclusion":"included",
+                    "conditionText":null,"responsibilities":{"design":"studio","purchasing":"client","installation":"none"},
+                    "phases":[{"name":"Room plans","service":"design"}]}]},
+         "evidence":{"manifestId":"manifest-1","manifestHash":"\(request.evidenceManifestHash)",
+                     "members":[{"kind":"plan_issue","title":"Issued room plan","issuedAt":null,
+                                 "content":null,"documents":[{"bucket":"project-documents",
+                                 "path":"plans/room.pdf","title":"Room plan PDF"}]}]}}
+        """
+        return try! JSONDecoder().decode(RemoteServiceAcceptanceEvidence.self, from: Data(json.utf8))
+    }
+
     /// A Stage-2 approval row, as `list_my_project_decision_reviews` serves it.
     static let approvalRow = """
     {
@@ -79,6 +94,51 @@ enum ServiceAcceptanceFixture {
 
 @MainActor
 struct ServiceAcceptanceDecodeTests {
+
+    @Test("client evidence decodes issued timestamps, nested selection facts and a decimal dimension")
+    func decodesPopulatedEvidence() throws {
+        let json = """
+        {"requestId":"req-1","requestNumber":2,
+         "scope":{"editionId":"ed-1","contentHash":"sha-scope-1","packages":[]},
+         "evidence":{"manifestId":"manifest-1","manifestHash":"sha-evidence-1","members":[
+           {"kind":"product_configuration","title":"Dining table","issuedAt":"2026-10-28T14:30:00Z",
+            "content":{"productName":"Dining table","dimensions":{"width":81.25,"unit":"in"},
+                       "selections":[{"groupName":"Finish","valueLabel":"Natural oak"}]},
+            "documents":[]}]}}
+        """
+        let read = try JSONDecoder().decode(RemoteServiceAcceptanceEvidence.self, from: Data(json.utf8))
+        let request = try ServiceAcceptanceFixture.request(ServiceAcceptanceFixture.row())
+        #expect(read.matches(request))
+        let member = try #require(read.evidence.members.first)
+        #expect(member.issuedAt == "2026-10-28T14:30:00Z")
+        #expect(member.content == .object([
+            "productName": .string("Dining table"),
+            "dimensions": .object(["width": .double(81.25), "unit": .string("in")]),
+            "selections": .array([.object(["groupName": .string("Finish"), "valueLabel": .string("Natural oak")])])
+        ]))
+        #expect(ServiceAcceptanceCopy.source(member.kind) == "Furniture selection")
+        #expect(ServiceAcceptanceCopy.party("gc") == "your general contractor")
+        #expect(ServiceAcceptanceCopy.party("none") == nil)
+        #expect(ServiceAcceptanceCopy.inclusion("excluded") == "Not included")
+    }
+
+    @Test("unknown evidence kind and party stay readable without exposing wire tokens")
+    func unknownEvidenceCopy() throws {
+        let request = try ServiceAcceptanceFixture.request(ServiceAcceptanceFixture.row())
+        let json = """
+        {"requestId":"\(request.requestId)","requestNumber":2,
+         "scope":{"editionId":"ed-1","contentHash":"sha-scope-1",
+                  "packages":[{"key":"design","label":"Design","inclusion":"included",
+                    "conditionText":null,"responsibilities":{"design":"future_party","purchasing":"none","installation":"none"},
+                    "phases":[]}]},
+         "evidence":{"manifestId":"m-1","manifestHash":"sha-evidence-1",
+                     "members":[{"kind":"future_kind","title":"Drawing","issuedAt":null,
+                                 "content":null,"documents":[]}]}}
+        """
+        let read = try JSONDecoder().decode(RemoteServiceAcceptanceEvidence.self, from: Data(json.utf8))
+        #expect(ServiceAcceptanceCopy.source(try #require(read.evidence.members.first).kind) == "Issued item")
+        #expect(ServiceAcceptanceCopy.party(try #require(read.scope.packages.first).responsibilities.design) == "another party")
+    }
 
     // MARK: - viewerRole fails closed
 
