@@ -1,0 +1,747 @@
+-- US-52 release-review fixes, lane F-A (00896-00899). The enclosing runner
+-- owns BEGIN/ROLLBACK; service_acceptance_relink_concurrency.test.mjs commits
+-- the shared sections under its own prefix.
+--
+-- Actors: studio A owner/designer 1, member 2, admin 3; studio B owner 4;
+-- client 5 (profile slot "client"); 6 linked to the required "co_client" card;
+-- 7 linked to the required "partner" card; 8 and 9 linked to spare cards; 10
+-- an outsider. The guest card and both paper cards are unlinked. Mutations run
+-- as the definer owner with a JWT caller, as service_acceptance_body does.
+
+-- BEGIN shared assertion helpers
+CREATE TEMP TABLE assertion_count(n integer NOT NULL);
+INSERT INTO assertion_count VALUES (0);
+GRANT ALL ON assertion_count TO authenticated;
+CREATE FUNCTION pg_temp.assert_true(ok boolean, name text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'ASSERTION FAILED: %',name; END IF;
+  UPDATE assertion_count SET n=n+1;
+  RAISE NOTICE 'PASS: %',name;
+END $$;
+CREATE FUNCTION pg_temp.expect_error(command text, state text, message text, name text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE actual_state text; actual_message text;
+BEGIN
+  BEGIN EXECUTE command;
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS actual_state=RETURNED_SQLSTATE,actual_message=MESSAGE_TEXT;
+  END;
+  PERFORM pg_temp.assert_true(actual_state=state AND (message IS NULL OR strpos(actual_message,message)>0),
+    name||' ['||COALESCE(actual_state,'<none>')||' '||COALESCE(actual_message,'')||']');
+END $$;
+CREATE FUNCTION pg_temp.uid(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+  SELECT ('f8960000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.card(n integer) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+  SELECT ('f8966000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+$$;
+CREATE FUNCTION pg_temp.actor(n integer) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claim.sub',CASE WHEN n IS NULL THEN '' ELSE pg_temp.uid(n)::text END,true);
+  PERFORM set_config('request.jwt.claims',CASE WHEN n IS NULL THEN '' ELSE jsonb_build_object('sub',pg_temp.uid(n),
+    'role','authenticated')::text END,true);
+END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assert_true(boolean,text),pg_temp.expect_error(text,text,text,text),
+  pg_temp.actor(integer),pg_temp.uid(integer),pg_temp.card(integer) TO authenticated;
+-- END shared assertion helpers
+
+-- BEGIN shared fixture
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM auth.users WHERE id::text LIKE 'f8960000-%'),'fixture starts absent');
+SET LOCAL session_replication_role=replica;
+INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
+SELECT pg_temp.uid(n),'release-fixes-'||n||'@test.invalid','',now(),now(),now(),'authenticated','authenticated'
+FROM generate_series(1,10) n;
+INSERT INTO public.profiles(id,email,full_name,is_designer)
+SELECT id,email,'Release fixes fixture',true FROM auth.users WHERE id::text LIKE 'f8960000-%';
+INSERT INTO public.organizations(id,type,name,slug,status) VALUES
+('f8961000-0000-4000-8000-000000000001','design_studio','Release A','release-fixes-a','active'),
+('f8961000-0000-4000-8000-000000000002','design_studio','Release B','release-fixes-b','active');
+INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
+(pg_temp.uid(1),'f8961000-0000-4000-8000-000000000001','owner','active'),
+(pg_temp.uid(2),'f8961000-0000-4000-8000-000000000001','member','active'),
+(pg_temp.uid(3),'f8961000-0000-4000-8000-000000000001','admin','active'),
+(pg_temp.uid(4),'f8961000-0000-4000-8000-000000000002','owner','active');
+INSERT INTO public.user_roles(user_id,role_id,granted_by)
+SELECT p.id,r.id,p.id FROM public.profiles p CROSS JOIN public.roles r
+WHERE p.id::text LIKE 'f8960000-%' AND r.name='studio_owner';
+INSERT INTO public.studio_contacts(id,organization_id,entity_kind,contact_kind,full_name,profile_id) VALUES
+(pg_temp.card(1),'f8961000-0000-4000-8000-000000000001','person','client','Client',pg_temp.uid(5)),
+(pg_temp.card(2),'f8961000-0000-4000-8000-000000000001','person','client','Co-client',pg_temp.uid(6)),
+(pg_temp.card(3),'f8961000-0000-4000-8000-000000000001','person','client','Partner',pg_temp.uid(7)),
+(pg_temp.card(4),'f8961000-0000-4000-8000-000000000001','person','client','Guest',NULL),
+(pg_temp.card(5),'f8961000-0000-4000-8000-000000000001','person','client','Spare eight',pg_temp.uid(8)),
+(pg_temp.card(6),'f8961000-0000-4000-8000-000000000001','person','client','Spare nine',pg_temp.uid(9)),
+(pg_temp.card(7),'f8961000-0000-4000-8000-000000000001','person','client','Paper A',NULL),
+(pg_temp.card(8),'f8961000-0000-4000-8000-000000000001','person','client','Paper B',NULL);
+INSERT INTO public.client_households(id,organization_id,designer_id,display_name,member_person_ids) VALUES
+('f8967000-0000-4000-8000-000000000001','f8961000-0000-4000-8000-000000000001',pg_temp.uid(1),'Release household',
+ ARRAY[pg_temp.card(1),pg_temp.card(2),pg_temp.card(3),pg_temp.card(4),pg_temp.card(5),pg_temp.card(6),
+   pg_temp.card(7),pg_temp.card(8)]);
+INSERT INTO public.designer_clients(id,designer_id,client_id,client_name,client_email,status,source,household_id) VALUES
+('f8962000-0000-4000-8000-000000000001',pg_temp.uid(1),pg_temp.uid(5),'Release client',
+ 'release-fixes-5@test.invalid','active','direct','f8967000-0000-4000-8000-000000000001');
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+-- END shared fixture
+
+-- BEGIN shared native helpers
+-- 'household': three required slots (a profile and two linked cards) and an
+-- unlinked optional card. 'paper': two required cards, neither linked.
+CREATE FUNCTION pg_temp.policy(kind text) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_object('kind','acceptance_signer_policy','partKey','scope.signers','title','Signers','payload',
+  jsonb_build_object('policyRevision',1,'signers',CASE kind WHEN 'household' THEN jsonb_build_array(
+    jsonb_build_object('slot','client','required',true,'profileId',pg_temp.uid(5)),
+    jsonb_build_object('slot','co_client','required',true,'householdPersonId',pg_temp.card(2)),
+    jsonb_build_object('slot','partner','required',true,'householdPersonId',pg_temp.card(3)),
+    jsonb_build_object('slot','guest','required',false,'householdPersonId',pg_temp.card(4)))
+  ELSE jsonb_build_array(
+    jsonb_build_object('slot','paper_a','required',true,'householdPersonId',pg_temp.card(7)),
+    jsonb_build_object('slot','paper_b','required',true,'householdPersonId',pg_temp.card(8))) END));
+$$;
+CREATE FUNCTION pg_temp.parts(p uuid) RETURNS jsonb LANGUAGE sql AS $$
+ SELECT COALESCE(jsonb_agg(jsonb_build_object('kind',kind,'variant',variant,'partKey',part_key,'title',title,
+   'payload',payload,'required',required,'clientVisible',client_visible) ORDER BY position),'[]')
+ FROM public.proposal_agreement_parts WHERE proposal_id=p;
+$$;
+CREATE FUNCTION pg_temp.draft(p uuid, kind text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE phase_id uuid;
+BEGIN
+ INSERT INTO public.proposals(id,designer_id,designer_client_id,client_id,title,total_amount,status,valid_until)
+ VALUES(p,pg_temp.uid(1),'f8962000-0000-4000-8000-000000000001',pg_temp.uid(5),'Release draft',0,'draft',now()+interval '30 days');
+ INSERT INTO public.proposal_phases(proposal_id,name,phase_key,duration_days,lane,fee_cents,sort_order)
+ VALUES(p,'Design','design-development',5,'main',0,0) RETURNING id INTO phase_id;
+ PERFORM public.upsert_design_services_draft(p,jsonb_build_object('scope','Interior design services',
+   'deliverables',jsonb_build_array('Selections'),'exclusions','[]'::jsonb,'billingCeilingCents',100000,
+   'retainerAmountCents',0,'retainerActivationPolicy','immediate','billingCadence','monthly',
+   'currency','USD','terms','Signed actual hours','currentRateVersion',1),
+   jsonb_build_array(jsonb_build_object('version',1,'roleName','Designer','hourlyRateCents',12000,'sortOrder',0,'effectiveAt',now()-interval '1 day')));
+ PERFORM public.materialize_standard_parts(p);
+ PERFORM public.upsert_agreement_parts(p,pg_temp.parts(p)||jsonb_build_array(
+   jsonb_build_object('kind','scope_package','partKey','scope.kitchen','title','Kitchen','payload',
+     jsonb_build_object('packageKey','pkg.kitchen','label','Kitchen','inclusion','included',
+       'responsibilities',jsonb_build_object('design','studio','purchasing','client','payer','client',
+         'fabrication_contract','gc','installation','gc'),
+       'serviceBindings',jsonb_build_object('design',jsonb_build_array(phase_id)))),
+   pg_temp.policy(kind)),'release fixture');
+END $$;
+CREATE FUNCTION pg_temp.send_and_sign(p uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE snapshot jsonb;
+BEGIN
+ snapshot:=public.get_commercial_document_send_snapshot(p);
+ PERFORM public.send_commercial_document(p,snapshot->>'documentFingerprint',NULL,now()+interval '30 days');
+ PERFORM pg_temp.actor(5);
+ PERFORM public.sign_design_services_agreement(p,'Release Client');
+ PERFORM pg_temp.actor(1);
+END $$;
+CREATE TEMP TABLE sa_results(key text PRIMARY KEY,value jsonb);
+GRANT ALL ON sa_results TO authenticated;
+CREATE FUNCTION pg_temp.v(k text) RETURNS jsonb LANGUAGE sql AS $$ SELECT value FROM sa_results WHERE key=k $$;
+CREATE FUNCTION pg_temp.req(k text) RETURNS uuid LANGUAGE sql AS $$ SELECT (value->>'requestId')::uuid FROM sa_results WHERE key=k $$;
+CREATE FUNCTION pg_temp.project(k text DEFAULT 'origin') RETURNS uuid LANGUAGE sql AS $$
+  SELECT (value->>'projectId')::uuid FROM sa_results WHERE key=k
+$$;
+CREATE FUNCTION pg_temp.ed(k text DEFAULT 'origin') RETURNS uuid LANGUAGE sql AS $$
+  SELECT id FROM public.project_scope_editions WHERE project_id=pg_temp.project(k) AND status='active';
+$$;
+CREATE FUNCTION pg_temp.signer(req uuid, s text) RETURNS uuid LANGUAGE sql AS $$
+  SELECT id FROM public.service_acceptance_signers WHERE request_id=req AND slot=s AND status='active';
+$$;
+CREATE FUNCTION pg_temp.create(k text, origin text DEFAULT 'origin', manifest text DEFAULT 'f8968000-0000-4000-8000-000000000001')
+RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.create_service_acceptance_request(pg_temp.project(origin),pg_temp.ed(origin),manifest::uuid,k);
+$$;
+CREATE FUNCTION pg_temp.respond(req uuid, k text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.respond_service_acceptance(r.id,'accept','[]'::jsonb,NULL,r.scope_content_hash,r.evidence_manifest_hash,
+    r.signer_policy_revision,k)
+  FROM public.service_acceptance_requests r WHERE r.id=req;
+$$;
+CREATE FUNCTION pg_temp.replace(req uuid, slot text, new_card uuid, k text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.replace_service_acceptance_signer(r.id,pg_temp.signer(r.id,slot),NULL,new_card,r.signer_policy_revision,
+    'Studio repairs the '||slot||' slot',k)
+  FROM public.service_acceptance_requests r WHERE r.id=req;
+$$;
+CREATE FUNCTION pg_temp.present(req uuid, k text, scope text DEFAULT NULL) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.present_service_acceptance_offline(r.id,COALESCE(scope,r.scope_content_hash),r.evidence_manifest_hash,k)
+  FROM public.service_acceptance_requests r WHERE r.id=req;
+$$;
+-- The studio's card link edit (the designer's studio_contacts update).
+CREATE FUNCTION pg_temp.link(c uuid, profile uuid) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE n integer;
+BEGIN
+  UPDATE public.studio_contacts SET profile_id=profile WHERE id=c;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END $$;
+-- The caller's own entries for a request in the client list.
+CREATE FUNCTION pg_temp.listed(req uuid) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object('count',count(*),'entry',(array_agg(e))[1])
+  FROM jsonb_array_elements(public.get_my_service_acceptance_requests()) e WHERE e->>'requestId'=req::text;
+$$;
+-- V22 delivery as the service path (no JWT): claim, deliver, finalize, after-send.
+CREATE FUNCTION pg_temp.deliver(req uuid) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE d uuid; f timestamptz; caller text := current_setting('request.jwt.claim.sub',true);
+BEGIN
+  SELECT outbound_draft_id INTO STRICT d FROM public.service_acceptance_requests WHERE id=req;
+  PERFORM pg_temp.actor(NULL);
+  PERFORM public.claim_outbound_draft_for_send(d);
+  PERFORM public.record_outbound_draft_send_attempt(d);
+  PERFORM public.record_outbound_draft_delivery(d,'msg-'||d);
+  SELECT finalizing_at INTO f FROM public.claim_outbound_draft_finalize(d);
+  PERFORM public.record_outbound_draft_after_send(d,f);
+  PERFORM public.mark_outbound_draft_sent(d,pg_temp.uid(1),'msg-'||d);
+  PERFORM set_config('request.jwt.claim.sub',COALESCE(caller,''),true);
+  PERFORM set_config('request.jwt.claims',CASE WHEN COALESCE(caller,'')='' THEN '' ELSE
+    jsonb_build_object('sub',caller,'role','authenticated')::text END,true);
+END $$;
+-- The platform's status change (organizations.status is platform-controlled).
+CREATE FUNCTION pg_temp.studio(status text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  SET LOCAL session_replication_role=replica;
+  UPDATE public.organizations SET status=studio.status::public.organization_status WHERE id='f8961000-0000-4000-8000-000000000001';
+  SET LOCAL session_replication_role=origin;
+END $$;
+CREATE FUNCTION pg_temp.paper(n integer, origin text, owner_n integer) RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE o uuid := ('f8969000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+BEGIN
+  INSERT INTO storage.objects(id,bucket_id,name,owner_id,version,metadata)
+  VALUES (o,'service-acceptance-paper',pg_temp.project(origin)||'/'||o||'.pdf',pg_temp.uid(owner_n)::text,'v-'||n,
+    jsonb_build_object('mimetype','application/pdf','size',2048,'eTag','"etag-'||n||'"'));
+  RETURN o;
+END $$;
+CREATE FUNCTION pg_temp.record_paper(req uuid, slot text, obj uuid, k text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.record_service_acceptance_paper_intake(r.id,pg_temp.signer(r.id,slot),obj,current_date,'Signed Name','accept',
+    '[]'::jsonb,NULL,r.request_number,r.scope_content_hash,r.evidence_manifest_hash,r.signer_policy_revision,k)
+  FROM public.service_acceptance_requests r WHERE r.id=req;
+$$;
+-- WP-10C's byte-hashing step as the service path (no JWT).
+CREATE FUNCTION pg_temp.stamp(k text) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE i public.service_acceptance_paper_intakes%ROWTYPE; stamped jsonb;
+  caller text := current_setting('request.jwt.claim.sub',true);
+BEGIN
+  SELECT * INTO STRICT i FROM public.service_acceptance_paper_intakes WHERE id=(pg_temp.v(k)->>'intakeId')::uuid;
+  PERFORM pg_temp.actor(NULL);
+  stamped:=public.stamp_service_acceptance_paper_hash(i.id,encode(extensions.digest(k,'sha256'),'hex'),
+    i.storage_object_version,i.storage_object_etag);
+  UPDATE sa_results SET value=value||jsonb_build_object('documentSha256',stamped->'documentSha256') WHERE key=k;
+  PERFORM set_config('request.jwt.claim.sub',COALESCE(caller,''),true);
+  PERFORM set_config('request.jwt.claims',CASE WHEN COALESCE(caller,'')='' THEN '' ELSE
+    jsonb_build_object('sub',caller,'role','authenticated')::text END,true);
+  RETURN stamped;
+END $$;
+CREATE FUNCTION pg_temp.review(k text, rk text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.review_service_acceptance_paper_intake((pg_temp.v(k)->>'intakeId')::uuid,'confirmed',
+    pg_temp.v(k)->>'documentSha256',NULL,rk);
+$$;
+GRANT EXECUTE ON FUNCTION pg_temp.v(text),pg_temp.req(text),pg_temp.listed(uuid) TO authenticated;
+-- END shared native helpers
+
+-- Local activation (rolled back by the runner; the concurrency suite needs it on already).
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+-- BEGIN shared origin
+SELECT pg_temp.draft('f8963000-0000-4000-8000-000000000001','household');
+SELECT pg_temp.send_and_sign('f8963000-0000-4000-8000-000000000001');
+INSERT INTO sa_results VALUES('origin',public.countersign_design_services_agreement(
+ 'f8963000-0000-4000-8000-000000000001','Release Designer'));
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
+('f8968000-0000-4000-8000-000000000001',pg_temp.project(),NULL,'service_acceptance','[]',repeat('a',64),repeat('1',64),'rf-1',pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+-- END shared origin
+
+SELECT pg_temp.assert_true(position('LIMIT 1' IN (SELECT prosrc FROM pg_proc
+  WHERE oid='public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text)'::regprocedure))=0
+  AND position('LIMIT 1' IN (SELECT prosrc FROM pg_proc WHERE oid='public.get_my_service_acceptance_requests()'::regprocedure))=0,
+  'D1: neither respond nor the list resolves a signer with LIMIT 1');
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Defect 1, order A: a signer answers, then a card is relinked onto them.
+-- ───────────────────────────────────────────────────────────────────────────
+INSERT INTO sa_results VALUES('r1',pg_temp.create('rf-r1'));
+SELECT pg_temp.deliver(pg_temp.req('r1'));
+SELECT pg_temp.assert_true((SELECT lifecycle='sent' FROM public.service_acceptance_requests WHERE id=pg_temp.req('r1'))
+  AND (SELECT count(*)=3 FROM public.service_acceptance_signers WHERE request_id=pg_temp.req('r1') AND required),
+  'D1 fixture: a sent request with three required slots');
+SELECT pg_temp.actor(6);
+INSERT INTO sa_results VALUES('a6',pg_temp.respond(pg_temp.req('r1'),'rf-a6'));
+SELECT pg_temp.assert_true(pg_temp.v('a6')->>'aggregateOutcome'='pending','D1-A: 6 answers the co_client card slot');
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(3),pg_temp.uid(6))=1,'D1-A: the studio relinks the partner card onto 6');
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
+  AND pg_temp.listed(pg_temp.req('r1'))->'entry'->'viewerSignerId'='null'::jsonb
+  AND pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerRole'='observer',
+  'D1-A: two matching slots list the request once, with no slot');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'rf-a6-partner')$q$,pg_temp.req('r1')),'55000',
+  'signer_identity_collision','D1-A: 6 cannot answer the partner slot as well');
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM public.service_acceptance_responses WHERE request_id=pg_temp.req('r1')),
+  'D1-A: still one response on the request');
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((pg_temp.respond(pg_temp.req('r1'),'rf-a6')->>'replayed')::boolean,
+  'D1-A: 6 still replays the first receipt (R15 runs before the identity check)');
+
+-- The person rule on its own: with 6's answered slot replaced, 6 matches one
+-- active slot (partner) and is still refused, because 6 already answered here.
+SAVEPOINT person_rule;
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('rp-co-a',pg_temp.replace(pg_temp.req('r1'),'co_client',pg_temp.card(6),'rf-rp-co-a'));
+SELECT pg_temp.actor(6);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId')::uuid=pg_temp.signer(pg_temp.req('r1'),'partner'),
+  'D1-A person rule: 6 now matches the partner slot alone');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'rf-a6-after-replace')$q$,pg_temp.req('r1')),'23505',
+  'already_responded','D1-A person rule: a person who answered one slot answers no other');
+ROLLBACK TO SAVEPOINT person_rule;
+
+-- Recovery: the studio replaces the partner slot (audited), and the request completes.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('rp-pa-a',pg_temp.replace(pg_temp.req('r1'),'partner',pg_temp.card(5),'rf-rp-pa-a'));
+SELECT pg_temp.assert_true((SELECT replaced_by=pg_temp.uid(1) AND replacement_reason IS NOT NULL FROM public.service_acceptance_signers
+  WHERE request_id=pg_temp.req('r1') AND slot='partner' AND status='replaced'),'D1-A recovery: the replacement is attributed');
+SELECT pg_temp.actor(6);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'rf-a6-again')$q$,pg_temp.req('r1')),'23505',
+  'already_responded','D1-A recovery: 6 matches only its answered slot');
+SELECT pg_temp.actor(8);
+INSERT INTO sa_results VALUES('a8',pg_temp.respond(pg_temp.req('r1'),'rf-a8'));
+SELECT pg_temp.actor(5);
+INSERT INTO sa_results VALUES('a5',pg_temp.respond(pg_temp.req('r1'),'rf-a5'));
+SELECT pg_temp.assert_true(pg_temp.v('a5')->>'aggregateOutcome'='accepted'
+  AND (SELECT count(DISTINCT responder_profile_id)=3 AND count(*)=3 FROM public.service_acceptance_responses
+    WHERE request_id=pg_temp.req('r1')),'D1-A recovery: three people answered three slots; accepted');
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(3),pg_temp.uid(7))=1,'D1-A: the partner card is restored to 7');
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Defect 1, order B: a card is relinked first, then the person answers.
+-- ───────────────────────────────────────────────────────────────────────────
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('r2',pg_temp.create('rf-r2'));
+SELECT pg_temp.deliver(pg_temp.req('r2'));
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(7))=1,'D1-B: the studio relinks the co_client card onto 7');
+SELECT pg_temp.actor(7);
+SELECT pg_temp.assert_true(pg_temp.listed(pg_temp.req('r2'))->'entry'->>'viewerRole'='observer'
+  AND pg_temp.listed(pg_temp.req('r2'))->'entry'->'viewerSignerId'='null'::jsonb,'D1-B: 7 sees the request as an observer');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'rf-b7')$q$,pg_temp.req('r2')),'55000',
+  'signer_identity_collision','D1-B: 7 matching two required slots is refused');
+SELECT pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE request_id=pg_temp.req('r2')),
+  'D1-B: the refusal records nothing');
+-- Defect 2 on replace: a suspended studio's owner cannot repair the slot.
+SELECT pg_temp.studio('suspended');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.replace(%L,'co_client',%L,'rf-rp-co-b')$q$,pg_temp.req('r2'),pg_temp.card(5)),
+  '42501','insufficient_privilege','D2: a suspended studio''s owner cannot replace a signer');
+SELECT pg_temp.studio('active');
+INSERT INTO sa_results VALUES('rp-co-b',pg_temp.replace(pg_temp.req('r2'),'co_client',pg_temp.card(5),'rf-rp-co-b'));
+SELECT pg_temp.assert_true((pg_temp.v('rp-co-b')->>'signerPolicyRevision')::int=2,'D2 control: once active, the owner replaces it');
+SELECT pg_temp.actor(7);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r2'))->'entry'->>'viewerSignerId')::uuid=pg_temp.signer(pg_temp.req('r2'),'partner'),
+  'D1-B recovery: 7 matches the partner slot alone');
+INSERT INTO sa_results VALUES('b7',pg_temp.respond(pg_temp.req('r2'),'rf-b7'));
+SELECT pg_temp.actor(8);
+INSERT INTO sa_results VALUES('b8',pg_temp.respond(pg_temp.req('r2'),'rf-b8'));
+SELECT pg_temp.actor(5);
+INSERT INTO sa_results VALUES('b5',pg_temp.respond(pg_temp.req('r2'),'rf-b5'));
+SELECT pg_temp.assert_true(pg_temp.v('b5')->>'aggregateOutcome'='accepted'
+  AND (SELECT bool_and(x.signer_id=s.id AND s.status='active') AND count(*)=3 FROM public.service_acceptance_responses x
+    JOIN public.service_acceptance_signers s ON s.id=x.signer_id WHERE x.request_id=pg_temp.req('r2')),
+  'D1-B recovery: each active slot answered once; accepted');
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(6))=1,'D1-B: the co_client card is restored to 6');
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Defect 3: an amendment excludes a package whose agreed phase is still open.
+-- ───────────────────────────────────────────────────────────────────────────
+CREATE FUNCTION pg_temp.codes(kind text DEFAULT 'blockers') RETURNS text[] LANGUAGE sql AS $$
+  SELECT COALESCE(array_agg((b->>'code')||COALESCE(':'||(b->>'packageKey'),'') ORDER BY n),'{}')
+  FROM jsonb_array_elements(public._derive_studio_service_obligations(pg_temp.project())->kind) WITH ORDINALITY x(b,n);
+$$;
+CREATE FUNCTION pg_temp.complete(k text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.complete_studio_service(pg_temp.project(),
+    (d->'acceptance'->>'requestId')::uuid,d->>'obligationHash',k)
+  FROM public._derive_studio_service_obligations(pg_temp.project()) d;
+$$;
+SELECT pg_temp.assert_true(pg_temp.codes()=ARRAY['agreed_phase_open:pkg.kitchen'],
+  'D3 control: the included kitchen''s agreed design phase is open and blocks');
+-- The amendment: the kitchen package moves to excluded; everything else carries.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('amend',public.create_service_addendum(pg_temp.project(),'Exclude the kitchen'));
+SELECT public.copy_agreement_parts_from_authority((pg_temp.v('amend')->>'proposalId')::uuid,'release amendment');
+SELECT public.upsert_agreement_parts((pg_temp.v('amend')->>'proposalId')::uuid,
+  (SELECT jsonb_agg(CASE WHEN p->'payload'->>'packageKey'='pkg.kitchen'
+     THEN jsonb_set(p,'{payload,inclusion}','"excluded"') ELSE p END ORDER BY n)
+   FROM jsonb_array_elements(pg_temp.parts((pg_temp.v('amend')->>'proposalId')::uuid)) WITH ORDINALITY x(p,n)),
+  'exclude the kitchen');
+SELECT pg_temp.send_and_sign((pg_temp.v('amend')->>'proposalId')::uuid);
+SELECT public.countersign_design_services_agreement((pg_temp.v('amend')->>'proposalId')::uuid,'Release Designer');
+SELECT pg_temp.assert_true((SELECT inclusion='excluded' FROM public.project_scope_edition_packages
+    WHERE edition_id=pg_temp.ed() AND package_key='pkg.kitchen')
+  AND EXISTS (SELECT 1 FROM public.project_scope_edition_phases ep JOIN public.project_phases pp ON pp.id=ep.project_phase_id
+    WHERE ep.edition_id=pg_temp.ed() AND ep.package_key='pkg.kitchen' AND pp.status<>'completed'),
+  'D3 fixture: the amendment edition excludes the kitchen and still carries its open phase');
+INSERT INTO sa_results VALUES('r3',pg_temp.create('rf-r3'));
+SELECT pg_temp.deliver(pg_temp.req('r3'));
+SELECT pg_temp.actor(5); SELECT pg_temp.respond(pg_temp.req('r3'),'rf-c5');
+SELECT pg_temp.actor(6); SELECT pg_temp.respond(pg_temp.req('r3'),'rf-c6');
+SELECT pg_temp.actor(7); SELECT pg_temp.respond(pg_temp.req('r3'),'rf-c7');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.assert_true(pg_temp.codes()='{}' AND pg_temp.codes('informational') @> ARRAY['package_excluded:pkg.kitchen'],
+  'D3: the excluded package''s open phase does not block; the package stays visible as informational');
+-- Fail-closed: a phase keyed to no package of the edition still blocks.
+SAVEPOINT d3;
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.project_phases(id,project_id,name,status) VALUES
+('f896c000-0000-4000-8000-000000000001',pg_temp.project(),'Orphan','in_progress'),
+('f896c000-0000-4000-8000-000000000002',pg_temp.project(),'Unkeyed','in_progress');
+INSERT INTO public.project_scope_edition_phases(edition_id,source_proposal_phase_id,project_phase_id,package_key,service_slot,bound_in_edition)
+VALUES (pg_temp.ed(),extensions.gen_random_uuid(),'f896c000-0000-4000-8000-000000000001','pkg.nowhere','design',2),
+       (pg_temp.ed(),extensions.gen_random_uuid(),'f896c000-0000-4000-8000-000000000002',NULL,NULL,NULL);
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.assert_true(pg_temp.codes() @> ARRAY['agreed_phase_open:pkg.nowhere','agreed_phase_open'],
+  'D3: a phase keyed to no package of the edition, or to none, still blocks');
+ROLLBACK TO SAVEPOINT d3;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Defect 2 on completion: the studio admin (not the designer of record).
+-- ───────────────────────────────────────────────────────────────────────────
+SELECT pg_temp.studio('suspended');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.complete('rf-done-suspended')$q$,'42501','insufficient_privilege',
+  'D2: a suspended studio''s admin cannot complete the service');
+SELECT pg_temp.studio('active');
+INSERT INTO sa_results VALUES('done',pg_temp.complete('rf-done'));
+SELECT pg_temp.assert_true(pg_temp.v('done')->>'completionId' IS NOT NULL AND NOT (pg_temp.v('done')->>'replayed')::boolean,
+  'D3 + D2 control: the active studio''s admin completes with the kitchen excluded');
+SELECT pg_temp.studio('deactivated');
+SELECT pg_temp.expect_error(format($q$SELECT public.revoke_studio_service_completion(%L,'Reopened')$q$,
+  pg_temp.v('done')->>'completionId'),'42501','insufficient_privilege',
+  'D2: a deactivated studio''s admin cannot revoke the completion');
+SELECT pg_temp.studio('pending_approval');
+SELECT pg_temp.expect_error(format($q$SELECT public.revoke_studio_service_completion(%L,'Reopened')$q$,
+  pg_temp.v('done')->>'completionId'),'42501','insufficient_privilege',
+  'D2: a pending_approval studio''s admin cannot revoke the completion');
+SELECT pg_temp.studio('active');
+SELECT pg_temp.assert_true((public.revoke_studio_service_completion((pg_temp.v('done')->>'completionId')::uuid,'Reopened')
+  ->>'revokedAt') IS NOT NULL,'D2 control: the active studio''s admin revokes');
+SELECT pg_temp.studio('suspended');
+SELECT pg_temp.assert_true(public.is_org_admin_or_owner('f8961000-0000-4000-8000-000000000001'),
+  'D2: a suspended studio''s admin still manages its roster (00556 exception kept)');
+SELECT pg_temp.studio('active');
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Defect 4: a paper-only request reaches paper intake by offline presentation.
+-- ───────────────────────────────────────────────────────────────────────────
+SELECT pg_temp.actor(1);
+SELECT pg_temp.draft('f8963000-0000-4000-8000-000000000002','paper');
+SELECT pg_temp.send_and_sign('f8963000-0000-4000-8000-000000000002');
+INSERT INTO sa_results VALUES('origin2',public.countersign_design_services_agreement(
+ 'f8963000-0000-4000-8000-000000000002','Release Designer'));
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
+('f8968000-0000-4000-8000-000000000002',pg_temp.project('origin2'),NULL,'service_acceptance','[]',repeat('b',64),repeat('2',64),'rf-2',pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+-- A nonempty manifest: one plan print, whose client projection is its sheet
+-- and whose served file is a project-documents object.
+CREATE FUNCTION pg_temp.plan_manifest(origin text, n integer) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE p uuid := pg_temp.project(origin); path text := pg_temp.project(origin)::text||'/release-evidence-'||n||'.pdf';
+  doc uuid := ('f896d000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+  sheet uuid := ('f896d100-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+  batch uuid := ('f896d200-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+  print uuid := ('f896d300-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+BEGIN
+  SET LOCAL session_replication_role=replica;
+  INSERT INTO public.project_documents(id,project_id,title,storage_path,client_visible,uploaded_by)
+  VALUES (doc,p,'Release plan '||n,path,false,pg_temp.uid(1));
+  INSERT INTO storage.objects(bucket_id,name,owner_id,metadata)
+  VALUES ('project-documents',path,pg_temp.uid(1)::text,'{"mimetype":"application/pdf"}');
+  INSERT INTO public.plan_sheets(id,project_id,sheet_number,title,state,current_print_number,current_print_id,created_by)
+  VALUES (sheet,p,'A-90'||n,'Release sheet '||n,'shared',1,print,pg_temp.uid(1));
+  INSERT INTO public.plan_print_batches(id,project_id,idempotency_key,request_hash,item_count)
+  VALUES (batch,p,'rf-batch-'||n,repeat('9',64),1);
+  INSERT INTO public.plan_prints(id,sheet_id,batch_id,print_number,rev_letter,project_document_id,sha256,source,created_by)
+  VALUES (print,sheet,batch,1,'A',doc,repeat('c',64),'upload',pg_temp.uid(1));
+  SET LOCAL session_replication_role=origin;
+  RETURN public.create_evidence_manifest(p,NULL,'service_acceptance',jsonb_build_array(
+    jsonb_build_object('kind','plan_print','id',print,'sha256',repeat('c',64),'rev','A')),'rf-manifest-'||n);
+END $$;
+CREATE FUNCTION pg_temp.manifest_hash(k text) RETURNS text LANGUAGE sql AS $$
+  SELECT manifest_hash FROM public.evidence_manifests WHERE id=(pg_temp.v(k)->>'manifestId')::uuid;
+$$;
+-- Both send-time snapshot tables for a request, as one comparable value.
+CREATE FUNCTION pg_temp.snap(req uuid) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object(
+    'members',(SELECT jsonb_agg(to_jsonb(s) ORDER BY s.ordinal) FROM public.service_acceptance_evidence_snapshots s
+      WHERE s.request_id=req),
+    'objects',(SELECT jsonb_agg(to_jsonb(o) ORDER BY o.ordinal,o.object_name)
+      FROM public.service_acceptance_evidence_snapshot_objects o WHERE o.request_id=req));
+$$;
+CREATE FUNCTION pg_temp.timing(req uuid) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object('lifecycle',lifecycle,'sentAt',sent_at,'offlinePresentedAt',offline_presented_at,
+    'offlinePresentedBy',offline_presented_by) FROM public.service_acceptance_requests WHERE id=req;
+$$;
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('m2',pg_temp.plan_manifest('origin2',2));
+INSERT INTO sa_results VALUES('p1',pg_temp.create('rf-p1','origin2',pg_temp.v('m2')->>'manifestId'));
+SELECT pg_temp.assert_true((SELECT lifecycle='draft' AND sent_at IS NULL FROM public.service_acceptance_requests WHERE id=pg_temp.req('p1'))
+  AND (SELECT count(*)=2 AND bool_and(to_address IS NULL AND status='awaiting_review' AND delivered_at IS NULL)
+    FROM public.outbound_drafts WHERE ref_type='service_acceptance_request' AND ref_id=pg_temp.req('p1')),
+  'D4 fixture: an all-paper request is a draft whose two notices have no address');
+INSERT INTO sa_results SELECT 'p1-drafts',jsonb_agg(to_jsonb(d) ORDER BY d.id) FROM public.outbound_drafts d
+  WHERE ref_type='service_acceptance_request' AND ref_id=pg_temp.req('p1');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.record_paper(%L,'paper_a',pg_temp.paper(1,'origin2',1),'rf-paper-early')$q$,
+  pg_temp.req('p1')),'55000','request_not_open','D4: paper intake still needs a presented request');
+
+-- Deny-by-default: shipped revoked, capability-gated, admin of an active studio only.
+SELECT pg_temp.assert_true(NOT has_function_privilege('authenticated','public.present_service_acceptance_offline(uuid,text,text,text)','EXECUTE')
+  AND NOT has_function_privilege('anon','public.present_service_acceptance_offline(uuid,text,text,text)','EXECUTE')
+  AND NOT has_function_privilege('service_role','public.present_service_acceptance_offline(uuid,text,text,text)','EXECUTE')
+  AND NOT has_function_privilege('authenticated','public._freeze_service_acceptance_evidence(uuid)','EXECUTE'),
+  'D4: the offline presentation and the freeze helper ship revoked from every API role');
+SAVEPOINT inactive;
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present')$q$,pg_temp.req('p1')),'55000',
+  'scope_editions_inactive','D4: refuses while scope_editions is off');
+ROLLBACK TO SAVEPOINT inactive;
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present')$q$,pg_temp.req('p1')),'42501',
+  'insufficient_privilege','D4: a studio member who is not owner/admin cannot present');
+SELECT pg_temp.actor(4);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present')$q$,pg_temp.req('p1')),'42501',
+  'insufficient_privilege','D4: another studio''s owner cannot present');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present')$q$,pg_temp.req('p1')),'42501',
+  'insufficient_privilege','D4: the client cannot present');
+SELECT pg_temp.studio('suspended');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present')$q$,pg_temp.req('p1')),'42501',
+  'insufficient_privilege','D2/D4: a suspended studio''s admin cannot present');
+SELECT pg_temp.studio('active');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present',repeat('0',64))$q$,pg_temp.req('p1')),'40001',
+  'stale_scope','D4: a scope hash that differs from the request is refused');
+SELECT pg_temp.expect_error(format($q$SELECT public.present_service_acceptance_offline(%L,r.scope_content_hash,repeat('0',64),'rf-present')
+  FROM public.service_acceptance_requests r WHERE r.id=%L$q$,pg_temp.req('p1'),pg_temp.req('p1')),'40001',
+  'stale_scope','D4: an evidence hash that differs from the request is refused');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'')$q$,pg_temp.req('p1')),'23514',
+  'client_request_id_invalid','D4: a blank client_request_id is refused');
+
+-- Present: admin 3, attributed, same edition and evidence hash, no delivery and no answer.
+SELECT pg_temp.actor(3);
+INSERT INTO sa_results VALUES('present',pg_temp.present(pg_temp.req('p1'),'rf-present'));
+SELECT pg_temp.assert_true(pg_temp.v('present')->>'lifecycle'='sent' AND NOT (pg_temp.v('present')->>'replayed')::boolean
+  AND (pg_temp.v('present')->>'offlinePresentedBy')::uuid=pg_temp.uid(3)
+  AND pg_temp.v('present')->>'offlinePresentedAt'=pg_temp.v('present')->>'sentAt','D4: the receipt names who presented it and when');
+SELECT pg_temp.assert_true((SELECT lifecycle='sent' AND sent_at=offline_presented_at AND offline_presented_by=pg_temp.uid(3)
+    AND offline_present_client_request_id='rf-present' AND offline_present_request_hash ~ '^[0-9a-f]{64}$'
+    AND scope_edition_id=pg_temp.ed('origin2')
+    AND scope_content_hash=(SELECT content_hash FROM public.project_scope_editions WHERE id=pg_temp.ed('origin2'))
+    AND evidence_manifest_hash=pg_temp.manifest_hash('m2') AND aggregate_outcome='pending'
+  FROM public.service_acceptance_requests WHERE id=pg_temp.req('p1')),
+  'D4: the request is sent, bound to the same edition and evidence hash, attributed to the admin');
+SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(member_kind='plan_print'
+      AND member_id='f896d300-0000-4000-8000-000000000002' AND title='A-902 Release sheet 2' AND issued_at IS NOT NULL)
+    FROM public.service_acceptance_evidence_snapshots WHERE request_id=pg_temp.req('p1'))
+  AND (SELECT count(*)=1 AND bool_and(bucket_id='project-documents'
+      AND object_name=pg_temp.project('origin2')::text||'/release-evidence-2.pdf'
+      AND object_id=(SELECT id FROM storage.objects WHERE bucket_id='project-documents'
+        AND name=pg_temp.project('origin2')::text||'/release-evidence-2.pdf'))
+    FROM public.service_acceptance_evidence_snapshot_objects WHERE request_id=pg_temp.req('p1')),
+  'D4 freeze: the presentation snapshots the member''s projection (sheet title, issued time) and pins its served object');
+INSERT INTO sa_results VALUES('p1-snap',pg_temp.snap(pg_temp.req('p1')));
+SELECT pg_temp.expect_error(format($q$UPDATE public.service_acceptance_evidence_snapshots SET title='Changed'
+  WHERE request_id=%L$q$,pg_temp.req('p1')),'23514','cannot be changed','D4 freeze: the member snapshot cannot be changed');
+SELECT pg_temp.expect_error(format($q$DELETE FROM public.service_acceptance_evidence_snapshots WHERE request_id=%L$q$,
+  pg_temp.req('p1')),'23514','cannot be changed','D4 freeze: the member snapshot cannot be deleted');
+SELECT pg_temp.expect_error(format($q$DELETE FROM public.service_acceptance_evidence_snapshot_objects WHERE request_id=%L$q$,
+  pg_temp.req('p1')),'23514','cannot be changed','D4 freeze: the pinned object cannot be unpinned');
+SELECT pg_temp.assert_true(pg_temp.snap(pg_temp.req('p1'))=pg_temp.v('p1-snap'),'D4 freeze: the snapshot is unchanged');
+SELECT pg_temp.assert_true((SELECT jsonb_agg(to_jsonb(d) ORDER BY d.id) FROM public.outbound_drafts d
+    WHERE ref_type='service_acceptance_request' AND ref_id=pg_temp.req('p1'))=pg_temp.v('p1-drafts')
+  AND NOT EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE request_id=pg_temp.req('p1')),
+  'D4: no notice is claimed, delivered or marked, and no response is created');
+SELECT pg_temp.assert_true((SELECT r->>'offlinePresentedAt' IS NOT NULL AND (r->>'offlinePresentedBy')::uuid=pg_temp.uid(3)
+  FROM jsonb_array_elements(public.get_project_service_acceptance(pg_temp.project('origin2'))->'requests') r
+  WHERE (r->>'requestId')::uuid=pg_temp.req('p1')),'D4: the studio read shows the offline presentation');
+SELECT pg_temp.assert_true((SELECT bool_and(r->'offlinePresentedAt'='null'::jsonb AND r->'offlinePresentedBy'='null'::jsonb)
+  FROM jsonb_array_elements(public.get_project_service_acceptance(pg_temp.project())->'requests') r),
+  'D4: a delivered request carries the offline keys as null');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.assert_true(pg_temp.listed(pg_temp.req('p1'))->'entry'->>'viewerRole'='observer'
+  AND NOT (pg_temp.listed(pg_temp.req('p1'))->'entry' ? 'offlinePresentedBy'),
+  'D4: the project client sees the presented request as an observer, without the studio fields');
+
+-- Receipt replay and refusals after presentation.
+SELECT pg_temp.actor(3);
+SELECT pg_temp.assert_true((pg_temp.present(pg_temp.req('p1'),'rf-present')->>'replayed')::boolean,
+  'D4: the same caller and payload replays the receipt');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present')$q$,pg_temp.req('p1')),'23505',
+  'idempotency_key_reused','D4: another admin under the same key is refused');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present-again')$q$,pg_temp.req('p1')),'55000',
+  'request_not_open','D4: a presented request cannot be presented again');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present-r3')$q$,pg_temp.req('r3')),'55000',
+  'request_not_open','D4: a delivered request cannot be presented');
+-- The guard keeps the offline columns write-once.
+SELECT pg_temp.expect_error(format($q$DO $d$ BEGIN
+  PERFORM set_config('app.service_acceptance_request_id',%L,true);
+  UPDATE public.service_acceptance_requests SET offline_presented_by=%L WHERE id=%L; END $d$$q$,
+  pg_temp.req('p1'),pg_temp.uid(1),pg_temp.req('p1')),'23514','service_acceptance_transition_invalid',
+  'D4: the guard refuses a later change to who presented it');
+SELECT pg_temp.expect_error(format($q$UPDATE public.service_acceptance_requests SET offline_presented_at=NULL WHERE id=%L$q$,
+  pg_temp.req('p1')),'42501','service_acceptance_write_unauthorized','D4: no direct write outside the RPC marker');
+
+-- Paper intake now proceeds (K5): recorded by the designer, confirmed by the admin.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('pa',pg_temp.record_paper(pg_temp.req('p1'),'paper_a',pg_temp.paper(2,'origin2',1),'rf-pa'));
+INSERT INTO sa_results VALUES('pb',pg_temp.record_paper(pg_temp.req('p1'),'paper_b',pg_temp.paper(3,'origin2',1),'rf-pb'));
+SELECT pg_temp.stamp('pa'); SELECT pg_temp.stamp('pb');
+SELECT pg_temp.studio('suspended');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.review('pa','rf-rv-pa')$q$,'42501','insufficient_privilege',
+  'D2: a suspended studio''s admin cannot confirm paper');
+SELECT pg_temp.studio('active');
+SELECT pg_temp.assert_true(pg_temp.review('pa','rf-rv-pa')->>'aggregateOutcome'='pending','D4: paper A confirmed by the admin');
+SELECT pg_temp.assert_true(pg_temp.review('pb','rf-rv-pb')->>'aggregateOutcome'='accepted','D4: paper B confirmed; accepted');
+SELECT pg_temp.assert_true((SELECT count(*)=2 AND bool_and(method='paper_intake' AND responder_profile_id IS NULL
+    AND presented_scope_content_hash=(SELECT scope_content_hash FROM public.service_acceptance_requests WHERE id=pg_temp.req('p1')))
+  FROM public.service_acceptance_responses WHERE request_id=pg_temp.req('p1'))
+  AND (SELECT lifecycle='closed' FROM public.service_acceptance_requests WHERE id=pg_temp.req('p1'))
+  AND NOT EXISTS (SELECT 1 FROM public.outbound_drafts WHERE ref_type='service_acceptance_request'
+    AND ref_id=pg_temp.req('p1') AND (delivered_at IS NOT NULL OR status IN ('sending','sent'))),
+  'D4: both answers are reviewed paper, never a client response, and no notice was ever delivered');
+SELECT pg_temp.assert_true(pg_temp.snap(pg_temp.req('p1'))=pg_temp.v('p1-snap'),
+  'D4 freeze: paper review and the close leave the snapshot as presented');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.assert_true((SELECT r->>'lifecycle'='sent' AND (r->>'replayed')::boolean
+    AND r->>'sentAt'=pg_temp.v('present')->>'sentAt' FROM pg_temp.present(pg_temp.req('p1'),'rf-present') r)
+  AND (SELECT lifecycle='closed' FROM public.service_acceptance_requests WHERE id=pg_temp.req('p1')),
+  'D4 replay: after the close the receipt still reads its own effect, sent');
+
+-- Replay after a withdrawal: the receipt stays 'sent'; the request stays withdrawn.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('w1',pg_temp.create('rf-w1','origin2',pg_temp.v('m2')->>'manifestId'));
+SELECT pg_temp.actor(3);
+INSERT INTO sa_results VALUES('w1-present',pg_temp.present(pg_temp.req('w1'),'rf-present-w1'));
+SELECT pg_temp.actor(1);
+SELECT public.withdraw_service_acceptance_request(pg_temp.req('w1'),'Scope is changing','rf-w1-withdraw');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.assert_true((SELECT r->>'lifecycle'='sent' AND (r->>'replayed')::boolean
+    AND r->>'offlinePresentedAt'=pg_temp.v('w1-present')->>'offlinePresentedAt'
+    FROM pg_temp.present(pg_temp.req('w1'),'rf-present-w1') r)
+  AND (SELECT lifecycle='withdrawn' FROM public.service_acceptance_requests WHERE id=pg_temp.req('w1')),
+  'D4 replay: after a withdrawal the receipt reads sent and the request stays withdrawn');
+
+-- A held notice delivered after the presentation changes nothing: the
+-- after-send finds the request already sent (household policy, origin project).
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('m1',pg_temp.plan_manifest('origin',1));
+INSERT INTO sa_results VALUES('h1',pg_temp.create('rf-h1','origin',pg_temp.v('m1')->>'manifestId'));
+SELECT pg_temp.actor(3);
+SELECT pg_temp.present(pg_temp.req('h1'),'rf-present-h1');
+INSERT INTO sa_results VALUES('h1-snap',pg_temp.snap(pg_temp.req('h1')));
+INSERT INTO sa_results VALUES('h1-timing',pg_temp.timing(pg_temp.req('h1')));
+SELECT pg_temp.assert_true(jsonb_array_length(pg_temp.v('h1-snap')->'members')=1
+  AND jsonb_array_length(pg_temp.v('h1-snap')->'objects')=1
+  AND NOT EXISTS (SELECT 1 FROM public.outbound_drafts WHERE ref_type='service_acceptance_request'
+    AND ref_id=pg_temp.req('h1') AND (delivered_at IS NOT NULL OR status<>'awaiting_review')),
+  'D4 freeze: a household request presented on paper is frozen and its notices are still held');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.deliver(pg_temp.req('h1'));
+SELECT pg_temp.assert_true((SELECT status='sent' AND delivered_at IS NOT NULL FROM public.outbound_drafts
+    WHERE id=(SELECT outbound_draft_id FROM public.service_acceptance_requests WHERE id=pg_temp.req('h1')))
+  AND pg_temp.timing(pg_temp.req('h1'))=pg_temp.v('h1-timing')
+  AND pg_temp.snap(pg_temp.req('h1'))=pg_temp.v('h1-snap'),
+  'D4 freeze: delivering a held notice later keeps the sent and presented times and the snapshot');
+
+-- Delivery first: the email send freezes the evidence; presenting is refused and changes nothing.
+INSERT INTO sa_results VALUES('h2',pg_temp.create('rf-h2','origin',pg_temp.v('m1')->>'manifestId'));
+SELECT pg_temp.deliver(pg_temp.req('h2'));
+INSERT INTO sa_results VALUES('h2-snap',pg_temp.snap(pg_temp.req('h2')));
+INSERT INTO sa_results VALUES('h2-timing',pg_temp.timing(pg_temp.req('h2')));
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present-h2')$q$,pg_temp.req('h2')),'55000',
+  'request_not_open','D4: a request delivered by email cannot then be presented on paper');
+SELECT pg_temp.assert_true(jsonb_array_length(pg_temp.v('h2-snap')->'objects')=1
+  AND pg_temp.snap(pg_temp.req('h2'))=pg_temp.v('h2-snap') AND pg_temp.timing(pg_temp.req('h2'))=pg_temp.v('h2-timing')
+  AND pg_temp.v('h2-timing')->'offlinePresentedAt'='null'::jsonb,
+  'D4: the refused presentation leaves the delivered request and its snapshot as sent');
+
+-- A freeze that fails rolls the whole presentation back.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('h3',pg_temp.create('rf-h3','origin',pg_temp.v('m1')->>'manifestId'));
+SAVEPOINT freeze_fails;
+SET LOCAL session_replication_role=replica;
+DELETE FROM storage.objects WHERE bucket_id='project-documents' AND name=pg_temp.project()::text||'/release-evidence-1.pdf';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present-h3')$q$,pg_temp.req('h3')),'23514',
+  'service_acceptance_evidence_object_missing','D4: presenting refuses when a served object is missing');
+SELECT pg_temp.assert_true(pg_temp.timing(pg_temp.req('h3'))=jsonb_build_object('lifecycle','draft','sentAt',NULL,
+    'offlinePresentedAt',NULL,'offlinePresentedBy',NULL)
+  AND (SELECT offline_present_client_request_id IS NULL FROM public.service_acceptance_requests WHERE id=pg_temp.req('h3'))
+  AND pg_temp.snap(pg_temp.req('h3'))=jsonb_build_object('members',NULL,'objects',NULL),
+  'D4: the failed freeze leaves the request a draft with no presentation and no snapshot');
+ROLLBACK TO SAVEPOINT freeze_fails;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Defect 2 on completion: the designer of record of a non-active studio.
+-- ───────────────────────────────────────────────────────────────────────────
+SELECT pg_temp.actor(1);
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by)
+VALUES ('f896e000-0000-4000-8000-000000000001',pg_temp.project(),90,'Completion evidence','rf-issue',repeat('1',64),
+  repeat('2',64),1,pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('r4',pg_temp.create('rf-r4'));
+SELECT pg_temp.deliver(pg_temp.req('r4'));
+SELECT pg_temp.actor(5);
+SELECT public.respond_service_acceptance(r.id,'accept_with_conditions','[{"text":"Touch up the paint"}]'::jsonb,NULL,
+  r.scope_content_hash,r.evidence_manifest_hash,r.signer_policy_revision,'rf-r4-5')
+FROM public.service_acceptance_requests r WHERE r.id=pg_temp.req('r4');
+SELECT pg_temp.actor(6); SELECT pg_temp.respond(pg_temp.req('r4'),'rf-r4-6');
+SELECT pg_temp.actor(7); SELECT pg_temp.respond(pg_temp.req('r4'),'rf-r4-7');
+SELECT pg_temp.actor(1);
+CREATE FUNCTION pg_temp.condition4() RETURNS uuid LANGUAGE sql AS $$
+  SELECT (c->>'conditionId')::uuid FROM public.service_acceptance_responses x, jsonb_array_elements(x.conditions) c
+  WHERE x.request_id=pg_temp.req('r4') AND x.response='accept_with_conditions';
+$$;
+CREATE FUNCTION pg_temp.settle(k text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.resolve_service_acceptance_condition(pg_temp.req('r4'),pg_temp.condition4(),'Done on site',
+    '{"issueId":"f896e000-0000-4000-8000-000000000001"}'::jsonb,k);
+$$;
+-- Hand the job to 2, a plain member, so only the designer-of-record branch
+-- can grant (the owner and admin would also pass the admin branch).
+SET LOCAL session_replication_role=replica;
+UPDATE public.projects SET designer_id=pg_temp.uid(2) WHERE id=pg_temp.project();
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(2);
+SELECT pg_temp.assert_true((SELECT lifecycle='closed' AND aggregate_outcome='accepted_with_conditions'
+    FROM public.service_acceptance_requests WHERE id=pg_temp.req('r4'))
+  AND pg_temp.condition4() IS NOT NULL
+  AND (SELECT designer_id=pg_temp.uid(2) AND studio_id='f8961000-0000-4000-8000-000000000001'
+    FROM public.projects WHERE id=pg_temp.project())
+  AND NOT public._is_service_acceptance_studio_admin(pg_temp.project())
+  AND public._can_complete_studio_service(pg_temp.project()),
+  'D2 fixture: 2, a plain member, is the designer of record of studio A''s job, accepted with one condition');
+SELECT pg_temp.studio('suspended');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.complete('rf-done-dor')$q$,'42501','insufficient_privilege',
+  'D2: a suspended studio''s designer of record cannot complete the service');
+SELECT pg_temp.assert_true((public.get_studio_service_completion(pg_temp.project())->>'projectId')::uuid=pg_temp.project(),
+  'D2: the designer of record still reads the completion record (self-read unchanged)');
+SELECT pg_temp.studio('active');
+SELECT pg_temp.actor(2);
+INSERT INTO sa_results VALUES('done-dor',pg_temp.complete('rf-done-dor'));
+SELECT pg_temp.assert_true(pg_temp.v('done-dor')->>'state'='completed_with_conditions',
+  'D2 control: on an active studio the designer of record completes, with the condition open');
+SELECT pg_temp.studio('deactivated');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.settle('rf-settle')$q$,'42501','insufficient_privilege',
+  'D2: a deactivated studio''s designer of record cannot resolve the condition');
+SELECT pg_temp.assert_true((SELECT state='completed_with_conditions' FROM public.studio_service_completions
+    WHERE id=(pg_temp.v('done-dor')->>'completionId')::uuid)
+  AND NOT EXISTS (SELECT 1 FROM public.service_acceptance_condition_resolutions WHERE request_id=pg_temp.req('r4')),
+  'D2: the refusal records no resolution and does not advance the completion');
+SELECT pg_temp.studio('active');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.settle('rf-settle');
+SELECT pg_temp.assert_true((SELECT state='completed' FROM public.studio_service_completions
+    WHERE id=(pg_temp.v('done-dor')->>'completionId')::uuid),
+  'D2 control: on an active studio the designer of record resolves it, and the completion advances to completed');
+
+DO $$ BEGIN RAISE NOTICE 'release fixes: PASS % assertions', (SELECT n FROM assertion_count); END $$;

@@ -91,6 +91,9 @@ export interface ServiceAcceptanceRequest {
   supersededAt: string | null;
   withdrawnAt: string | null;
   withdrawReason: string | null;
+  /** 00899: set when an active studio's owner or admin presented the draft on paper; then equals sentAt. */
+  offlinePresentedAt: string | null;
+  offlinePresentedBy: string | null;
   outboundDraftId: string | null;
   createdAt: string;
   signers: ServiceAcceptanceSigner[];
@@ -191,6 +194,7 @@ export function readProjectServiceAcceptance(value: unknown, projectId: string):
         supersededReason: nullableOneOf(row.supersededReason, SUPERSEDED_REASONS),
         supersededAt: nullableText(row.supersededAt), withdrawnAt: nullableText(row.withdrawnAt),
         withdrawReason: nullableText(row.withdrawReason), outboundDraftId: nullableText(row.outboundDraftId),
+        offlinePresentedAt: nullableText(row.offlinePresentedAt), offlinePresentedBy: nullableText(row.offlinePresentedBy),
         createdAt: text(row.createdAt), signers: records(row.signers).map(readSigner),
         paperIntakes: records(row.paperIntakes).map(readIntake),
       };
@@ -311,6 +315,24 @@ export function useWithdrawServiceAcceptanceRequest(projectId: string) {
   return useServiceAcceptanceAct<WithdrawServiceAcceptanceArgs, { requestId: string; lifecycle: string; replayed: boolean }>(
     projectId, 'withdraw', (args, key) => createBrowserClient().rpc('withdraw_service_acceptance_request', {
       p_request_id: args.requestId, p_reason: args.reason, p_client_request_id: key,
+    }));
+}
+
+export interface PresentServiceAcceptanceOfflineArgs {
+  requestId: string; scopeContentHash: string; evidenceManifestHash: string;
+}
+export interface ServiceAcceptanceOfflineReceipt {
+  /** The presentation's effect: a replay reads 'sent' even after a later withdrawal or close (00899). */
+  requestId: string; lifecycle: 'sent'; sentAt: string; offlinePresentedAt: string; offlinePresentedBy: string;
+  replayed: boolean;
+}
+
+/** 00899: marks a draft request as presented on paper, so paper intake can open. Sends nothing. */
+export function usePresentServiceAcceptanceOffline(projectId: string) {
+  return useServiceAcceptanceAct<PresentServiceAcceptanceOfflineArgs, ServiceAcceptanceOfflineReceipt>(
+    projectId, 'present-offline', (args, key) => createBrowserClient().rpc('present_service_acceptance_offline', {
+      p_request_id: args.requestId, p_scope_content_hash: args.scopeContentHash,
+      p_evidence_manifest_hash: args.evidenceManifestHash, p_client_request_id: key,
     }));
 }
 

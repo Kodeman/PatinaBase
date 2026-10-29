@@ -6,7 +6,7 @@ Replay horizon: a runner that re-applies migration M must then re-apply, in nume
 
 `service_acceptance_x08_test.sql` checks the designer `get_project_decision_reviews` and client `list_my_project_decision_reviews` artifact-only lists against a nonempty baseline while service requests are added. It exercises required/optional signers, project-client observer, studio/comember, another household, GC, maker, second studio and anon. Draft and sent cannot coexist as open requests on one project: the fixture checks draft invisibility first, then supersedes it. Sent superseded history remains visible; unsent superseded history does not.
 
-`service_acceptance_activation_plan_test.sql` rehearses exactly C4 §2.8's six authenticated grants and service-role-only hash stamp, dynamically checks all service-acceptance functions (including the authenticated storage predicate exception and PUBLIC denial), then applies inverse revokes and compares the shipped ACL census. Neither suite leaves activation behind; both raise on failure, print PASS counts and end in `ROLLBACK`.
+`service_acceptance_activation_plan_test.sql` rehearses exactly C4 §2.8's seven authenticated grants (00899 adds `present_service_acceptance_offline`) and service-role-only hash stamp, dynamically checks all service-acceptance functions (including the authenticated storage predicate exception and PUBLIC denial), then applies inverse revokes and compares the shipped ACL census. Neither suite leaves activation behind; both raise on failure, print PASS counts and end in `ROLLBACK`.
 
 These two suites refuse anything except `127.0.0.1:55322`. Use a freshly reset **owned** CLI stack with a unique project ID and +1000 port offset (API 55321, DB 55322, shadow 55320, pooler 55329), following the isolation, pin, cron and teardown instructions below. Never point them at shared 54322. Example, from the repository root:
 
@@ -36,6 +36,15 @@ Two guards default to an owned port instead: `service_completion_test.sql` (C6, 
 ```
 ROUND8_DB_URL=postgresql://postgres:postgres@127.0.0.1:56322/postgres SERVICE_COMPLETION_DB_WINDOW=owned \
   node --test --test-concurrency=1 supabase/tests/round8/service_completion_concurrency.test.mjs
+```
+
+`service_acceptance_release_fixes_test.sql` (00896–00899, release-review lane F-A) uses the same `57322` guard and refuses 54322. It covers one person on two slots (both orders, the person rule and the audited repair), suspended, deactivated and pending studios against replace, paper review, complete and revoke, the designer of record of a non-active studio against complete and condition resolution (with active-studio controls), an amendment that excludes a package with an open phase, and the offline presentation of a paper-only request through paper intake to acceptance. The presentation cases use a nonempty plan-print manifest: the frozen snapshot and pinned object, their immutability, replays after the close and after a withdrawal, a held notice delivered afterwards, delivery first then a refused presentation, and a rollback when the freeze fails.
+
+`service_acceptance_relink_concurrency.test.mjs` is a window suite: it commits an `f89d` fixture from that body's shared sections and removes it at the end. One session relinks a household card while another responds as the card's new profile, in both orders. The responder waits on the card lock; relink first is refused with `signer_identity_collision` and records nothing, respond first keeps its one slot. Both end in a studio repair and an accepted request. It needs `scope_editions` already on (it never toggles it):
+
+```
+ROUND8_DB_URL=postgresql://postgres:postgres@127.0.0.1:57322/postgres SERVICE_ACCEPTANCE_DB_WINDOW=owned \
+  node --test --test-concurrency=1 supabase/tests/round8/service_acceptance_relink_concurrency.test.mjs
 ```
 
 ### Isolated CLI stack

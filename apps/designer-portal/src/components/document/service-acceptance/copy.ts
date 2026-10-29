@@ -39,6 +39,11 @@ export const LIFECYCLE: Record<ServiceAcceptanceLifecycle, string> = {
   closed: 'Closed',
 };
 
+/** A request presented on paper (00899) is 'sent' in the record but never reached the client by email. */
+export function lifecycleLabel(request: { lifecycle: ServiceAcceptanceLifecycle; offlinePresentedAt: string | null }): string {
+  return request.lifecycle === 'sent' && request.offlinePresentedAt ? 'Presented on paper' : LIFECYCLE[request.lifecycle];
+}
+
 export const OUTCOME: Record<ServiceAcceptanceOutcome, string> = {
   pending: 'Waiting on responses',
   accepted: 'Accepted',
@@ -91,6 +96,14 @@ export const PAPER_MISMATCH =
 export function paperRefusalCopy(error: unknown): string | null {
   const token = serviceAcceptanceRefusal(error);
   if (token === 'stale_scope' || token === 'stale_signer_policy') return PAPER_MISMATCH;
+  return refusalCopy(error);
+}
+
+/** Presenting a draft on paper (00899): only an active studio's owner or admin may. */
+export function presentRefusalCopy(error: unknown): string | null {
+  if (serviceAcceptanceRefusal(error) === 'insufficient_privilege') {
+    return 'Marking a request presented on paper needs an owner or admin of an active studio.';
+  }
   return refusalCopy(error);
 }
 

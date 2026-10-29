@@ -29102,6 +29102,10 @@ export type Database = {
           evidence_manifest_id: string
           id: string
           lifecycle: string
+          offline_present_client_request_id: string | null
+          offline_present_request_hash: string | null
+          offline_presented_at: string | null
+          offline_presented_by: string | null
           outbound_draft_id: string
           predecessor_request_id: string | null
           project_id: string
@@ -29130,6 +29134,10 @@ export type Database = {
           evidence_manifest_id: string
           id?: string
           lifecycle?: string
+          offline_present_client_request_id?: string | null
+          offline_present_request_hash?: string | null
+          offline_presented_at?: string | null
+          offline_presented_by?: string | null
           outbound_draft_id: string
           predecessor_request_id?: string | null
           project_id: string
@@ -29158,6 +29166,10 @@ export type Database = {
           evidence_manifest_id?: string
           id?: string
           lifecycle?: string
+          offline_present_client_request_id?: string | null
+          offline_present_request_hash?: string | null
+          offline_presented_at?: string | null
+          offline_presented_by?: string | null
           outbound_draft_id?: string
           predecessor_request_id?: string | null
           project_id?: string
@@ -29195,6 +29207,20 @@ export type Database = {
             columns: ["evidence_manifest_id"]
             isOneToOne: false
             referencedRelation: "evidence_manifests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_offline_presented_by_fkey"
+            columns: ["offline_presented_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_acceptance_requests_offline_presented_by_fkey"
+            columns: ["offline_presented_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
           {
@@ -40595,6 +40621,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _freeze_service_acceptance_evidence: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
       _furnishing_authorization_item_snapshot: {
         Args: {
           p_line: Database["public"]["Tables"]["project_ffe_items"]["Row"]
@@ -40761,6 +40791,10 @@ export type Database = {
           evidence_manifest_id: string
           id: string
           lifecycle: string
+          offline_present_client_request_id: string | null
+          offline_present_request_hash: string | null
+          offline_presented_at: string | null
+          offline_presented_by: string | null
           outbound_draft_id: string
           predecessor_request_id: string | null
           project_id: string
@@ -40798,6 +40832,10 @@ export type Database = {
           evidence_manifest_id: string
           id: string
           lifecycle: string
+          offline_present_client_request_id: string | null
+          offline_present_request_hash: string | null
+          offline_presented_at: string | null
+          offline_presented_by: string | null
           outbound_draft_id: string
           predecessor_request_id: string | null
           project_id: string
@@ -47625,6 +47663,15 @@ export type Database = {
           p_party_id: string
           p_proposal_id: string
           p_timeline?: string
+        }
+        Returns: Json
+      }
+      present_service_acceptance_offline: {
+        Args: {
+          p_client_request_id: string
+          p_evidence_manifest_hash: string
+          p_request_id: string
+          p_scope_content_hash: string
         }
         Returns: Json
       }

@@ -309,16 +309,29 @@ SELECT pg_temp.expect_error(format('SELECT public.get_studio_service_completion(
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-9')$q$,pg_temp.req('r1')),'42501','insufficient_privilege',
   'card unlinked before responding is refused');
 
--- One person, one slot: a card moved onto the client's own profile does not
--- give the client the card's slot.
+-- One person, one slot (00896): a card moved onto the client's own profile
+-- makes the client match two active required slots. The list names no slot
+-- and respond refuses with the collision; no slot is chosen by ordering.
 SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(5))=1,'designer points the co_client card at the client');
 SELECT pg_temp.actor(5);
 SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
+  AND pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId' IS NULL
+  AND pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerRole'='observer',
+  'client stays listed once, as an observer, while two slots match');
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-client-collision')$q$,pg_temp.req('r1')),'55000',
+  'signer_identity_collision','a client matching two required slots is refused');
+RESET ROLE;
+SELECT pg_temp.assert_true(NOT EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE request_id=pg_temp.req('r1')
+  AND responder_profile_id=pg_temp.uid(5)),'the refused collision records no response');
+SET LOCAL ROLE authenticated;
+
+-- The studio relinks the card; the client answers only the profile slot.
+SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(6))=1,'designer relinks the co_client card');
+SELECT pg_temp.actor(5);
+SELECT pg_temp.assert_true((pg_temp.listed(pg_temp.req('r1'))->>'count')::int=1
   AND (pg_temp.listed(pg_temp.req('r1'))->'entry'->>'viewerSignerId')::uuid=pg_temp.signer(pg_temp.req('r1'),'client'),
-  'client stays listed once, on the profile slot');
+  'client is listed once, on the profile slot');
 INSERT INTO sa_results VALUES('client',pg_temp.respond(pg_temp.req('r1'),'accept','hi-client'));
-SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'accept','hi-client-card')$q$,pg_temp.req('r1')),'23505',
-  'already_responded','primary client cannot answer the card slot');
 RESET ROLE;
 SELECT pg_temp.assert_true((SELECT signer_id=pg_temp.signer(pg_temp.req('r1'),'client') AND responder_profile_id=pg_temp.uid(5)
   FROM public.service_acceptance_responses WHERE id=(pg_temp.v('client')->>'responseId')::uuid)
@@ -327,9 +340,8 @@ SELECT pg_temp.assert_true((SELECT signer_id=pg_temp.signer(pg_temp.req('r1'),'c
   AND pg_temp.v('client')->'pendingRequiredSigners'->0->>'slot'='co_client',
   'profile signer answers its own slot; the card slot stays pending');
 
--- Relinked, the card's profile answers the card slot, attributed to the slot and to auth.uid().
+-- The card's profile answers the card slot, attributed to the slot and to auth.uid().
 SET LOCAL ROLE authenticated;
-SELECT pg_temp.assert_true(pg_temp.link(pg_temp.card(2),pg_temp.uid(6))=1,'designer relinks the co_client card');
 SELECT pg_temp.actor(6);
 INSERT INTO sa_results VALUES('co',pg_temp.attempt(format($q$SELECT pg_temp.respond(%L,'accept','hi-co')$q$,pg_temp.req('r1'))));
 SELECT pg_temp.assert_true(pg_temp.v('co')->'ok'->>'aggregateOutcome'='accepted',
