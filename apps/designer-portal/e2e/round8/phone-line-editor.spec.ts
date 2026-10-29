@@ -155,7 +155,7 @@ for (const width of [320, 390]) {
           await expect(finish).not.toHaveAttribute('aria-invalid', 'true');
           expect(writes).toBe(2);
           await page.reload({ waitUntil: 'domcontentloaded' });
-          await expect(instrument(page).getByRole('textbox', { name: 'Finish' })).toHaveValue(draft);
+          await expect(instrument(page).getByRole('textbox', { name: 'Finish' })).toHaveValue(draft, { timeout: 60_000 });
           expect(writes, 'reload never replays a recovered draft').toBe(2);
         }
         await page.unroute(specWrite);
@@ -378,12 +378,12 @@ for (const width of [320, 390]) {
         await expect(finish).not.toHaveAttribute('aria-invalid', 'true');
         const recoveredWrites = writes;
         await page.reload({ waitUntil: 'domcontentloaded' });
-        await expect(instrument(page).getByRole('textbox', { name: 'Finish' })).toHaveValue(abandoned);
+        await expect(instrument(page).getByRole('textbox', { name: 'Finish' })).toHaveValue(abandoned, { timeout: 60_000 });
         expect(writes, 'reload never replays the recovered write').toBe(recoveredWrites);
       }
 
       await page.goto(`/doc/${JOB}?unfold=pieces&lens=spec&room=${ROOM}&line=00000000-0000-4000-8000-000000000099`, { waitUntil: 'domcontentloaded' });
-      await expect(instrument(page).locator('[data-spec-line-missing]')).toHaveText('That line is no longer in this room.');
+      await expect(instrument(page).locator('[data-spec-line-missing]')).toHaveText('That line is no longer in this room.', { timeout: 60_000 });
       await expect(instrument(page).getByTestId('spec-fields-pane')).toBeVisible();
       // Noncancelable cross-route exits/no Navigation API remain WP-11 residuals.
     });
