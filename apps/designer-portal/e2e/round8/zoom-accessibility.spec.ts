@@ -20,15 +20,21 @@ async function fullyInsideViewport(page: Page, control: Locator) {
     if (!box) return false;
     const hit = await control.evaluate((element) => {
       const rect = element.getBoundingClientRect();
+      const radii = getComputedStyle(element);
       const corners = [
-        [rect.left + 1, rect.top + 1],
-        [rect.right - 1, rect.top + 1],
-        [rect.left + 1, rect.bottom - 1],
-        [rect.right - 1, rect.bottom - 1],
-      ];
-      return corners.every(([x, y]) => {
+        [rect.left + 1, rect.top + 1, radii.borderTopLeftRadius, 1, 1],
+        [rect.right - 1, rect.top + 1, radii.borderTopRightRadius, -1, 1],
+        [rect.left + 1, rect.bottom - 1, radii.borderBottomLeftRadius, 1, -1],
+        [rect.right - 1, rect.bottom - 1, radii.borderBottomRightRadius, -1, -1],
+      ] as const;
+      return corners.every(([x, y, cornerRadius, dx, dy]) => {
         const target = document.elementFromPoint(x, y);
-        return target === element || element.contains(target);
+        if (target === element || element.contains(target)) return true;
+        // Rounded corners cut the 1px point out of the painted hit area.
+        const radius = parseFloat(cornerRadius);
+        if (radius <= 3.5) return false;
+        const inside = document.elementFromPoint(x + dx * radius, y + dy * radius);
+        return inside === element || element.contains(inside);
       });
     });
     const viewport = page.viewportSize();
