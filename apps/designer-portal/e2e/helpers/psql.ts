@@ -20,25 +20,36 @@ import { existsSync } from 'node:fs';
 const DB_URL =
   process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
-// The destination is the URL's host, unless a libpq parameter overrides it —
-// so check the parsed host and refuse any override.
-function isLocalPostgres(raw: string): boolean {
+// libpq and WHATWG `URL` disagree on edge syntax (`#`, query overrides), so the
+// URL psql receives is rebuilt from the validated parts, never passed through.
+function localConnection(raw: string): string | null {
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    return false;
+    return null;
   }
-  if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') return false;
-  if (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') return false;
-  return !['host', 'hostaddr', 'service', 'servicefile'].some((key) => url.searchParams.has(key));
+  if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') return null;
+  if (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') return null;
+  const safe = /^[A-Za-z0-9._~%-]*$/;
+  if (!safe.test(url.username) || !safe.test(url.password)) return null;
+  if (!/^\/[A-Za-z0-9_-]+$/.test(url.pathname) || !/^\d*$/.test(url.port)) return null;
+  const auth = url.username ? `${url.username}${url.password ? `:${url.password}` : ''}@` : '';
+  return `postgresql://${auth}${url.hostname}:${url.port || '5432'}${url.pathname}`;
 }
 
-if (!isLocalPostgres(DB_URL)) {
+const CONNECTION = localConnection(DB_URL);
+if (!CONNECTION) {
   throw new Error(
     `REFUSING to run psql e2e helpers against a non-local Postgres URL: "${DB_URL}". ` +
       `This module only ever talks to the local Supabase stack.`,
   );
+}
+
+// libpq reads these from the environment and they can redirect the connection.
+const PSQL_ENV = { ...process.env };
+for (const key of ['PGHOST', 'PGHOSTADDR', 'PGSERVICE', 'PGSERVICEFILE', 'PGSYSCONFDIR']) {
+  delete PSQL_ENV[key];
 }
 
 // The Supabase CLI's `psql` isn't always on PATH (homebrew's `libpq` is
@@ -55,8 +66,8 @@ const PSQL_BIN = PSQL_CANDIDATES.find((c) => c === 'psql' || existsSync(c)) ?? '
 function run(sql: string, extraArgs: string[] = []): string {
   return execFileSync(
     PSQL_BIN,
-    ['-X', '-q', '-v', 'ON_ERROR_STOP=1', ...extraArgs, DB_URL, '-c', sql],
-    { encoding: 'utf8' },
+    ['-X', '-q', '-v', 'ON_ERROR_STOP=1', ...extraArgs, CONNECTION, '-c', sql],
+    { encoding: 'utf8', env: PSQL_ENV },
   );
 }
 
