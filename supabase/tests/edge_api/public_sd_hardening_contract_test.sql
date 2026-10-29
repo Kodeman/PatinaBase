@@ -1914,16 +1914,30 @@ INSERT INTO _00511_expected_dependency (
 )
 VALUES
   (
+    -- 00882 (round 8, billing lock order) takes the project FOR UPDATE instead
+    -- of FOR SHARE and locks the proposal before the commercial document, with
+    -- an explicit not-found refusal after each (00578's hash was
+    -- 19ed2037eedd20097f1a9c1b28d812db520d37e49650d1772aed65f555437f00).
+    -- Signature, arguments, result type, proconfig, SECURITY DEFINER flag and
+    -- ACL are unchanged, and the caller universe is the same.
     'app_private.issue_invoice_for_actor(uuid,date,uuid)',
     'p_invoice_id uuid, p_due_date date, p_actor_id uuid', 'invoices',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '19ed2037eedd20097f1a9c1b28d812db520d37e49650d1772aed65f555437f00'
+    '59d85e0a4e6cc97db7aefabd285e15c5f7a98d6c61a36c6b4b9e3b4c8e2a5d7a'
   ),
   (
+    -- 00835 replaced the inline executed-origin EXISTS with
+    -- public.project_has_design_agreement_eligibility() (00578's hash was
+    -- 4cb2a23d819be51eaf2de2c67a393c53c64230b39f4107b5b6ac82d7e818da58;
+    -- 00835's was 14ee7e7f334d9b408a357187a023e1e382607da52420f8a331d23bf7273c21ca).
+    -- 00876 (round 8, external presence parity) then locks the source FF&E
+    -- items FOR UPDATE in id order and refuses items already routed to an
+    -- external fulfilment. Signature, arguments, result type, proconfig,
+    -- SECURITY DEFINER flag, ACL and the invoice-core call are unchanged.
     'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '4cb2a23d819be51eaf2de2c67a393c53c64230b39f4107b5b6ac82d7e818da58'
+    'a25a93c4354ffbe4d552d4af3510d04429f9120491c9ef3f1db5717293f75ef1'
   ),
   (
     'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
@@ -1990,16 +2004,35 @@ VALUES
     -- file pins about the function still holds. Rows materialized before 00619
     -- keep roster_role NULL and 00618's legacy label leg prices them exactly as
     -- it did yesterday (P-4).
+    --
+    -- 00869 (round 8, scope execution) takes the origin project FOR UPDATE
+    -- instead of FOR SHARE and calls public._scope_after_execution() once the
+    -- document is executed (00619's hash was
+    -- 33af21f76ae82453a95a5cbbf8908d07e9cc4df02e09f82dc69dcd2a5786dc6a).
+    -- 00885 (round 8, countersign execution time) executes at
+    -- GREATEST(studio signed_at, the active authority's effective_at), read
+    -- under that project lock, so a predecessor never ends before it began
+    -- (00869's hash was
+    -- 0c08999d5bd2f737b9696e0835c2e6a8a9ed4853538ff85ba27e77d4be1be728).
+    -- Signature, arguments, result type, proconfig, SECURITY DEFINER flag,
+    -- ACL, the issue_invoice_for_actor call and the 'commercialDocumentId'
+    -- anchor are unchanged.
     'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
     'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '33af21f76ae82453a95a5cbbf8908d07e9cc4df02e09f82dc69dcd2a5786dc6a'
+    'ab558c3f54b73e98a8aeb34c9c894a0d9bd927e45c504938c9225a3b4dbacf3e'
   ),
   (
+    -- Same two deltas as the client rail above: 00835's eligibility helper
+    -- (00578's hash was
+    -- 71e3700f9a100f863a968cba9afab3a66e701d1dc369a491f5e9c31d1eacd4a3;
+    -- 00835's was 83b2c3686f99aee99b2e314a43d045965ab59c903323992a3a3c686a0dee320e),
+    -- then 00876's ordered source-item FOR UPDATE and external-presence
+    -- refusal. Profile, ACL and the invoice-core call are unchanged.
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
     'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '71e3700f9a100f863a968cba9afab3a66e701d1dc369a491f5e9c31d1eacd4a3'
+    'ff927ce367f9d5c9734e0350f78f78e44d5d7f76cbff0a346f94e0cea23fce33'
   ),
   (
     'public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)',
