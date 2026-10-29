@@ -109,8 +109,7 @@ function from(name: string) {
       eq: () => pieces,
       is: () => pieces,
       order: () => pieces,
-      range: (start: number, end: number) =>
-        respond(piecesMode, () => pieceRows.slice(start, end + 1), "pieces"),
+      limit: (count: number) => respond(piecesMode, () => pieceRows.slice(0, count), "pieces"),
     };
     return pieces;
   }

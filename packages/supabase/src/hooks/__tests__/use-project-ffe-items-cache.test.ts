@@ -37,14 +37,14 @@ describe('useProjectFFEItems shared cache', () => {
       eq: vi.fn(),
       is: vi.fn(),
       order: vi.fn(),
-      range: vi.fn(),
+      limit: vi.fn(),
       then: (resolve: (result: { data: unknown[]; error: null }) => unknown) =>
         Promise.resolve({ data: [], error: null }).then(resolve),
     };
     query.eq.mockReturnValue(query);
     query.is.mockReturnValue(query);
     query.order.mockReturnValue(query);
-    query.range.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
     select.mockReturnValue(query);
     from.mockReturnValue({ select });
   });

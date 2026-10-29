@@ -164,46 +164,63 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      let query = supabase
-        .from('project_ffe_items')
-        .select(`
-          *,
-          ffe_line_stage,
-          ffe_line_authorization,
-          studio_purchases(status),
-          primary_image_url,
-          suggested_lead_time_weeks:ffe_item_suggested_lead_time_weeks,
-          suggested_lead_time_source:ffe_item_suggested_lead_time_source,
-          effective_lead_time_weeks:ffe_item_effective_lead_time_weeks,
-          room:project_rooms!project_room_id(id, name),
-          product:products!product_id(id, name, images, brand),
-          blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
-          item_claims:damage_claims!ffe_item_id(id, state, receiving_inspection_id, created_at, inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(photo_asset_ids)),
-          spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
-            readiness_status,
-            configuration_id, configuration_snapshot,
-            configuration_snapshot_hash, configuration_locked_at
-          ),
-          ${PURCHASE_ORDER_EMBED}
-        `)
-        .eq('project_id', projectId)
-        .is('removed_at', null)
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true });
+      // Keyset pages, never OFFSET: the computed columns run for every skipped
+      // row too, at ~4 ms a row (RC-3d), so offset pages hit statement_timeout
+      // on large jobs. 500 rows keeps one page well inside the 8 s limit.
+      const pageSize = 500;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const readPage = (after?: any) => {
+        let query = supabase
+          .from('project_ffe_items')
+          .select(`
+            *,
+            ffe_line_stage,
+            ffe_line_authorization,
+            studio_purchases(status),
+            primary_image_url,
+            suggested_lead_time_weeks:ffe_item_suggested_lead_time_weeks,
+            suggested_lead_time_source:ffe_item_suggested_lead_time_source,
+            effective_lead_time_weeks:ffe_item_effective_lead_time_weeks,
+            room:project_rooms!project_room_id(id, name),
+            product:products!product_id(id, name, images, brand),
+            blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
+            item_claims:damage_claims!ffe_item_id(id, state, receiving_inspection_id, created_at, inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(photo_asset_ids)),
+            spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
+              readiness_status,
+              configuration_id, configuration_snapshot,
+              configuration_snapshot_hash, configuration_locked_at
+            ),
+            ${PURCHASE_ORDER_EMBED}
+          `)
+          .eq('project_id', projectId)
+          .is('removed_at', null);
 
-      if (filters?.roomId) query = query.eq('project_room_id', filters.roomId);
-      if (filters?.status) query = query.eq('status', filters.status);
-      if (filters?.itemType) query = query.eq('item_type', filters.itemType);
-      if (filters?.purchaseOrderId) query = query.eq('purchase_order_id', filters.purchaseOrderId);
+        if (filters?.roomId) query = query.eq('project_room_id', filters.roomId);
+        if (filters?.status) query = query.eq('status', filters.status);
+        if (filters?.itemType) query = query.eq('item_type', filters.itemType);
+        if (filters?.purchaseOrderId) query = query.eq('purchase_order_id', filters.purchaseOrderId);
+        if (after) {
+          const { sort_order: order, created_at: at, id } = after;
+          query = query.or(
+            `sort_order.gt.${order},and(sort_order.eq.${order},created_at.gt."${at}"),` +
+              `and(sort_order.eq.${order},created_at.eq."${at}",id.gt.${id})`,
+          );
+        }
 
-      const pageSize = 1000;
+        return query
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .limit(pageSize);
+      };
+
       const items = [];
-      for (let offset = 0; ; offset += pageSize) {
-        const { data, error } = await query.range(offset, offset + pageSize - 1);
+      for (let after; ; ) {
+        const { data, error } = await readPage(after);
         if (error) throw error;
         items.push(...(data ?? []));
         if ((data?.length ?? 0) < pageSize) return items;
+        after = data[data.length - 1];
       }
     },
     enabled: !!projectId,
