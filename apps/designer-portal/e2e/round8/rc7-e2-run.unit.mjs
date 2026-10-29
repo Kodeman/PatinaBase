@@ -96,11 +96,13 @@ function harness(t, options = {}) {
     moduleUrl: 'file:///mock-runner.mjs', console, Date: FakeDate,
     process: { env: {}, kill: options.kill ?? (() => { throw new Error('process.kill is forbidden in this test'); }) },
     mocks,
-    spawnSync() { throw new Error('external processes are forbidden in cleanup tests'); },
+    spawnSync: options.spawnSync ?? (() => { throw new Error('external processes are forbidden in cleanup tests'); }),
   });
-  vm.runInContext(`${moduleBody}\n${Object.keys(mocks).map((key) => `${key} = mocks.${key};`).join('\n')}
-globalThis.journey = journey; globalThis.stopClientServer = stopClientServer; globalThis.E2_EXPECTED = E2_EXPECTED;`, context);
-  return { ...state, state, repo, home, parent, evidence, expected: context.E2_EXPECTED,
+  vm.runInContext(`${moduleBody}\nglobalThis.realRunLeg = runLeg;\n${Object.keys(mocks).map((key) => `${key} = mocks.${key};`).join('\n')}
+globalThis.journey = journey; globalThis.stopClientServer = stopClientServer; globalThis.E2_EXPECTED = E2_EXPECTED;
+globalThis.parseArgs = parseArgs; globalThis.classifyProbe = classifyProbe; globalThis.DEFECT_PROBES = DEFECT_PROBES;
+globalThis.probeArgs = probeArgs;`, context);
+  return { ...state, state, repo, home, parent, evidence, expected: context.E2_EXPECTED, context,
     stop: (child) => context.stopClientServer(evidence, child),
     journey: (args = {}) => context.journey({ evidence, runs: 1, workdir: parent, ...args }) };
 }
@@ -182,7 +184,7 @@ for (const n of ['1', '2']) {
     assert.equal(leg.defectEnv, n);
     assert.equal(leg.round8, '1');
     assert.deepEqual([...leg.args], ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
-      '--grep', `@rc7-e2-defect-${n} `, '--project', 'chromium', '--workers=1']);
+      '--grep', `@rc7-e2-defect-${n} `, '--project', 'chromium', '--workers=1', '--reporter=list,json']);
     assert.deepEqual(h.clientServer, ['start', 'stop']);
   });
 }
@@ -218,7 +220,8 @@ test('--keep-stack intentionally retains the owned child without stopping or del
   assert.deepEqual(h.deleted, []);
 });
 
-for (const kind of ['root', 'home', 'repo', 'other checkout', 'symlink to checkout', 'symlink to home']) {
+for (const kind of ['root', 'home', 'repo', 'inside repo', 'other checkout', 'symlink to checkout', 'symlink to home',
+  'missing', 'a file', 'none given']) {
   test(`rejects dangerous workdir parent: ${kind}`, async (t) => {
     const h = harness(t, { preparationError: true });
     const checkout = path.join(h.parent, 'other-checkout');
@@ -229,8 +232,13 @@ for (const kind of ['root', 'home', 'repo', 'other checkout', 'symlink to checko
     fs.writeFileSync(path.join(h.repo, '.git'), 'gitdir: /unused/worktrees/example');
     const homeLink = path.join(h.parent, 'home-link');
     fs.symlinkSync(h.home, homeLink);
-    const target = { root: path.parse(h.parent).root, home: h.home, repo: h.repo,
-      'other checkout': checkout, 'symlink to checkout': link, 'symlink to home': homeLink }[kind];
+    const inside = path.join(h.repo, 'scratch');
+    fs.mkdirSync(inside);
+    const file = path.join(h.parent, 'a-file');
+    fs.writeFileSync(file, 'x');
+    const target = { root: path.parse(h.parent).root, home: h.home, repo: h.repo, 'inside repo': inside,
+      'other checkout': checkout, 'symlink to checkout': link, 'symlink to home': homeLink,
+      missing: path.join(h.parent, 'missing'), 'a file': file, 'none given': undefined }[kind];
     await assert.rejects(h.journey({ workdir: target }), /unsafe workdir parent/);
     assert.deepEqual(h.prepared, [], 'refuse before preparation');
     assert.deepEqual(h.deleted, [], 'refuse without deleting anything');
@@ -318,4 +326,150 @@ test('client-portal stop: a port still listening after the group is gone is resi
   h.state.legs.push(['marker']);
   assert.equal(await h.stop(group.child), false);
   assert.ok(h.logs.some((line) => line.includes('port 3112 STILL LISTENING')));
+});
+
+test('--workdir is required (no os.tmpdir() default)', (t) => {
+  const h = harness(t);
+  assert.throws(() => h.context.parseArgs(['--evidence', h.evidence]), /--workdir <existing scratch parent> is required/);
+  assert.equal(h.context.parseArgs(['--evidence', h.evidence, '--workdir', h.parent]).workdir, h.parent);
+});
+
+// ── Defect probe classification from Playwright's JSON reporter ────────────
+
+const JOURNEY = fileURLToPath(new URL('./rc7-e2-consumer-journey.journey.ts', import.meta.url));
+const JOURNEY_LINES = fs.readFileSync(JOURNEY, 'utf8').split('\n');
+const ESC = '\u001b';
+const color = (text) => `${ESC}[31m${text}${ESC}[39m`;
+
+/** Playwright 1.58's JSON reporter shape (reporters/json.js) for one chromium test with one result. */
+function report(probe, { line, rawMessage, stdout = [], status = 'failed', globalErrors = [], extraErrors = [],
+  retries = 0, stats = {} }) {
+  const want = probe === 'none' ? null : { 1: 1228, 2: 1260 }[probe];
+  const location = { file: JOURNEY, line, column: 42 };
+  // The formatted error carries the source excerpt, which quotes the step lines around the failure.
+  const snippet = JOURNEY_LINES.slice(line - 3, line + 2).map((text, i) => `${i === 2 ? '>' : ' '} ${line - 2 + i} | ${text}`).join('\n');
+  const result = (retry) => ({
+    workerIndex: 0, parallelIndex: 0, status, duration: 26600,
+    error: { message: rawMessage, stack: `Error: ${rawMessage}\n    at ${JOURNEY}:${line}:42`, location, snippet },
+    errors: [{ location, message: `Error: ${rawMessage}\n\n${snippet}\n    at ${JOURNEY}:${line}:42` }, ...extraErrors],
+    stdout: stdout.map((text) => ({ text })), stderr: [], retry, startTime: '2026-10-29T18:07:50.000Z',
+    annotations: [], attachments: [],
+  });
+  const title = probe === 'none' ? 'something else' : (probe === '1'
+    ? "@rc7-e2-defect-1 the Replace form offers the job household's other members and replaces the signer"
+    : '@rc7-e2-defect-2 a paper with a mismatched scope code is refused promptly with stale_scope through the API');
+  return {
+    config: { rootDir: path.dirname(JOURNEY), projects: [{ name: 'chromium', retries }] },
+    suites: [{ title: 'rc7-e2-consumer-journey.spec.ts', file: 'rc7-e2-consumer-journey.spec.ts', column: 0, line: 0,
+      specs: [], suites: [{ title: 'RC-7 e2 defects (repro only; not in a counted runner leg)',
+        file: 'rc7-e2-consumer-journey.journey.ts', line: 1225, column: 6, specs: [{
+          title, ok: false, tags: [], id: 'abc-123', file: 'rc7-e2-consumer-journey.journey.ts', line: want ?? 1, column: 7,
+          tests: [{ timeout: 600000, annotations: [], expectedStatus: 'passed', projectId: 'chromium', projectName: 'chromium',
+            results: Array.from({ length: retries + 1 }, (_, i) => result(i)), status: 'unexpected' }],
+        }] }] }],
+    errors: globalErrors,
+    stats: { startTime: '2026-10-29T18:07:45.000Z', duration: 30000, expected: 0, skipped: 0, unexpected: 1, flaky: 0, ...stats },
+  };
+}
+
+const PROBE1_DEFECT = color('expect(locator).toHaveCount(expected) failed') + '\n\nLocator:  locator(\'[data-service-acceptance]\')'
+  + ".getByText('No other household member is on file for this job.')\nExpected: 0\nReceived: 1\nTimeout:  5000ms";
+const PROBE2_BODY = '{\n  "message":"The upstream server is timing out"\n}';
+const PROBE2_DEFECT = `${PROBE2_BODY}\n\n${color('expect(received).toMatchObject(expected)')}\n\n- Expected  - 2\n+ Received  + 2\n\n`
+  + '  Object {\n-   "code": "40001",\n-   "message": "stale_scope",\n+   "code": undefined,\n'
+  + '+   "message": "The upstream server is timing out",\n  }';
+
+test('drift guard: each probe step line is the defect assertion in the journey, under the probe title', (t) => {
+  const h = harness(t);
+  for (const n of ['1', '2']) {
+    const want = h.context.DEFECT_PROBES[n];
+    assert.equal(JOURNEY_LINES[want.line - 1].trim(), want.step, `probe ${n} line ${want.line}`);
+    const source = `test('${want.title.replaceAll("'", "\\'")}'`;
+    assert.ok(JOURNEY_LINES.some((text) => text.includes(source)), `probe ${n} title in the journey`);
+  }
+});
+
+test('probe 1, the true defect: one failure at the step with Expected 0 / Received 1 classifies as the defect', (t) => {
+  const h = harness(t);
+  const line = h.context.DEFECT_PROBES['1'].line;
+  assert.deepEqual([...h.context.classifyProbe(report('1', { line, rawMessage: PROBE1_DEFECT }), '1')], []);
+});
+
+test('probe 2, the true defect: the gateway 504 at the step classifies as the defect', (t) => {
+  const h = harness(t);
+  const line = h.context.DEFECT_PROBES['2'].line;
+  const body = report('2', { line, rawMessage: PROBE2_DEFECT, stdout: [`[RC7 e2 defect-2 api] 504 60004ms ${PROBE2_BODY}\n`] });
+  assert.deepEqual([...h.context.classifyProbe(body, '2')], []);
+});
+
+test('false green 1: a later step fails while the excerpt quotes the defect line; not the defect', (t) => {
+  const h = harness(t);
+  const step = h.context.DEFECT_PROBES['1'].line;
+  // Past the defect step, the option assertion fails; its excerpt still shows line `step` and its text.
+  const later = report('1', { line: step + 1, rawMessage: `${color('expect(locator).toHaveCount(expected) failed')}\n\n`
+    + 'Locator:  locator(\'option[value="c2c26000-0000-4000-8000-000000000003"]\')\nExpected: 1\nReceived: 0' });
+  assert.ok(later.suites[0].suites[0].specs[0].tests[0].results[0].errors[0].message
+    .includes('No other household member is on file for this job.'), 'the old log-text check would have matched');
+  const reasons = [...h.context.classifyProbe(later, '1')];
+  assert.ok(reasons.some((reason) => reason.includes(`first error at rc7-e2-consumer-journey.journey.ts:${step + 1}`)), reasons.join('; '));
+  assert.ok(reasons.some((reason) => reason.startsWith('actual value missing')), reasons.join('; '));
+});
+
+test('false green 2: the timeout text is logged but a later assertion fails; not the defect', (t) => {
+  const h = harness(t);
+  const step = h.context.DEFECT_PROBES['2'].line;
+  const later = report('2', { line: step + 1, stdout: [`[RC7 e2 defect-2 api] 504 60004ms ${PROBE2_BODY}\n`],
+    rawMessage: `${color('expect(received).toBeLessThan(expected)')}\n\nExpected: < 10000\nReceived:   60004` });
+  const reasons = [...h.context.classifyProbe(later, '2')];
+  assert.ok(reasons.some((reason) => reason.includes(`first error at rc7-e2-consumer-journey.journey.ts:${step + 1}`)), reasons.join('; '));
+  assert.ok(reasons.some((reason) => reason.startsWith('actual value missing')), reasons.join('; '));
+});
+
+for (const [name, options, expect] of [
+  ['a global (setup/teardown) error', { globalErrors: [{ message: 'globalTeardown failed' }] }, /error\(s\) outside the test/],
+  ['a second (soft) error in the test', { extraErrors: [{ message: 'soft', location: { file: JOURNEY, line: 1, column: 1 } }] }, /2 errors \(want 1\)/],
+  ['a retried test', { retries: 1 }, /2 results \(want 1\)/],
+  ['a timed-out test', { status: 'timedOut' }, /status timedOut/],
+  ['another test', { probe: 'none' }, /title/],
+]) {
+  test(`the true defect plus ${name} is rejected`, (t) => {
+    const h = harness(t);
+    const line = h.context.DEFECT_PROBES['2'].line;
+    const body = report(options.probe ?? '2', { line, rawMessage: PROBE2_DEFECT, ...options });
+    const reasons = [...h.context.classifyProbe(body, '2')];
+    assert.ok(reasons.some((reason) => expect.test(reason)), reasons.join('; '));
+  });
+}
+
+test('runLeg judges a probe from the JSON file Playwright writes, and fails without one', (t) => {
+  for (const [label, write, ok] of [['true', true, true], ['no-json', false, false]]) {
+    let seen;
+    const h = harness(t, { spawnSync: (_command, args, options) => {
+      seen = { args, env: options.env };
+      fs.writeSync(options.stdio[1], '  ✘  1 [chromium] › journey\n  1 failed\n');
+      if (write) {
+        const line = h.context.DEFECT_PROBES['1'].line;
+        fs.writeFileSync(options.env.PLAYWRIGHT_JSON_OUTPUT_FILE, JSON.stringify(report('1', { line, rawMessage: PROBE1_DEFECT })));
+      }
+      return { status: 1 };
+    } });
+    const leg = h.context.realRunLeg(h.evidence, label, { RC7_E2_DEFECT_PROBE: '1' },
+      { args: h.context.probeArgs('1'), expected: 1, probe: '1' });
+    assert.equal(seen.env.PLAYWRIGHT_JSON_OUTPUT_FILE, path.join(h.evidence, label, 'e2-defect-probe-1.json'));
+    assert.ok(seen.args.includes('--reporter=list,json'));
+    assert.equal(leg.ok, ok, label);
+    assert.ok(leg.lines.some((line) => line.startsWith(ok ? 'probe is the defect' : 'probe NOT the defect: no JSON report')),
+      leg.lines.join('\n'));
+  }
+});
+
+test('runLeg: the true defect JSON with exit 0 is not the defect', (t) => {
+  const h = harness(t, { spawnSync: (_command, _args, options) => {
+    const line = h.context.DEFECT_PROBES['1'].line;
+    fs.writeFileSync(options.env.PLAYWRIGHT_JSON_OUTPUT_FILE, JSON.stringify(report('1', { line, rawMessage: PROBE1_DEFECT })));
+    return { status: 0 };
+  } });
+  const leg = h.context.realRunLeg(h.evidence, 'exit0', {}, { args: h.context.probeArgs('1'), expected: 1, probe: '1' });
+  assert.equal(leg.ok, false);
+  assert.ok(leg.lines.some((line) => line.includes('exit 0 (want 1)')));
 });

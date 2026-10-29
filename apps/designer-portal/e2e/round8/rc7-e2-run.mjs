@@ -5,7 +5,7 @@
  * the RC-2 runner (run-consumer-journey.mjs, SQ-2337), which stays as it was.
  *
  *   node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence <dir> [--runs 2]
- *       [--workdir <existing scratch parent>] [--pins-from <dir with the .temp version pins>] [--keep-stack]
+ *       --workdir <existing scratch parent> [--pins-from <dir with the .temp version pins>] [--keep-stack]
  *       [--defect-probe <1|2>]
  *
  * It starts ONE owned Supabase stack (project patina-rc7-e2, RC-7 lane e2 port
@@ -24,9 +24,14 @@
  * fixtures: fresh jobs per project), @rc7-e2-paper, @rc7-e2-completion.
  *
  * --defect-probe <n> instead runs the @rc7-e2-defect-<n> repro once on chromium
- * with RC7_E2_DEFECT_PROBE=<n> (its fixme lifted) and passes only when that test
- * fails at its defect step (1: the Replace form offers no household member;
- * 2: the stale_scope refusal times out at the gateway).
+ * with RC7_E2_DEFECT_PROBE=<n> (its fixme lifted) and passes only when
+ * Playwright's JSON report shows that test alone failing, once, with one error
+ * first located at its defect step and carrying the defect's actual value
+ * (1: the Replace form offers no household member; 2: the stale_scope refusal
+ * times out at the gateway).
+ *
+ * --workdir is required: an existing scratch directory outside home, / and any
+ * checkout, under which the run creates and later removes its own child.
  *
  * The client portal is then stopped (SIGTERM, SIGKILL after a grace period) and
  * its port and the designer port must be free; any residue fails the run. Below
@@ -66,14 +71,27 @@ const E2_PROJECTS = ['chromium', 'webkit-iphone'];
 const E2_EXPECTED = E2_LEGS.reduce((sum, [, tests]) => sum + tests, 0) * E2_PROJECTS.length;
 const E2_ARGS = ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
   '--grep', E2_LEGS.map(([tag]) => tag).join('|'), ...E2_PROJECTS.flatMap((name) => ['--project', name]), '--workers=1'];
-// --defect-probe <n>: the DEFECT RC7-e2-<n> repro alone, fixme lifted, on chromium;
-// it must fail at its defect step, whose text the log must carry.
-const DEFECT_STEPS = {
-  1: 'No other household member is on file for this job.',
-  2: 'The upstream server is timing out',
+// --defect-probe <n>: the DEFECT RC7-e2-<n> repro alone, fixme lifted, on chromium.
+// Judged from Playwright's JSON report (classifyProbe), never from log text: the
+// one test must fail once, with one error, first located at the defect step's
+// line, carrying the defect's actual value.
+const JOURNEY_FILE = 'rc7-e2-consumer-journey.journey.ts';
+const DEFECT_PROBES = {
+  1: {
+    title: '@rc7-e2-defect-1 the Replace form offers the job household\'s other members and replaces the signer',
+    line: 1242,
+    step: "await expect(replace.getByText('No other household member is on file for this job.')).toHaveCount(0);",
+    actual: [/^\s*Expected: 0\s*$/m, /^\s*Received: 1\s*$/m],
+  },
+  2: {
+    title: '@rc7-e2-defect-2 a paper with a mismatched scope code is refused promptly with stale_scope through the API',
+    line: 1303,
+    step: "expect(refusal(viaApi), viaApi.body).toMatchObject({ code: '40001', message: 'stale_scope' });",
+    actual: [/^\s*\+\s+"code": undefined,\s*$/m, /^\s*\+\s+"message": "The upstream server is timing out",\s*$/m],
+  },
 };
 const probeArgs = (n) => ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
-  '--grep', `@rc7-e2-defect-${n} `, '--project', 'chromium', '--workers=1'];
+  '--grep', `@rc7-e2-defect-${n} `, '--project', 'chromium', '--workers=1', '--reporter=list,json'];
 // RC-7 common rule: stop below 20 GiB free.
 const MIN_FREE_KIB = 20 * 1024 * 1024;
 const PROVIDER_KEY = /RESEND|SMTP|SENDGRID|POSTMARK|MAILGUN|SES_|TWILIO/i;
@@ -95,11 +113,12 @@ function parseArgs(argv) {
     else if (flag === '--keep-stack') args.keepStack = true;
     else if (flag === '--defect-probe') {
       args.defectProbe = value();
-      if (!DEFECT_STEPS[args.defectProbe]) throw new Error(`--defect-probe takes ${Object.keys(DEFECT_STEPS).join(' or ')}`);
+      if (!DEFECT_PROBES[args.defectProbe]) throw new Error(`--defect-probe takes ${Object.keys(DEFECT_PROBES).join(' or ')}`);
     }
     else throw new Error(`unknown argument ${flag}`);
   }
   if (!args.evidence) throw new Error('--evidence <dir> is required');
+  if (!args.workdir) throw new Error('--workdir <existing scratch parent> is required');
   if (!Number.isInteger(args.runs) || args.runs < 1) throw new Error('--runs must be a positive integer');
   return args;
 }
@@ -278,11 +297,56 @@ function functionsReceipt() {
   return { container: edge, EMAIL_DEV_MODE: mode, providerKeyNames, envNameCount: names.length };
 }
 
+const ANSI = /\u001b\[[0-9;]*m/g;
+
+/**
+ * A defect probe's verdict from Playwright's JSON report: no other error
+ * anywhere, exactly one test (the probe's, on chromium) run once and failed
+ * with exactly one error, located first at the defect step, whose message
+ * carries the defect's actual value. Returns the reasons it is not the defect.
+ */
+function classifyProbe(report, probe) {
+  const want = DEFECT_PROBES[probe];
+  const reasons = [];
+  if (!report || typeof report !== 'object') return ['no JSON report'];
+  if ((report.errors ?? []).length !== 0) reasons.push(`${report.errors.length} error(s) outside the test`);
+  const stats = report.stats ?? {};
+  for (const [key, value] of [['expected', 0], ['unexpected', 1], ['flaky', 0], ['skipped', 0]]) {
+    if (stats[key] !== value) reasons.push(`stats.${key} ${stats[key]} (want ${value})`);
+  }
+  const specs = [];
+  const walk = (suite) => {
+    for (const spec of suite.specs ?? []) specs.push(spec);
+    for (const child of suite.suites ?? []) walk(child);
+  };
+  for (const suite of report.suites ?? []) walk(suite);
+  const tests = specs.flatMap((spec) => (spec.tests ?? []).map((entry) => ({ spec, entry })));
+  if (tests.length !== 1) return [...reasons, `${tests.length} tests (want 1)`];
+  const [{ spec, entry }] = tests;
+  if (spec.title !== want.title) reasons.push(`title ${JSON.stringify(spec.title)}`);
+  if (path.posix.basename(spec.file ?? '') !== JOURNEY_FILE) reasons.push(`file ${spec.file}`);
+  if (entry.projectName !== 'chromium') reasons.push(`project ${entry.projectName}`);
+  const results = entry.results ?? [];
+  if (results.length !== 1) return [...reasons, `${results.length} results (want 1)`];
+  const [result] = results;
+  if (result.status !== 'failed') reasons.push(`status ${result.status} (want failed)`);
+  const errors = result.errors ?? [];
+  if (errors.length !== 1) reasons.push(`${errors.length} errors (want 1)`);
+  const at = errors[0]?.location;
+  if (!at || path.basename(at.file ?? '') !== JOURNEY_FILE || at.line !== want.line) {
+    reasons.push(`first error at ${at ? `${path.basename(at.file ?? '')}:${at.line}` : 'no location'} (want ${JOURNEY_FILE}:${want.line})`);
+  }
+  // The assertion's own message, without the source excerpt that quotes the step.
+  const message = String(result.error?.message ?? '').replace(ANSI, '');
+  for (const pattern of want.actual) if (!pattern.test(message)) reasons.push(`actual value missing ${pattern}`);
+  return reasons;
+}
+
 /**
  * One playwright.round8.config.ts run in the designer portal. Counted runs pass
  * on exit 0 with exactly `${expected} passed`; the defect probe passes on exit 1
- * with exactly `1 failed` at the defect step. Review-and-send tap lines are
- * returned for the run log (the journey fails any send that needed a retap).
+ * when classifyProbe finds the defect in the JSON report. Review-and-send tap
+ * lines are returned for the run log (the journey fails any send that needed a retap).
  */
 function runLeg(evidence, label, legEnv, { args, expected, probe = null }) {
   const dir = path.join(evidence, label);
@@ -290,10 +354,12 @@ function runLeg(evidence, label, legEnv, { args, expected, probe = null }) {
   const name = probe ? `e2-defect-probe-${probe}` : 'e2-rc7';
   const report = path.join(dir, name);
   const logPath = path.join(dir, `${name}.log`);
+  const jsonPath = path.join(dir, `${name}.json`);
   const out = fs.openSync(logPath, 'w');
   const result = spawnSync('pnpm', ['exec', 'playwright', 'test', ...args], {
     cwd: DESIGNER,
-    env: { ...legEnv, PLAYWRIGHT_OUTPUT_DIR: report, PLAYWRIGHT_EVIDENCE_DIR: report },
+    env: { ...legEnv, PLAYWRIGHT_OUTPUT_DIR: report, PLAYWRIGHT_EVIDENCE_DIR: report,
+      ...(probe ? { PLAYWRIGHT_JSON_OUTPUT_FILE: jsonPath } : {}) },
     stdio: ['ignore', out, out],
     timeout: 75 * 60 * 1000,
     killSignal: 'SIGTERM',
@@ -306,10 +372,19 @@ function runLeg(evidence, label, legEnv, { args, expected, probe = null }) {
   const summary = lines.filter((line) => /^\s*\d+ (passed|failed|flaky|skipped|did not run|interrupted)\b/.test(line))
     .map((line) => line.trim().replace(/ \(.*\)$/, ''));
   const taps = text.split('\n').filter((line) => line.includes('[RC7 e2 review-and-send]')).map((line) => line.trim());
+  let verdict = [];
+  if (probe) {
+    let parsed = null;
+    try { parsed = JSON.parse(fs.readFileSync(jsonPath, 'utf8')); } catch { /* judged as no report */ }
+    verdict = classifyProbe(parsed, probe);
+    if (result.status !== 1) verdict.unshift(`exit ${result.status ?? result.signal} (want 1)`);
+    verdict = verdict.length ? verdict.map((reason) => `probe NOT the defect: ${reason}`)
+      : [`probe is the defect: 1 failed at ${JOURNEY_FILE}:${DEFECT_PROBES[probe].line} (json ${jsonPath})`];
+  }
   const ok = probe
-    ? result.status === 1 && summary.length === 1 && summary[0] === '1 failed' && text.includes(DEFECT_STEPS[probe])
+    ? verdict.length === 1 && verdict[0].startsWith('probe is the defect')
     : result.status === 0 && summary.length === 1 && summary[0] === `${expected} passed`;
-  return { ok, status: result.status ?? result.signal, logPath, lines, taps };
+  return { ok, status: result.status ?? result.signal, logPath, lines: [...lines, ...verdict], taps };
 }
 
 /**
@@ -391,10 +466,14 @@ async function stopClientServer(evidence, child, { graceMs = 20_000, settleMs = 
   return gone && released;
 }
 
-function createOwnedWorkdir(parent = os.tmpdir()) {
-  const target = fs.realpathSync(parent);
+function createOwnedWorkdir(parent) {
+  if (!parent) throw new Error('unsafe workdir parent (none given); pass --workdir <existing scratch directory>');
+  let target;
+  try { target = fs.realpathSync(parent); } catch { throw new Error(`unsafe workdir parent ${parent}: does not exist`); }
+  if (!fs.statSync(target).isDirectory()) throw new Error(`unsafe workdir parent ${target}: not a directory`);
+  const root = fs.realpathSync(ROOT);
   if (target === path.parse(target).root || target === fs.realpathSync(os.homedir())
-    || target === fs.realpathSync(ROOT) || fs.existsSync(path.join(target, '.git'))) {
+    || target === root || target.startsWith(`${root}${path.sep}`) || fs.existsSync(path.join(target, '.git'))) {
     throw new Error(`unsafe workdir parent ${target}; use an existing scratch directory outside checkout roots`);
   }
   return fs.mkdtempSync(path.join(target, 'patina-rc2-journey-'));

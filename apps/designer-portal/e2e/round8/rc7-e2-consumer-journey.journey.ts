@@ -336,11 +336,20 @@ async function completePhases(project: string) {
 
 // ── Browser actors ─────────────────────────────────────────────────────────
 
+const SANITY = /^https:\/\/([a-z0-9-]+\.)*sanity\.io(\/|$)/i;
+let sanityBlocked = 0;
+
 /** Each actor in its own context: the portals share one localhost cookie name. */
 async function signIn(browser: Browser, base: string, email: string, landing: string): Promise<Page> {
   // The running project's device (Desktop Chrome, or iPhone 14 on webkit-iphone) applies to every actor.
   const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch } = test.info().project.use;
   const context = await browser.newContext({ baseURL: base, viewport, userAgent, deviceScaleFactor, isMobile, hasTouch });
+  // No request leaves for the production help CMS: the portals' help-system hook
+  // (packages/help-system useHelpContent) reads Sanity from the browser.
+  await context.route(SANITY, (route) => {
+    sanityBlocked += 1;
+    return route.abort('blockedbyclient');
+  });
   // As e2e/fixtures/auth.ts does: the first-sign-in welcome dialog never opens.
   await context.addInitScript(() => {
     try { window.localStorage.setItem('help-system.welcome-shown.first-project-walkthrough', '1'); } catch { /* none */ }
@@ -608,6 +617,7 @@ test.afterAll(() => {
     '-v', `owned_port=${target.dbPort}`, '-v', `owned_server_addr=${target.serverAddr}`,
     '-v', `owned_system_id=${target.systemId}`, target.dbUrl, '-f', path.join(__dirname, 'rc7-e2-cleanup.sql')], { encoding: 'utf8' });
   console.log('[RC7 e2 cleanup]', out.trim());
+  console.log('[RC7 e2 sanity requests blocked]', sanityBlocked);
   expect(JSON.parse(out.trim().split('\n').pop()!)).toMatchObject({ f01NonDraftProposals: 0 });
 });
 
@@ -1279,7 +1289,14 @@ test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () =>
     const viaApi = await rpcAs(DESIGNER_EMAIL, 'record_service_acceptance_paper_intake', args);
     const ms = Date.now() - started;
     console.log('[RC7 e2 defect-2 api]', viaApi.status, `${ms}ms`, viaApi.body);
-    console.log('[RC7 e2 defect-2 backends after]', sql(`SELECT count(*) FROM pg_stat_activity
+    // Diagnostic only: an idle pooled connection keeps its last query, so read
+    // each matching backend's state, age and wait, not a bare count.
+    console.log('[RC7 e2 defect-2 backends after]', sql(`SELECT coalesce(json_agg(json_build_object(
+      'pid', pid, 'application', application_name, 'state', state,
+      'queryAgeS', round(extract(epoch FROM now() - query_start)::numeric, 1),
+      'xactAgeS', round(extract(epoch FROM now() - xact_start)::numeric, 1),
+      'waitEventType', wait_event_type, 'waitEvent', wait_event) ORDER BY pid), '[]'::json)
+      FROM pg_stat_activity
       WHERE query ILIKE '%record_service_acceptance_paper_intake%' AND pid <> pg_backend_pid();`));
     expect(sql(`SELECT count(*) FROM public.service_acceptance_paper_intakes WHERE request_id='${row.id}';`)).toBe('0');
     // The defect step: on this base the gateway answers 504 "The upstream server is timing out".
