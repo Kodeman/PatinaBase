@@ -39,7 +39,13 @@ test.afterAll(() => {
 test('A13 saving a maker account does not appoint a job party or create a PO', async ({ authenticatedPage: page }) => {
   test.setTimeout(240_000);
   const partiesBefore = psqlScalar(`SELECT count(*) FROM project_parties WHERE project_id='${JOB}';`);
-  await page.goto('/people', { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  try {
+    await page.goto('/people', { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  } catch (error) {
+    if (!/Navigation to .*\/people.* is interrupted by another navigation to .*\/desk/.test(String(error))) throw error;
+    await expect(page.locator('[data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+    await page.goto('/people', { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  }
   await expect(page.locator('[data-people-renderer="round8"]')).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole('button', { name: 'Add contact' })).toBeEnabled({ timeout: 60_000 });
   await page.getByRole('button', { name: 'Add contact' }).click();
