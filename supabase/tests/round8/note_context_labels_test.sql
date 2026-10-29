@@ -5,21 +5,36 @@ SET LOCAL statement_timeout = '30s';
 \ir typed_subjects_body.psql
 DO $$
 DECLARE
+  visible_setup text;
   hidden_setup text;
+  visible_subject_setup text;
   hidden_subject_setup text;
+  subject_setup text;
 BEGIN
-  hidden_setup := pg_temp.sql_of('UPDATE public.field_captures SET designer_id={D},project_id={PA},project_room_id={XA},title=''Withheld capture'' WHERE id={XB}');
-  hidden_subject_setup := hidden_setup || '; ' || pg_temp.sql_of('UPDATE public.margin_notes SET subject_kind=''field_capture'',subject_id={XB} WHERE id={N4}');
-  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''capture_room_name'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = '874 A room', 'fixture room name resolves when visible';
-  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''capture_title'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = 'Withheld capture', 'fixture capture title resolves when visible';
-  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''capture_kind'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = 'specimen', 'fixture capture kind resolves when visible';
-  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT (payload->>''capture_date'') IS NOT NULL FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = 'true', 'fixture capture date resolves when visible';
+  -- Visible: the capture is re-authored by D, so D's co-member A1 reads it too
+  -- (field_captures_studio_select). Hidden: the same project, room and title,
+  -- but the capture keeps its unrelated author U, so A1's capture join is
+  -- RLS-hidden. The capture guard triggers refuse routing U's capture into D's
+  -- project, so the hidden setup bypasses them (postgres, rolled back by probe).
+  visible_setup := pg_temp.sql_of('UPDATE public.field_captures SET designer_id={D},project_id={PA},project_room_id={XA},title=''Withheld capture'' WHERE id={XB}');
+  hidden_setup := 'SET LOCAL session_replication_role = replica; '
+    || pg_temp.sql_of('UPDATE public.field_captures SET project_id={PA},project_room_id={XA},title=''Withheld capture'' WHERE id={XB}')
+    || '; SET LOCAL session_replication_role = origin';
+  subject_setup := pg_temp.sql_of('UPDATE public.margin_notes SET subject_kind=''field_capture'',subject_id={XB} WHERE id={N4}');
+  visible_subject_setup := visible_setup || '; ' || subject_setup;
+  hidden_subject_setup := hidden_setup || '; ' || subject_setup;
+  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''capture_room_name'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), visible_setup) = '874 A room', 'fixture room name resolves when visible';
+  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''capture_title'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), visible_setup) = 'Withheld capture', 'fixture capture title resolves when visible';
+  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''capture_kind'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), visible_setup) = 'specimen', 'fixture capture kind resolves when visible';
+  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT (payload->>''capture_date'') IS NOT NULL FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), visible_setup) = 'true', 'fixture capture date resolves when visible';
   ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''capture_room_name'' FROM public.margin_items WHERE kind=''note'' AND item_id={N1}'), NULL) = '874 A room', 'visible capture room label';
+  ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''capture_room_name'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), visible_setup) = '874 A room', 'co-member reads the room label of a visible capture';
+  ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''capture_visible'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = 'false', 'hidden setup: A1 reads the note but not its capture';
   ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''capture_room_name'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = 'null', 'hidden capture room label withheld';
   ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''capture_title'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = 'null', 'hidden capture title withheld';
   ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''capture_kind'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = 'null', 'hidden capture kind withheld';
   ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''capture_date'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_setup) = 'null', 'hidden capture date withheld';
-  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''subject_capture_title'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_subject_setup) = 'Withheld capture', 'fixture subject title resolves when visible';
+  ASSERT pg_temp.probe(pg_temp.id('D'), pg_temp.sql_of('SELECT payload->>''subject_capture_title'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), visible_subject_setup) = 'Withheld capture', 'fixture subject title resolves when visible';
   ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''subject_capture_title'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_subject_setup) = 'null', 'hidden subject capture title withheld';
   ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''subject_capture_kind'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_subject_setup) = 'null', 'hidden subject capture kind withheld';
   ASSERT pg_temp.probe(pg_temp.id('A1'), pg_temp.sql_of('SELECT payload->>''subject_capture_date'' FROM public.margin_items WHERE kind=''note'' AND item_id={N4}'), hidden_subject_setup) = 'null', 'hidden subject capture date withheld';
