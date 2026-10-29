@@ -155,7 +155,10 @@ SET LOCAL ROLE authenticated;
 SELECT public.get_client_project_threshold(pg_temp.presence_id(2)) AS client_result \gset
 RESET ROLE;
 INSERT INTO reader_results VALUES('client',:'client_result');
-SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM reader_results r,jsonb_array_elements(r.value->'selections') x
+SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM reader_results r,jsonb_array_elements(r.value->'selections') x
+ WHERE r.key='client' AND (x->>'kind'='external' OR x->>'id'=pg_temp.presence_id(14)::text)),
+ 'reader 00901 legacy threshold selections never carry an external line');
+SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM reader_results r,jsonb_array_elements(r.value->'externalSelections') x
  WHERE r.key='client' AND x->>'id'=pg_temp.presence_id(14)::text AND x->>'kind'='external'
  AND x->'clientLineTotalCents'='null'::jsonb AND x->'reportedPriceCents'='null'::jsonb),
  'reader threshold exposes external label without studio or private reported price');
@@ -163,10 +166,44 @@ SET LOCAL session_replication_role=replica;
 UPDATE public.project_external_fulfilments SET price_visibility='client_visible' WHERE id=pg_temp.presence_id(30);
 SET LOCAL session_replication_role=origin;
 SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM jsonb_array_elements(
- public.get_client_project_threshold(pg_temp.presence_id(2))->'selections') x
+ public.get_client_project_threshold(pg_temp.presence_id(2))->'externalSelections') x
  WHERE x->>'id'=pg_temp.presence_id(14)::text AND x->>'reportedPriceCents'='7654321'
  AND x->'clientLineTotalCents'='null'::jsonb),
  'reader client-visible reported price stays labelled and outside studio money');
+-- 00901: legacy `selections` equals the 00883 reader's studio lines byte for
+-- byte; its external lines move, unchanged, to externalSelections. Both bodies
+-- read the same rows, with one executed studio furnishing line as a control.
+SAVEPOINT threshold_00901;
+SET LOCAL session_replication_role=replica;
+UPDATE public.project_commercial_documents SET executed_at=now() WHERE id=pg_temp.presence_id(73);
+UPDATE public.project_ffe_items SET source_authorization_item_id=pg_temp.presence_id(83) WHERE id=pg_temp.presence_id(52);
+SET LOCAL session_replication_role=origin;
+SET LOCAL ROLE authenticated;
+SELECT public.get_client_project_threshold(pg_temp.presence_id(2)) AS threshold_00901 \gset
+RESET ROLE;
+SAVEPOINT threshold_00883;
+\ir ../../migrations/00883_round8_external_reader_parity.sql
+SET LOCAL ROLE authenticated;
+SELECT public.get_client_project_threshold(pg_temp.presence_id(2)) AS threshold_00883 \gset
+RESET ROLE;
+ROLLBACK TO threshold_00883;
+SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM jsonb_array_elements(:'threshold_00901'::jsonb->'selections') x
+ WHERE x->>'id'=pg_temp.presence_id(52)::text AND x->>'kind'='furnishings' AND x->>'clientLineTotalCents'='100'),
+ 'reader 00901 studio control line is present in selections');
+SELECT pg_temp.presence_assert(NOT EXISTS(SELECT 1 FROM jsonb_array_elements(:'threshold_00901'::jsonb->'selections') x
+ WHERE x->>'kind'='external' OR x ? 'externalFulfilmentId'),
+ 'reader 00901 selections contain no external line');
+SELECT pg_temp.presence_assert(:'threshold_00901'::jsonb->'selections'=(SELECT COALESCE(jsonb_agg(x ORDER BY o),'[]'::jsonb)
+ FROM jsonb_array_elements(:'threshold_00883'::jsonb->'selections') WITH ORDINALITY s(x,o) WHERE x->>'kind'<>'external'),
+ 'reader 00901 studio selections are unchanged from the 00883 body');
+SELECT pg_temp.presence_assert(jsonb_array_length(:'threshold_00901'::jsonb->'externalSelections')>0
+ AND :'threshold_00901'::jsonb->'externalSelections'=(SELECT jsonb_agg(x ORDER BY o)
+ FROM jsonb_array_elements(:'threshold_00883'::jsonb->'selections') WITH ORDINALITY s(x,o) WHERE x->>'kind'='external'),
+ 'reader 00901 externalSelections carries exactly the 00883 external lines');
+SELECT pg_temp.presence_assert((:'threshold_00901'::jsonb-'externalSelections'-'selections')
+ =(:'threshold_00883'::jsonb-'selections'),
+ 'reader 00901 adds only externalSelections at the top level');
+ROLLBACK TO threshold_00901;
 SELECT pg_temp.presence_actor(4);
 INSERT INTO reader_results VALUES('editorial',public._build_project_editorial(pg_temp.presence_id(2)));
 SELECT pg_temp.presence_assert(EXISTS(SELECT 1 FROM reader_results r,jsonb_array_elements(r.value->'rooms') room,

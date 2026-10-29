@@ -22,6 +22,8 @@ SET LOCAL lock_timeout = '3s';
 \ir ../../migrations/00879_round8_fabrication_instruction.sql
 \ir ../../migrations/00883_round8_external_reader_parity.sql
 \ir ../../migrations/00885_round8_countersign_execution_time.sql
+\ir ../../migrations/00900_round8_external_install_hold_guard.sql
+\ir ../../migrations/00901_round8_client_threshold_external_field.sql
 
 CREATE FUNCTION pg_temp.assert_true(ok boolean, label text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN

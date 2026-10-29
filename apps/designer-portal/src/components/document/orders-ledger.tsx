@@ -44,7 +44,7 @@ import { dueToMakers, LedgerFrontMatter } from './ledger-front-matter';
 import { PoMoneyOut } from './line-unfold/record-payment';
 import { ordersThroughput } from '@/lib/document/ledger-summary';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
-import { VendorsBookPage } from './orders-book-vendors';
+import { VendorsBookPage, type VendorPlace } from './orders-book-vendors';
 import { WeekBookPage } from './orders-book-week';
 import { ReceivingBookPage } from './orders-book-receiving';
 import type { OpenLedgerContext } from './command-bar';
@@ -54,6 +54,12 @@ import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { DocumentAction } from './document-action';
 import { useStudioMoney } from '@/hooks/use-studio-money';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
+import {
+  rememberPaperOrigin,
+  restoreStudioOverlay,
+  studioOverlayScroll,
+  type StudioOverlayState,
+} from '@/lib/document/paper/paper-origin';
 
 type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
 
@@ -84,6 +90,28 @@ interface POForThroughput {
 }
 
 type AnyRecord = any;
+
+type PaymentLens = 'due' | 'pending' | 'paid';
+
+/** A held Orders return: its filter is the page, with any worn lens after `?`
+ *  (`ledger?project=…&payment=due`), and on the vendors page the vendor, its
+ *  sub-page and thread (`vendors?vendor=…&sub=thread&thread=…`). Stored data
+ *  is untrusted. */
+function parseOrdersReturn(held: StudioOverlayState | null | undefined) {
+  if (held?.overlay !== 'orders') return null;
+  const [pageKey, lens] = (held.filter ?? '').split('?');
+  const params = new URLSearchParams(lens ?? '');
+  const payment = params.get('payment');
+  return {
+    held,
+    page: PAGES.find((p) => p.key === pageKey)?.key ?? 'ledger',
+    project: params.get('project'),
+    payment: payment === 'due' || payment === 'pending' || payment === 'paid' ? (payment as PaymentLens) : null,
+    vendor: params.get('vendor'),
+    vendorPage: params.get('sub'),
+    thread: params.get('thread'),
+  };
+}
 
 /** PRC-06: one lens option — an underline word in a `.filters` line, held
  *  (underlined) when worn (R28; US-28 S8). */
@@ -148,13 +176,16 @@ export function OrdersLedger({
   const vendors = vendorsPage?.data;
 
   const updateEta = useUpdatePurchaseOrderETA();
+  // A return from a job reopens the page and lenses it was left on.
+  const [heldReturn] = useState(() => parseOrdersReturn(initialContext?.studioReturn));
   // R28: the book's pages, linked by DM-mono text. Brief-a-vendor (R29)
   // pre-addresses straight onto Vendors with the document's project. (page is
   // a free string on the shared context — narrow it to this book's pages.)
   const [page, setPage] = useState<BookPage>(
-    PAGES.some((p) => p.key === initialContext?.page)
-      ? (initialContext!.page as BookPage)
-      : 'ledger',
+    heldReturn?.page ??
+      (PAGES.some((p) => p.key === initialContext?.page)
+        ? (initialContext!.page as BookPage)
+        : 'ledger'),
   );
   // R18: send / resend through the shared preview-confirm.
   const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
@@ -178,11 +209,11 @@ export function OrdersLedger({
   // designer was holding stays the lens across Ledger, Week and Receiving —
   // not just the page the book happened to open onto.
   const [projectLens, setProjectLens] = useState<string | null>(
-    initialContext?.projectId ?? null,
+    heldReturn ? heldReturn.project : initialContext?.projectId ?? null,
   );
-  const [paymentLens, setPaymentLens] = useState<
-    'due' | 'pending' | 'paid' | null
-  >(null);
+  const [paymentLens, setPaymentLens] = useState<PaymentLens | null>(
+    heldReturn?.payment ?? null,
+  );
   // US-28 S8 — at 390 the two lens lines fold behind "Filter" (CSS reads
   // data-open; at wider widths they always show and Filter is not drawn).
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -313,8 +344,34 @@ export function OrdersLedger({
     return vendorIds.size === 1 ? [...vendorIds][0] : null;
   }, [orders, selected]);
 
-  const openDocument = (projectId: string | null) => {
+  const pressed = useRef<HTMLElement | null>(null);
+  const returnState = useRef(heldReturn?.held);
+  useEffect(() => {
+    const held = returnState.current;
+    const root = bookRef.current;
+    if (!held || !root) return;
+    return restoreStudioOverlay(root, held, () => held.focusKey
+      ? root.querySelector<HTMLElement>(`[data-orders-return="${CSS.escape(held.focusKey)}"]`)
+      : root.querySelector<HTMLElement>('[data-orders-page-links] [aria-current="page"]'),
+    () => { returnState.current = undefined; });
+  }, []);
+
+  const openDocument = (projectId: string | null, place?: VendorPlace) => {
     if (!projectId) return;
+    const root = bookRef.current;
+    const rowKey = pressed.current?.dataset.ordersReturn;
+    const lens = new URLSearchParams({
+      ...(projectLens ? { project: projectLens } : {}),
+      ...(paymentLens ? { payment: paymentLens } : {}),
+      ...(place ? { vendor: place.vendorId, sub: place.page } : {}),
+      ...(place?.threadId ? { thread: place.threadId } : {}),
+    }).toString();
+    // Without a row to land on, the page link takes focus, so the sheet opens at its top.
+    rememberPaperOrigin(projectId, { path: '/desk', studioOverlay: {
+      overlay: 'orders', filter: lens ? `${page}?${lens}` : page,
+      ...(rowKey ? { subject: rowKey, focusKey: rowKey } : {}),
+      scrollTop: root && rowKey ? studioOverlayScroll(root).scrollTop : 0,
+    } });
     onClose();
     router.push(`/doc/${projectId}`);
   };
@@ -362,6 +419,7 @@ export function OrdersLedger({
   return (
     <div
       ref={bookRef}
+      onClickCapture={(event) => { pressed.current = (event.target as Element).closest<HTMLElement>('button'); }}
       className="mx-auto w-full min-w-0 max-w-3xl"
       data-orders-book
     >
@@ -414,8 +472,9 @@ export function OrdersLedger({
         <VendorsBookPage
           vendors={vendors ?? []}
           orders={orders ?? []}
-          initialVendorId={initialContext?.vendorId ?? null}
-          initialVendorPage={initialContext?.vendorPage ?? null}
+          initialVendorId={heldReturn?.vendor ?? initialContext?.vendorId ?? null}
+          initialVendorPage={heldReturn?.vendorPage ?? initialContext?.vendorPage ?? null}
+          initialThreadId={heldReturn?.thread ?? null}
           focusField={initialContext?.focus ?? null}
           briefProjectId={initialContext?.projectId ?? null}
           canSeePoMoney={canSeePoMoney}
@@ -695,7 +754,7 @@ export function OrdersLedger({
                   return (
                     <Fragment key={po.id}>
                       <li
-                        data-orders-po-row
+                        data-orders-po-row={po.id}
                         className="border-b border-[var(--color-pearl)] px-1 py-3"
                       >
                         <div
@@ -869,6 +928,7 @@ export function OrdersLedger({
                             </DocumentAction>
                             <button
                               type="button"
+                              data-orders-return={`po:${po.id}`}
                               onClick={() =>
                                 openDocument(
                                   po.project_id ?? po.project?.id ?? null,

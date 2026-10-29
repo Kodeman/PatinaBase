@@ -39,7 +39,11 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries }),
 }));
 
-import { usePrepareSpecBookIssue, useUpdateProjectFfeSpec } from "../use-spec-books";
+import {
+  ProjectFfeSpecConflictError,
+  usePrepareSpecBookIssue,
+  useUpdateProjectFfeSpec,
+} from "../use-spec-books";
 
 beforeEach(() => {
   builder = makeBuilder({
@@ -94,6 +98,42 @@ describe("useUpdateProjectFfeSpec", () => {
       { method: "maybeSingle", args: [] },
     ]);
     expect(updated.row_version).toBe(8);
+  });
+
+  it("answers a stale row_version with the row the other session left, refetching only the line reads", async () => {
+    const mutation = useUpdateProjectFfeSpec() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+      onError: (error: unknown, input: { projectId: string }) => void;
+    };
+    const peer = { id: "spec-1", finish: "Peer walnut", row_version: 9 };
+    (builder as unknown as { maybeSingle: ReturnType<typeof vi.fn> }).maybeSingle
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: peer, error: null });
+
+    const refused = await mutation.mutationFn({
+      projectId: "project-1",
+      specId: "spec-1",
+      expectedRowVersion: 7,
+      changes: { finish: "Mine" },
+    }).catch((error: unknown) => error);
+
+    expect(refused).toBeInstanceOf(ProjectFfeSpecConflictError);
+    expect((refused as ProjectFfeSpecConflictError).current).toEqual(peer);
+    // The update, then a plain read of the same row.
+    expect(builder.__chain).toEqual([
+      { method: "update", args: [{ finish: "Mine" }] },
+      { method: "eq", args: ["id", "spec-1"] },
+      { method: "eq", args: ["row_version", 7] },
+      { method: "select", args: ["*"] },
+      { method: "select", args: ["*"] },
+      { method: "eq", args: ["id", "spec-1"] },
+    ]);
+
+    mutation.onError(refused, { projectId: "project-1" });
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["project-ffe-items", "project-1"] });
+    mutation.onError(new Error("other"), { projectId: "project-1" });
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
   });
 
   it("forwards canonical warning ids in the issue RPC payload", async () => {

@@ -9,6 +9,8 @@ SET LOCAL statement_timeout='30s';
 \ir ../../migrations/00883_round8_external_reader_parity.sql
 \ir ../../migrations/00884_round8_external_package_reading.sql
 \ir ../../migrations/00887_round8_external_reading_grant_binding.sql
+\ir ../../migrations/00900_round8_external_install_hold_guard.sql
+\ir ../../migrations/00901_round8_client_threshold_external_field.sql
 \ir external_presence_body.psql
 \ir external_presence_money_body.psql
 \ir external_presence_exit_body.psql

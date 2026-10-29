@@ -13,6 +13,8 @@
  * - F11: a failed Dimensions field is marked invalid, as text fields are.
  * - F12: item label, rooms, labor and COM writes reach the same hold.
  * - Legacy (no owner): the same one-at-a-time writes; no hold, no marks.
+ * - RC7-E6-3: a stale save keeps the draft, names the peer's value and saves
+ *   again on the refreshed row_version.
  */
 
 import { useState } from "react";
@@ -41,6 +43,11 @@ const mutation = (fn: (input: never) => unknown) => ({
 });
 
 jest.mock("@patina/supabase", () => ({
+  ProjectFfeSpecConflictError: class extends Error {
+    constructor(readonly current: unknown) {
+      super("This selection changed in another session. Refresh before saving.");
+    }
+  },
   useUpdateProjectFfeSpec: () =>
     mutation(
       (input: Call["input"]) =>
@@ -128,14 +135,16 @@ const line = {
 
 /** The row as the table holds it; a write on an older version conflicts. */
 let server: SpecLensSpec;
-const CONFLICT = "This selection changed in another session. Refresh before saving.";
+const { ProjectFfeSpecConflictError: Conflict } = jest.requireMock("@patina/supabase") as {
+  ProjectFfeSpecConflictError: new (current: SpecLensSpec) => Error;
+};
 
-/** Answers write `i` as the table would. */
+/** Answers write `i` as the table would: a stale version gets the row as it is. */
 async function answer(i: number) {
   const call = mockSpecCalls[i];
   await act(async () => {
     if (call.input.expectedRowVersion !== server.row_version) {
-      call.reject(new Error(CONFLICT));
+      call.reject(new Conflict({ ...server }));
       return;
     }
     server = {
@@ -338,6 +347,452 @@ it("clear then Esc — embedded clear waits for the in-flight row writer on its 
   expect(server).toMatchObject({ finish: null, row_version: 3 });
   expect(onLeave).toHaveBeenCalledTimes(1);
   expect(snapshot().dirty).toBe(false);
+});
+
+describe("RC7-E6-3 (A06): a save another session got to first", () => {
+  /** Another session saves the row; this pane still holds the older version. */
+  const peerSaves = (changes: Partial<SpecLensSpec>) => {
+    server = { ...server, ...changes, row_version: server.row_version + 1 };
+  };
+  async function enter(name: string, value: string) {
+    const input = field(name);
+    act(() => input.focus());
+    fireEvent.change(input, { target: { value } });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+  }
+
+  it.each([
+    ["Finish", "finish"],
+    ["Material", "material"],
+    ["Color", "color_fabric"],
+    ["Exact location", "exact_location"],
+  ] as const)(
+    "%s keeps its draft and focus, names the peer's value, and saves on the refreshed row_version",
+    async (name, column) => {
+      render(<Harness />);
+      peerSaves({ [column]: "Peer walnut" });
+      await enter(name, "Mine");
+      await answer(0);
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        `${name} changed in another session to “Peer walnut”. Save again to replace it.`,
+      );
+      expect(field(name)).toHaveValue("Mine");
+      expect(field(name)).toHaveFocus();
+      expect(field(name)).toHaveAttribute("aria-invalid", "true");
+      // The pane's row is the peer's now; the draft did not reset to it.
+      expect(shown).toMatchObject({ [column]: "Peer walnut", row_version: 2 });
+      expect(snapshot().dirty).toBe(true);
+
+      await act(async () => {
+        fireEvent.keyDown(field(name), { key: "Enter" });
+      });
+      expect(mockSpecCalls).toHaveLength(2);
+      expect(mockSpecCalls[1].input).toMatchObject({
+        expectedRowVersion: 2,
+        changes: { [column]: "Mine" },
+      });
+      await answer(1);
+
+      expect(server).toMatchObject({ [column]: "Mine", row_version: 3 });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(field(name)).not.toHaveAttribute("aria-invalid");
+      expect(field(name)).toHaveFocus();
+      expect(snapshot().dirty).toBe(false);
+    },
+  );
+
+  it("Notes, written on blur, keeps its draft and saves once edited again on the refreshed row_version", async () => {
+    render(<Harness />);
+    peerSaves({ trade_notes: null, finish: "Peer finish" });
+    peerSaves({ trade_notes: "Peer note" });
+    await type("Notes", "My note");
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Notes changed in another session to “Peer note”. Save again to replace it.",
+    );
+    expect(field("Notes")).toHaveValue("My note");
+    // Finish was never edited here, so it shows what the peer saved, and
+    // passing through it writes nothing over the peer.
+    expect(field("Finish")).toHaveValue("Peer finish");
+    await type("Finish", "Peer finish");
+    expect(mockSpecCalls).toHaveLength(1);
+
+    // In conflict, leaving Notes saves nothing over the peer.
+    await act(async () => {
+      fireEvent.blur(field("Notes"));
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(field("Notes")).toHaveValue("My note");
+
+    // Edited again, it saves on blur against the peer's row.
+    await type("Notes", "My note, kept");
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 3,
+      changes: { trade_notes: "My note, kept" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({
+      trade_notes: "My note, kept",
+      finish: "Peer finish",
+      row_version: 4,
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("an edit queued behind the refused write is not sent over the peer; it waits for its own save", async () => {
+    render(<Harness />);
+    await enter("Finish", "First");
+    // Edited again and left while the first write is out: it queues.
+    fireEvent.change(field("Finish"), { target: { value: "Second" } });
+    await act(async () => {
+      fireEvent.blur(field("Finish"));
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    peerSaves({ finish: "Peer walnut" });
+    await answer(0);
+
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(server).toMatchObject({ finish: "Peer walnut", row_version: 2 });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Finish changed in another session to “Peer walnut”. Save again to replace it.",
+    );
+    expect(field("Finish")).toHaveValue("Second");
+    expect(field("Finish")).toHaveAttribute("aria-invalid", "true");
+    expect(await flush()).toMatch("Finish changed in another session");
+    expect(mockSpecCalls).toHaveLength(1);
+
+    act(() => field("Finish").focus());
+    await act(async () => {
+      fireEvent.keyDown(field("Finish"), { key: "Enter" });
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { finish: "Second" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ finish: "Second", row_version: 3 });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(snapshot().dirty).toBe(false);
+  });
+
+  it("a queued edit of a column the peer left alone still sends on the peer's row", async () => {
+    render(<Harness />);
+    await enter("Finish", "First");
+    await type("Material", "Ash");
+    peerSaves({ finish: "Peer walnut" });
+    await answer(0);
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { material: "Ash" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ finish: "Peer walnut", material: "Ash", row_version: 3 });
+    expect(field("Finish")).toHaveValue("First");
+  });
+
+  it("untouched fields, including a saved value typed with spaces and Dimensions, follow the adopted row", async () => {
+    render(<Harness />);
+    await type("Finish", " Walnut ");
+    await answer(0);
+    expect(server).toMatchObject({ finish: "Walnut", row_version: 2 });
+    expect(field("Finish")).toHaveValue("Walnut");
+
+    peerSaves({ finish: "Peer oak", selected_dimensions: { width: "90", unit: "in" } as never });
+    await enter("Material", "Ash");
+    await answer(1);
+    // The saved " Walnut " is clean, so the field shows the peer's.
+    expect(field("Finish")).toHaveValue("Peer oak");
+    expect(screen.getByRole("textbox", { name: "width" })).toHaveValue("90");
+    // Material began from a value the peer left alone: it sends on the peer's row.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockSpecCalls[2].input).toMatchObject({
+      expectedRowVersion: 3,
+      changes: { material: "Ash" },
+    });
+    await answer(2);
+
+    // Passing through them writes nothing over the peer.
+    await type("Finish", "Peer oak");
+    await act(async () => {
+      fireEvent.blur(screen.getByRole("textbox", { name: "width" }));
+    });
+    expect(mockSpecCalls).toHaveLength(3);
+    expect(server).toMatchObject({ finish: "Peer oak", material: "Ash", row_version: 4 });
+  });
+
+  it("an edited Dimensions draft stays over the adopted row and names the change", async () => {
+    render(<Harness />);
+    const width = () => screen.getByRole("textbox", { name: "width" });
+    fireEvent.change(width(), { target: { value: "72" } });
+    peerSaves({ selected_dimensions: { width: "90", unit: "in" } as never });
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Dimensions changed in another session. Save again to replace it.",
+    );
+    expect(width()).toHaveValue("72");
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    fireEvent.change(width(), { target: { value: "74" } });
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { selected_dimensions: { width: "74" } },
+    });
+  });
+
+  it("says a cleared peer value, and a peer edit elsewhere on the row, in words", async () => {
+    render(<Harness />);
+    peerSaves({ finish: null });
+    await enter("Finish", "Mine");
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Finish cleared in another session. Save again to replace it.",
+    );
+
+    // Put back to what the peer left: nothing to write, and the mark clears.
+    fireEvent.change(field("Finish"), { target: { value: "" } });
+    await act(async () => {
+      fireEvent.keyDown(field("Finish"), { key: "Enter" });
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    // A peer edit elsewhere on the row: Color sends on the peer's row.
+    peerSaves({ material: "Peer ash" });
+    await enter("Color", "Moss");
+    await answer(1);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockSpecCalls[2].input).toMatchObject({
+      expectedRowVersion: 3,
+      changes: { color_fabric: "Moss" },
+    });
+    await answer(2);
+    expect(server).toMatchObject({ material: "Peer ash", color_fabric: "Moss" });
+    expect(field("Material")).toHaveValue("Peer ash");
+  });
+
+  it("a draft typed while another field's write is out is checked when it commits (repro 1)", async () => {
+    render(<Harness />);
+    await enter("Finish", "Mine");
+    // Typed, not left: nothing is handed over yet.
+    act(() => field("Material").focus());
+    fireEvent.change(field("Material"), { target: { value: "Ash" } });
+    peerSaves({ finish: "Peer oak", material: "Peer ash" });
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Finish changed in another session to “Peer oak”.",
+    );
+    // The adopted row does not reach a dirty field.
+    expect(field("Material")).toHaveValue("Ash");
+
+    await act(async () => {
+      fireEvent.blur(field("Material"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(server).toMatchObject({ material: "Peer ash", row_version: 2 });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Material changed in another session to “Peer ash”. Save again to replace it.",
+    );
+    expect(field("Material")).toHaveValue("Ash");
+    expect(field("Material")).toHaveAttribute("aria-invalid", "true");
+    expect(field("Material")).toHaveFocus();
+
+    // The explicit save builds on the row as it is now.
+    await act(async () => {
+      fireEvent.keyDown(field("Material"), { key: "Enter" });
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { material: "Ash" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ finish: "Peer oak", material: "Ash", row_version: 3 });
+    expect(field("Material")).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("Dimensions compare by value, not key order (repro 2)", async () => {
+    server = { ...server, selected_dimensions: { width: "90", unit: "in" } as never };
+    render(<Harness />);
+    const width = () => screen.getByRole("textbox", { name: "width" });
+    // The peer's row returns the same measurements with its keys reordered.
+    peerSaves({ finish: "Peer oak", selected_dimensions: { unit: "in", width: "90" } as never });
+    await enter("Material", "Ash");
+    await answer(0);
+    expect(mockSpecCalls[1].input).toMatchObject({ changes: { material: "Ash" } });
+    await answer(1);
+    // Clean, the measurements pass through without a write.
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    expect(mockSpecCalls).toHaveLength(2);
+
+    // An edit that began from the same measurements in another order is
+    // not a conflict.
+    peerSaves({ selected_dimensions: { width: "90", unit: "in" } as never });
+    fireEvent.change(width(), { target: { value: "72" } });
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    await answer(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockSpecCalls[3].input).toMatchObject({
+      expectedRowVersion: 4,
+      changes: { selected_dimensions: { width: "72", unit: "in" } },
+    });
+  });
+
+  it("an image chosen while another write is out is checked against the image it replaced", async () => {
+    render(<Harness />);
+    await enter("Finish", "Mine");
+    const link = screen.getByRole("textbox", { name: "Paste an image link" });
+    fireEvent.change(link, { target: { value: "https://example.com/mine.jpg" } });
+    await act(async () => {
+      fireEvent.keyDown(link, { key: "Enter" });
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    peerSaves({
+      finish: "Peer oak",
+      selected_media: [{ url: "https://example.com/peer.jpg" }] as never,
+    });
+    await answer(0);
+
+    // Neither write goes over the peer.
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(server).toMatchObject({
+      finish: "Peer oak",
+      selected_media: [{ url: "https://example.com/peer.jpg" }],
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Image changed in another session. Press Enter in the link field to save yours again. Finish changed in another session to “Peer oak”. Save again to replace it.",
+    );
+    // The chosen image stays, and Enter on the empty link saves it again.
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute(
+      "src",
+      "https://example.com/mine.jpg",
+    );
+    await act(async () => {
+      fireEvent.keyDown(link, { key: "Enter" });
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { selected_media: [{ url: "https://example.com/mine.jpg" }] },
+    });
+  });
+
+  it("A, then image B sent, then C chosen before B lands: C sends on B's row with no alert", async () => {
+    server = { ...server, selected_media: [{ url: "https://example.com/a.jpg" }] as never };
+    render(<Harness />);
+    const link = screen.getByRole("textbox", { name: "Paste an image link" });
+    const choose = async (url: string) => {
+      fireEvent.change(link, { target: { value: url } });
+      await act(async () => {
+        fireEvent.keyDown(link, { key: "Enter" });
+      });
+    };
+    await choose("https://example.com/b.jpg");
+    await choose("https://example.com/c.jpg");
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute(
+      "src",
+      "https://example.com/c.jpg",
+    );
+    await answer(0);
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { selected_media: [{ url: "https://example.com/c.jpg" }] },
+    });
+    await answer(1);
+    expect(server).toMatchObject({
+      selected_media: [{ url: "https://example.com/c.jpg" }],
+      row_version: 3,
+    });
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute(
+      "src",
+      "https://example.com/c.jpg",
+    );
+  });
+
+  it("a focus the pane moves after a conflict never commits another conflicted field", async () => {
+    render(<Harness />);
+    // Material is in conflict, its draft kept.
+    peerSaves({ material: "Peer ash" });
+    await enter("Material", "Ash");
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent("Material changed in another session");
+    expect(mockSpecCalls).toHaveLength(1);
+
+    // Finish holds a draft begun before a peer changed it.
+    act(() => field("Finish").focus());
+    fireEvent.change(field("Finish"), { target: { value: "Mine" } });
+    peerSaves({ finish: "Peer oak" });
+    // Notes began from a value the peer left alone: it lands on the peer's row.
+    await type("Notes", "Note");
+    await answer(1);
+    await answer(2);
+    expect(server).toMatchObject({ trade_notes: "Note", finish: "Peer oak", row_version: 4 });
+
+    // Tab from Finish into Material: Finish alerts and takes focus back,
+    // which leaves Material; Material's draft is not sent.
+    await act(async () => {
+      field("Material").focus();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(field("Finish")).toHaveFocus();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Finish changed in another session to “Peer oak”.",
+    );
+    expect(mockSpecCalls).toHaveLength(3);
+    expect(server).toMatchObject({ material: "Peer ash", finish: "Peer oak" });
+    expect(field("Material")).toHaveValue("Ash");
+    expect(field("Material")).toHaveAttribute("aria-invalid", "true");
+
+    // Each saves only on its own explicit save.
+    await act(async () => {
+      fireEvent.keyDown(field("Finish"), { key: "Enter" });
+    });
+    expect(mockSpecCalls[3].input).toMatchObject({
+      expectedRowVersion: 4,
+      changes: { finish: "Mine" },
+    });
+    await answer(3);
+    expect(server).toMatchObject({ finish: "Mine", material: "Peer ash" });
+  });
+
+  it("A, then B sent, then A typed again before B lands: the new A stays and saves (new)", async () => {
+    server = { ...server, finish: "A" };
+    render(<Harness />);
+    await enter("Finish", "B");
+    fireEvent.change(field("Finish"), { target: { value: "A" } });
+    await answer(0);
+    expect(shown).toMatchObject({ finish: "B", row_version: 2 });
+    // B's answer acknowledges B's generation only.
+    expect(field("Finish")).toHaveValue("A");
+    expect(mockSpecCalls).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.keyDown(field("Finish"), { key: "Enter" });
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { finish: "A" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ finish: "A", row_version: 3 });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
 
 describe("F6: one writer per row", () => {

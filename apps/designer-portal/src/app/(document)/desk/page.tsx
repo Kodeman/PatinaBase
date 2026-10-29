@@ -660,6 +660,7 @@ export default function DeskPage() {
       }
       returnOverlay.current = null;
       if (held.overlay === 'books') openLedger('accounts', { page: held.filter, invoiceId: held.subject, studioReturn: held });
+      else if (held.overlay === 'orders') openLedger('orders', { studioReturn: held });
       else if (held.overlay === 'post') openPost(held);
       else openCommandBar(held.query, held);
     };

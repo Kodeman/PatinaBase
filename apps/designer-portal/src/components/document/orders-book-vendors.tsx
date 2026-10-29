@@ -84,6 +84,13 @@ const MSG_ACCENT = {
 type VendorPage = 'terms' | 'thread' | 'orders';
 const VENDOR_PAGES: readonly VendorPage[] = ['terms', 'thread', 'orders'];
 
+/** RC7-E6-2 — where a document was opened from on the vendors page. */
+export interface VendorPlace {
+  vendorId: string;
+  page: VendorPage;
+  threadId: string | null;
+}
+
 const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   draft: { color: 'var(--color-aged-oak)', ink: 'var(--color-aged-oak)' },
   held_for_release: { color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' },
@@ -787,6 +794,7 @@ function VendorThread({
     thread.project_id && projectName ? (
       <button
         type="button"
+        data-orders-return={`thread:${thread.id}`}
         onClick={() => onOpenDocument(thread.project_id)}
         className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.1em] text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
       >
@@ -996,6 +1004,7 @@ export function VendorsBookPage({
   orders,
   initialVendorId,
   initialVendorPage = null,
+  initialThreadId = null,
   focusField = null,
   briefProjectId,
   canSeePoMoney,
@@ -1009,11 +1018,13 @@ export function VendorsBookPage({
   initialVendorId: string | null;
   /** US-19 F3-22 (517-1): the sub-page the vendor opens on; `thread` otherwise. */
   initialVendorPage?: string | null;
+  /** RC7-E6-2: the thread a return reopens. */
+  initialThreadId?: string | null;
   /** US-19 F3-22 (517-1): `orders-email` lands focus on the terms' Orders email. */
   focusField?: string | null;
   /** R29 pre-addressing: the document the brief is about. */
   briefProjectId: string | null;
-  onOpenDocument: (projectId: string | null) => void;
+  onOpenDocument: (projectId: string | null, place?: VendorPlace) => void;
 }) {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(initialVendorId);
@@ -1049,7 +1060,7 @@ export function VendorsBookPage({
   const { data: threads } = useVendorThreads(
     vendor?.contact_profile_id ?? null,
   );
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(initialThreadId);
   const thread =
     (threads ?? []).find((t) => t.id === activeThreadId) ??
     (threads ?? [])[0] ??
@@ -1208,8 +1219,13 @@ export function VendorsBookPage({
                     </p>
                     <button
                       type="button"
+                      data-orders-return={`po:${po.id}`}
                       onClick={() =>
-                        onOpenDocument(po.project_id ?? po.project?.id ?? null)
+                        onOpenDocument(po.project_id ?? po.project?.id ?? null, {
+                          vendorId: vendor.id,
+                          page: 'orders',
+                          threadId: null,
+                        })
                       }
                       className={ROW_LINK}
                     >
@@ -1257,7 +1273,16 @@ export function VendorsBookPage({
                   ))}
                 </p>
               )}
-              <VendorThread thread={thread} onOpenDocument={onOpenDocument} />
+              <VendorThread
+                thread={thread}
+                onOpenDocument={(projectId) =>
+                  onOpenDocument(projectId, {
+                    vendorId: vendor.id,
+                    page: 'thread',
+                    threadId: thread.id,
+                  })
+                }
+              />
             </>
           ) : (
             <p className="doc-type-body italic text-[var(--color-quiet-ink)]">

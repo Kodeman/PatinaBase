@@ -4,7 +4,7 @@ import type { StudioOverlayState, PaperOrigin } from './paper-origin';
 export function parseStudioOverlay(value: unknown): StudioOverlayState | null {
   if (!value || typeof value !== 'object') return null;
   const held = value as Partial<StudioOverlayState>;
-  if (held.overlay !== 'books' && held.overlay !== 'post' && held.overlay !== 'search') return null;
+  if (held.overlay !== 'books' && held.overlay !== 'orders' && held.overlay !== 'post' && held.overlay !== 'search') return null;
   for (const key of ['subject', 'filter', 'query', 'focusKey'] as const) {
     if (held[key] !== undefined && typeof held[key] !== 'string') return null;
   }

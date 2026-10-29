@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import {
   usePurchaseOrders,
   useUpdatePurchaseOrderETA,
   useVendors,
 } from '@patina/supabase';
 import { OrdersLedger, ordersSendLanding } from './orders-ledger';
+import { readPaperOrigin } from '@/lib/document/paper/paper-origin';
 
 const mockPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
@@ -139,7 +140,28 @@ jest.mock('@/lib/document/ledger-summary', () => ({
 }));
 
 jest.mock('./orders-book-vendors', () => ({
-  VendorsBookPage: () => <div>Vendor page</div>,
+  VendorsBookPage: ({
+    initialVendorId,
+    initialVendorPage,
+    initialThreadId,
+    onOpenDocument,
+  }: {
+    initialVendorId?: string | null;
+    initialVendorPage?: string | null;
+    initialThreadId?: string | null;
+    onOpenDocument: (projectId: string | null, place?: object) => void;
+  }) => (
+    <div>
+      Vendor page · {initialVendorId ?? 'none'} · {initialVendorPage ?? 'none'} · {initialThreadId ?? 'none'}
+      <button
+        type="button"
+        data-orders-return="thread:t-9"
+        onClick={() => onOpenDocument('project-2', { vendorId: 'v-1', page: 'thread', threadId: 't-9' })}
+      >
+        re: Lake House →
+      </button>
+    </div>
+  ),
 }));
 
 jest.mock('./orders-book-week', () => ({
@@ -934,5 +956,92 @@ describe('OrdersLedger · Send the purchase order lands on its row (walk D3)', (
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
     );
     expect(document.activeElement).toBe(document.body);
+  });
+});
+
+describe('OrdersLedger · Studio return (RC7-E6-2)', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    mockPush.mockReset();
+    mockCanSeeMargin.mockReturnValue(true);
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false });
+    mockUseVendors.mockReturnValue({ data: { data: VENDORS } });
+    mockUseUpdatePurchaseOrderETA.mockReturnValue({ mutateAsync: mockMutateEta });
+  });
+
+  const rowDocument = (poId: string) =>
+    document.querySelector<HTMLElement>(`[data-orders-po-row="${poId}"] [data-orders-return="po:${poId}"]`)!;
+
+  it('remembers the page, lenses, pressed row and sheet scroll before opening the job', () => {
+    const onClose = jest.fn();
+    render(<div data-doc-sheet-scroll-region><OrdersLedger onClose={onClose} /></div>);
+    fireEvent.click(screen.getByRole('button', { name: 'Lake House' }));
+    fireEvent.click(screen.getByRole('button', { name: 'due' }));
+    rowDocument('po-2').closest<HTMLElement>('[data-doc-sheet-scroll-region]')!.scrollTop = 55;
+    fireEvent.click(rowDocument('po-2'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/doc/project-2');
+    expect(readPaperOrigin('project-2')).toMatchObject({
+      kind: 'studio-overlay', path: '/desk', overlay: 'orders',
+      filter: 'ledger?project=project-2&payment=due', subject: 'po:po-2', focusKey: 'po:po-2', scrollTop: 55,
+    });
+  });
+
+  it('reopens at that page and lenses with focus on the same row under StrictMode', async () => {
+    render(
+      <StrictMode>
+        <div data-doc-sheet-scroll-region>
+          <OrdersLedger
+            onClose={jest.fn()}
+            initialContext={{ studioReturn: { overlay: 'orders', filter: 'ledger?project=project-2&payment=due', subject: 'po:po-2', focusKey: 'po:po-2', scrollTop: 0 } }}
+          />
+        </div>
+      </StrictMode>,
+    );
+    expect(screen.getByRole('button', { name: 'Lake House' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'due' })).toHaveAttribute('aria-pressed', 'true');
+    expect(document.querySelectorAll('[data-orders-po-row]')).toHaveLength(1);
+    await waitFor(() => expect(rowDocument('po-2')).toHaveFocus());
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('remembers the vendor, its sub-page and thread when leaving from a vendor thread', () => {
+    render(<div data-doc-sheet-scroll-region><OrdersLedger onClose={jest.fn()} /></div>);
+    fireEvent.click(screen.getByRole('button', { name: 'Vendor accounts' }));
+    fireEvent.click(screen.getByRole('button', { name: 're: Lake House →' }));
+    expect(mockPush).toHaveBeenCalledWith('/doc/project-2');
+    expect(readPaperOrigin('project-2')).toMatchObject({
+      kind: 'studio-overlay', overlay: 'orders',
+      filter: 'vendors?vendor=v-1&sub=thread&thread=t-9', subject: 'thread:t-9', focusKey: 'thread:t-9',
+    });
+  });
+
+  it('reopens the vendor at its sub-page and thread, focusing the pressed control', async () => {
+    render(
+      <div data-doc-sheet-scroll-region>
+        <OrdersLedger
+          onClose={jest.fn()}
+          initialContext={{ studioReturn: { overlay: 'orders', filter: 'vendors?vendor=v-1&sub=thread&thread=t-9', subject: 'thread:t-9', focusKey: 'thread:t-9' } }}
+        />
+      </div>,
+    );
+    expect(screen.getByText(/Vendor page · v-1 · thread · t-9/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 're: Lake House →' })).toHaveFocus());
+  });
+
+  it('reopens another page with its lens, focusing the page link when no row was pressed', async () => {
+    render(
+      <div data-doc-sheet-scroll-region>
+        <OrdersLedger onClose={jest.fn()} initialContext={{ studioReturn: { overlay: 'orders', filter: 'receiving?project=project-1' } }} />
+      </div>,
+    );
+    expect(screen.getByText('Receiving page · project-1')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Receiving' })).toHaveFocus());
+  });
+
+  it('opens on the register for a malformed held filter', () => {
+    render(<OrdersLedger onClose={jest.fn()} initialContext={{ studioReturn: { overlay: 'orders', filter: 'nowhere?payment=owed' } }} />);
+    expect(screen.getByRole('button', { name: 'Order register' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getAllByRole('button', { name: 'all' }).every((lens) => lens.getAttribute('aria-pressed') === 'true')).toBe(true);
   });
 });

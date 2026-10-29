@@ -1487,6 +1487,7 @@ export {
   useProjectSpecBook,
   useSpecBookWorkbench,
   useUpdateProjectFfeSpec,
+  ProjectFfeSpecConflictError,
   useUpdateSpecBookChapter,
   useUpdateSpecBookItemSetting,
   usePrepareSpecBookIssue,

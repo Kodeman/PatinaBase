@@ -303,19 +303,21 @@ import { openPost } from '@/components/document/overlays/post-sheet';
 
 describe('Desk overlay return owner', () => {
   beforeEach(() => { jest.clearAllMocks(); mockRenderer.current = { renderer: 'round8' }; });
-  it.each(['books', 'post', 'search'] as const)('reopens %s once after the body commits', async (overlay) => {
+  it.each(['books', 'orders', 'post', 'search'] as const)('reopens %s once after the body commits', async (overlay) => {
     const studioOverlay = { overlay, subject: 'inv-1', query: 'Holloway', filter: 'ledger', scrollTop: 80, focusKey: 'doc:job' };
+    const opener = overlay === 'books' || overlay === 'orders' ? openLedger : overlay === 'post' ? openPost : openCommandBar;
     markDeskReturn({ docId: 'job', kind: 'studio-overlay', focusId: mockAnchorId, anchorId: null, ...studioOverlay });
     const view = render(<DeskPage />);
     await screen.findByRole('button', { name: 'Open Holloway Den' });
-    await waitFor(() => expect(overlay === 'books' ? openLedger : overlay === 'post' ? openPost : openCommandBar).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(opener).toHaveBeenCalledTimes(1));
     if (overlay === 'books') expect(openLedger).toHaveBeenCalledWith('accounts', { page: 'ledger', invoiceId: 'inv-1', studioReturn: studioOverlay });
+    else if (overlay === 'orders') expect(openLedger).toHaveBeenCalledWith('orders', { studioReturn: studioOverlay });
     else if (overlay === 'post') expect(openPost).toHaveBeenCalledWith(studioOverlay);
     else expect(openCommandBar).toHaveBeenCalledWith('Holloway', studioOverlay);
     view.unmount();
     render(<DeskPage />);
     expect(takeDeskReturn()).toBeNull();
-    expect(overlay === 'books' ? openLedger : overlay === 'post' ? openPost : openCommandBar).toHaveBeenCalledTimes(1);
+    expect(opener).toHaveBeenCalledTimes(1);
   });
   it('cancels a pending overlay when the reader moves before the body is ready', async () => {
     mockHydrated = false;

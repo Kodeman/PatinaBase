@@ -88,6 +88,7 @@ const mockLinesHook = jest.fn((): { data: unknown } => ({ data: mockLines }));
 const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
 jest.mock("@patina/supabase", () => ({
+  ProjectFfeSpecConflictError: class extends Error {},
   createBrowserClient: () => ({
     from: (table: string) => ({
       select: () => ({

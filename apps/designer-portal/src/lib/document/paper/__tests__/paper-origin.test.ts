@@ -122,6 +122,13 @@ describe("paper-origin", () => {
     expect(takeDeskReturn()).toBeNull();
   });
 
+  it("carries an Orders return through the Desk intent intact", () => {
+    const studioOverlay = { overlay: 'orders' as const, filter: 'ledger?project=job-2&payment=due', subject: 'po-2', focusKey: 'po-2', scrollTop: 140 };
+    rememberPaperOrigin(DOC, { path: '/desk', studioOverlay });
+    markDeskReturn(readPaperOrigin(DOC));
+    expect(takeDeskReturn()).toEqual({ docId: DOC, anchor: 'studio-find', at: expect.any(Number), studioOverlay });
+  });
+
   it("makes Desk return a no-op with storage disabled", () => {
     jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
     expect(() => markDeskReturn({ docId: DOC, focusId: "control", anchorId: null })).not.toThrow();
@@ -136,7 +143,7 @@ describe("paper-origin", () => {
     expect(window.sessionStorage.getItem("patina:desk-return:v1")).toBeNull();
   });
 
-  it.each(['books', 'post', 'search'] as const)('remembers %s overlay state without borrowing window scroll', (overlay) => {
+  it.each(['books', 'orders', 'post', 'search'] as const)('remembers %s overlay state without borrowing window scroll', (overlay) => {
     window.scrollY = 920;
     const state = { overlay, subject: 'invoice-7', filter: 'receivables', query: 'oak', scrollTop: 180, focusKey: 'row-7' };
     rememberPaperOrigin(DOC, { path: `/doc/${DOC}`, studioOverlay: state });

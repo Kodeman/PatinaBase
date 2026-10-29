@@ -343,6 +343,20 @@ export interface UpdateProjectFfeSpecInput {
 }
 
 /**
+ * A save refused on a stale row_version. `current` is the row as the other
+ * session left it (null when it can no longer be read), so the caller can
+ * show its values and save again on its row_version.
+ */
+export class ProjectFfeSpecConflictError extends Error {
+  readonly current: ProjectFfeSpec | null;
+  constructor(current: ProjectFfeSpec | null) {
+    super("This selection changed in another session. Refresh before saving.");
+    this.name = "ProjectFfeSpecConflictError";
+    this.current = current;
+  }
+}
+
+/**
  * Optimistic concurrency is enforced in the UPDATE predicate. A zero-row
  * result means another editor advanced row_version and is surfaced as a
  * conflict instead of silently overwriting their work.
@@ -369,14 +383,27 @@ export function useUpdateProjectFfeSpec() {
         .maybeSingle();
       if (error) throw error;
       if (!data) {
-        throw new Error(
-          "This selection changed in another session. Refresh before saving.",
+        const { data: current } = await getSupabase()
+          .from("project_ffe_specs")
+          .select("*")
+          .eq("id", specId)
+          .maybeSingle();
+        throw new ProjectFfeSpecConflictError(
+          (current as ProjectFfeSpec | null) ?? null,
         );
       }
       return data as ProjectFfeSpec;
     },
     // A stale version is a user-visible conflict, not a transient failure.
     retry: false,
+    // Only the line reads refetch on a conflict: the spec-book workbench
+    // reseeds its open form from a refetched row, which would drop the draft.
+    onError: (error, { projectId }) => {
+      if (!(error instanceof ProjectFfeSpecConflictError)) return;
+      void queryClient.invalidateQueries({
+        queryKey: ["project-ffe-items", projectId],
+      });
+    },
     onSuccess: (_data, { projectId }) => {
       void queryClient.invalidateQueries({
         queryKey: specBookKeys.workbench(projectId),
