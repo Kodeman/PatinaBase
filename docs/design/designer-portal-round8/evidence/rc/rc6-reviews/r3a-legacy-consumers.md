@@ -1,0 +1,8 @@
+# RC-6 R3a (Codex Astra) lens 5 — NOT-READY
+1 HIGH/high use-paper-renderer.ts:115 DNT does not force legacy: isAnalyticsPossible (posthog.ts:53-67) checks config only; respect_dnt suppresses capture not flags. Test use-paper-renderer.test.ts:331-336 expects round8 under DNT.
+2 HIGH/high use-paper-renderer.ts:73-75 fallback() restores sessionStorage renderer (could be round8) on unavailable/error/1500ms timeout; should be legacy for new resolution, keep in-memory latch.
+3 MED/high  use-paper-renderer.ts:101-107 fresh TRUE answers skip identity validation (anon true before identify latches round8).
+4 LOW/high  client-portal service-acceptance-door.tsx:11-15 returns null before error render on initial RPC failure.
+OK: frames mutually exclusive; DOM contract kept; visual exceptions narrow; /pieces kept; no new kinds in legacy parsers.
+DISPOSITION (orchestrator): F1+F2 are BY DESIGN per evidence/flag-inventory.md §4 "Fallbacks named" (DNT treated like any user; blocked SDK -> tab latch else legacy) + DECISIONS P10. HANDOFF.md:51 wording was wrong -> correct the doc. Kill-switch caveat: latched tab stays round8 across reloads while SDK blocked. F3 (fresh-true identity) and F4 (client door error) are real -> fix wave.
+F3 (fresh-true identity) — TWO fix attempts failed (1ae0bfa3b late-session regression; 7ac5443f7 relied on minified PostHog private fields). DECISION: revert renderer to 1faae43c0; add ROLLOUT.md constraint at merge: designer-paper-round8 targeted ONLY to identified persons (person property / user-id cohort), never anonymous % rollout, so anonymous evaluation is false. Residual: stale anon FALSE after identify -> legacy for one load (safe direction).

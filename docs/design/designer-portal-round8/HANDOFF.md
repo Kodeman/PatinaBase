@@ -2,13 +2,23 @@
 
 Kody retired Sidequest as this program's engineering control plane on 29 October 2026 (decision K1-R in [DECISIONS.md](DECISIONS.md)). This file holds everything that lived only on the Sidequest board, so the program can continue with ordinary subagents, worktrees and orchestrator-run merges.
 
-## Where the program stands
+## Where the program stands (updated 29 October 2026, after RC-6)
 
-- **Branch:** `redesign/designer-portal-round8`. It holds waves W0–W5 and the WP-11 repairs. The code tip under test is `7d5d872f3`; the docs-only commits after it add the RC-3b evidence and this handoff.
-- **Migrations on the branch:** `00868`–`00895`. None is on Strata. Everything consequential ships inactive (C4 service acceptance and C6 completion are server-gated until activation).
+- **Branch:** `redesign/designer-portal-round8`. It holds waves W0–W5, the WP-11 repairs and the RC-6 fix wave. The code tip is `c066bc47a`; the commits after it are evidence docs only.
+- **Release candidate: complete.** Verdict in [`evidence/rc/rc6-release-review.md`](evidence/rc/rc6-release-review.md). **Ready to ship inactive once Kody asks to ship; not ready to activate C4/C6.**
+- **Migrations on the branch:** `00868`–`00899`. None is on Strata. Any `db push` of these also carries main's `00867`. Everything consequential ships inactive.
 - **Plan:** `~/.claude/plans/use-astra-on-max-iridescent-muffin.md` (waves, gates G1–G5, rulings).
-- **Evidence:** `evidence/rc/`. RC-1 SQL gate (`rc1-sql-gate.md`), RC-2 consumer walk (`rc2-consumer-walk.md`), RC-3 browser matrix (`rc3-browser-matrix.md`) and RC-3b final-tip matrix (`rc3b-final-tip-matrix.md`).
-- **Sidequest archive:** the board database, raw verification logs and review reports were backed up to `~/sidequest-backup-2026-10-29.tgz`, a copy of `~/.claude/sidequest/`. Raw gate logs cited by the evidence docs live under `~/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-<n>/`.
+- **Evidence:** `evidence/rc/`:
+  - RC-1 SQL gate;
+  - RC-2 consumer walk;
+  - RC-3, RC-3b and RC-3c browser matrices;
+  - RC-4 visual;
+  - RC-5 rollout rehearsal;
+  - RC-6: the reviews in `rc6-reviews/`, `rc6-final-tip-sql.md`, `rc6-final-tip-matrix.md` and `rc6-release-review.md`.
+- **Sidequest archive:** `~/sidequest-backup-2026-10-29.tgz`, a copy of `~/.claude/sidequest/`. Raw gate logs cited by the older evidence docs live under `~/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-<n>/`.
+- **What is next:** Kody's rulings (below), then a separate "ship" request for the inactive chain in [ROLLOUT.md §6](ROLLOUT.md). Activation follows the gates in the release review.
+
+> The sections below, from "RC-3b results" to "Remaining work", record how the RC was reached. Every step in them is now done.
 
 ## RC-3b results on 7d5d872f3, and what they leave open
 
