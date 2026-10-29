@@ -214,6 +214,10 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
           .limit(pageSize);
       };
 
+      // Each page is its own statement, so the list is not one snapshot. A line
+      // whose sort key moves past the cursor mid-read can appear twice, and one
+      // that moves behind it can be missed. Lines that don't move are read
+      // exactly once. The next refetch corrects either case.
       const items = [];
       for (let after; ; ) {
         const { data, error } = await readPage(after);

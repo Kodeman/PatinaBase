@@ -227,7 +227,9 @@ During probing, the old OFFSET-0 first page itself returned `57014` at 8.08 s an
 - Each page uses the same filters and the same `sort_order, created_at, id` order.
 - Each page after the first adds `or=(sort_order.gt.S, and(sort_order.eq.S, created_at.gt."C"), and(sort_order.eq.S, created_at.eq."C", id.gt.I))`, keyed on the previous page's last row.
 - All three keys are `NOT NULL`, so the filter needs no null handling.
-- The return value, query key and failure semantics are unchanged: a failed later page still rejects the whole read. No consumer changed.
+- The return value, query key and failure semantics are unchanged: a failed later page still rejects the whole read.
+- **Consistency.** The pages are separate statements, not one snapshot, and offset paging had the same property. A line whose sort key moves during the read can appear twice or be missed. Lines that don't move are read exactly once, and the next refetch corrects either case.
+- **The one consumer change** came from the review rework. `LineQueryReading` no longer prints a transport page count ("· N pages"), because that count was derived from the old 1,000-row size. It now prints the total only.
 
 **Order checks:**
 - The probe's keyset ids matched `ORDER BY sort_order, created_at, id` exactly for the 2,000-line, 500-line and F01 jobs.
