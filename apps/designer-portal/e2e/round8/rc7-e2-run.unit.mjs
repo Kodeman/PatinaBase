@@ -172,18 +172,20 @@ test('the review-and-send tap lines reach the run log', async (t) => {
   assert.ok(h.logs.includes('   [RC7 e2 review-and-send] webkit-iphone request 1: taps=1'));
 });
 
-test('--defect-probe runs only the @rc7-e2-defect repro on chromium with the fixme lifted', async (t) => {
-  const h = harness(t);
-  assert.equal(await h.journey({ defectProbe: true }), true);
-  assert.equal(h.legs.length, 1);
-  const [leg] = h.legs;
-  assert.equal(leg.probe, true, 'judged as a probe: 1 failed at the defect step');
-  assert.equal(leg.defectEnv, '1');
-  assert.equal(leg.round8, '1');
-  assert.deepEqual([...leg.args], ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
-    '--grep', '@rc7-e2-defect', '--project', 'chromium', '--workers=1']);
-  assert.deepEqual(h.clientServer, ['start', 'stop']);
-});
+for (const n of ['1', '2']) {
+  test(`--defect-probe ${n} runs only the @rc7-e2-defect-${n} repro on chromium with its fixme lifted`, async (t) => {
+    const h = harness(t);
+    assert.equal(await h.journey({ defectProbe: n }), true);
+    assert.equal(h.legs.length, 1);
+    const [leg] = h.legs;
+    assert.equal(leg.probe, n, 'judged as a probe: 1 failed at the defect step');
+    assert.equal(leg.defectEnv, n);
+    assert.equal(leg.round8, '1');
+    assert.deepEqual([...leg.args], ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
+      '--grep', `@rc7-e2-defect-${n} `, '--project', 'chromium', '--workers=1']);
+    assert.deepEqual(h.clientServer, ['start', 'stop']);
+  });
+}
 
 test('a failed leg fails the journey and still stops the client portal', async (t) => {
   const h = harness(t, { legOk: false });

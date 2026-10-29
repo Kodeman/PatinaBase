@@ -6,7 +6,7 @@
  *
  *   node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence <dir> [--runs 2]
  *       [--workdir <existing scratch parent>] [--pins-from <dir with the .temp version pins>] [--keep-stack]
- *       [--defect-probe]
+ *       [--defect-probe <1|2>]
  *
  * It starts ONE owned Supabase stack (project patina-rc7-e2, RC-7 lane e2 port
  * block 571: API 57121, DB 57122, shadow 57120, pooler 57129, inspector 57183;
@@ -23,9 +23,10 @@
  * own browser context: @rc7-e2-acceptance (applies the base and rc7-e2
  * fixtures: fresh jobs per project), @rc7-e2-paper, @rc7-e2-completion.
  *
- * --defect-probe instead runs the @rc7-e2-defect repro once on chromium with
- * RC7_E2_DEFECT_PROBE=1 (the fixme lifted) and passes only when that test fails
- * at the defect step (the Replace form offers no household member).
+ * --defect-probe <n> instead runs the @rc7-e2-defect-<n> repro once on chromium
+ * with RC7_E2_DEFECT_PROBE=<n> (its fixme lifted) and passes only when that test
+ * fails at its defect step (1: the Replace form offers no household member;
+ * 2: the stale_scope refusal times out at the gateway).
  *
  * The client portal is then stopped (SIGTERM, SIGKILL after a grace period) and
  * its port and the designer port must be free; any residue fails the run. Below
@@ -65,16 +66,20 @@ const E2_PROJECTS = ['chromium', 'webkit-iphone'];
 const E2_EXPECTED = E2_LEGS.reduce((sum, [, tests]) => sum + tests, 0) * E2_PROJECTS.length;
 const E2_ARGS = ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
   '--grep', E2_LEGS.map(([tag]) => tag).join('|'), ...E2_PROJECTS.flatMap((name) => ['--project', name]), '--workers=1'];
-// --defect-probe: the DEFECT RC7-e2-1 repro alone, fixme lifted, on chromium.
-const PROBE_ARGS = ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
-  '--grep', '@rc7-e2-defect', '--project', 'chromium', '--workers=1'];
-const DEFECT_STEP = 'No other household member is on file for this job.';
+// --defect-probe <n>: the DEFECT RC7-e2-<n> repro alone, fixme lifted, on chromium;
+// it must fail at its defect step, whose text the log must carry.
+const DEFECT_STEPS = {
+  1: 'No other household member is on file for this job.',
+  2: 'The upstream server is timing out',
+};
+const probeArgs = (n) => ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
+  '--grep', `@rc7-e2-defect-${n} `, '--project', 'chromium', '--workers=1'];
 // RC-7 common rule: stop below 20 GiB free.
 const MIN_FREE_KIB = 20 * 1024 * 1024;
 const PROVIDER_KEY = /RESEND|SMTP|SENDGRID|POSTMARK|MAILGUN|SES_|TWILIO/i;
 
 function parseArgs(argv) {
-  const args = { runs: 2, keepStack: false, defectProbe: false };
+  const args = { runs: 2, keepStack: false, defectProbe: null };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => {
@@ -88,7 +93,10 @@ function parseArgs(argv) {
     else if (flag === '--workdir') args.workdir = path.resolve(value());
     else if (flag === '--pins-from') args.pinsFrom = path.resolve(value());
     else if (flag === '--keep-stack') args.keepStack = true;
-    else if (flag === '--defect-probe') args.defectProbe = true;
+    else if (flag === '--defect-probe') {
+      args.defectProbe = value();
+      if (!DEFECT_STEPS[args.defectProbe]) throw new Error(`--defect-probe takes ${Object.keys(DEFECT_STEPS).join(' or ')}`);
+    }
     else throw new Error(`unknown argument ${flag}`);
   }
   if (!args.evidence) throw new Error('--evidence <dir> is required');
@@ -276,10 +284,10 @@ function functionsReceipt() {
  * with exactly `1 failed` at the defect step. Review-and-send tap lines are
  * returned for the run log (the journey fails any send that needed a retap).
  */
-function runLeg(evidence, label, legEnv, { args, expected, probe = false }) {
+function runLeg(evidence, label, legEnv, { args, expected, probe = null }) {
   const dir = path.join(evidence, label);
   fs.mkdirSync(dir, { recursive: true });
-  const name = probe ? 'e2-defect-probe' : 'e2-rc7';
+  const name = probe ? `e2-defect-probe-${probe}` : 'e2-rc7';
   const report = path.join(dir, name);
   const logPath = path.join(dir, `${name}.log`);
   const out = fs.openSync(logPath, 'w');
@@ -299,7 +307,7 @@ function runLeg(evidence, label, legEnv, { args, expected, probe = false }) {
     .map((line) => line.trim().replace(/ \(.*\)$/, ''));
   const taps = text.split('\n').filter((line) => line.includes('[RC7 e2 review-and-send]')).map((line) => line.trim());
   const ok = probe
-    ? result.status === 1 && summary.length === 1 && summary[0] === '1 failed' && text.includes(DEFECT_STEP)
+    ? result.status === 1 && summary.length === 1 && summary[0] === '1 failed' && text.includes(DEFECT_STEPS[probe])
     : result.status === 0 && summary.length === 1 && summary[0] === `${expected} passed`;
   return { ok, status: result.status ?? result.signal, logPath, lines, taps };
 }
@@ -466,12 +474,12 @@ async function journey(args) {
       const client = await startClientServer(evidence, label, legEnv);
       try {
         requireDisk(evidence);
-        const legArgs = args.defectProbe ? { args: PROBE_ARGS, expected: 1, probe: true }
+        const legArgs = args.defectProbe ? { args: probeArgs(args.defectProbe), expected: 1, probe: args.defectProbe }
           : { args: E2_ARGS, expected: E2_EXPECTED };
         const leg = runLeg(evidence, label, { ...legEnv, RC7_E2_ROUND8: '1',
-          ...(args.defectProbe ? { RC7_E2_DEFECT_PROBE: '1' } : {}),
+          ...(args.defectProbe ? { RC7_E2_DEFECT_PROBE: args.defectProbe } : {}),
           SUPABASE_INTERNAL_URL: legEnv.NEXT_PUBLIC_SUPABASE_URL }, legArgs);
-        log(evidence, `== ${label} ${args.defectProbe ? 'defect probe @rc7-e2-defect on chromium'
+        log(evidence, `== ${label} ${args.defectProbe ? `defect probe @rc7-e2-defect-${args.defectProbe} on chromium`
           : `e2 ${E2_LEGS.map(([tag]) => tag).join('|')} on ${E2_PROJECTS.join(' + ')}`} exit=${leg.status} log=${leg.logPath}`);
         for (const line of leg.lines) log(evidence, `   ${line.trim()}`);
         for (const line of leg.taps) log(evidence, `   ${line}`);

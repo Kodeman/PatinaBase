@@ -120,6 +120,32 @@ function refusal(result: { status: number; body: string }): { status: number; co
   return { status: result.status, code: body.code, message: body.message };
 }
 
+/** record_service_acceptance_paper_intake arguments for a client-slot paper with the given presented codes. */
+function paperIntakeArgs(row: RequestRow, signerId: string, scope: string, evidence: string, name: string) {
+  return { p_request_id: row.id, p_signer_id: signerId, p_storage_object_id: randomUUID(),
+    p_paper_signed_on: new Date().toISOString().slice(0, 10), p_signed_name: name, p_disposition: 'accept',
+    p_conditions: [], p_return_reason: null, p_presented_request_number: row.number,
+    p_presented_scope_content_hash: scope, p_presented_evidence_manifest_hash: evidence,
+    p_presented_signer_policy_revision: row.revision, p_client_request_id: `rc7-paper-${randomUUID()}` };
+}
+
+/**
+ * Defect diagnosis only: one statement as an authenticated user straight in
+ * the owned database (no API), inside a transaction that is rolled back.
+ */
+function dbAs(uid: string, statement: string): { ok: boolean; out: string; ms: number } {
+  const started = Date.now();
+  try {
+    const out = execFileSync('psql', ['-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', owned().dbUrl, '-c',
+      `BEGIN; SELECT set_config('request.jwt.claims', '{"sub":"${uid}","role":"authenticated"}', true) IS NOT NULL;
+       SET LOCAL ROLE authenticated; ${statement}; ROLLBACK;`],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return { ok: true, out, ms: Date.now() - started };
+  } catch (error) {
+    return { ok: false, out: String((error as { stderr?: string }).stderr ?? error), ms: Date.now() - started };
+  }
+}
+
 // ── Fixture ────────────────────────────────────────────────────────────────
 
 /** A small, valid one-page PDF naming the fictional sheet. */
@@ -813,26 +839,9 @@ test.describe('RC-7 e2 paper — job P', () => {
     expect(sent.scopeHash).toBe(edition.hash);
     expect(frozen(row.id).members).toEqual(['plan_issue:RC7 fictional drawing set']);
 
-    // A paper whose scope or evidence code does not match the request is refused
-    // (record_service_acceptance_paper_intake, the Record paper form's RPC, as the
-    // designer): checked before the stored PDF, so nothing is uploaded or written.
-    const clientSlot = sql(`SELECT id FROM public.service_acceptance_signers WHERE request_id='${row.id}'
-      AND slot='client' AND status='active';`);
-    const paperArgs = (scope: string, evidence: string) => ({ p_request_id: row.id, p_signer_id: clientSlot,
-      p_storage_object_id: randomUUID(), p_paper_signed_on: today(), p_signed_name: PAPER_CARDS.one,
-      p_disposition: 'accept', p_conditions: [], p_return_reason: null, p_presented_request_number: sent.number,
-      p_presented_scope_content_hash: scope, p_presented_evidence_manifest_hash: evidence,
-      p_presented_signer_policy_revision: sent.revision, p_client_request_id: `rc7-paper-mismatch-${randomUUID()}` });
-    const otherHash = (hash: string) => `${hash.slice(0, -1)}${hash.endsWith('0') ? '1' : '0'}`;
-    for (const [what, args] of [['scope code', paperArgs(otherHash(sent.scopeHash), sent.evidenceHash)],
-      ['evidence code', paperArgs(sent.scopeHash, otherHash(sent.evidenceHash))]] as const) {
-      const mismatch = await rpcAs(DESIGNER_EMAIL, 'record_service_acceptance_paper_intake', args);
-      console.log(`[RC7 e2 paper ${what} mismatch]`, mismatch.status, mismatch.body);
-      expect(mismatch.status, `${what}: ${mismatch.body}`).toBeGreaterThanOrEqual(400);
-      expect(refusal(mismatch), what).toMatchObject({ code: '40001', message: 'stale_scope' });
-    }
-    expect(sql(`SELECT count(*) FROM public.service_acceptance_paper_intakes WHERE request_id='${row.id}';`),
-      'the refused papers record nothing').toBe('0');
+    // A paper whose scope or evidence code does not match the request: the
+    // database refuses it (stale_scope, 40001), but through the API the call
+    // hangs until the gateway times out (DEFECT RC7-e2-2, repro below).
 
     const admin = await designer(browser, ADMIN_EMAIL);
     for (const [index, name] of [PAPER_CARDS.one, PAPER_CARDS.two].entries()) {
@@ -1206,8 +1215,8 @@ test.describe('RC-7 e2 completion and care', () => {
 
 test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () => {
   // DEFECT RC7-e2-1: the request card's Replace form finds no household on a composed job: useProjectHousehold reads projects.client_profile_id (FK to client_profiles, never set) instead of projects.client_id.
-  test('@rc7-e2-defect the Replace form offers the job household\'s other members and replaces the signer', async ({ browser }) => {
-    // Fixme unless rc7-e2-run.mjs --defect-probe lifts it (RC7_E2_DEFECT_PROBE=1).
+  test('@rc7-e2-defect-1 the Replace form offers the job household\'s other members and replaces the signer', async ({ browser }) => {
+    // Fixme unless rc7-e2-run.mjs --defect-probe 1 lifts it (RC7_E2_DEFECT_PROBE=1).
     test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '1', 'DEFECT RC7-e2-1');
     await applyFixtures();
     const project = jobOf(ACTOR.client.id);
@@ -1235,5 +1244,46 @@ test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () =>
     console.log('[RC7 e2 defect replacement audit]', JSON.stringify(audit));
     expect(audit).toMatchObject({ status: 'replaced', reason, by: DESIGNER, at: true, successorCard: THIRD_CARD,
       successorStatus: 'active', successorRequired: true, requestRevision: row.revision + 1, revision: row.revision + 1 });
+  });
+
+  // DEFECT RC7-e2-2: a stale_scope refusal (RAISE ... ERRCODE serialization_failure, SQLSTATE 40001) never reaches the caller through PostgREST: the call hangs until the gateway answers 504.
+  test('@rc7-e2-defect-2 a paper with a mismatched scope code is refused promptly with stale_scope through the API', async ({ browser }) => {
+    // Fixme unless rc7-e2-run.mjs --defect-probe 2 lifts it (RC7_E2_DEFECT_PROBE=2).
+    test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '2', 'DEFECT RC7-e2-2');
+    await applyFixtures();
+    const project = jobOf(ACTOR.paper.id);
+    const studio = await designer(browser);
+    const row = await draft(studio, project, manifest(project, 'rc7-sa-1'));
+    // The Presented on paper control's RPC, as the designer.
+    await actAs(DESIGNER_EMAIL, 'present_service_acceptance_offline', { p_request_id: row.id,
+      p_scope_content_hash: row.scopeHash, p_evidence_manifest_hash: row.evidenceHash,
+      p_client_request_id: `rc7-present-${randomUUID()}` });
+    const sent = request(row.id);
+    expect(sent.lifecycle).toBe('sent');
+    const slot = sql(`SELECT id FROM public.service_acceptance_signers WHERE request_id='${row.id}'
+      AND slot='client' AND status='active';`);
+    const wrongScope = `${sent.scopeHash.slice(0, -1)}${sent.scopeHash.endsWith('0') ? '1' : '0'}`;
+    const args = paperIntakeArgs(sent, slot, wrongScope, sent.evidenceHash, PAPER_CARDS.one);
+
+    // The database refuses at once, as the designer (rolled back).
+    const named = Object.entries(args).map(([key, value]) => `${key} => ${value === null ? 'NULL'
+      : Array.isArray(value) ? `'${JSON.stringify(value)}'::jsonb` : typeof value === 'number' ? value : `'${value}'`}`).join(', ');
+    const direct = dbAs(DESIGNER, `SELECT public.record_service_acceptance_paper_intake(${named})`);
+    console.log('[RC7 e2 defect-2 direct]', direct.ok, `${direct.ms}ms`, direct.out.trim());
+    expect(direct.ok).toBe(false);
+    expect(direct.out).toMatch(/ERROR:\s+stale_scope/);
+    expect(direct.ms).toBeLessThan(10_000);
+
+    // Through the API, as the designer: the same refusal should come back promptly.
+    const started = Date.now();
+    const viaApi = await rpcAs(DESIGNER_EMAIL, 'record_service_acceptance_paper_intake', args);
+    const ms = Date.now() - started;
+    console.log('[RC7 e2 defect-2 api]', viaApi.status, `${ms}ms`, viaApi.body);
+    console.log('[RC7 e2 defect-2 backends after]', sql(`SELECT count(*) FROM pg_stat_activity
+      WHERE query ILIKE '%record_service_acceptance_paper_intake%' AND pid <> pg_backend_pid();`));
+    expect(sql(`SELECT count(*) FROM public.service_acceptance_paper_intakes WHERE request_id='${row.id}';`)).toBe('0');
+    // The defect step: on this base the gateway answers 504 "The upstream server is timing out".
+    expect(refusal(viaApi), viaApi.body).toMatchObject({ code: '40001', message: 'stale_scope' });
+    expect(ms).toBeLessThan(10_000);
   });
 });
