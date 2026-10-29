@@ -1049,8 +1049,10 @@ UPDATE us49_editorial SET before_text = jsonb_set(before_text::jsonb, '{assets}'
 -- from the current side so every other envelope byte is still compared.
 SELECT ok(
   (SELECT count(*) > 0
-          AND count(*) FILTER (WHERE NOT (item ->> 'responsibility' = 'studio'
-                                          AND item -> 'externalFulfilmentId' = 'null'::jsonb)) = 0
+          AND count(*) FILTER (WHERE (item ? 'responsibility'
+                                      AND item ? 'externalFulfilmentId'
+                                      AND item ->> 'responsibility' = 'studio'
+                                      AND item -> 'externalFulfilmentId' = 'null'::jsonb) IS NOT TRUE) = 0
    FROM us49_editorial,
         jsonb_array_elements(after_text::jsonb -> 'rooms') AS r(room),
         jsonb_array_elements(room -> 'items') AS i(item)),
