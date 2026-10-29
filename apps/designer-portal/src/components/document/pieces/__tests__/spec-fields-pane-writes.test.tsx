@@ -488,24 +488,29 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     await type("Finish", " Walnut ");
     await answer(0);
     expect(server).toMatchObject({ finish: "Walnut", row_version: 2 });
+    expect(field("Finish")).toHaveValue("Walnut");
 
     peerSaves({ finish: "Peer oak", selected_dimensions: { width: "90", unit: "in" } as never });
     await enter("Material", "Ash");
     await answer(1);
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "This selection changed in another session. Save again.",
-    );
-    // The saved " Walnut " was not an edit, so the field shows the peer's.
+    // The saved " Walnut " is clean, so the field shows the peer's.
     expect(field("Finish")).toHaveValue("Peer oak");
     expect(screen.getByRole("textbox", { name: "width" })).toHaveValue("90");
+    // Material began from a value the peer left alone: it sends on the peer's row.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockSpecCalls[2].input).toMatchObject({
+      expectedRowVersion: 3,
+      changes: { material: "Ash" },
+    });
+    await answer(2);
 
     // Passing through them writes nothing over the peer.
     await type("Finish", "Peer oak");
     await act(async () => {
       fireEvent.blur(screen.getByRole("textbox", { name: "width" }));
     });
-    expect(mockSpecCalls).toHaveLength(2);
-    expect(field("Material")).toHaveValue("Ash");
+    expect(mockSpecCalls).toHaveLength(3);
+    expect(server).toMatchObject({ finish: "Peer oak", material: "Ash", row_version: 4 });
   });
 
   it("an edited Dimensions draft stays over the adopted row and names the change", async () => {
@@ -547,13 +552,112 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     expect(mockSpecCalls).toHaveLength(1);
     expect(screen.queryByRole("alert")).toBeNull();
 
+    // A peer edit elsewhere on the row: Color sends on the peer's row.
     peerSaves({ material: "Peer ash" });
     await enter("Color", "Moss");
     await answer(1);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockSpecCalls[2].input).toMatchObject({
+      expectedRowVersion: 3,
+      changes: { color_fabric: "Moss" },
+    });
+    await answer(2);
+    expect(server).toMatchObject({ material: "Peer ash", color_fabric: "Moss" });
+    expect(field("Material")).toHaveValue("Peer ash");
+  });
+
+  it("a draft typed while another field's write is out is checked when it commits (repro 1)", async () => {
+    render(<Harness />);
+    await enter("Finish", "Mine");
+    // Typed, not left: nothing is handed over yet.
+    act(() => field("Material").focus());
+    fireEvent.change(field("Material"), { target: { value: "Ash" } });
+    peerSaves({ finish: "Peer oak", material: "Peer ash" });
+    await answer(0);
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "This selection changed in another session. Save again.",
+      "Finish changed in another session to “Peer oak”.",
     );
-    expect(field("Color")).toHaveValue("Moss");
+    // The adopted row does not reach a dirty field.
+    expect(field("Material")).toHaveValue("Ash");
+
+    await act(async () => {
+      fireEvent.blur(field("Material"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(server).toMatchObject({ material: "Peer ash", row_version: 2 });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Material changed in another session to “Peer ash”. Save again to replace it.",
+    );
+    expect(field("Material")).toHaveValue("Ash");
+    expect(field("Material")).toHaveAttribute("aria-invalid", "true");
+    expect(field("Material")).toHaveFocus();
+
+    // The explicit save builds on the row as it is now.
+    await act(async () => {
+      fireEvent.keyDown(field("Material"), { key: "Enter" });
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { material: "Ash" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ finish: "Peer oak", material: "Ash", row_version: 3 });
+    expect(field("Material")).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("Dimensions compare by value, not key order (repro 2)", async () => {
+    server = { ...server, selected_dimensions: { width: "90", unit: "in" } as never };
+    render(<Harness />);
+    const width = () => screen.getByRole("textbox", { name: "width" });
+    // The peer's row returns the same measurements with its keys reordered.
+    peerSaves({ finish: "Peer oak", selected_dimensions: { unit: "in", width: "90" } as never });
+    await enter("Material", "Ash");
+    await answer(0);
+    expect(mockSpecCalls[1].input).toMatchObject({ changes: { material: "Ash" } });
+    await answer(1);
+    // Clean, the measurements pass through without a write.
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    expect(mockSpecCalls).toHaveLength(2);
+
+    // An edit that began from the same measurements in another order is
+    // not a conflict.
+    peerSaves({ selected_dimensions: { width: "90", unit: "in" } as never });
+    fireEvent.change(width(), { target: { value: "72" } });
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    await answer(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockSpecCalls[3].input).toMatchObject({
+      expectedRowVersion: 4,
+      changes: { selected_dimensions: { width: "72", unit: "in" } },
+    });
+  });
+
+  it("A, then B sent, then A typed again before B lands: the new A stays and saves (new)", async () => {
+    server = { ...server, finish: "A" };
+    render(<Harness />);
+    await enter("Finish", "B");
+    fireEvent.change(field("Finish"), { target: { value: "A" } });
+    await answer(0);
+    expect(shown).toMatchObject({ finish: "B", row_version: 2 });
+    // B's answer acknowledges B's generation only.
+    expect(field("Finish")).toHaveValue("A");
+    expect(mockSpecCalls).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.keyDown(field("Finish"), { key: "Enter" });
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { finish: "A" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ finish: "A", row_version: 3 });
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
 

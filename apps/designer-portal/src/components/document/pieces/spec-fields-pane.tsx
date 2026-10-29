@@ -249,80 +249,143 @@ const TEXT_COLUMNS: ReadonlySet<SpecColumn> = new Set([
   "trade_notes",
 ]);
 
-/** True when every column `changes` names already holds that value in `row`. */
+/** Structural equality, independent of key order (JSONB need not keep it). */
+function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((item, i) => sameJson(item, b[i]))
+    );
+  }
+  const left = Object.keys(a);
+  const right = b as Record<string, unknown>;
+  return (
+    left.length === Object.keys(right).length &&
+    left.every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(right, key) &&
+        sameJson((a as Record<string, unknown>)[key], right[key]),
+    )
+  );
+}
+
+/** True when every column `changes` names already holds that value in `row`;
+ *  text compares trimmed, as saves are. */
 function sameColumns(changes: SpecChanges, row: SpecChanges): boolean {
   return (Object.keys(changes) as SpecColumn[]).every((column) =>
     TEXT_COLUMNS.has(column)
       ? String(changes[column] ?? "").trim() === String(row[column] ?? "").trim()
-      : JSON.stringify(changes[column] ?? null) ===
-        JSON.stringify(row[column] ?? null),
+      : sameJson(changes[column] ?? null, row[column] ?? null),
   );
-}
-
-/** True when the peer's row differs from `base` in a column `changes` names. */
-function peerChanged(changes: SpecChanges, base: SpecChanges, peer: SpecChanges): boolean {
-  const theirs: SpecChanges = Object.fromEntries(
-    Object.keys(changes).map((column) => [column, peer[column as SpecColumn]]),
-  );
-  return !sameColumns(theirs, base);
 }
 
 /**
- * RC7-E6-3 — the alert for a save another session got to first: what that
- * session left in each refused field.
+ * RC7-E6-3 — the alert for fields whose row another session changed after
+ * their edit began: what each now holds.
  */
 function conflictText(
   fields: readonly (readonly [string, SpecChanges])[],
-  base: SpecChanges,
-  peer: SpecChanges,
+  row: SpecChanges,
 ): string {
-  const said = fields.flatMap(([field, changes]) => {
+  const said = fields.map(([field, changes]) => {
     const columns = Object.keys(changes) as SpecColumn[];
-    if (!peerChanged(changes, base, peer)) return [];
     if (columns.length !== 1 || !TEXT_COLUMNS.has(columns[0])) {
-      return [`${field} changed in another session.`];
+      return `${field} changed in another session.`;
     }
-    const value = String(peer[columns[0]] ?? "").trim();
-    return [
-      value
-        ? `${field} changed in another session to “${value}”.`
-        : `${field} cleared in another session.`,
-    ];
+    const value = String(row[columns[0]] ?? "").trim();
+    return value
+      ? `${field} changed in another session to “${value}”.`
+      : `${field} cleared in another session.`;
   });
-  if (said.length === 0) return "This selection changed in another session. Save again.";
   return `${said.join(" ")} Save again to replace ${said.length > 1 ? "them" : "it"}.`;
+}
+
+/**
+ * RC7-E6-3 — a committed edit's three-way link back to its field. `base` is
+ * the row value the edit began from; the pane writes only while the row
+ * still holds it.
+ */
+interface SpecEdit {
+  /** The keystroke generation this commit hands over. */
+  gen: number;
+  base: () => SpecChanges;
+  /** The row saved this commit: the field builds on it, and is clean again
+   *  only if nothing was typed since. */
+  ack: (saved: SpecLensSpec) => void;
+  /** A conflict was shown: the next save builds on the row as it is now. */
+  rebase: (row: SpecLensSpec) => void;
+}
+
+/**
+ * One spec field's edit: { base, draft, gen }. A clean field (no draft)
+ * shows, and so follows, its row. The first keystroke after clean takes the
+ * row value as base; each keystroke is a generation, and only a save of the
+ * current generation makes the field clean.
+ */
+function useSpecEdit<T>(column: SpecColumn, value: T, version: number) {
+  const [draft, setDraft] = useState<{ value: T } | null>(null);
+  // A save's row, shown until the row this field is handed catches up to it.
+  const [saved, setSaved] = useState<{ value: T; version: number } | null>(null);
+  const row = saved && saved.version > version ? saved.value : value;
+  const gen = useRef(0);
+  const base = useRef(row);
+  const change = (next: T) => {
+    if (!draft) base.current = row;
+    gen.current += 1;
+    setDraft({ value: next });
+  };
+  const edit = (): SpecEdit => {
+    if (!draft) base.current = row;
+    const at = gen.current;
+    return {
+      gen: at,
+      base: () => ({ [column]: base.current }) as SpecChanges,
+      ack: (next) => {
+        base.current = next[column] as T;
+        setSaved({ value: next[column] as T, version: next.row_version });
+        if (gen.current === at) setDraft(null);
+      },
+      rebase: (next) => {
+        base.current = next[column] as T;
+      },
+    };
+  };
+  return { shown: draft ? draft.value : row, change, edit };
 }
 
 /** A text field written on blur or Enter; the pane decides if it changed. */
 function SpecText({
   label,
+  column,
   value,
+  version,
   placeholder,
   multiline,
   unsaved,
   onCommit,
 }: {
   label: string;
+  column: SpecColumn;
   value: string | null | undefined;
+  version: number;
   placeholder?: string;
   multiline?: boolean;
   /** WP-01.6 — its last write failed and the draft still shows. */
   unsaved?: boolean;
   /** The value the field shows now, handed over on blur or Enter. */
-  onCommit: (next: string | null) => void;
+  onCommit: (next: string | null, edit: SpecEdit) => void;
 }) {
-  const [draft, setDraft] = useState(value ?? "");
-  // A field nobody has edited follows its row (a peer's save adopted after a
-  // conflict); an edited draft stays until it saves or is put back.
-  // Compared trimmed, as saves are: a saved " Walnut " is the row's "Walnut".
-  const [seen, setSeen] = useState(value ?? "");
-  if ((value ?? "") !== seen) {
-    setSeen(value ?? "");
-    if (draft.trim() === seen.trim()) setDraft(value ?? "");
-  }
+  const { shown, change, edit } = useSpecEdit(column, value ?? null, version);
+  const draft = shown ?? "";
   const commit = () => {
     const next = draft.trim();
-    onCommit(next === "" ? null : next);
+    onCommit(next === "" ? null : next, edit());
   };
   const common = {
     "aria-label": label,
@@ -348,12 +411,12 @@ function SpecText({
         <textarea
           {...common}
           rows={2}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => change(e.target.value)}
         />
       ) : (
         <input
           {...common}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => change(e.target.value)}
         />
       )}
     </Field>
@@ -667,12 +730,12 @@ export function SpecFieldsPane({
   };
 
   // SQ-1897 (story #38) — one writer per spec row. At most one write of the
-  // row is out at a time; a field committed meanwhile waits, then the fields
-  // still waiting send what they show against the row_version last answered.
-  // A failed write is never sent again by itself: the field stays marked
-  // until it saves or is put back. Every field carries a number for its
-  // latest commit, so an answer to an older one cannot clear, mark or alert
-  // over a newer one, whichever order the answers come in.
+  // row is out at a time; a field committed meanwhile waits, then sends
+  // against the row_version last answered. A failed write is never sent
+  // again by itself: the field stays marked until it saves or is put back.
+  // RC7-E6-3 — every commit, queued or not, is checked against the row when
+  // it would send: if the row moved from the value the edit began from and
+  // now holds something else, the field alerts instead (three-way).
   const acked = useRef<SpecLensSpec | null>(spec);
   if (
     spec &&
@@ -682,43 +745,62 @@ export function SpecFieldsPane({
   ) {
     acked.current = spec;
   }
-  const latestSpec = useRef(new Map<string, number>());
-  const pendingSpec = useRef(
-    new Map<string, { changes: SpecChanges; sticky: boolean }>(),
-  );
-  const sendingSpec = useRef<{
+  type SpecWrite = {
     changes: SpecChanges;
-    fields: Map<string, { seq: number; sticky: boolean; changes: SpecChanges }>;
-  } | null>(null);
+    /** Absent for a write with no draft of its own (Image). */
+    edit: SpecEdit | null;
+    sticky: boolean;
+  };
+  /** Each field's latest commit; an answer to an older one changes nothing. */
+  const latestSpec = useRef(new Map<string, SpecWrite>());
+  const pendingSpec = useRef(new Map<string, SpecWrite>());
+  const sendingSpec = useRef<Map<string, SpecWrite> | null>(null);
+
+  /** Fields whose row moved under them: alert, keep the draft, and let the
+   *  field's next save build on the row as it is now. */
+  const conflict = (fields: [string, SpecWrite][], row: SpecLensSpec) => {
+    const message = conflictText(
+      fields.map(([field, write]) => [field, write.changes] as const),
+      row,
+    );
+    setError(message);
+    hold.failed(fields[0][0], message);
+    for (const [field, write] of fields) {
+      write.edit?.rebase(row);
+      if (write.sticky) hold.mark(field, message);
+    }
+  };
+
+  /** What a commit does against `row`: nothing, an alert, or a write. */
+  const check = (field: string, write: SpecWrite, row: SpecLensSpec) => {
+    if (sameColumns(write.changes, row)) {
+      write.edit?.ack(row);
+      revert(field);
+      return "same" as const;
+    }
+    if (write.edit && !sameColumns(write.edit.base(), row)) return "conflict" as const;
+    return "send" as const;
+  };
 
   const sendSpec = () => {
     const row = acked.current;
     if (sendingSpec.current || !alive.current || !row) return;
     const changes: SpecChanges = {};
-    const fields = new Map<
-      string,
-      { seq: number; sticky: boolean; changes: SpecChanges }
-    >();
-    for (const [field, entry] of pendingSpec.current) {
-      // What it shows is what the row now holds: nothing to write.
-      if (sameColumns(entry.changes, row)) revert(field);
-      else {
-        Object.assign(changes, entry.changes);
-        fields.set(field, {
-          seq: latestSpec.current.get(field) ?? 0,
-          sticky: entry.sticky,
-          changes: entry.changes,
-        });
-      }
+    const fields = new Map<string, SpecWrite>();
+    const moved: [string, SpecWrite][] = [];
+    for (const [field, write] of pendingSpec.current) {
+      const next = check(field, write, row);
+      if (next === "conflict") moved.push([field, write]);
+      if (next !== "send") continue;
+      Object.assign(changes, write.changes);
+      fields.set(field, write);
     }
     pendingSpec.current.clear();
+    if (moved.length > 0) conflict(moved, row);
     if (fields.size === 0) return;
-    const sending = { changes, fields };
-    sendingSpec.current = sending;
+    sendingSpec.current = fields;
     const latest = () =>
-      [...fields].filter(
-        ([field, sent]) => latestSpec.current.get(field) === sent.seq,
-      );
+      [...fields].filter(([field, write]) => latestSpec.current.get(field) === write);
     void hold.busy(
       updateSpec
         .mutateAsync({
@@ -734,49 +816,40 @@ export function SpecFieldsPane({
             if (!alive.current) return;
             acked.current = saved;
             onSpecSaved(saved);
+            for (const [, write] of fields) write.edit?.ack(saved);
             for (const [field] of latest()) revert(field);
           },
           (e: unknown) => {
             if (!alive.current) return;
-            // A stale row_version: take the row the other session left, so
-            // the drafts stay on screen and the next save carries its version.
+            const sent = latest();
+            // A stale row_version: take the row the other session left, and
+            // check each field again against it, as a commit would be.
             const peer =
               e instanceof ProjectFfeSpecConflictError &&
-              e.current?.id === row.id
+              e.current?.id === row.id &&
+              e.current.row_version > row.row_version
                 ? e.current
                 : null;
-            if (
-              peer &&
-              (!acked.current || peer.row_version > acked.current.row_version)
-            ) {
+            if (!peer) {
+              if (sent.length === 0) return;
+              const message = errorText(e, "The field was not saved.");
+              setError(message);
+              hold.failed(sent[0][0], message);
+              for (const [field, write] of sent) {
+                if (write.sticky) hold.mark(field, message);
+              }
+              return;
+            }
+            if (!acked.current || peer.row_version > acked.current.row_version) {
               acked.current = peer;
               onSpecSaved(peer);
             }
-            const alerted = new Map<string, { changes: SpecChanges; sticky: boolean }>(
-              latest().map(([field, sent]) => [field, sent]),
-            );
-            // An edit queued behind this write was made over the older row:
-            // where the peer changed its columns it is not sent, and waits
-            // for its own save after the alert.
-            if (peer) {
-              for (const [field, entry] of pendingSpec.current) {
-                if (!peerChanged(entry.changes, row, peer)) continue;
-                pendingSpec.current.delete(field);
-                alerted.set(field, entry);
-              }
-            }
-            if (alerted.size === 0) return;
-            const message = peer
-              ? conflictText(
-                  [...alerted].map(([field, entry]) => [field, entry.changes] as const),
-                  row,
-                  peer,
-                )
-              : errorText(e, "The field was not saved.");
-            setError(message);
-            hold.failed([...alerted.keys()][0], message);
-            for (const [field, entry] of alerted) {
-              if (entry.sticky) hold.mark(field, message);
+            // Each field is checked again when the queue sends; a write with
+            // no draft of its own (Image) cannot tell what moved, so it alerts.
+            const blind = sent.filter(([, write]) => !write.edit);
+            if (blind.length > 0) conflict(blind, peer);
+            for (const [field, write] of sent) {
+              if (write.edit) pendingSpec.current.set(field, write);
             }
           },
         )
@@ -788,29 +861,48 @@ export function SpecFieldsPane({
   };
 
   /**
-   * A field hands over the spec columns it shows. `field` is its label; a
-   * field whose draft stays on screen (`sticky`) holds the unfolded sheet
-   * open until it saves or is put back (WP-01.6).
+   * A field hands over the spec columns it shows and, for a field with a
+   * draft, its edit. `field` is its label; a field whose draft stays on
+   * screen (`sticky`) holds the unfolded sheet open until it saves or is put
+   * back (WP-01.6).
    */
-  const writeSpec = (field: string, changes: SpecChanges, sticky = true) => {
-    if (!acked.current) return;
-    const out = sendingSpec.current;
-    const outSeq = out?.fields.get(field)?.seq;
-    if (out && outSeq !== undefined) {
-      // The write that is out already sends this value: it decides.
-      if (sameColumns(changes, out.changes)) {
-        pendingSpec.current.delete(field);
-        latestSpec.current.set(field, outSeq);
-        return;
-      }
-    } else if (sameColumns(changes, acked.current)) {
-      pendingSpec.current.delete(field);
-      latestSpec.current.set(field, (latestSpec.current.get(field) ?? 0) + 1);
-      revert(field);
+  const writeSpec = (
+    field: string,
+    changes: SpecChanges,
+    edit: SpecEdit | null,
+    sticky = true,
+  ) => {
+    const row = acked.current;
+    if (!row) return;
+    const last = latestSpec.current.get(field);
+    // The same keystroke generation is already handed over: it decides.
+    if (
+      edit &&
+      last?.edit?.gen === edit.gen &&
+      (pendingSpec.current.get(field) === last ||
+        sendingSpec.current?.get(field) === last)
+    ) {
       return;
     }
-    latestSpec.current.set(field, (latestSpec.current.get(field) ?? 0) + 1);
-    pendingSpec.current.set(field, { changes, sticky });
+    const write: SpecWrite = { changes, edit, sticky };
+    latestSpec.current.set(field, write);
+    pendingSpec.current.delete(field);
+    if (sendingSpec.current) {
+      pendingSpec.current.set(field, write);
+      setError(null);
+      return;
+    }
+    const next = check(field, write, row);
+    if (next === "same") return;
+    if (next === "conflict") {
+      conflict([[field, write]], row);
+      // The field keeps its draft, and focus, for its save.
+      setTimeout(() => {
+        if (alive.current) fieldControl(paneRef.current, field)?.focus();
+      }, 0);
+      return;
+    }
+    pendingSpec.current.set(field, write);
     setError(null);
     sendSpec();
   };
@@ -1002,7 +1094,7 @@ export function SpecFieldsPane({
     setImageNote(null);
     setLink("");
     // The link field empties as it sends, so a refusal leaves no draft.
-    writeSpec("Image", { selected_media: [{ url }] }, false);
+    writeSpec("Image", { selected_media: [{ url }] }, null, false);
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -1259,21 +1351,27 @@ export function SpecFieldsPane({
               label="Finish"
               value={spec.finish}
               {...specField("Finish")}
-              onCommit={(finish) => writeSpec("Finish", { finish })}
+              column="finish"
+              version={spec.row_version}
+              onCommit={(finish, edit) => writeSpec("Finish", { finish }, edit)}
             />
             <SpecText
               key={`material-${spec.id}`}
               label="Material"
               value={spec.material}
               {...specField("Material")}
-              onCommit={(material) => writeSpec("Material", { material })}
+              column="material"
+              version={spec.row_version}
+              onCommit={(material, edit) => writeSpec("Material", { material }, edit)}
             />
             <SpecText
               key={`color-${spec.id}`}
               label="Color"
               value={spec.color_fabric}
               {...specField("Color")}
-              onCommit={(color_fabric) => writeSpec("Color", { color_fabric })}
+              column="color_fabric"
+              version={spec.row_version}
+              onCommit={(color_fabric, edit) => writeSpec("Color", { color_fabric }, edit)}
             />
             <Field label="Dimensions">
               <DimensionsField
@@ -1284,11 +1382,14 @@ export function SpecFieldsPane({
                     unknown
                   > | null) ?? null
                 }
+                version={spec.row_version}
                 {...specField("Dimensions")}
-                onCommit={(selected_dimensions) =>
-                  writeSpec("Dimensions", {
-                    selected_dimensions: selected_dimensions as never,
-                  })
+                onCommit={(selected_dimensions, edit) =>
+                  writeSpec(
+                    "Dimensions",
+                    { selected_dimensions: selected_dimensions as never },
+                    edit,
+                  )
                 }
               />
             </Field>
@@ -1298,7 +1399,11 @@ export function SpecFieldsPane({
               value={spec.exact_location}
               placeholder="See drawings"
               {...specField("Exact location")}
-              onCommit={(exact_location) => writeSpec("Exact location", { exact_location })}
+              column="exact_location"
+              version={spec.row_version}
+              onCommit={(exact_location, edit) =>
+                writeSpec("Exact location", { exact_location }, edit)
+              }
             />
             <SpecText
               key={`notes-${spec.id}`}
@@ -1306,7 +1411,9 @@ export function SpecFieldsPane({
               value={spec.trade_notes}
               multiline
               {...specField("Notes")}
-              onCommit={(trade_notes) => writeSpec("Notes", { trade_notes })}
+              column="trade_notes"
+              version={spec.row_version}
+              onCommit={(trade_notes, edit) => writeSpec("Notes", { trade_notes }, edit)}
             />
           </>
         ) : (
@@ -1480,31 +1587,25 @@ export function SpecFieldsPane({
 /** W × D × H, handed over when focus leaves the three fields. */
 function DimensionsField({
   value,
+  version,
   unsaved,
   onCommit,
 }: {
   value: Record<string, unknown> | null;
+  version: number;
   /** WP-01.6 — its last write failed and the draft still shows. */
   unsaved?: boolean;
-  onCommit: (next: Record<string, unknown> | null) => void;
+  onCommit: (next: Record<string, unknown> | null, edit: SpecEdit) => void;
 }) {
-  const [draft, setDraft] = useState(value);
-  // As SpecText: untouched measurements follow the row; edited ones stay.
-  const [seen, setSeen] = useState(value);
-  const same = (a: unknown, b: unknown) =>
-    JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-  if (!same(value, seen)) {
-    setSeen(value);
-    if (same(draft, seen)) setDraft(value);
-  }
+  const { shown, change, edit } = useSpecEdit("selected_dimensions", value, version);
   return (
     <div
       onBlur={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        onCommit(draft);
+        onCommit(shown, edit());
       }}
     >
-      <DimensionFields value={draft} onChange={setDraft} invalid={unsaved} />
+      <DimensionFields value={shown} onChange={change} invalid={unsaved} />
     </div>
   );
 }
