@@ -40320,6 +40320,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      _external_install_blocker: {
+        Args: { p_fulfilment_id: string }
+        Returns: string
+      }
       _external_lock: {
         Args: { p_fulfilment_id: string }
         Returns: {
