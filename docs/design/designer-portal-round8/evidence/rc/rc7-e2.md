@@ -3,7 +3,7 @@
 ## Header
 
 - Worktree `/Users/kody/Code/patina-r8-rc7-e2`, branch `r8-rc7-e2`. Counted runs c1/c2 tested tip `47d500f1e` (base `3cf79663c` + lane commits `56bbb23cf`, `7ca21c5dc`, `28f3bf3e9`, `47d500f1e`); their stack receipts record head `47d500f1e`.
-- Review fixes (Opus cross-provider review, fix-then-accept) land after `037952e6b`: `5912de176`, `9b7be17fe`, then `86c8f482a` (DEFECT RC7-e2-2 repro). The review-fix counted runs r2 and r3 tested tip `86c8f482a`; their receipts record that head. Development runs r1 (at `9b7be17fe`) and r1b (at `86c8f482a`) failed and are recorded under Commands.
+- Review fixes (Opus cross-provider review, fix-then-accept) land after `037952e6b`: `5912de176`, `9b7be17fe`, then `86c8f482a` (DEFECT RC7-e2-2 repro). Second review fixes (Codex, fix-then-accept): `1221598e1` (JSON-report probe classifier, required `--workdir`, production Sanity blocked in the browser, backend-state diagnostic) and the doc commit after it. No browser run has tested `1221598e1` yet; the two defect probes re-run on it once that is cleared. The review-fix counted runs r2 and r3 tested tip `86c8f482a`; their receipts record that head. Development runs r1 (at `9b7be17fe`) and r1b (at `86c8f482a`) failed and are recorded under Commands.
 - Owned stack: `project_id` `patina-rc7-e2`; API 57121, DB 57122, shadow 57120, pooler 57129, inspector 57183. Designer portal 3110, client portal 3112. `edge-runtime` kept; `EMAIL_DEV_MODE=dry_run`.
 - Counted-run stacks: one fresh stack per run, started and stopped by the runner (receipts under Commands).
 - Migration head applied: numbered head `00899` (`00899_round8_service_acceptance_offline_presentation`). Proven by query in every review-fix receipt: `numberedHead: "00899"`, `migration00899: "00899 round8_service_acceptance_offline_presentation"`. The ledger also holds `20260910152111_create_contact_messages`, and `max(version)` sorts as text, so the c1/c2 receipts' `ledgerMax 20260910152111` is not the head. From the review-fix runs on, `rc7-e2-run.mjs` writes `numberedHead` (`SELECT max(version) FROM supabase_migrations.schema_migrations WHERE version ~ '^[0-9]{5}$'`) and `migration00899` (`SELECT version || ' ' || name … WHERE version = '00899'`) into the receipt.
@@ -33,9 +33,12 @@
 - `apps/designer-portal/e2e/round8/rc7-e2-run.mjs` and `rc7-e2-run.unit.mjs` (lane-local runner, new in the review fixes):
   - Derived from the RC-2 runner. It runs only the rc7-e2 legs: no RC-2 legs, and no refusal-check mode.
   - One round-8 invocation per run (`--project chromium --project webkit-iphone --workers=1`), expecting 14 passed.
-  - `--defect-probe <1|2>` runs only `@rc7-e2-defect-<n>` on chromium with `RC7_E2_DEFECT_PROBE=<n>`. It passes only on exit 1 with exactly `1 failed`, and only when the log carries that defect's step text:
-    - 1: `No other household member is on file for this job.`
-    - 2: `The upstream server is timing out`
+  - `--defect-probe <1|2>` runs only `@rc7-e2-defect-<n>` on chromium with `RC7_E2_DEFECT_PROBE=<n>`.
+    - At `86c8f482a` it passed on exit 1 with exactly `1 failed` when the log carried the defect's text anywhere. Codex showed that can report a false green: the source excerpt of a failure at another line quotes probe 1's step, and probe 2's timeout text is logged before a later assertion can fail.
+    - Since `1221598e1` it adds `--reporter=list,json` (`PLAYWRIGHT_JSON_OUTPUT_FILE`) and `classifyProbe` judges the JSON report. It requires exit 1, no error outside the test, `stats` exactly 1 unexpected and 0 expected, flaky or skipped, and exactly one test (the probe's title, on chromium). That test must have one result, status `failed`, exactly one error, and first error location `rc7-e2-consumer-journey.journey.ts:<step line>`.
+    - The assertion's own message (not the excerpt) must carry the actual value. For 1 that is `Expected: 0` / `Received: 1`. For 2 it is `+ "code": undefined` and `+ "message": "The upstream server is timing out"`.
+    - A unit drift guard checks that each step line is the defect assertion in the journey.
+  - `--workdir` is required: an existing directory, not `/`, home or the checkout or anything inside it, and not a checkout. The `os.tmpdir()` default is gone.
   - It copies every `[RC7 e2 review-and-send]` tap line into the run log.
   - Disk floor of 20 GiB.
   - Awaited client-portal stop: SIGTERM, then SIGKILL; the run fails on any process or port residue. The run also fails if 3110 is still listening afterwards.
@@ -59,7 +62,7 @@ Runs:
 - Each of the four is `14 passed`, 7 on `chromium` and 7 on `webkit-iphone`, with runner exit 0.
 - The failed development runs r1 and r1b are under Commands.
 
-Lines below are at `86c8f482a`.
+Lines below are at `86c8f482a`. At `1221598e1` the journey's lines shift: +3 from :339, +9 from :344, +10 from :611, +17 after :1282. The probe steps move from :1232 to :1242 and from :1286 to :1303; the probe titles move from :1218 to :1228 and from :1250 to :1260.
 
 | ID / clause | Before | Now | Spec | Asserted | Readback | Runs |
 |---|---|---|---|---|---|---|
@@ -68,11 +71,11 @@ Lines below are at `86c8f482a`.
 | A20 rejection requires new evidence | weak | **weak** | R1 :620 → R2 :653 | Client returns with a reason. The returned request stays `closed/returned`, and request 2 freezes its own snapshot.<br>Request 2 binds a different manifest (`rc2-sa-2`) only because the journey chose it. The product does not require it: `create_service_acceptance_request` (00889:446, 00891:47) has no check against a returned request's manifest. A draft on the returned `rc2-sa-1` would be accepted, so no refusal branch exists to assert (RC7-E2-OBS-2). | R1 `closed/returned`, response `return` with reason; R2 `evidenceHash ≠` R1's; R2 frozen members = revised drawing set only | c1 ✓✓, c2 ✓✓, r2 ✓✓, r3 ✓✓ (positive path only) |
 | A20 signer replacement requires new evidence | weak | defect | R3 :726; repro :1218 | The card's Replace form cannot offer the household (DEFECT RC7-e2-1), so the designer's own session calls `replace_service_acceptance_signer`. The card shows `was replaced` and the new signer `Waiting`.<br>The old signer gets no form. Their REST respond is refused with exactly `{status 500, code 55000, message signer_not_active}` (:787; RC7-E2-OBS-3).<br>The replacement gets their own V22 notice and accepts with a condition. | signer row `replaced`, with reason, `replaced_by` = designer, revision 2; successor card active and required; request revision 2; R3 `closed/accepted_with_conditions` with 2 responses | c1 ✓✓, c2 ✓✓ (RPC path); UI path: `--defect-probe 1` failed at the defect step :1232 (`86c8f482a`) |
 | A20 superseded scope requires new evidence | weak | covered | R2 :653, R3 :726 | While R2 is pending, the real actors execute an amendment over HTTP.<br>Designer: `create_service_addendum`, `copy_agreement_parts_from_authority`, `upsert_agreement_parts`, `send_commercial_document`. Client: `sign_design_services_agreement`. Designer: `countersign_design_services_agreement`.<br>The card reads `Replaced` / `the agreed scope changed`. The client's respond is refused with exactly `{500, 55000, request_not_open}` (:694). The old evidence stays readable, with no answer offered.<br>**New:** the designer's `create_service_acceptance_request` on the superseded edition is refused with exactly `{500, 55000, scope_edition_not_active}`, and the request count is unchanged (:722).<br>R3 binds edition 2. Its manifest hash equals R2's (same `rc2-sa-2`, asserted at :737). What is new is the scope edition and request 3's own send-time freeze. | R2 `superseded`, `scope_edition_superseded`; edition 1 `superseded`, edition 2 active; frozen snapshot unchanged; refused draft writes no request; R3 edition = edition 2, `scopeHash ≠` R2's | c1 ✓✓, c2 ✓✓ (without the refused draft); r2 ✓✓, r3 ✓✓ |
-| A20 designer request follows V22 | weak | covered | `sendNotices` :431 (R1–R3, F, D) | `Review and send` sheet; each notice checked by recipient; `Send the N checked`; the row reads `Sent` or leaves the sheet.<br>**New:** the tap count goes in a `review-and-send-taps` annotation and a `taps=N` log line. A send that needed the one allowed retap fails the test (`expect.soft(taps).toBe(1)`, :456; RC7-E2-OBS-1). It did so once, in development run r1b (WebKit, R1).<br>**New:** exact notice counts per request. After a send, `sent` = sent before + the N checked, and the total rows are unchanged, so a duplicate send or a duplicate draft fails. | `outbound_drafts.status sent`, `delivery_message_id ~ ^dryrun_\d+$`; request `sent`; per-request `{sent, total}` | c1 ✓✓, c2 ✓✓ (0 retaps); r2 ✓✓, r3 ✓✓ (`taps=1` on all 12 sends in each); r1b ✘ on WebKit (`taps=2`) |
+| A20 designer request follows V22 | weak | covered | `sendNotices` :431 (R1–R3, F, D) | `Review and send` sheet; each notice checked by recipient; `Send the N checked`; the row reads `Sent` or leaves the sheet.<br>**New:** the tap count goes in a `review-and-send-taps` annotation and a `taps=N` log line. A send that needed the one allowed retap fails the test (`expect.soft(taps).toBe(1)`, :456; RC7-E2-OBS-1). It did so once, in development run r1b (WebKit, R1).<br>**New:** exact notice counts per request, which is row-count integrity only. After a send, `sent` = sent before + the N checked, and the total rows are unchanged. The harness clicks `Send` once per sheet, so it never exercises a duplicate or retried send, and duplicate-send protection is not tested here. | `outbound_drafts.status sent`, `delivery_message_id ~ ^dryrun_\d+$`; request `sent`; per-request `{sent, total}` | c1 ✓✓, c2 ✓✓ (0 retaps); r2 ✓✓, r3 ✓✓ (`taps=1` on all 12 sends in each); r1b ✘ on WebKit (`taps=2`) |
 | A20 authenticated client-portal response | weak | covered | R1–R3, F :1011, D :1102 | each signer answers in their own browser context on 3112, with the project's device (Desktop Chrome / iPhone 14) | `responses.method portal_authenticated`, `responder` = signer profile | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
 | A20 iOS response | weak | weak | — | not run (no simulator or device in this lane; `webkit-iphone` is a browser emulation, not the iOS app) | — | — |
 | A20 permitted paper intake → same scoped truth | weak | covered | paper :812 | All-paper household: the notices are address-less holds (00891). The studio marks the request presented on paper (00899). Paper is uploaded per slot (`Record paper for <Slot>`), stamped, and confirmed by a second admin. The client sees `Reviewed paper response` and has no answer of their own.<br>**New (:879–:895):** the recorder (the designer; their `organization_members` role on the recorded studio reads `owner`/`admin`) calls `review_service_acceptance_paper_intake` `confirmed` on their own stamped intake. It is refused with HTTP 403, code `42501`, message `insufficient_privilege` (r2, r3). The intake stays `pending_review` with no reviewer, and there are 0 responses. | request `sent` via offline presentation, 0 sent drafts; intakes `pending_review` → `confirmed` with stored sha, `reviewed_by` = the second admin; responses `paper_intake`, `responder NULL`, same edition / scope / evidence hashes; `closed/accepted` | c1 ✓✓, c2 ✓✓ (without the self-review refusal); r2 ✓✓, r3 ✓✓ |
-| A20 paper with a mismatched scope / evidence code refused | weak | defect | repro :1250 (`@rc7-e2-defect-2`) | The database refuses the designer's `record_service_acceptance_paper_intake` with a mismatched scope code at once: `ERROR: stale_scope`, 37 ms, as `authenticated` in a rolled-back transaction.<br>The same call through the API gets HTTP 504 `The upstream server is timing out` after 60 004 ms, and 1 backend is still running the call after the 504 (DEFECT RC7-e2-2). | 0 intakes written | r1 ✘✘ (in the paper journey at `9b7be17fe`; moved out); `--defect-probe 2` failed at the defect step :1286 |
+| A20 paper with a mismatched scope / evidence code refused | weak | defect | repro :1250 (`@rc7-e2-defect-2`) | The database refuses the designer's `record_service_acceptance_paper_intake` with a mismatched scope code at once: `ERROR: stale_scope`, 37 ms, as `authenticated` in a rolled-back transaction.<br>The same call through the API gets HTTP 504 `The upstream server is timing out` after 60 004 ms (DEFECT RC7-e2-2). What the database does after the 504 is not established. | 0 intakes written | r1 ✘✘ (in the paper journey at `9b7be17fe`; moved out); `--defect-probe 2` failed at the defect step :1286 |
 | A21 full-service obligations | weak | covered | job F :1011 | blockers `studio_line_open`, `studio_installation_open`, `agreed_phase_open` shown; excluded `Cabinetry` is informational; Complete is disabled. After `record_project_ffe_installed` and `advance_project_phase` (designer session), Complete is enabled, then completed | `_derive_studio_service_obligations()` before and after; `studio_service_completions` `completed` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
 | A21 design-only obligations | weak | covered | job D :1102 | phases, then acceptance only; complete; care `pkg.design` | blockers `acceptance_not_accepted:-` → none; completion `completed` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
 | A21 client-buy obligations | weak | covered | job A :933 | the client-bought `pkg.living` line and the external fulfilment are informational (`Outside work still in progress`) | info `external_fulfilment_open:pkg.living` | c1 ✓✓, c2 ✓✓; r2 ✓✓, r3 ✓✓ |
@@ -185,9 +188,11 @@ RC7_E2_ROUND8=1 playwright test … --grep '@rc7-e2-defect-<n> ' --project chrom
 | **r2** | `86c8f482a` | 17:56:03Z, 21999.19M / 23552.00M, 290 GiB | `7702150098791886889`, 172.24.0.2 | **`14 passed (10.8m)`**, exit 0; 0 failed, 0 flaky, 0 skipped; `taps=1` × 12 | `RESULT: PASSED`; SIGTERM, process group gone, port 3112 free; `supabase stop --no-backup exit=0; containers left 0; volumes left 0` |
 | **r3** | `86c8f482a` | 18:13:01Z, 19386.38M / 20480.00M, 293 GiB | `7702154467906760746`, 172.24.0.2 | **`14 passed (11.4m)`**, exit 0; 0 failed, 0 flaky, 0 skipped; `taps=1` × 12 | `RESULT: PASSED`; same stop and teardown lines |
 | probe1 | `86c8f482a` | 18:07:45Z, 19690.38M / 20480.00M, 293 GiB | `7702153111913160746`, 172.24.0.2 | `1 failed` at :1232 (`Expected: 0 Received: 1`), as required | `RESULT: PASSED`; clean stop and teardown |
-| probe2 | `86c8f482a` | 18:09:40Z, 19626.38M / 20480.00M, 293 GiB | `7702153607434137642`, 172.24.0.2 | `1 failed` at :1286: direct `ERROR: stale_scope` in 37 ms; API 504 after 60004 ms; 1 backend still running the call afterwards | `RESULT: PASSED`; clean stop and teardown |
+| probe2 | `86c8f482a` | 18:09:40Z, 19626.38M / 20480.00M, 293 GiB | `7702153607434137642`, 172.24.0.2 | `1 failed` at :1286: direct `ERROR: stale_scope` in 37 ms; API 504 after 60004 ms. A bare `pg_stat_activity` count read 1 matching row afterwards (`state` not read; not evidence of a running call) | `RESULT: PASSED`; clean stop and teardown |
 
 All review-fix receipts (`<label>/stack-receipt.json`): `cronLaunchActiveJobs: off`, `numberedHead: 00899`, `migration00899: 00899 round8_service_acceptance_offline_presentation`, `ledgerMax 20260910152111`. No run was infra-interrupted: there was no exit 2 and no PGRST002. Logs are under `/Users/kody/.claude/rc7-evidence/e2/review-r8/<label>.log` and `<label>/run1/e2-*.log`.
+
+The probe1 and probe2 verdicts above came from the log-text check that Codex later showed can report a false green (see Files). Read by hand, each log has exactly one error, at :1232 (probe1, `Expected: 0 Received: 1`) and at :1286 (probe2, the 504 diff). The two probes have not yet been re-run on the JSON classifier at `1221598e1`.
 
 New readbacks in r2 and r3, once per project:
 
@@ -210,6 +215,15 @@ RC7_E2_ROUND8=1 playwright test --config playwright.round8.config.ts e2e/round8/
 ```
 
 The same run also showed the second teardown refusal (`last_owner_protected`), which led to the `-07` unseat in `rc7-e2-cleanup.sql`. Log: `/Users/kody/.claude/rc7-evidence/e2/r8dev/fixme-forced.log`.
+
+Gates at `1221598e1`:
+
+```
+node --test apps/designer-portal/e2e/round8/rc7-e2-run.unit.mjs             # 44 pass, 0 fail (classifier: true defect ×2, both false greens, global error, extra error, retry, timeout, other test, no JSON, exit 0; drift guard; workdir required/missing/file/inside repo)
+node --test apps/designer-portal/e2e/round8/run-consumer-journey.unit.mjs   # 15 pass, 0 fail (still identical to base 3cf79663c)
+pnpm --filter @patina/designer-portal type-check                            # exit 0
+tsc --noEmit -p <temp tsconfig extending apps/designer-portal/tsconfig.json, files = the lane .spec.ts and .journey.ts, types node>  # exit 0
+```
 
 Gates at `86c8f482a`:
 
@@ -268,22 +282,24 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
     - `paper_document_changed` ×2;
     - `scope_edition_stale`, `scope_execution_document_moved`, `stale_obligations` and `service_completion_requires_read_committed` ×1 each.
   - They cover the client respond, paper record and review, signer replacement and service completion paths. Only `stale_scope` on paper record was exercised; the others are inferred from the same raise.
-  - The intended stale-page message never arrives. The caller waits 60 s for a gateway 504, and the database keeps working on the call after the 504.
-  - Confidence: high on the symptom (r1 on both projects, probe2). Medium to high on the mechanism.
+  - The intended stale-page message never arrives. The caller waits 60 s for a gateway 504.
+  - Confidence: high on the symptom (r1 on both projects, probe2). The mechanism below is an unverified hypothesis; a separate fix lane is establishing it.
 - Repro:
   - `@rc7-e2-defect-2 a paper with a mismatched scope code is refused promptly with stale_scope through the API`, `rc7-e2-consumer-journey.journey.ts:1250`, fixme unless `--defect-probe 2`.
   - Steps: job P; draft `rc7-sa-1` in the UI; the designer's `present_service_acceptance_offline`; then `record_service_acceptance_paper_intake` with the scope hash's last digit changed.
   - The database refuses at once as the designer (`authenticated`, rolled back): `ERROR: stale_scope`, 37 ms.
-  - The same call through `/rest/v1/rpc` as the designer returns HTTP 504 `The upstream server is timing out` after 60 004 ms. `pg_stat_activity` then still shows 1 backend running the call. 0 intakes are written.
+  - The same call through `/rest/v1/rpc` as the designer returns HTTP 504 `The upstream server is timing out` after 60 004 ms. 0 intakes are written.
+  - A bare count of `pg_stat_activity` rows whose query text matched read 1 after the 504. It did not read `state`, and an idle pooled connection keeps its last query, so it does not show a running call. Since `1221598e1` the repro logs each matching backend's `state`, `application_name`, query and transaction age, and wait event instead.
   - Probe2 failed at :1286, as required.
-- Root cause (mechanism inferred, not traced in PostgREST source):
+- Hypothesis (unverified; not traced in PostgREST source and not shown by the database; a separate fix lane is establishing the mechanism):
   - The RPCs raise a deterministic refusal with SQLSTATE `40001` (for example `00886_round8_service_acceptance.sql:900`, inside `record_service_acceptance_paper_intake` (:856): `RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'serialization_failure'`).
-  - PostgREST's transaction layer treats `40001` as a transient serialization failure and retries the transaction. The refusal recurs on every retry, so the loop runs until Kong's 60 s upstream timeout, and past it.
-- Proposed fix: raise these refusals with a non-retryable SQLSTATE that PostgREST maps to a client error. Examples are `check_violation` (23514 → 400), or a custom `P0001` with the message kept. Keep the message strings (`stale_scope`, …) that the portal maps to copy. Then re-run this repro and expect `{code, message: 'stale_scope'}` within 10 s.
+  - PostgREST's transaction layer treats `40001` as a transient serialization failure and retries the transaction. The refusal would recur on every retry, so the call would run until Kong's 60 s upstream timeout.
+- Proposed fix, if the hypothesis holds: raise these refusals with a non-retryable SQLSTATE that PostgREST maps to a client error. Examples are `check_violation` (23514 → 400), or a custom `P0001` with the message kept. Keep the message strings (`stale_scope`, …) that the portal maps to copy. Then re-run this repro and expect `{code, message: 'stale_scope'}` within 10 s.
 - Earlier review-fix tree: the same branch sat inside the paper journey at `9b7be17fe`. Run r1 failed there, which is how the defect was found; the branch was then moved to this repro.
 
 ## Harness debt (not fixed; not owned)
 
+- Cross-lane: the portals' help-system hook reads production Sanity from the browser in every e2e run that does not block it. This lane blocks it per context since `1221598e1`. A shared fix (an env switch that turns the help-system's Sanity client off in local runs, or a shared route block in the e2e fixtures) belongs to the integration lead.
 - `apps/designer-portal/e2e/helpers/psql.ts:21`, `e2e/round8/global-setup.ts:11` and `e2e/round8/global-teardown.ts:8` fall back to `127.0.0.1:54322` (the shared stack) when `SUPABASE_DB_URL` is unset. The runner always sets it to the owned 57122. The rc7-e2 journey's `owned()` refuses any DB URL but 57122.
 - **Merged-gate debt: `e2e/round8/global-teardown.ts`** (not edited here; the integration lead owns the fix). It cannot purge the F01 accounts once any round-8 test leaves an executed agreement or a non-F01 member on the F01 studio.
   - `:72` (`DELETE FROM auth.users` for the F01 actors) cascades into the F01 designer's non-draft proposals. Guard `guard_proposal_copy_immutability` (00390) then refuses: "non-draft proposals are immutable editions and cannot be deleted".
@@ -306,6 +322,9 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
 - A paper with a mismatched code refused through the API: DEFECT RC7-e2-2. The database refusal is shown; the API path hangs.
 - WebKit first-tap stability: the miss recurred in 1 of 3 review-fix journeys (r1b). r2 and r3 had none. Not root-caused (RC7-E2-OBS-1).
 - Screen reader: no assistive-technology pass.
+- Duplicate-send protection on `Review and send`: never exercised (one `Send` per sheet). The notice counts prove row-count integrity only.
+- The RC7-e2-2 mechanism (PostgREST retrying `40001`): a hypothesis. A separate fix lane owns it.
+- The JSON probe classifier on real Playwright output: unit tests only (real-shaped reports) until the two probes re-run at `1221598e1`.
 
 ## Teardown
 
@@ -318,3 +337,7 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
   - Correction: the counted run at `56bbb23cf` did read the shared stack once per journey. The runner's identity proof ran `docker exec supabase_db_supabase psql … -c 'SELECT system_identifier FROM pg_control_system();'` inside the shared DB container. It was read-only and recorded `sharedSystemId` `7701004642274893866` in the receipt.
   - Since `28f3bf3e9` the runner no longer makes that read; the c1/c2 receipts carry no shared id.
 - No `--linked`, Strata or PostHog.
+- Correction: every run read production Sanity (`kv3qrinl.apicdn.sanity.io`, read-only help-CMS content). The help-system hook (`packages/help-system/src/hooks/useHelpContent.ts`) fetches it from the browser.
+  - r2's log has 16 `[help-system] Sanity fetch failed` lines. All 16 are `[browser]`-forwarded from the designer portal, and all ended in a request error. The client portal's dev log has none, and no server-side fetch appears.
+  - Since `1221598e1` every journey browser context aborts `*.sanity.io` requests (`context.route`), and `afterAll` logs `[RC7 e2 sanity requests blocked] N`. The browser still logs `Sanity fetch failed` for each aborted request.
+  - App config is not edited. Other lanes' journeys still make these reads (Harness debt).
