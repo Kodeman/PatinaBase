@@ -44,8 +44,9 @@ Kody retired Sidequest as this program's engineering control plane on 29 October
      6. Separate activation migrations, C4 then C6, only after ruling evidence and consumer sign-off.
 
      Give every step a probe and a rollback.
-   - **Include the RC-1 lock note.** These DDL migrations hold AccessExclusiveLock on `auth.*`/`storage.*` until COMMIT, through a DDL event trigger: 00868–00871, 00874–00878, 00886, 00888 and 00889. Sign-in and storage stall meanwhile. Plan a low-traffic window, state the per-file stall window and give `lock_timeout` guidance.
+   - **Include the RC-1 lock note.** These DDL migrations hold AccessExclusiveLock on `auth.*`/`storage.*` until COMMIT, through a DDL event trigger: 00868–00871, 00874–00878, 00886, 00888, 00889 and 00892 (RC-5 measured 00892; 00896–00899 are measured at the final-tip gate). Sign-in and storage stall meanwhile. Plan a low-traffic window, state the per-file stall window and give `lock_timeout` guidance.
    - **The outbound-kinds importers to redeploy:** outbound-draft-send, decision-reminders, expire-decisions, field-daily, invoice-reminders, notification-digest, review-requests and site-request-dispatch.
+   - **Superseded by RC-5:** the redeploy set is 44 functions, not these 8 (every transitive `_shared/send-authority.ts` importer, which covers all `outbound-kinds` and `outbound-send` importers, plus `service-acceptance-paper-hash`). The corrected chain is in `ROLLOUT.md` §6.
    - **Rehearse locally:**
      - the renderer flag on, off, and unresolved mid-session, with no remount during an edit;
      - the recorded fallbacks in `evidence/flag-inventory.md` §4: DNT is treated like any other user (flags resolve), and a blocked or hung SDK falls to the tab latch, else legacy;

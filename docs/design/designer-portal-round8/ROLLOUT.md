@@ -50,4 +50,16 @@ Define the incident owner, cohort switch, observable health signals and recovery
 
 WP-11 supplies the acceptance evidence matrix, source-preservation result, all independent review dispositions, new-contract consumer tests, additive migration/backfill rehearsal, rollback proof and founder visual review. Scope any deferral explicitly; security or business-integrity defects do not become acceptable because the screen resembles round eight.
 
+### Ship chain (RC-5, re-based on the integration tip, 2026-10-28)
+
+The full runbook, with commands, probes and rollback per stage, is `evidence/rc/rc5-rollout-rehearsal.md` §1. It was written and rehearsed on an owned, populated stack, never executed against production. These corrections apply on top of it:
+
+1. **Migrations: 00867 plus 00868–00899, 33 files.** Strata's head is 00866. `supabase db push` cannot skip a file, so main's `00867_margin_notes_tenant_guard` ships with this push. Kody's "ship 00867?" ruling is therefore required before the round-8 push. 00896–00899 (RC-6 database fixes) postdate the RC-5 rehearsal and are re-rehearsed at the final-tip gate.
+2. **AccessExclusive locks on `auth.*`/`storage.*`:** 00868–00871, 00874–00878, 00886, 00888, 00889 and 00892 (13 files; 00892 recreates seven `storage.objects` policies). Lock behaviour of 00896–00899 is measured at the final-tip gate. Strata runs with `lock_timeout = 0`, so a waiting file stalls every sign-in queued behind it. Window: 00:00–04:00 CT. Set `lock_timeout` 5 s and `statement_timeout` 60 s per file. The mechanism is a ship-time decision (RC-5 §2.3: in-file `SET LOCAL`, a role setting, or per-file `psql` plus `migration repair`). None is verified.
+3. **Edge functions: 44.** Every function that transitively imports `_shared/send-authority.ts` (43, re-counted at 5e2d113ea), which covers all 8 `outbound-kinds` and all 8 `outbound-send` importers, plus `service-acceptance-paper-hash`. `stripe-webhook` is in the set although its source is unchanged.
+4. **Portals: designer and client**, through `infra/deploy-portal.sh`. Export the production Supabase trio from each `wrangler.jsonc` in the same shell (plus `SUPABASE_ORIGIN_RUNTIME` for designer).
+5. **Activation order: C2 before or with C4, then C6.** Every C4 mutation refuses `scope_editions_inactive` until `server_capabilities.scope_editions` is on and its three grants exist. Each activation is a reviewed migration that is not yet written.
+6. **Activation gate: renderer coverage (RC-5 D9).** The C2/C4/C6 capability switch is global, but the designer acceptance and completion screens exist only in the round-8 renderer. Do not activate while any designer who could be asked to act still renders legacy. Either the renderer flag reaches every studio first, or the legacy frame gains the sections.
+7. **Kill switch:** see §2. A tab already latched to round 8 stays there while PostHog is unreachable. Tell cohort users to close the tab, not reload.
+
 Once the user requests production shipment, follow `patina-deploy` and the affected migration/edge/service/iOS skills. Portal deployment uses `infra/deploy-portal.sh`, which rebuilds workspace distributions. Verify actual behavior and relevant data, not static version strings. Merging the branch alone does not deploy.
