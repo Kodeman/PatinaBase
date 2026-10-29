@@ -1,6 +1,7 @@
 import { test, expect } from '../fixtures/auth';
 import type { Page } from '@playwright/test';
 import { psqlScalar } from '../helpers/psql';
+import { round8Stack } from './owned-stack';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const ROOM = 'f0180000-0000-4000-8000-000000000011';
@@ -32,8 +33,7 @@ async function sameEditor(page: Page) {
 
 test('A02 job, ledger and edited line instrument remain one mounted context with no replay', async ({ authenticatedPage: page }) => {
   test.setTimeout(300_000);
-  expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
-  expect(new URL(process.env.SUPABASE_DB_URL!).port).toBe('61122');
+  round8Stack('E6 nested');
   const line = psqlScalar(`SELECT id FROM project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 02' AND removed_at IS NULL;`);
   expect(line).toMatch(/^[0-9a-f-]{36}$/);
   const original = psqlScalar(`SELECT coalesce(finish,'') FROM project_ffe_specs WHERE ffe_item_id='${line}';`);

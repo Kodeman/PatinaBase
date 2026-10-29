@@ -1,5 +1,6 @@
 import { test as authTest, expect } from '../fixtures/auth';
 import { psqlRun, psqlScalar } from '../helpers/psql';
+import { rc7OwnedStackSql } from './owned-stack';
 
 const STUDIO = 'f0180000-0000-4000-8000-000000000001';
 const DESIGNER = 'f0180000-0000-4000-8000-000000000002';
@@ -26,9 +27,7 @@ const test = authTest.extend<{ nav: NavLog }>({
 const vendorId = () => psqlScalar(`SELECT id FROM vendors WHERE name='${NAME}';`);
 
 test.beforeAll(() => {
-  expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
-  expect(new URL(process.env.SUPABASE_DB_URL!).port).toBe('61122');
-  expect(psqlScalar(`SELECT current_setting('rc7.e6_stack', true);`)).toBe('patina-rc7-e6');
+  psqlRun(rc7OwnedStackSql('E6 maker'));
   expect(psqlScalar(`SELECT count(*) FROM projects WHERE id='${JOB}' AND studio_id='${STUDIO}' AND designer_id='${DESIGNER}';`)).toBe('1');
   expect(psqlScalar(`SELECT count(*) FROM vendors WHERE name='${NAME}';`)).toBe('0');
   fixtureReady = true;
@@ -36,8 +35,8 @@ test.beforeAll(() => {
 
 test.afterAll(() => {
   if (!fixtureReady) return;
-  psqlRun(`DO $$ DECLARE v_id uuid; BEGIN
-    IF current_setting('rc7.e6_stack', true) IS DISTINCT FROM 'patina-rc7-e6' OR NOT EXISTS (SELECT 1 FROM projects WHERE id='${JOB}' AND studio_id='${STUDIO}' AND designer_id='${DESIGNER}')
+  psqlRun(`${rc7OwnedStackSql('E6 maker cleanup')}DO $$ DECLARE v_id uuid; BEGIN
+    IF NOT EXISTS (SELECT 1 FROM projects WHERE id='${JOB}' AND studio_id='${STUDIO}' AND designer_id='${DESIGNER}')
       THEN RAISE EXCEPTION 'not E6 owned F01 stack'; END IF;
     SELECT id INTO v_id FROM vendors WHERE name='${NAME}';
     IF v_id IS NULL THEN RETURN; END IF;

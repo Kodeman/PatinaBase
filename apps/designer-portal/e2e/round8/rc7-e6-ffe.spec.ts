@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures/auth';
 import { psqlRun, psqlScalar } from '../helpers/psql';
+import { rc7OwnedStackSql } from './owned-stack';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const ROOM = 'f0180000-0000-4000-8000-000000000011';
@@ -34,17 +35,14 @@ async function openLine(page: Page, line: string) {
 // RC7-E6-3 fixed by 937ed121b/63f978a02: a stale save refetches the peer version and shows its value beside the local draft.
 test('A06 stale FF&E save refetches the peer, retains the typed draft and retries once', async ({ authenticatedPage: page, browser }) => {
   test.setTimeout(300_000);
-  expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
-  expect(new URL(process.env.SUPABASE_DB_URL!).port).toBe('61122');
+  psqlRun(rc7OwnedStackSql('E6 A06'));
   const line = psqlScalar(`SELECT id FROM project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='${NAME}' AND removed_at IS NULL;`);
   expect(line).toMatch(/^[0-9a-f-]{36}$/);
   expect(psqlScalar(`SELECT count(*) FROM project_ffe_items WHERE project_id='${JOB}' AND removed_at IS NULL;`)).toBe('80');
   expect(psqlScalar(`SELECT count(*) FROM project_ffe_items WHERE project_room_id='${ROOM}' AND removed_at IS NULL;`)).toBe('36');
-  expect(psqlScalar(`SELECT current_setting('rc7.e6_stack', true);`)).toBe('patina-rc7-e6');
   const specId = psqlScalar(`SELECT id FROM project_ffe_specs WHERE ffe_item_id='${line}';`);
   expect(specId).toMatch(/^[0-9a-f-]{36}$/);
-  psqlRun(`DO $$ BEGIN
-    IF current_setting('rc7.e6_stack', true) IS DISTINCT FROM 'patina-rc7-e6' THEN RAISE EXCEPTION 'not the E6 owned stack'; END IF;
+  psqlRun(`${rc7OwnedStackSql('E6 A06 reset')}DO $$ BEGIN
     UPDATE project_ffe_specs SET finish='${ORIGINAL}' WHERE id='${specId}';
   END $$;`);
   const original = finishOf(line);

@@ -28,3 +28,30 @@ export function round8Stack(purpose: string): { api: URL; db: URL } {
   }
   return { api, db };
 }
+
+// RC-7 lane specs that write fixtures or revoke grants also require the stack
+// owner's marker: a supabase_admin-owned rc7_owned.stack table holding a
+// project_id row equal to RC7_OWNED_STACK. The shared stack never carries it.
+// Prefix the returned SQL to the same psqlRun call as the write: it sets the
+// session's rc7.stack and raises before anything after it runs.
+export function rc7OwnedStackSql(purpose: string): string {
+  round8Stack(purpose);
+  const stack = process.env.RC7_OWNED_STACK ?? '';
+  if (!/^[a-z0-9-]+$/.test(stack)) {
+    throw new Error(`${purpose}: RC7_OWNED_STACK must name the owned stack's rc7_owned.stack row.`);
+  }
+  const label = purpose.replace(/'/g, "''");
+  return `SELECT set_config('rc7.stack', '${stack}', false);
+DO $rc7$ DECLARE owned boolean; BEGIN
+  IF to_regclass('rc7_owned.stack') IS NULL
+     OR (SELECT relowner FROM pg_class WHERE oid = to_regclass('rc7_owned.stack')) <> 'supabase_admin'::regrole THEN
+    RAISE EXCEPTION '${label}: no supabase_admin-owned rc7_owned.stack marker; refusing';
+  END IF;
+  EXECUTE 'SELECT EXISTS (SELECT 1 FROM rc7_owned.stack WHERE project_id = $1)'
+    INTO owned USING current_setting('rc7.stack', true);
+  IF owned IS NOT TRUE THEN
+    RAISE EXCEPTION '${label}: rc7_owned.stack does not name %; refusing', current_setting('rc7.stack', true);
+  END IF;
+END $rc7$;
+`;
+}

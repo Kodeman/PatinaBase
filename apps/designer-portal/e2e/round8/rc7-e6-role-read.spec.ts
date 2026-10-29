@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures/auth';
 import { psqlRun, psqlScalar } from '../helpers/psql';
+import { rc7OwnedStackSql } from './owned-stack';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 
@@ -8,12 +9,9 @@ const JOB = 'f0180000-0000-4000-8000-000000000010';
 // service key); RLS stays the data boundary.
 test('temporary role-read refusal cannot redirect the designer to Wrong portal', async ({ authenticatedPage: page }) => {
   test.setTimeout(120_000);
-  expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
-  expect(new URL(process.env.SUPABASE_DB_URL!).port).toBe('61122');
-  expect(psqlScalar(`SELECT current_setting('rc7.e6_stack', true);`)).toBe('patina-rc7-e6');
+  psqlRun(rc7OwnedStackSql('E6 role-read'));
   expect(psqlScalar(`SELECT has_table_privilege('service_role','public.user_roles','SELECT')`)).toBe('t');
-  psqlRun(`DO $$ BEGIN
-    IF current_setting('rc7.e6_stack', true) IS DISTINCT FROM 'patina-rc7-e6' THEN RAISE EXCEPTION 'not the E6 owned stack'; END IF;
+  psqlRun(`${rc7OwnedStackSql('E6 role-read')}DO $$ BEGIN
     REVOKE SELECT ON public.user_roles FROM service_role;
   END $$;`);
   try {

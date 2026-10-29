@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures/auth';
 import { psqlRun, psqlScalar } from '../helpers/psql';
+import { rc7OwnedStackSql } from './owned-stack';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const ORDER = 'f6110000-0000-4000-8000-000000000101';
@@ -36,18 +37,14 @@ async function search(page: Page, query: string) {
 test.describe('RC7 E6 exact job entry matrix on live rows', () => {
   test.setTimeout(300_000);
   test.beforeAll(() => {
-    expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
-    expect(new URL(process.env.SUPABASE_DB_URL!).port).toBe('61122');
-    expect(psqlScalar(`SELECT current_setting('rc7.e6_stack', true);`)).toBe('patina-rc7-e6');
-    psqlRun(readFileSync(path.join(__dirname, 'rc7-e6-entry-fixture.sql'), 'utf8'));
+    psqlRun(rc7OwnedStackSql('E6 entry fixture') + readFileSync(path.join(__dirname, 'rc7-e6-entry-fixture.sql'), 'utf8'));
     seeded = true;
     expect(readback()).toBe('draft|unsent|unread');
   });
   test.afterAll(() => {
     if (!seeded) return;
-    psqlRun(`BEGIN; DO $$ BEGIN
-      IF current_setting('rc7.e6_stack', true) IS DISTINCT FROM 'patina-rc7-e6'
-        OR NOT EXISTS (SELECT 1 FROM purchase_orders WHERE id='${ORDER}' AND project_id='${JOB}' AND po_number='E6-DRAFT' AND status='draft' AND sent_at IS NULL)
+    psqlRun(`${rc7OwnedStackSql('E6 entry cleanup')}BEGIN; DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM purchase_orders WHERE id='${ORDER}' AND project_id='${JOB}' AND po_number='E6-DRAFT' AND status='draft' AND sent_at IS NULL)
         OR NOT EXISTS (SELECT 1 FROM notification_log WHERE id='${NOTICE}' AND type='e6_local_notice')
       THEN RAISE EXCEPTION 'E6 fixture changed unexpectedly; refusing cleanup'; END IF;
     END $$;
