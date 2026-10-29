@@ -202,7 +202,7 @@ function OpenClaimRow({
           </DocumentAction>
           <button
             type="button"
-            data-orders-return={po?.id}
+            data-orders-return={`claim:${claim.id}`}
             onClick={() => onOpenDocument(po?.project?.id ?? null)}
             className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center whitespace-nowrap text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           >
@@ -339,7 +339,7 @@ function QueueRow({
         </DocumentAction>
         <button
           type="button"
-          data-orders-return={po.id}
+          data-orders-return={`po:${po.id}`}
           onClick={() => onOpenDocument(po.project_id ?? po.project?.id ?? null)}
           className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center whitespace-nowrap text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
         >

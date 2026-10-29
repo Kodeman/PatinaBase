@@ -14,10 +14,11 @@ let mockOrderItems: Record<string, unknown>[] = [];
 let mockOrderAuthority: Record<string, unknown> = { isSuccess: true, data: null };
 let mockOrderAgreement: Record<string, unknown> = { isSuccess: true, data: { state: 'missing', evidence: null } };
 let mockOrderInstruments: Record<string, unknown> = { isSuccess: true, data: [] };
+let mockThreads: Record<string, unknown>[] = [];
 jest.mock('@tanstack/react-query', () => ({
   ...jest.requireActual('@tanstack/react-query'),
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
-  useQuery: () => ({ data: [] }),
+  useQuery: (q: { queryKey: unknown[] }) => ({ data: q.queryKey[0] === 'vendor-threads' ? mockThreads : [] }),
   useQueries: ({ queries }: { queries: { queryKey: string[] }[] }) => queries.map(q =>
     q.queryKey[0] === 'project-purchasing-agreement' ? mockOrderAgreement :
     q.queryKey[0] === 'authority' ? mockOrderAuthority : mockOrderInstruments),
@@ -37,6 +38,10 @@ jest.mock('@patina/supabase', () => ({
   }),
   useStudioPaymentMethods: () => ({ data: [{ id: 'pm-1', label: 'Studio Amex' }] }),
   useUpsertStudioVendorAccount: () => ({ mutate: mockUpsert, isPending: false }),
+  useUser: () => ({ user: { id: 'user-1' } }),
+  useThreadMessages: () => ({ data: { pages: [] } }),
+  useSendMessage: () => ({ mutate: jest.fn(), isPending: false }),
+  useStartVendorBrief: () => ({ mutate: jest.fn(), mutateAsync: jest.fn(), isPending: false }),
 }));
 
 jest.mock('@/hooks/use-viewer-studio', () => ({
@@ -228,5 +233,39 @@ describe('Orders book external agreement purchase gate', () => {
     mockOrderAgreement = { isSuccess: true, data: { state: 'missing', evidence: null } };
     openOrders(); expect(screen.getByRole('button', { name: /Order all/ })).toBeInTheDocument();
     expect(screen.getByText(/You can still order/)).toBeInTheDocument();
+  });
+});
+
+describe('RC7-E6-2: a document opened from the vendors page carries its place', () => {
+  beforeEach(() => {
+    mockOrderAgreement = { isSuccess: true, data: { state: 'missing', evidence: null } };
+    mockOrderItems = [];
+    mockThreads = [];
+  });
+
+  it('an open order passes the vendor, its Orders page and a po-namespaced row key', () => {
+    const onOpenDocument = jest.fn();
+    render(<VendorsBookPage vendors={[vendor]} initialVendorId={vendor.id} initialVendorPage="orders"
+      orders={[{ id: 'po-1', vendor_id: vendor.id, project_id: 'project-1', status: 'sent', po_number: 'PO-1', project: { name: 'Oak House' } }]}
+      briefProjectId={null} canSeePoMoney={() => true} onOpenDocument={onOpenDocument} />);
+    const open = screen.getByRole('button', { name: 'open document →' });
+    expect(open).toHaveAttribute('data-orders-return', 'po:po-1');
+    fireEvent.click(open);
+    expect(onOpenDocument).toHaveBeenCalledWith('project-1', { vendorId: vendor.id, page: 'orders', threadId: null });
+  });
+
+  it('reopens the held thread and passes it with a thread-namespaced key', () => {
+    mockThreads = [
+      { id: 't-1', project_id: 'project-1', project: { name: 'Oak House' }, participants: [] },
+      { id: 't-2', project_id: 'project-2', project: { name: 'Lake House' }, participants: [] },
+    ];
+    const onOpenDocument = jest.fn();
+    render(<VendorsBookPage vendors={[{ ...vendor, contact_profile_id: 'profile-1' }]} orders={[]}
+      initialVendorId={vendor.id} initialVendorPage="thread" initialThreadId="t-2"
+      briefProjectId={null} canSeePoMoney={() => true} onOpenDocument={onOpenDocument} />);
+    const link = screen.getByRole('button', { name: 're: Lake House →' });
+    expect(link).toHaveAttribute('data-orders-return', 'thread:t-2');
+    fireEvent.click(link);
+    expect(onOpenDocument).toHaveBeenCalledWith('project-2', { vendorId: vendor.id, page: 'thread', threadId: 't-2' });
   });
 });

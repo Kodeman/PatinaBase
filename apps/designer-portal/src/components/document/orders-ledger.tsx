@@ -44,7 +44,7 @@ import { dueToMakers, LedgerFrontMatter } from './ledger-front-matter';
 import { PoMoneyOut } from './line-unfold/record-payment';
 import { ordersThroughput } from '@/lib/document/ledger-summary';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
-import { VendorsBookPage } from './orders-book-vendors';
+import { VendorsBookPage, type VendorPlace } from './orders-book-vendors';
 import { WeekBookPage } from './orders-book-week';
 import { ReceivingBookPage } from './orders-book-receiving';
 import type { OpenLedgerContext } from './command-bar';
@@ -94,7 +94,9 @@ type AnyRecord = any;
 type PaymentLens = 'due' | 'pending' | 'paid';
 
 /** A held Orders return: its filter is the page, with any worn lens after `?`
- *  (`ledger?project=…&payment=due`). Stored data is untrusted. */
+ *  (`ledger?project=…&payment=due`), and on the vendors page the vendor, its
+ *  sub-page and thread (`vendors?vendor=…&sub=thread&thread=…`). Stored data
+ *  is untrusted. */
 function parseOrdersReturn(held: StudioOverlayState | null | undefined) {
   if (held?.overlay !== 'orders') return null;
   const [pageKey, lens] = (held.filter ?? '').split('?');
@@ -105,6 +107,9 @@ function parseOrdersReturn(held: StudioOverlayState | null | undefined) {
     page: PAGES.find((p) => p.key === pageKey)?.key ?? 'ledger',
     project: params.get('project'),
     payment: payment === 'due' || payment === 'pending' || payment === 'paid' ? (payment as PaymentLens) : null,
+    vendor: params.get('vendor'),
+    vendorPage: params.get('sub'),
+    thread: params.get('thread'),
   };
 }
 
@@ -351,13 +356,15 @@ export function OrdersLedger({
     () => { returnState.current = undefined; });
   }, []);
 
-  const openDocument = (projectId: string | null) => {
+  const openDocument = (projectId: string | null, place?: VendorPlace) => {
     if (!projectId) return;
     const root = bookRef.current;
     const rowKey = pressed.current?.dataset.ordersReturn;
     const lens = new URLSearchParams({
       ...(projectLens ? { project: projectLens } : {}),
       ...(paymentLens ? { payment: paymentLens } : {}),
+      ...(place ? { vendor: place.vendorId, sub: place.page } : {}),
+      ...(place?.threadId ? { thread: place.threadId } : {}),
     }).toString();
     // Without a row to land on, the page link takes focus, so the sheet opens at its top.
     rememberPaperOrigin(projectId, { path: '/desk', studioOverlay: {
@@ -465,8 +472,9 @@ export function OrdersLedger({
         <VendorsBookPage
           vendors={vendors ?? []}
           orders={orders ?? []}
-          initialVendorId={initialContext?.vendorId ?? null}
-          initialVendorPage={initialContext?.vendorPage ?? null}
+          initialVendorId={heldReturn?.vendor ?? initialContext?.vendorId ?? null}
+          initialVendorPage={heldReturn?.vendorPage ?? initialContext?.vendorPage ?? null}
+          initialThreadId={heldReturn?.thread ?? null}
           focusField={initialContext?.focus ?? null}
           briefProjectId={initialContext?.projectId ?? null}
           canSeePoMoney={canSeePoMoney}
@@ -920,7 +928,7 @@ export function OrdersLedger({
                             </DocumentAction>
                             <button
                               type="button"
-                              data-orders-return={po.id}
+                              data-orders-return={`po:${po.id}`}
                               onClick={() =>
                                 openDocument(
                                   po.project_id ?? po.project?.id ?? null,

@@ -140,7 +140,28 @@ jest.mock('@/lib/document/ledger-summary', () => ({
 }));
 
 jest.mock('./orders-book-vendors', () => ({
-  VendorsBookPage: () => <div>Vendor page</div>,
+  VendorsBookPage: ({
+    initialVendorId,
+    initialVendorPage,
+    initialThreadId,
+    onOpenDocument,
+  }: {
+    initialVendorId?: string | null;
+    initialVendorPage?: string | null;
+    initialThreadId?: string | null;
+    onOpenDocument: (projectId: string | null, place?: object) => void;
+  }) => (
+    <div>
+      Vendor page · {initialVendorId ?? 'none'} · {initialVendorPage ?? 'none'} · {initialThreadId ?? 'none'}
+      <button
+        type="button"
+        data-orders-return="thread:t-9"
+        onClick={() => onOpenDocument('project-2', { vendorId: 'v-1', page: 'thread', threadId: 't-9' })}
+      >
+        re: Lake House →
+      </button>
+    </div>
+  ),
 }));
 
 jest.mock('./orders-book-week', () => ({
@@ -949,7 +970,7 @@ describe('OrdersLedger · Studio return (RC7-E6-2)', () => {
   });
 
   const rowDocument = (poId: string) =>
-    document.querySelector<HTMLElement>(`[data-orders-po-row="${poId}"] [data-orders-return="${poId}"]`)!;
+    document.querySelector<HTMLElement>(`[data-orders-po-row="${poId}"] [data-orders-return="po:${poId}"]`)!;
 
   it('remembers the page, lenses, pressed row and sheet scroll before opening the job', () => {
     const onClose = jest.fn();
@@ -962,7 +983,7 @@ describe('OrdersLedger · Studio return (RC7-E6-2)', () => {
     expect(mockPush).toHaveBeenCalledWith('/doc/project-2');
     expect(readPaperOrigin('project-2')).toMatchObject({
       kind: 'studio-overlay', path: '/desk', overlay: 'orders',
-      filter: 'ledger?project=project-2&payment=due', subject: 'po-2', focusKey: 'po-2', scrollTop: 55,
+      filter: 'ledger?project=project-2&payment=due', subject: 'po:po-2', focusKey: 'po:po-2', scrollTop: 55,
     });
   });
 
@@ -972,7 +993,7 @@ describe('OrdersLedger · Studio return (RC7-E6-2)', () => {
         <div data-doc-sheet-scroll-region>
           <OrdersLedger
             onClose={jest.fn()}
-            initialContext={{ studioReturn: { overlay: 'orders', filter: 'ledger?project=project-2&payment=due', subject: 'po-2', focusKey: 'po-2', scrollTop: 0 } }}
+            initialContext={{ studioReturn: { overlay: 'orders', filter: 'ledger?project=project-2&payment=due', subject: 'po:po-2', focusKey: 'po:po-2', scrollTop: 0 } }}
           />
         </div>
       </StrictMode>,
@@ -982,6 +1003,30 @@ describe('OrdersLedger · Studio return (RC7-E6-2)', () => {
     expect(document.querySelectorAll('[data-orders-po-row]')).toHaveLength(1);
     await waitFor(() => expect(rowDocument('po-2')).toHaveFocus());
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('remembers the vendor, its sub-page and thread when leaving from a vendor thread', () => {
+    render(<div data-doc-sheet-scroll-region><OrdersLedger onClose={jest.fn()} /></div>);
+    fireEvent.click(screen.getByRole('button', { name: 'Vendor accounts' }));
+    fireEvent.click(screen.getByRole('button', { name: 're: Lake House →' }));
+    expect(mockPush).toHaveBeenCalledWith('/doc/project-2');
+    expect(readPaperOrigin('project-2')).toMatchObject({
+      kind: 'studio-overlay', overlay: 'orders',
+      filter: 'vendors?vendor=v-1&sub=thread&thread=t-9', subject: 'thread:t-9', focusKey: 'thread:t-9',
+    });
+  });
+
+  it('reopens the vendor at its sub-page and thread, focusing the pressed control', async () => {
+    render(
+      <div data-doc-sheet-scroll-region>
+        <OrdersLedger
+          onClose={jest.fn()}
+          initialContext={{ studioReturn: { overlay: 'orders', filter: 'vendors?vendor=v-1&sub=thread&thread=t-9', subject: 'thread:t-9', focusKey: 'thread:t-9' } }}
+        />
+      </div>,
+    );
+    expect(screen.getByText(/Vendor page · v-1 · thread · t-9/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 're: Lake House →' })).toHaveFocus());
   });
 
   it('reopens another page with its lens, focusing the page link when no row was pressed', async () => {
