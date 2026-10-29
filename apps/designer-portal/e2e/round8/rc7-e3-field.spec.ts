@@ -171,6 +171,13 @@ function seedDefectObservation() {
 }
 
 // DEFECT RC7-E3-2: the Field writer cannot carry subject, scope or next owner.
+// Schema gap + writer gap: 00874_round8_typed_subjects.sql:9-10 adds only
+// margin_notes.subject_kind/subject_id; margin_notes has NO scope or
+// next-owner column, so `to_jsonb(n)->>'scope'` and `->>'next_owner_id'` below
+// are always null. This fixme also seeds its own note (seedDefectObservation)
+// instead of the Field product path (MarginNoteWrite.swift), so it cannot
+// flip as written: once a schema and writer ruling lands, rewrite it to read
+// the real columns from a note written through the product path.
 test.fixme("A15 Field observation records a typed source, scope and review owner", async () => {
   ownedStack();
   seedDefectObservation();

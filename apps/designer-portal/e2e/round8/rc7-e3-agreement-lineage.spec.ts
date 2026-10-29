@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures/auth";
 import { psqlAsUserRow, psqlRows, psqlRun, psqlScalar } from "../helpers/psql";
 
@@ -13,10 +14,12 @@ import { psqlAsUserRow, psqlRows, psqlRun, psqlScalar } from "../helpers/psql";
 // UI (designer, F01): record inquiry, Accept, link the client through
 // /api/clients/invite, set the Direction's client through HouseholdChip, read
 // the Direction's design-agreement acts, open its Contract Room.
-// Authenticated RPC (the RPCs the UI routes call): begin_direction_from_discovery
+// Authenticated RPC as the real actors: begin_direction_from_discovery
 // (designer), the agreement composition + send_commercial_document (designer),
 // sign_design_services_agreement (client), countersign_design_services_agreement
-// (designer), document_open (designer) for each former id. The sign chain and
+// (designer), document_open (designer) for each former id. The client portal's
+// sign route calls sign_design_services_agreement_with_trusted_ip with the
+// request IP and composed consent instead; that path is NOT exercised here. The sign chain and
 // its readback run in ONE transaction that is rolled back, so executed rows
 // never outlive the run.
 
@@ -68,13 +71,90 @@ function removeProbe() {
     DELETE FROM leads WHERE designer_id='${DESIGNER}' AND contact_name='${INQUIRY}';`);
 }
 
-async function openDoc(page: import("@playwright/test").Page, id: string) {
+async function openDoc(page: Page, id: string) {
   await page.goto(`/doc/${id}`, { waitUntil: "domcontentloaded" });
   await expect(page.locator("[data-document-shell]")).toHaveAttribute(
     "data-arrival-ready",
     "",
     { timeout: 60_000 },
   );
+}
+
+/** Designer UI: inquiry -> Accept; fixture Discovery; designer seed RPC;
+ *  invite route links the existing client profile to the relationship. */
+async function seedDirection(page: Page) {
+  await page.goto("/desk", { waitUntil: "domcontentloaded" });
+  await expect(page.locator('[data-studio="round8"]')).toHaveAttribute(
+    "data-arrival-ready",
+    "",
+    { timeout: 60_000 },
+  );
+  await page
+    .getByRole("button", { name: "Record an inquiry", exact: true })
+    .click();
+  await page.getByLabel("Client name").fill(INQUIRY);
+  await page.getByLabel("Email address (optional)").fill(CLIENT_EMAIL);
+  await page.getByLabel("Project summary").fill(NOTES);
+  await page.getByRole("button", { name: "Create inquiry brief" }).click();
+  await expect
+    .poll(() =>
+      psqlScalar(
+        `SELECT count(*) FROM leads WHERE designer_id='${DESIGNER}' AND contact_name='${INQUIRY}'`,
+      ),
+    )
+    .toBe("1");
+  const lead = psqlScalar(
+    `SELECT id FROM leads WHERE designer_id='${DESIGNER}' AND contact_name='${INQUIRY}'`,
+  );
+  await page.goto(`/doc/${lead}`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("[data-document-shell]")).toHaveAttribute(
+    "data-arrival-ready",
+    "",
+    { timeout: 60_000 },
+  );
+  await page.getByRole("button", { name: "Accept · begin" }).click();
+  await expect
+    .poll(() => psqlScalar(`SELECT status FROM leads WHERE id='${lead}'`))
+    .toBe("accepted");
+  const relationship = psqlScalar(
+    `SELECT id FROM designer_clients WHERE lead_id='${lead}' AND designer_id='${DESIGNER}'`,
+  );
+  expect(relationship).toMatch(/^[a-f0-9-]{36}$/);
+
+  // Discovery's five essentials (fixture), then the designer's own seed RPC.
+  psqlRun(`INSERT INTO client_discovery
+    (designer_client_id,designer_id,project_type,rooms,budget_max_cents,target_date,style_keywords,lifestyle)
+    VALUES ('${relationship}','${DESIGNER}','full_room',
+      '[{"name":"Piano room","notes":"Keep the piano alcove"}]'::jsonb,
+      5000000,'2027-06-01',ARRAY['warm'],'[{"room":"Piano room","who":"family"}]'::jsonb);`);
+  const [direction] = psqlAsUserRow(
+    DESIGNER,
+    `SELECT public.begin_direction_from_discovery('${relationship}');`,
+  );
+  expect(direction).toMatch(/^[a-f0-9-]{36}$/);
+  // 00414 redefined the seed: the Direction is a design-services draft from birth.
+  expect(
+    psqlScalar(
+      `SELECT document_kind||'|'||commercial_state||'|'||status FROM proposals WHERE id='${direction}'`,
+    ),
+  ).toBe("design_services|draft|draft");
+
+  // Client link: the invite route links the existing client profile to the
+  // relationship; HouseholdChip then sets the Direction's client.
+  const invite = await page.request.post("/api/clients/invite", {
+    data: {
+      designerClientId: relationship,
+      clientEmail: CLIENT_EMAIL,
+      invite: true,
+    },
+  });
+  expect(invite.ok(), await invite.text()).toBe(true);
+  expect(
+    psqlScalar(
+      `SELECT client_id FROM designer_clients WHERE id='${relationship}'`,
+    ),
+  ).toBe(CLIENT);
+  return { lead, relationship, direction };
 }
 
 /** Compose, send, client-sign and countersign `agreement` as the real actors,
@@ -161,6 +241,19 @@ SELECT jsonb_build_object(
     'project_commercial_documents.source_proposal_id', (SELECT count(*) FROM project_commercial_documents WHERE source_proposal_id = '${direction}'),
     'project_billing_authorities.source_proposal_id', (SELECT count(*) FROM project_billing_authorities WHERE source_proposal_id = '${direction}'),
     'projects.proposal_id', (SELECT count(*) FROM projects WHERE proposal_id = '${direction}')),
+  'scopeEditions', (SELECT jsonb_agg(jsonb_build_object('id', id, 'projectId', project_id,
+      'sourceProposalId', source_proposal_id, 'status', status))
+    FROM project_scope_editions WHERE project_id = c.project OR source_proposal_id = '${direction}'),
+  'billingAuthorities', (SELECT jsonb_agg(jsonb_build_object('id', id, 'projectId', project_id,
+      'sourceProposalId', source_proposal_id, 'status', status))
+    FROM project_billing_authorities WHERE project_id = c.project OR source_proposal_id = '${direction}'),
+  'projectLineageNotes', (SELECT jsonb_build_object('leadId', l.id, 'notes', l.project_description,
+      'contactName', l.contact_name)
+    FROM projects pj
+    JOIN proposals pr ON pr.id = pj.proposal_id
+    JOIN designer_clients dc ON dc.id = pr.designer_client_id
+    JOIN leads l ON l.id = dc.lead_id
+    WHERE pj.id = c.project),
   'aliases', (SELECT opened FROM e3_alias),
   'leadDocumentState', (SELECT jsonb_agg(jsonb_build_object('kind', engagement_kind, 'engagementId', engagement_id,
       'proposalId', proposal_id, 'projectId', project_id)) FROM document_state WHERE lead_id = '${lead}'))
@@ -180,77 +273,7 @@ test("A03 inquiry-born Direction carries its lineage through the signed agreemen
   test.setTimeout(300_000);
   removeProbe();
   try {
-    await page.goto("/desk", { waitUntil: "domcontentloaded" });
-    await expect(page.locator('[data-studio="round8"]')).toHaveAttribute(
-      "data-arrival-ready",
-      "",
-      { timeout: 60_000 },
-    );
-    await page
-      .getByRole("button", { name: "Record an inquiry", exact: true })
-      .click();
-    await page.getByLabel("Client name").fill(INQUIRY);
-    await page.getByLabel("Email address (optional)").fill(CLIENT_EMAIL);
-    await page.getByLabel("Project summary").fill(NOTES);
-    await page.getByRole("button", { name: "Create inquiry brief" }).click();
-    await expect
-      .poll(() =>
-        psqlScalar(
-          `SELECT count(*) FROM leads WHERE designer_id='${DESIGNER}' AND contact_name='${INQUIRY}'`,
-        ),
-      )
-      .toBe("1");
-    const lead = psqlScalar(
-      `SELECT id FROM leads WHERE designer_id='${DESIGNER}' AND contact_name='${INQUIRY}'`,
-    );
-    await page.goto(`/doc/${lead}`, { waitUntil: "domcontentloaded" });
-    await expect(page.locator("[data-document-shell]")).toHaveAttribute(
-      "data-arrival-ready",
-      "",
-      { timeout: 60_000 },
-    );
-    await page.getByRole("button", { name: "Accept · begin" }).click();
-    await expect
-      .poll(() => psqlScalar(`SELECT status FROM leads WHERE id='${lead}'`))
-      .toBe("accepted");
-    const relationship = psqlScalar(
-      `SELECT id FROM designer_clients WHERE lead_id='${lead}' AND designer_id='${DESIGNER}'`,
-    );
-    expect(relationship).toMatch(/^[a-f0-9-]{36}$/);
-
-    // Discovery's five essentials (fixture), then the designer's own seed RPC.
-    psqlRun(`INSERT INTO client_discovery
-      (designer_client_id,designer_id,project_type,rooms,budget_max_cents,target_date,style_keywords,lifestyle)
-      VALUES ('${relationship}','${DESIGNER}','full_room',
-        '[{"name":"Piano room","notes":"Keep the piano alcove"}]'::jsonb,
-        5000000,'2027-06-01',ARRAY['warm'],'[{"room":"Piano room","who":"family"}]'::jsonb);`);
-    const [direction] = psqlAsUserRow(
-      DESIGNER,
-      `SELECT public.begin_direction_from_discovery('${relationship}');`,
-    );
-    expect(direction).toMatch(/^[a-f0-9-]{36}$/);
-    // 00414 redefined the seed: the Direction is a design-services draft from birth.
-    expect(
-      psqlScalar(
-        `SELECT document_kind||'|'||commercial_state||'|'||status FROM proposals WHERE id='${direction}'`,
-      ),
-    ).toBe("design_services|draft|draft");
-
-    // Client link: the invite route links the existing client profile to the
-    // relationship; HouseholdChip then sets the Direction's client.
-    const invite = await page.request.post("/api/clients/invite", {
-      data: {
-        designerClientId: relationship,
-        clientEmail: CLIENT_EMAIL,
-        invite: true,
-      },
-    });
-    expect(invite.ok(), await invite.text()).toBe(true);
-    expect(
-      psqlScalar(
-        `SELECT client_id FROM designer_clients WHERE id='${relationship}'`,
-      ),
-    ).toBe(CLIENT);
+    const { lead, relationship, direction } = await seedDirection(page);
     await openDoc(page, direction);
     await page
       .getByRole("button", {
@@ -306,6 +329,33 @@ test("A03 inquiry-born Direction carries its lineage through the signed agreemen
         "proposals.parent_proposal_id"
       ],
     ).toBe(0);
+    // The edition and the billing authority the countersign minted belong to
+    // the returned project and name the Direction as their source.
+    const projectId = countersign.projectId as string;
+    const editions = readback.scopeEditions as Array<Record<string, string>>;
+    expect(editions).toHaveLength(1);
+    expect(editions[0]).toMatchObject({
+      projectId,
+      sourceProposalId: direction,
+      status: "active",
+    });
+    const authorities = readback.billingAuthorities as Array<
+      Record<string, string>
+    >;
+    expect(authorities).toHaveLength(1);
+    expect(authorities[0]).toMatchObject({
+      id: countersign.billingAuthorityId as string,
+      projectId,
+      sourceProposalId: direction,
+      status: "active",
+    });
+    // The original inquiry notes, read back through the activated project:
+    // project -> proposal (Direction) -> relationship -> lead.
+    expect(readback.projectLineageNotes).toEqual({
+      leadId: lead,
+      notes: NOTES,
+      contactName: INQUIRY,
+    });
     const aliases = readback.aliases as Record<string, Record<string, string>>;
     expect(aliases.lead).toEqual({ kind: "redirect", projectId: relationship });
     expect(aliases.relationship).toEqual({
@@ -320,6 +370,64 @@ test("A03 inquiry-born Direction carries its lineage through the signed agreemen
     // The Contract Room opens on the SAME row (after the rolled-back chain, so
     // the Room's own part materialization cannot race the RPC composition).
     await acts.getByRole("button", { name: /Open the Contract Room/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/drafting/${direction}`), {
+      timeout: 60_000,
+    });
+    expect(
+      psqlScalar(
+        `SELECT count(*) FROM proposals WHERE designer_client_id='${relationship}'`,
+      ),
+    ).toBe("1");
+  } finally {
+    removeProbe();
+  }
+});
+
+// DEFECT RC7-E3-5: the ⌘K "Draft a services agreement" cold start, picked for a
+// household that already has an open Discovery-seeded Direction, writes a
+// second design_services draft with no link to the Direction
+// (draft-proposal-opener.tsx:95-106). If that second agreement executes, the
+// Direction stays an open draft and the inquiry lineage forks. Expected: an
+// explicit choice — continue the existing Direction, or start a separate
+// commission — before any second row is written. Ruling owed by Kody.
+test.fixme("A03 cold-start agreement for a household with an open Direction offers continue-or-separate", async ({
+  authenticatedPage: page,
+}) => {
+  test.setTimeout(300_000);
+  removeProbe();
+  try {
+    const { relationship, direction } = await seedDirection(page);
+    await openDoc(page, direction);
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: "Studio search" });
+    await expect(palette).toBeVisible();
+    await palette
+      .getByRole("combobox", { name: "Studio search" })
+      .fill("services agreement");
+    await palette
+      .getByRole("option", { name: /^Draft a services agreement/ })
+      .first()
+      .click();
+    const sheet = page.getByTestId("draft-proposal-layer");
+    await expect(sheet).toBeVisible();
+    await sheet.getByTestId("client-picker-trigger").click();
+    await page.getByTestId(`client-picker-option-${CLIENT}`).click();
+
+    // Expected: a choice, and no second row until the designer makes it.
+    await expect(
+      page.getByRole("button", { name: /Continue the existing Direction/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Start a separate commission/ }),
+    ).toBeVisible();
+    expect(
+      psqlScalar(
+        `SELECT count(*) FROM proposals WHERE designer_client_id='${relationship}'`,
+      ),
+    ).toBe("1");
+    await page
+      .getByRole("button", { name: /Continue the existing Direction/ })
+      .click();
     await expect(page).toHaveURL(new RegExp(`/drafting/${direction}`), {
       timeout: 60_000,
     });

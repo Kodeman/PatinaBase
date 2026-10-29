@@ -1,6 +1,10 @@
 import { test, expect } from "../fixtures/auth";
 import { psqlScalar } from "../helpers/psql";
 
+// PLACEHOLDER (not a reproducer): this fixme only probes recipient kinds; it
+// drives no audience path, send, uncertain outcome or retry. Replace it with
+// real five-audience transitions before it can count as evidence.
+//
 // A14 requires five genuinely addressed subject/audience paths and a controlled
 // failure or unknown delivery result. Private notes and client drafts alone are
 // already exercised by audience-work.spec.ts; repeating those as if they proved
