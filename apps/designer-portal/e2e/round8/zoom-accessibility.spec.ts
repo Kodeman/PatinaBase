@@ -31,9 +31,12 @@ async function fullyInsideViewport(page: Page, control: Locator) {
         const target = document.elementFromPoint(x, y);
         if (target === element || element.contains(target)) return true;
         // Rounded corners cut the 1px point out of the painted hit area.
+        if (!cornerRadius.endsWith('px')) return false;
         const radius = parseFloat(cornerRadius);
         if (radius <= 3.5) return false;
-        const inside = document.elementFromPoint(x + dx * radius, y + dy * radius);
+        // Just past the arc: a radius r clears its corner (1 - 1/sqrt 2) r inward.
+        const step = Math.ceil(radius * (1 - Math.SQRT1_2)) + 1;
+        const inside = document.elementFromPoint(x + dx * step, y + dy * step);
         return inside === element || element.contains(inside);
       });
     });

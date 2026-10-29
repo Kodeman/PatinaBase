@@ -479,11 +479,12 @@ function PresentOnPaper({ projectId, request, studioHeld, onInactive, onPresente
     }
   }, [opened]);
   useEffect(() => {
-    if (studioHeld && opened) {
+    // A pending presentation keeps the confirm open so its refusal can render.
+    if (studioHeld && opened && !present.isPending) {
       backToLaunch.current = true;
       setOpened(false);
     }
-  }, [studioHeld, opened]);
+  }, [studioHeld, opened, present.isPending]);
   if (!opened) {
     return (
       <div className="mt-2">
