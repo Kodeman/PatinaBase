@@ -14,6 +14,7 @@ let mockRequest = {
 jest.mock('@patina/supabase', () => ({
   useMyStudioServiceCompletion: (projectId: string | null, requestId: string) => mockCompletion(projectId, requestId),
   useMyServiceAcceptanceRequests: () => ({ data: [mockRequest], isPending: false, isError: false }),
+  useMyServiceAcceptanceEvidence: () => ({ data: undefined, isSuccess: false, isError: false }),
 }));
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => mockHydrated }));
 const completion = {

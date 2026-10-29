@@ -467,6 +467,69 @@ nonisolated struct RemoteStudioServiceCompletionRead: Decodable, Sendable, Equat
     }
 }
 
+// MARK: - Bound scope and evidence
+
+nonisolated struct RemoteServiceAcceptanceEvidence: Decodable, Sendable {
+    let requestId: String
+    let requestNumber: Int
+    let scope: Scope
+    let evidence: Manifest
+
+    struct Scope: Decodable, Sendable {
+        let editionId: String
+        let contentHash: String
+        let packages: [Package]
+    }
+
+    struct Package: Decodable, Sendable, Identifiable {
+        let key: String
+        let label: String
+        let inclusion: String
+        let conditionText: String?
+        let responsibilities: Responsibilities
+        let phases: [Phase]
+        var id: String { key }
+    }
+
+    struct Responsibilities: Decodable, Sendable {
+        let design: String
+        let purchasing: String
+        let installation: String
+    }
+
+    struct Phase: Decodable, Sendable {
+        let name: String
+        let service: String
+    }
+
+    struct Manifest: Decodable, Sendable {
+        let manifestId: String
+        let manifestHash: String
+        let members: [Member]
+    }
+
+    struct Member: Decodable, Sendable {
+        let kind: String
+        let title: String
+        let issuedAt: String?
+        let content: JSONValue?
+        let documents: [Document]
+    }
+
+    struct Document: Decodable, Sendable, Identifiable {
+        let bucket: String
+        let path: String
+        let title: String
+        var id: String { path }
+    }
+
+    func matches(_ request: RemoteServiceAcceptanceRequest) -> Bool {
+        requestId == request.requestId && requestNumber == request.requestNumber
+            && scope.editionId == request.scopeEditionId && scope.contentHash == request.scopeContentHash
+            && evidence.manifestHash == request.evidenceManifestHash
+    }
+}
+
 // MARK: - Calls
 
 extension DecisionsAPIClient {
@@ -489,6 +552,11 @@ extension DecisionsAPIClient {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard let payload, !payload.isEmpty, payload != "null" else { return [] }
         return try JSONDecoder().decode([RemoteServiceAcceptanceRequest].self, from: data)
+    }
+
+    func fetchMyServiceAcceptanceEvidence(requestId: String) async throws -> RemoteServiceAcceptanceEvidence {
+        let data = try await callRPC("get_my_service_acceptance_evidence", body: ["p_request_id": requestId])
+        return try JSONDecoder().decode(RemoteServiceAcceptanceEvidence.self, from: data)
     }
 
     /// Record one answer with method `ios_authenticated`. Throws the raw

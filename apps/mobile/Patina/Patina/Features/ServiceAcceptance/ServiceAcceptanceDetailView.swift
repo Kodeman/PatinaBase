@@ -63,6 +63,8 @@ struct ServiceAcceptanceDetailView: View {
 /// The scrolling body of the sheet, split out so it renders on its own.
 struct ServiceAcceptanceDetailContent: View {
     @Bindable var model: ServiceAcceptanceModel
+    @Environment(\.openURL) private var openURL
+    @State private var documentError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -70,6 +72,7 @@ struct ServiceAcceptanceDetailContent: View {
                 let settled = model.settlement(for: request)
                 header(request, settled: settled)
                 references(request)
+                evidenceSection
                 if settled == nil, let note = ServiceAcceptanceCopy.roleNote(request) {
                     Text(note)
                         .font(PatinaTypography.bodySmall)
@@ -91,8 +94,17 @@ struct ServiceAcceptanceDetailContent: View {
             refusalLine
         }
         // Re-read when another request opens or this one's outcome lands.
+        .task(id: evidenceKey) {
+            if let request = model.presentedRequest { await model.loadEvidence(for: request) }
+        }
         .task(id: studioServiceKey) {
             if let request = model.presentedRequest { await model.loadStudioService(for: request) }
+        }
+    }
+
+    private var evidenceKey: String? {
+        model.presentedRequest.map {
+            "\($0.requestId)|\($0.requestNumber)|\($0.scopeEditionId)|\($0.scopeContentHash)|\($0.evidenceManifestHash)"
         }
     }
 
@@ -134,9 +146,64 @@ struct ServiceAcceptanceDetailContent: View {
             reference(ServiceAcceptanceCopy.scopeReference(request.scopeContentHash), request.scopeContentHash)
             reference(ServiceAcceptanceCopy.evidenceReference(request.evidenceManifestHash),
                       request.evidenceManifestHash)
-            help(ServiceAcceptanceCopy.referencesNote)
         }
         .accessibilityIdentifier("serviceAcceptance.references")
+    }
+
+    private var evidenceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let evidence = model.presentedEvidence, model.evidenceReady {
+                VStack(alignment: .leading, spacing: 16) {
+                    MonoLabel(text: "Agreed scope")
+                    ForEach(evidence.scope.packages) { package in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("\(package.label) · \(package.inclusion)")
+                                .font(PatinaTypography.bodySmallMedium)
+                            if let condition = package.conditionText { help(condition) }
+                            help("Responsibilities: design · \(package.responsibilities.design), purchasing · \(package.responsibilities.purchasing), installation · \(package.responsibilities.installation)")
+                            ForEach(Array(package.phases.enumerated()), id: \.offset) { _, phase in
+                                help("\(phase.name) · \(phase.service)")
+                            }
+                        }
+                    }
+                    MonoLabel(text: "Issued evidence")
+                    ForEach(Array(evidence.evidence.members.enumerated()), id: \.offset) { _, member in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(member.title).font(PatinaTypography.bodySmallMedium)
+                            if let issuedAt = member.issuedAt { help("Issued \(issuedAt)") }
+                            if let content = member.content { AcceptanceEvidenceValue(value: content) }
+                            ForEach(member.documents) { document in
+                                Button(document.title) {
+                                    Task {
+                                        do {
+                                            let url = try await DocumentsAPIClient.shared.signedURL(storagePath: document.path)
+                                            documentError = nil
+                                            openURL(url)
+                                        } catch { documentError = document.path }
+                                    }
+                                }
+                                .font(PatinaTypography.bodySmallMedium)
+                                .foregroundStyle(PatinaColors.Text.interactive)
+                            }
+                        }
+                    }
+                    if documentError != nil { help("Couldn’t open this file. Try again.") }
+                }
+                .accessibilityIdentifier("serviceAcceptance.evidence")
+            } else if model.evidenceFailed {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Couldn’t load the agreed scope and evidence. Your response is unavailable until you can review them.")
+                        .font(PatinaTypography.bodySmall)
+                        .foregroundStyle(PatinaColors.Text.error)
+                    Button(ServiceAcceptanceCopy.tryAgain) { Task { await model.retryEvidence() } }
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                        .accessibilityIdentifier("serviceAcceptance.evidence.retry")
+                }
+            } else {
+                help("Loading the agreed scope and evidence…")
+            }
+        }
     }
 
     private func reference(_ label: String, _ value: String) -> some View {
@@ -270,7 +337,7 @@ struct ServiceAcceptanceDetailContent: View {
                     PatinaButton(
                         ServiceAcceptanceCopy.choiceLabel(choice),
                         style: .secondary,
-                        isEnabled: !model.isSubmitting
+                        isEnabled: !model.isSubmitting && model.evidenceReady
                     ) {
                         model.choose(choice)
                     }
@@ -371,5 +438,34 @@ struct ServiceAcceptanceDetailContent: View {
                 }
             }
         }
+    }
+}
+
+private struct AcceptanceEvidenceValue: View {
+    let value: JSONValue
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            switch value {
+            case .object(let facts):
+                ForEach(facts.keys.sorted(), id: \.self) { key in
+                    HStack(alignment: .top) {
+                        Text(key.replacingOccurrences(of: "([A-Z])", with: " $1", options: .regularExpression).capitalized + ":")
+                        if let fact = facts[key] { AcceptanceEvidenceValue(value: fact) }
+                    }
+                }
+            case .array(let values):
+                ForEach(Array(values.enumerated()), id: \.offset) { _, item in
+                    AcceptanceEvidenceValue(value: item)
+                }
+            case .string(let text): Text(text)
+            case .int(let number): Text(String(number))
+            case .double(let number): Text(String(number))
+            case .bool(let flag): Text(flag ? "Yes" : "No")
+            case .null: EmptyView()
+            }
+        }
+        .font(PatinaTypography.caption)
+        .foregroundStyle(PatinaColors.Text.secondary)
     }
 }

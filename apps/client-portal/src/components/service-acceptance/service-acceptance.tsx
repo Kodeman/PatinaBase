@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import {
-  useMyServiceAcceptanceRequests, useRespondServiceAcceptance,
-  type MyServiceAcceptanceRequest, type MyServiceAcceptanceResponse,
+  useMyServiceAcceptanceRequests, useMyServiceAcceptanceEvidence, useRespondServiceAcceptance,
+  type MyServiceAcceptanceRequest, type MyServiceAcceptanceEvidence as AcceptanceEvidence, type MyServiceAcceptanceResponse,
   type RespondServiceAcceptanceInput, type ServiceAcceptanceAnswer, type MyServiceAcceptanceReceipt,
 } from '@patina/supabase';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { documentSignedUrl } from '@/hooks/use-documents-client';
 import { StudioServiceCompletion } from './studio-service-completion';
 
 const actions: Record<ServiceAcceptanceAnswer, string> = {
@@ -37,9 +38,30 @@ export function acceptanceRefusal(error: unknown): string {
   return retryCopy;
 }
 
+function EvidenceFacts({ content }: { content: Record<string, unknown> }) {
+  return <dl className="space-y-1">{Object.entries(content).map(([key, value]) =>
+    <div key={key}><dt className="font-medium">{key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())}</dt>
+      <dd>{Array.isArray(value) ? value.map((item, index) => <div key={index}>{typeof item === 'object' ? <EvidenceFacts content={item} /> : String(item)}</div>)
+        : value !== null && typeof value === 'object' ? <EvidenceFacts content={value as Record<string, unknown>} /> : String(value)}</dd></div>)}</dl>;
+}
+
+function IssuedDocument({ path, title }: { path: string; title: string }) {
+  const [failed, setFailed] = useState(false);
+  async function open() {
+    try {
+      const url = await documentSignedUrl(path);
+      if (!url) { setFailed(true); return; }
+      setFailed(false);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch { setFailed(true); }
+  }
+  return <li><button type="button" className="underline" onClick={() => void open()}>{title}</button>
+    {failed && <p role="alert">Couldn’t open this file. Try again.</p>}</li>;
+}
+
 export function ServiceAcceptanceEvidence({ request, evidence }: {
   request: MyServiceAcceptanceRequest;
-  evidence?: ReactNode;
+  evidence: AcceptanceEvidence | undefined;
 }) {
   return <section aria-label="Agreed scope and evidence" className="space-y-4 border-y py-6">
     <h2 className="font-serif text-2xl">{request.viewerRole === 'signer_required' ? 'What you’re accepting' : 'Agreed scope and evidence'}</h2>
@@ -50,7 +72,19 @@ export function ServiceAcceptanceEvidence({ request, evidence }: {
       <div><dt>Scope reference · {request.scopeContentHash.slice(0, 12)}</dt><dd><code className="break-all text-sm">{request.scopeContentHash}</code></dd></div>
       <div><dt>Evidence reference · {request.evidenceManifestHash.slice(0, 12)}</dt><dd><code className="break-all text-sm">{request.evidenceManifestHash}</code></dd></div>
     </dl>
-    {evidence ?? <p>These references identify the agreed scope and evidence. Their contents are not available on this page yet.</p>}
+    {evidence && <div className="space-y-6">
+      <div><h3 className="font-serif text-xl">Agreed scope</h3><ul className="space-y-4">{evidence.scope.packages.map((pkg) =>
+        <li key={pkg.key}><h4 className="font-medium">{pkg.label} · {pkg.inclusion}</h4>
+          {pkg.conditionText && <p>{pkg.conditionText}</p>}
+          <p>Responsibilities: design · {pkg.responsibilities.design}, purchasing · {pkg.responsibilities.purchasing}, installation · {pkg.responsibilities.installation}</p>
+          {pkg.phases.map((phase, index) => <p key={index}>{phase.name} · {phase.service}</p>)}</li>)}</ul></div>
+      <div><h3 className="font-serif text-xl">Issued evidence</h3><ul className="space-y-4">{evidence.evidence.members.map((member, index) =>
+        <li key={index}><h4 className="font-medium">{member.title}</h4>
+          {member.issuedAt && <p>Issued {member.issuedAt}</p>}
+          {member.content && <EvidenceFacts content={member.content} />}
+          {member.documents.length > 0 && <ul>{member.documents.map((doc) => <IssuedDocument key={doc.path} path={doc.path} title={doc.title} />)}</ul>}
+        </li>)}</ul></div>
+    </div>}
   </section>;
 }
 
@@ -64,7 +98,7 @@ function ResponseReading({ response }: { response: ResponseReadingValue }) {
   </div>;
 }
 
-function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest; reload: () => Promise<unknown> }) {
+function ResponseForm({ request, reload, evidenceReady }: { request: MyServiceAcceptanceRequest; reload: () => Promise<unknown>; evidenceReady: boolean }) {
   const mutation = useRespondServiceAcceptance();
   const [answer, setAnswer] = useState<ServiceAcceptanceAnswer | null>(null);
   const [presented, setPresented] = useState(request);
@@ -81,7 +115,7 @@ function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest
   const needsReload = errorCopy != null && ![pausedCopy, retryCopy, invalidCopy].includes(errorCopy);
 
   async function submit() {
-    if (!answer || !valid || stale || mutation.isPending || needsReload) return;
+    if (!evidenceReady || !answer || !valid || stale || mutation.isPending || needsReload) return;
     const input: RespondServiceAcceptanceInput = {
       request: presented, response: answer,
       conditions: answer === 'accept_with_conditions' ? conditions.map((c) => ({ text: c.text.trim() })) : [],
@@ -102,7 +136,7 @@ function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest
   return <section aria-label="Your response" className="space-y-4">
     <h2 className="font-serif text-2xl">Your response</h2>
     {request.lifecycle === 'sent' && waiting > 0 && <p>Waiting for {waiting} required responses</p>}
-    <fieldset disabled={mutation.isPending || needsReload || stale} className="space-y-4">
+    <fieldset disabled={!evidenceReady || mutation.isPending || needsReload || stale} className="space-y-4">
       <legend>How would you like to respond?</legend>
       <div className="flex flex-wrap gap-3">{(Object.keys(actions) as ServiceAcceptanceAnswer[]).map((value) =>
         <button className={control} type="button" aria-pressed={answer === value} key={value} onClick={() => {
@@ -140,19 +174,29 @@ function ResponseForm({ request, reload }: { request: MyServiceAcceptanceRequest
   </section>;
 }
 
-export function ServiceAcceptanceReading({ request, reload, evidence }: {
-  request: MyServiceAcceptanceRequest; reload: () => Promise<unknown>; evidence?: ReactNode;
+export function ServiceAcceptanceReading({ request, reload }: {
+  request: MyServiceAcceptanceRequest; reload: () => Promise<unknown>;
 }) {
+  const evidenceQuery = useMyServiceAcceptanceEvidence(request.requestId);
+  const evidence = evidenceQuery.data;
+  const evidenceReady = evidenceQuery.isSuccess && !!evidence
+    && evidence.requestId === request.requestId && evidence.requestNumber === request.requestNumber
+    && evidence.scope.editionId === request.scopeEditionId && evidence.scope.contentHash === request.scopeContentHash
+    && evidence.evidence.manifestHash === request.evidenceManifestHash;
   const own = request.signers.find((s) => s.signerId === request.viewerSignerId)?.response;
   const pending = request.signers.filter((s) => s.required && !s.response).length;
   return <article className="mx-auto max-w-2xl space-y-8 px-4 py-10">
     <Link href={`/projects/${encodeURIComponent(request.projectId)}`}>Return to your house</Link>
     <header><h1 className="font-serif text-3xl">Service acceptance</h1><p>Request {request.requestNumber} · {request.lifecycle} · {request.aggregateOutcome.replaceAll('_', ' ')}</p></header>
-    <ServiceAcceptanceEvidence request={request} evidence={evidence} />
+    <ServiceAcceptanceEvidence request={request} evidence={evidenceReady ? evidence : undefined} />
+    {!evidenceReady && <div className="space-y-2">{evidenceQuery.isError || (evidenceQuery.isSuccess && !evidenceReady)
+      ? <><p role="alert">Couldn’t load the agreed scope and evidence. Your response is unavailable until you can review them.</p>
+          <button type="button" className={control} onClick={() => void evidenceQuery.refetch()}>Try again</button></>
+      : <p role="status">Loading the agreed scope and evidence…</p>}</div>}
     <StudioServiceCompletion projectId={request.projectId} requestId={request.requestId} aggregateOutcome={request.aggregateOutcome} />
     {request.lifecycle === 'sent' && (request.viewerRole !== 'signer_required' || own) && pending > 0 && <p>Waiting for {pending} required responses</p>}
     {own && <section aria-label="Your recorded response"><h2>Your response</h2><ResponseReading response={own} /></section>}
-    {request.viewerRole === 'signer_required' && request.lifecycle === 'sent' && !own && <ResponseForm request={request} reload={reload} />}
+    {request.viewerRole === 'signer_required' && request.lifecycle === 'sent' && !own && <ResponseForm request={request} reload={reload} evidenceReady={evidenceReady} />}
     <section aria-label="Responses"><h2>Responses</h2><ul className="space-y-4">{request.signers.map((s) => <li key={s.signerId}>
       <h3>{s.slot}{s.signerId === request.viewerSignerId ? ' · You' : ''} · {s.required ? 'Required' : 'Optional'}</h3>
       {s.response ? <ResponseReading response={s.response} /> : <p>Waiting for response</p>}

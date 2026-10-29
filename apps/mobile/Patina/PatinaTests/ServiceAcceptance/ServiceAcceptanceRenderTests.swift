@@ -32,6 +32,11 @@ private actor StubService: ServiceAcceptanceService {
 
     func fetchMyServiceAcceptanceRequests() async throws -> [RemoteServiceAcceptanceRequest] { rows }
 
+    func fetchMyServiceAcceptanceEvidence(requestId: String) async throws -> RemoteServiceAcceptanceEvidence {
+        guard let request = rows.first(where: { $0.requestId == requestId }) else { throw URLError(.badServerResponse) }
+        return ServiceAcceptanceFixture.evidence(for: request)
+    }
+
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws {
         if let failure { throw failure }
     }
@@ -61,6 +66,7 @@ struct ServiceAcceptanceRenderTests {
         )
         await model.load()
         model.presentedRequestId = request.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         // ImageRenderer never runs `.task`; read the studio service directly.
         await model.loadStudioService(for: request)
         return model

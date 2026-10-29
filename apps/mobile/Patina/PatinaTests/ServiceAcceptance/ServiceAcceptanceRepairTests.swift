@@ -38,6 +38,11 @@ private actor ScriptedService: ServiceAcceptanceService {
         return rows
     }
 
+    func fetchMyServiceAcceptanceEvidence(requestId: String) async throws -> RemoteServiceAcceptanceEvidence {
+        guard let request = rows.first(where: { $0.requestId == requestId }) else { throw URLError(.badServerResponse) }
+        return ServiceAcceptanceFixture.evidence(for: request)
+    }
+
     func respondToServiceAcceptance(_ submission: ServiceAcceptanceSubmission) async throws {
         sent.append(submission)
         if !respondFailures.isEmpty { throw respondFailures.removeFirst() }
@@ -128,6 +133,7 @@ struct ServiceAcceptanceRepairTests {
         let model = ServiceAcceptanceModel(service: service)
         await model.load()
         model.presentedRequestId = request.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.returnToStudio)
         model.returnReason = String(repeating: "a", count: 2001)
         #expect(model.canSubmit == false)
@@ -151,6 +157,7 @@ struct ServiceAcceptanceRepairTests {
         let model = ServiceAcceptanceModel(service: service)
         await model.load()
         model.presentedRequestId = request.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.acceptWithConditions)
         model.conditions = ["Touch up the hall"]
         await model.submit(for: request)
@@ -171,12 +178,14 @@ struct ServiceAcceptanceRepairTests {
         await model.load()
 
         model.presentedRequestId = "req-A"
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.acceptWithConditions)
         model.conditions = ["Rehang the lamp"]
         #expect(model.canSubmit)
 
         model.presentedRequestId = nil
         model.presentedRequestId = "req-B"
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         #expect(model.choice == nil)
         #expect(model.conditions == [""])
         #expect(model.canSubmit == false)
@@ -184,6 +193,7 @@ struct ServiceAcceptanceRepairTests {
         #expect(await service.sent.isEmpty, "B was sent A's draft")
 
         model.presentedRequestId = "req-A"
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         #expect(model.choice == .acceptWithConditions)
         #expect(model.conditions == ["Rehang the lamp"])
     }
@@ -196,6 +206,7 @@ struct ServiceAcceptanceRepairTests {
         let model = ServiceAcceptanceModel(service: service)
         await model.load()
         model.presentedRequestId = before.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.accept)
         #expect(model.choice == .accept)
 
@@ -215,6 +226,7 @@ struct ServiceAcceptanceRepairTests {
         let model = ServiceAcceptanceModel(service: service)
         await model.load()
         model.presentedRequestId = open.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
         model.choose(.accept)
 
         await service.queueFetch(.failure(URLError(.notConnectedToInternet)))
@@ -280,6 +292,7 @@ struct ServiceAcceptanceRepairTests {
         #expect(model.pastRequests.map(\.requestId) == ["withdrawn", "superseded", "closed", "accepted"])
         for past in model.pastRequests {
             model.presentedRequestId = past.requestId
+        if let presented = model.presentedRequest { await model.loadEvidence(for: presented) }
             #expect(model.presentedRequest?.requestId == past.requestId)
             #expect(model.canRespond(past) == false)
         }

@@ -1,10 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ServiceAcceptancePage, ServiceAcceptanceReading, acceptanceRefusal } from './service-acceptance';
 import { ServiceAcceptanceDoor } from './service-acceptance-door';
-import type { MyServiceAcceptanceRequest } from '@patina/supabase';
+import type { MyServiceAcceptanceRequest, MyServiceAcceptanceEvidence } from '@patina/supabase';
 const mockMutate = jest.fn();
+const mockSignedUrl = jest.fn();
+jest.mock('@/hooks/use-documents-client', () => ({ documentSignedUrl: (...args: unknown[]) => mockSignedUrl(...args) }));
 let mockQuery: any;
-jest.mock('@patina/supabase', () => ({ useMyStudioServiceCompletion: () => ({ data: null, isPending: false, isError: false }), useMyServiceAcceptanceRequests: () => mockQuery, useRespondServiceAcceptance: () => ({ mutateAsync: mockMutate, isPending: false }) }));
+let mockEvidenceQuery: any;
+jest.mock('@patina/supabase', () => ({ useMyStudioServiceCompletion: () => ({ data: null, isPending: false, isError: false }), useMyServiceAcceptanceRequests: () => mockQuery, useMyServiceAcceptanceEvidence: () => mockEvidenceQuery, useRespondServiceAcceptance: () => ({ mutateAsync: mockMutate, isPending: false }) }));
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 const request = (over: Partial<MyServiceAcceptanceRequest> = {}): MyServiceAcceptanceRequest => ({
   requestId: 'r1', projectId: 'p1', requestNumber: 4, scopeEditionId: 'edition-1',
@@ -17,14 +20,30 @@ const receipt = (pendingRequiredSigners: { signerId: string; slot: string }[] = 
   responseId: 'response-1', aggregateOutcome,
   pendingRequiredSigners, signerPolicyRevision: 2, replayed: false,
 });
+const evidence: MyServiceAcceptanceEvidence = {
+  requestId: 'r1', requestNumber: 4,
+  scope: { editionId: 'edition-1', contentHash: 'a'.repeat(64), packages: [
+    { key: 'design', label: 'Design services', inclusion: 'included', conditionText: null,
+      responsibilities: { design: 'studio', purchasing: 'client', installation: 'none' }, phases: [{ name: 'Room plans', service: 'design' }] },
+    { key: 'delivery', label: 'Delivery', inclusion: 'excluded', conditionText: null,
+      responsibilities: { design: 'none', purchasing: 'none', installation: 'none' }, phases: [] },
+  ] },
+  evidence: { manifestId: 'manifest-1', manifestHash: 'b'.repeat(64), members: [
+    { kind: 'plan_issue', title: 'Issued room plan', issuedAt: '2026-10-28', content: null,
+      documents: [{ bucket: 'project-documents', path: 'plans/room.pdf', title: 'Room plan PDF' }] },
+  ] },
+};
 const click = (name: string) => fireEvent.click(screen.getByRole('button', { name, exact: true }));
-beforeEach(() => { mockMutate.mockReset(); mockQuery = { data: [request()], isPending: false, isError: false, refetch: jest.fn().mockResolvedValue({}) }; });
+beforeEach(() => { mockMutate.mockReset(); mockSignedUrl.mockResolvedValue('https://signed.example/room.pdf'); mockQuery = { data: [request()], isPending: false, isError: false, refetch: jest.fn().mockResolvedValue({}) };
+  mockEvidenceQuery = { data: evidence, isSuccess: true, isError: false, refetch: jest.fn() }; });
 it('shows exact references and required unanswered response controls without signature wording', () => {
   render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
   expect(screen.getByText('a'.repeat(64))).toBeInTheDocument();
   expect(screen.getByText('b'.repeat(64))).toBeInTheDocument();
   expect(screen.getByText('edition-1')).toBeInTheDocument();
-  expect(screen.getByText(/contents are not available/)).toBeInTheDocument();
+  expect(screen.getByText('Design services · included')).toBeInTheDocument();
+  expect(screen.getByText('Delivery · excluded')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Room plan PDF' })).toBeEnabled();
   for (const name of ['Accept', 'Accept with conditions', 'Return']) expect(screen.getByRole('button', { name, exact: true })).toBeEnabled();
   expect(document.body.textContent).not.toMatch(/sign(?:ature|ing)|e-sign/i);
 });
@@ -100,10 +119,10 @@ it('keeps mounted draft on warm read error and shows unavailable for a foreign i
 });
 it('shows own and other response methods without allowing a second response', () => {
   const own = { response: 'accept' as const, conditions: [], returnReason: null, respondedAt: 'today', method: 'ios_authenticated' as const };
-  render(<ServiceAcceptanceReading request={request({ signers: [{ signerId: 's1', slot: 'Client', required: true, response: own }, { signerId: 's2', slot: 'Partner', required: true, response: { ...own, method: 'paper_intake' } }] })} reload={mockQuery.refetch} evidence={<p>Authorized evidence contents</p>} />);
+  render(<ServiceAcceptanceReading request={request({ signers: [{ signerId: 's1', slot: 'Client', required: true, response: own }, { signerId: 's2', slot: 'Partner', required: true, response: { ...own, method: 'paper_intake' } }] })} reload={mockQuery.refetch} />);
   expect(within(screen.getByRole('region', { name: 'Your recorded response' })).getByText('Accept · Authenticated iOS response')).toBeInTheDocument();
   expect(screen.getByText('Accept · Reviewed paper response')).toBeInTheDocument();
-  expect(screen.getByText('Authorized evidence contents')).toBeInTheDocument();
+  expect(screen.getByText('Issued room plan')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Accept', exact: true })).not.toBeInTheDocument();
 });
 it('discovers only required unanswered sent requests in the current house', () => {
@@ -111,6 +130,42 @@ it('discovers only required unanswered sent requests in the current house', () =
   render(<ServiceAcceptanceDoor projectId="p1" />);
   expect(screen.getAllByRole('link')).toHaveLength(1);
   expect(screen.getByRole('link')).toHaveAttribute('href', '/acceptance/r1');
+});
+it('opens an issued file through its signed project-document URL', async () => {
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  render(<ServiceAcceptanceReading request={request()} reload={mockQuery.refetch} />);
+  click('Room plan PDF');
+  await waitFor(() => expect(mockSignedUrl).toHaveBeenCalledWith('plans/room.pdf'));
+  await waitFor(() => expect(open).toHaveBeenCalledWith('https://signed.example/room.pdf', '_blank', 'noopener,noreferrer'));
+});
+it('keeps response controls off until matching evidence loads and retries a failed read', () => {
+  mockEvidenceQuery = { data: undefined, isSuccess: false, isError: false, refetch: jest.fn() };
+  const { rerender } = render(<ServiceAcceptancePage requestId="r1" />);
+  expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeDisabled();
+  mockEvidenceQuery = { ...mockEvidenceQuery, isError: true };
+  rerender(<ServiceAcceptancePage requestId="r1" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load the agreed scope and evidence');
+  click('Try again');
+  expect(mockEvidenceQuery.refetch).toHaveBeenCalledTimes(1);
+  mockEvidenceQuery = { ...mockEvidenceQuery, data: { ...evidence, scope: { ...evidence.scope, contentHash: 'changed' } }, isSuccess: true, isError: false };
+  rerender(<ServiceAcceptancePage requestId="r1" />);
+  expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeDisabled();
+  mockEvidenceQuery = { ...mockEvidenceQuery, data: evidence };
+  rerender(<ServiceAcceptancePage requestId="r1" />);
+  expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeEnabled();
+});
+it('shows the entrance read error even without cached requests and offers retry', () => {
+  mockQuery = { data: undefined, isPending: false, isError: true, refetch: jest.fn() };
+  render(<ServiceAcceptanceDoor projectId="p1" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load acceptance requests');
+  click('Try again');
+  expect(mockQuery.refetch).toHaveBeenCalledTimes(1);
+});
+
+it('does not hide a failed refresh when cached acceptance requests are empty', () => {
+  mockQuery = { data: [], isPending: false, isError: true, refetch: jest.fn() };
+  render(<ServiceAcceptanceDoor projectId="p1" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load acceptance requests');
 });
 it('maps each authoritative refusal to calm copy', () => {
   for (const message of ['permission denied for function respond_service_acceptance', 'scope_editions_inactive']) expect(acceptanceRefusal({ message })).toMatch(/paused/);

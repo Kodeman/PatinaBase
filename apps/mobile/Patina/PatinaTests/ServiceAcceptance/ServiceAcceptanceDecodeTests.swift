@@ -62,6 +62,21 @@ enum ServiceAcceptanceFixture {
         try JSONDecoder().decode(RemoteServiceAcceptanceRequest.self, from: Data(json.utf8))
     }
 
+    static func evidence(for request: RemoteServiceAcceptanceRequest) -> RemoteServiceAcceptanceEvidence {
+        let json = """
+        {"requestId":"\(request.requestId)","requestNumber":\(request.requestNumber),
+         "scope":{"editionId":"\(request.scopeEditionId)","contentHash":"\(request.scopeContentHash)",
+                  "packages":[{"key":"design","label":"Design services","inclusion":"included",
+                    "conditionText":null,"responsibilities":{"design":"studio","purchasing":"client","installation":"none"},
+                    "phases":[{"name":"Room plans","service":"design"}]}]},
+         "evidence":{"manifestId":"manifest-1","manifestHash":"\(request.evidenceManifestHash)",
+                     "members":[{"kind":"plan_issue","title":"Issued room plan","issuedAt":null,
+                                 "content":null,"documents":[{"bucket":"project-documents",
+                                 "path":"plans/room.pdf","title":"Room plan PDF"}]}]}}
+        """
+        return try! JSONDecoder().decode(RemoteServiceAcceptanceEvidence.self, from: Data(json.utf8))
+    }
+
     /// A Stage-2 approval row, as `list_my_project_decision_reviews` serves it.
     static let approvalRow = """
     {

@@ -29,8 +29,6 @@ enum ServiceAcceptanceCopy {
     static let scopeEditionLabel = "Agreed scope edition"
     static func scopeReference(_ hash: String) -> String { "Scope reference · \(shortReference(hash))" }
     static func evidenceReference(_ hash: String) -> String { "Evidence reference · \(shortReference(hash))" }
-    static let referencesNote =
-        "These references identify the agreed scope and evidence. Their contents aren’t available in the app yet."
     /// The web client's short form: the first twelve characters.
     static func shortReference(_ hash: String) -> String { String(hash.prefix(12)) }
 
