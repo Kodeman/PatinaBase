@@ -14,15 +14,32 @@ import {
   THROUGHOUT_PLACE,
 } from "@/lib/document/pieces/build-room-url";
 
-const mockLines: { data: PurchaseLensLine[] | undefined } = { data: [] };
+const mockLines = {
+  data: [] as PurchaseLensLine[] | undefined,
+  isError: false,
+  isPending: false,
+  isFetching: false,
+  refetch: jest.fn(),
+};
+const mockRooms = {
+  data: [
+    { id: "living", name: "Living Room" },
+    { id: "kitchen", name: "Kitchen" },
+  ] as { id: string; name: string }[] | undefined,
+  isError: false,
+  isPending: false,
+  isFetching: false,
+  refetch: jest.fn(),
+};
 const mockPurchases = {
   data: [] as unknown[] | undefined,
   isError: false,
   isPending: false,
+  isFetching: false,
   refetch: jest.fn(),
 };
 function settledRead(data: unknown) {
-  return { data, isPending: false, isError: false, refetch: jest.fn() };
+  return { data, isPending: false, isError: false, isFetching: false, refetch: jest.fn() };
 }
 const mockAuthority = settledRead(null);
 const mockAgreement = settledRead({ state: "missing", evidence: null });
@@ -40,12 +57,7 @@ jest.mock("@/hooks/use-project-purchasing-agreement", () => ({
   useProjectPurchasingAgreement: () => mockAgreement,
 }));
 jest.mock("@/hooks/use-document-rooms", () => ({
-  useDocumentRooms: () => ({
-    data: [
-      { id: "living", name: "Living Room" },
-      { id: "kitchen", name: "Kitchen" },
-    ],
-  }),
+  useDocumentRooms: () => mockRooms,
 }));
 jest.mock("@/components/document/purchases/purchase-record-form", () => ({
   PurchaseRecordForm: ({ onDone }: { onDone: (r: string) => void }) => (
@@ -229,6 +241,18 @@ describe("derivePurchaseGroups", () => {
 describe("PurchaseLens", () => {
   beforeEach(() => {
     mockLines.data = ALL;
+    mockLines.isError = false;
+    mockLines.isPending = false;
+    mockLines.isFetching = false;
+    mockLines.refetch.mockClear();
+    mockRooms.data = ROOMS;
+    mockRooms.isError = false;
+    mockRooms.isPending = false;
+    mockRooms.isFetching = false;
+    mockRooms.refetch.mockClear();
+    mockAuthority.isFetching = false;
+    mockAgreement.isFetching = false;
+    mockInstruments.isFetching = false;
     mockPurchases.data = [
       {
         id: "sp-1",
@@ -298,6 +322,103 @@ describe("PurchaseLens", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mock record form" }));
     expect(screen.getByRole("status")).toHaveTextContent("Recorded the lamp.");
     expect(screen.queryByRole("button", { name: "Mock record form" })).not.toBeInTheDocument();
+  });
+
+  it("a failed schedule read says so, hides cached lines and retries", () => {
+    mockLines.isError = true;
+    render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(document.querySelector("[data-purchase-row]")).toBeNull();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("schedule could not be read");
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+    expect(mockLines.refetch).toHaveBeenCalledTimes(1);
+    expect(mockRooms.refetch).not.toHaveBeenCalled();
+  });
+
+  it("a failed room read cannot turn assigned lines into unassigned lines and retries", () => {
+    mockRooms.data = undefined;
+    mockRooms.isError = true;
+    render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(document.querySelector("[data-purchase-row]")).toBeNull();
+    expect(screen.queryByText("Not in a room yet")).not.toBeInTheDocument();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("rooms could not be read");
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+    expect(mockRooms.refetch).toHaveBeenCalledTimes(1);
+    expect(mockLines.refetch).not.toHaveBeenCalled();
+  });
+
+  it("waits for the schedule and rooms before grouping lines", () => {
+    mockLines.data = undefined;
+    mockLines.isPending = true;
+    mockRooms.data = undefined;
+    mockRooms.isPending = true;
+    render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(document.querySelector("[data-purchase-row]")).toBeNull();
+    expect(screen.getByText("Reading the schedule…")).toBeInTheDocument();
+  });
+
+  it("waits for the rooms before grouping cached lines", () => {
+    mockRooms.data = undefined;
+    mockRooms.isPending = true;
+    render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(document.querySelector("[data-purchase-row]")).toBeNull();
+    expect(screen.getByText("Reading the rooms…")).toBeInTheDocument();
+  });
+
+  it("retries all failed reads, announces refetch, and focuses the recovered schedule", () => {
+    mockLines.isError = true;
+    mockRooms.isError = true;
+    mockAuthority.isError = true;
+    try {
+      const { rerender } = render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+      const retry = within(screen.getByRole("alert")).getByRole("button", { name: "Try again" });
+      retry.focus();
+      fireEvent.click(retry);
+      expect(mockLines.refetch).toHaveBeenCalledTimes(1);
+      expect(mockRooms.refetch).toHaveBeenCalledTimes(1);
+      expect(mockAuthority.refetch).toHaveBeenCalledTimes(1);
+      expect(mockAgreement.refetch).not.toHaveBeenCalled();
+      mockLines.isFetching = true;
+      mockRooms.isFetching = true;
+      mockAuthority.isFetching = true;
+      rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+      expect(screen.getByRole("status")).toHaveTextContent("Reading again…");
+      expect(screen.getByRole("button", { name: "Try again" })).toBe(retry);
+      expect(retry).toBeDisabled();
+      expect(document.querySelector("[data-purchase-row]")).toBeNull();
+      mockLines.isError = false;
+      mockRooms.isError = false;
+      mockAuthority.isError = false;
+      mockLines.isFetching = false;
+      mockRooms.isFetching = false;
+      mockAuthority.isFetching = false;
+      rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+      expect(screen.getByRole("table", { name: "Purchasing" })).toHaveFocus();
+    } finally {
+      mockAuthority.isError = false;
+    }
+  });
+
+  it("retains the retry button after failure without stealing focus on later recovery", () => {
+    mockRooms.isError = true;
+    const { rerender } = render(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    const retry = within(screen.getByRole("alert")).getByRole("button", { name: "Try again" });
+    retry.focus();
+    fireEvent.click(retry);
+    mockRooms.isFetching = true;
+    rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(screen.getByRole("status")).toHaveTextContent("Reading again…");
+    expect(screen.getByRole("button", { name: "Try again" })).toBe(retry);
+    expect(retry).toBeDisabled();
+    mockRooms.isFetching = false;
+    rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(screen.getByRole("button", { name: "Try again" })).toBe(retry);
+    expect(retry).toBeEnabled();
+    expect(retry).toHaveFocus();
+    mockRooms.isError = false;
+    rerender(<PurchaseLens projectId="p1" room={null} canSeeMoney />);
+    expect(screen.getByRole("table", { name: "Purchasing" })).not.toHaveFocus();
   });
 
   it("a refused studio-purchases read says so and retries", () => {
