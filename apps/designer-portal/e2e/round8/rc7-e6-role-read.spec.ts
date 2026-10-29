@@ -3,7 +3,7 @@ import { psqlRun, psqlScalar } from '../helpers/psql';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 
-// DEFECT RC7-e6-1: a refused role read is misreported as a forbidden account.
+// DEFECT RC7-E6-1: a refused role read is misreported as a forbidden account.
 test.fixme('temporary role-read refusal cannot redirect the designer to Wrong portal', async ({ authenticatedPage: page }) => {
   test.setTimeout(120_000);
   expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');

@@ -1,6 +1,6 @@
 BEGIN;
 DO $$ BEGIN
-  IF inet_server_port() <> 5432 OR NOT EXISTS (
+  IF current_setting('rc7.e6_stack', true) IS DISTINCT FROM 'patina-rc7-e6' OR NOT EXISTS (
     SELECT 1 FROM public.projects WHERE id='f0180000-0000-4000-8000-000000000010'
       AND designer_id='f0180000-0000-4000-8000-000000000002'
   ) THEN RAISE EXCEPTION 'E6 requires its owned F01 stack'; END IF;

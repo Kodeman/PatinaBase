@@ -12,6 +12,7 @@ const vendorId = () => psqlScalar(`SELECT id FROM vendors WHERE name='${NAME}';`
 test.beforeAll(() => {
   expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
   expect(new URL(process.env.SUPABASE_DB_URL!).port).toBe('61122');
+  expect(psqlScalar(`SELECT current_setting('rc7.e6_stack', true);`)).toBe('patina-rc7-e6');
   expect(psqlScalar(`SELECT count(*) FROM projects WHERE id='${JOB}' AND studio_id='${STUDIO}' AND designer_id='${DESIGNER}';`)).toBe('1');
   expect(psqlScalar(`SELECT count(*) FROM vendors WHERE name='${NAME}';`)).toBe('0');
   fixtureReady = true;
@@ -20,7 +21,7 @@ test.beforeAll(() => {
 test.afterAll(() => {
   if (!fixtureReady) return;
   psqlRun(`DO $$ DECLARE v_id uuid; BEGIN
-    IF inet_server_port()<>5432 OR NOT EXISTS (SELECT 1 FROM projects WHERE id='${JOB}' AND studio_id='${STUDIO}' AND designer_id='${DESIGNER}')
+    IF current_setting('rc7.e6_stack', true) IS DISTINCT FROM 'patina-rc7-e6' OR NOT EXISTS (SELECT 1 FROM projects WHERE id='${JOB}' AND studio_id='${STUDIO}' AND designer_id='${DESIGNER}')
       THEN RAISE EXCEPTION 'not E6 owned F01 stack'; END IF;
     SELECT id INTO v_id FROM vendors WHERE name='${NAME}';
     IF v_id IS NULL THEN RETURN; END IF;
@@ -35,11 +36,12 @@ test.afterAll(() => {
   expect(vendorId()).toBe('');
 });
 
-test('A13 saving a maker account does not appoint a job party or grant authority', async ({ authenticatedPage: page }) => {
+test('A13 saving a maker account does not appoint a job party or create a PO', async ({ authenticatedPage: page }) => {
   test.setTimeout(240_000);
+  const partiesBefore = psqlScalar(`SELECT count(*) FROM project_parties WHERE project_id='${JOB}';`);
   await page.goto('/people', { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await expect(page.locator('[data-people-renderer="round8"]')).toBeVisible({ timeout: 60_000 });
-  await page.waitForLoadState('networkidle', { timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Add contact' })).toBeEnabled({ timeout: 60_000 });
   await page.getByRole('button', { name: 'Add contact' }).click();
   const sheet = page.getByRole('dialog', { name: 'New contact' });
   await expect(sheet).toBeVisible({ timeout: 30_000 });
@@ -52,9 +54,11 @@ test('A13 saving a maker account does not appoint a job party or grant authority
   const id = vendorId();
   expect(psqlScalar(`SELECT count(*) FROM saved_vendors WHERE vendor_id='${id}' AND designer_id='${DESIGNER}';`)).toBe('1');
   expect(psqlScalar(`SELECT count(*) FROM studio_vendor_accounts WHERE vendor_id='${id}' AND organization_id='${STUDIO}';`)).toBe('1');
+  expect(psqlScalar(`SELECT count(*) FROM project_parties WHERE project_id='${JOB}';`)).toBe(partiesBefore);
   expect(psqlScalar(`SELECT count(*) FROM project_parties WHERE project_id='${JOB}' AND display_name='${NAME}';`)).toBe('0');
   expect(psqlScalar(`SELECT count(*) FROM purchase_orders WHERE vendor_id='${id}';`)).toBe('0');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByText(NAME, { exact: true }).first()).toBeVisible({ timeout: 60_000 });
+  expect(psqlScalar(`SELECT count(*) FROM project_parties WHERE project_id='${JOB}';`)).toBe(partiesBefore);
   expect(psqlScalar(`SELECT count(*) FROM studio_vendor_accounts WHERE vendor_id='${id}' AND organization_id='${STUDIO}';`)).toBe('1');
 });

@@ -38,6 +38,7 @@ test.describe('RC7 E6 exact job entry matrix on live rows', () => {
   test.beforeAll(() => {
     expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
     expect(new URL(process.env.SUPABASE_DB_URL!).port).toBe('61122');
+    expect(psqlScalar(`SELECT current_setting('rc7.e6_stack', true);`)).toBe('patina-rc7-e6');
     psqlRun(readFileSync(path.join(__dirname, 'rc7-e6-entry-fixture.sql'), 'utf8'));
     seeded = true;
     expect(readback()).toBe('draft|unsent|unread');
@@ -45,7 +46,8 @@ test.describe('RC7 E6 exact job entry matrix on live rows', () => {
   test.afterAll(() => {
     if (!seeded) return;
     psqlRun(`BEGIN; DO $$ BEGIN
-      IF NOT EXISTS (SELECT 1 FROM purchase_orders WHERE id='${ORDER}' AND project_id='${JOB}' AND po_number='E6-DRAFT' AND status='draft' AND sent_at IS NULL)
+      IF current_setting('rc7.e6_stack', true) IS DISTINCT FROM 'patina-rc7-e6'
+        OR NOT EXISTS (SELECT 1 FROM purchase_orders WHERE id='${ORDER}' AND project_id='${JOB}' AND po_number='E6-DRAFT' AND status='draft' AND sent_at IS NULL)
         OR NOT EXISTS (SELECT 1 FROM notification_log WHERE id='${NOTICE}' AND type='e6_local_notice')
       THEN RAISE EXCEPTION 'E6 fixture changed unexpectedly; refusing cleanup'; END IF;
     END $$;
@@ -99,15 +101,12 @@ test.describe('RC7 E6 exact job entry matrix on live rows', () => {
     expect(readback()).toBe(marked);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    const retry = page.getByRole('group', { name: 'Desk recovery' }).getByRole('button', { name: 'Try again' });
-    await expect(page.locator('[data-studio="round8"][data-arrival-ready]').or(retry)).toBeVisible({ timeout: 60_000 });
-    if (await retry.isVisible()) await retry.click();
     await settled(page);
     await expect(post).toHaveCount(0);
     expect(readback()).toBe(marked);
   });
 
-  // DEFECT RC7-e6-2: Orders closes without recording a return marker for its opener.
+  // DEFECT RC7-E6-2: Orders closes without recording a return marker for its opener.
   test.fixme('order entry returns to the exact order row, scroll and focus without replay', async ({ authenticatedPage: page }) => {
     await settled(page);
     const before = readback();

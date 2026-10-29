@@ -20,6 +20,16 @@ async function sameShell(page: Page) {
   });
 }
 
+async function sameEditor(page: Page) {
+  return page.evaluate(() => {
+    const held = window as unknown as { __e6Instrument?: Element; __e6Finish?: Element };
+    return !!held.__e6Instrument && held.__e6Instrument.isConnected &&
+      held.__e6Instrument === document.querySelector('[data-unfold-instrument="pieces"]') &&
+      !!held.__e6Finish && held.__e6Finish.isConnected &&
+      held.__e6Finish === held.__e6Instrument.querySelector('[data-testid="spec-fields-pane"] [aria-label="Finish"]');
+  });
+}
+
 test('A02 job, ledger and edited line instrument remain one mounted context with no replay', async ({ authenticatedPage: page }) => {
   test.setTimeout(300_000);
   expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
@@ -27,6 +37,7 @@ test('A02 job, ledger and edited line instrument remain one mounted context with
   const line = psqlScalar(`SELECT id FROM project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${ROOM}' AND name='F01 Living Room selection 02' AND removed_at IS NULL;`);
   expect(line).toMatch(/^[0-9a-f-]{36}$/);
   const original = psqlScalar(`SELECT coalesce(finish,'') FROM project_ffe_specs WHERE ffe_item_id='${line}';`);
+  const versionOf = () => Number(psqlScalar(`SELECT row_version FROM project_ffe_specs WHERE ffe_item_id='${line}';`));
   const draft = `E6 mounted draft ${Date.now()}`;
   const timeBefore = psqlScalar(`SELECT count(*) FROM project_time_entries WHERE project_id='${JOB}';`);
 
@@ -58,23 +69,38 @@ test('A02 job, ledger and edited line instrument remain one mounted context with
   await instrument.locator(`[data-line-id="${line}"] > button`).click();
   const finish = instrument.getByTestId('spec-fields-pane').getByRole('textbox', { name: 'Finish' });
   await expect(finish).toHaveValue(original);
+  const versionBefore = versionOf();
+  await page.evaluate(() => {
+    const held = window as unknown as { __e6Instrument?: Element; __e6Finish?: Element };
+    held.__e6Instrument = document.querySelector('[data-unfold-instrument="pieces"]')!;
+    held.__e6Finish = held.__e6Instrument.querySelector('[data-testid="spec-fields-pane"] [aria-label="Finish"]')!;
+  });
+  expect(await sameEditor(page)).toBe(true);
   let writes = 0;
   page.on('request', request => {
     if (request.method() === 'PATCH' && new URL(request.url()).pathname.endsWith('/rest/v1/project_ffe_specs')) writes++;
   });
   await finish.fill(draft);
   expect(await sameShell(page)).toBe(true);
+  expect(await sameEditor(page)).toBe(true);
 
   await openOrders(page);
   await expect(instrument).toHaveCount(1);
   expect(await sameShell(page)).toBe(true);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Purchase orders' })).toHaveCount(0);
+  expect(await sameEditor(page)).toBe(true);
   await expect(finish).toHaveValue(draft);
   await expect.poll(() => psqlScalar(`SELECT coalesce(finish,'') FROM project_ffe_specs WHERE ffe_item_id='${line}';`)).toBe(draft);
+  await expect.poll(versionOf).toBe(versionBefore + 1);
   await expect(page.locator('[data-document-shell]')).toHaveCount(1);
   await expect(instrument).toHaveCount(1);
   expect(await sameShell(page)).toBe(true);
+  expect(await sameEditor(page)).toBe(true);
   expect(writes, 'the nested ledger cannot replay the Finish save').toBe(1);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-document-shell][data-arrival-ready]')).toHaveCount(1, { timeout: 60_000 });
+  expect(versionOf(), 'reload cannot replay the Finish save').toBe(versionBefore + 1);
+  expect(writes, 'reload cannot replay the Finish PATCH').toBe(1);
   expect(psqlScalar(`SELECT count(*) FROM project_time_entries WHERE project_id='${JOB}';`)).toBe(timeBefore);
 });
