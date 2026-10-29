@@ -182,7 +182,7 @@ SELECT pg_temp.presence_assert(NOT (public.assign_ffe_items_to_scope_package(pg_
 SELECT pg_temp.presence_assert((public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.chairs','assign')->>'replayed')::boolean,
  'original requester exact assignment replays');
 SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.tables','assign')$q$,
- '40001','external_request_changed','assignment receipt rejects changed payload');
+ 'PT409','external_request_changed','assignment receipt rejects changed payload');
 SELECT pg_temp.presence_actor(4);
 SELECT pg_temp.presence_error($q$SELECT public.assign_ffe_items_to_scope_package(pg_temp.presence_id(2),ARRAY[pg_temp.presence_id(15),pg_temp.presence_id(1)],'pkg.chairs','assign')$q$,
  '42501','idempotency_key_reused','another authorized requester cannot replay assignment');
@@ -279,7 +279,7 @@ SELECT pg_temp.presence_error($q$SELECT public.set_ffe_item_external_fulfilment(
  '42501','external_fulfilment_access','other-studio member cannot convert recorded-A item');
 SELECT pg_temp.presence_actor(6);
 SELECT pg_temp.presence_error($q$SELECT public.set_ffe_item_external_fulfilment(pg_temp.presence_id(40),pg_temp.presence_id(30),1,'stale')$q$,
- '40001','external_conversion_version_conflict','conversion checks native item version');
+ 'PT409','external_conversion_version_conflict','conversion checks native item version');
 SELECT pg_temp.presence_assert((public.set_ffe_item_external_fulfilment(b.id,pg_temp.presence_id(30),b.row_version,'convert-'||b.id)->'pricingSnapshot')=b.pricing,
  'each converted line receipt holds its exact native pricing snapshot') FROM presence_before b ORDER BY id;
 -- Native purchasing APIs stay active, but external lines cannot enter them.
@@ -298,7 +298,7 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.presence_error($q$SELECT public.set_ffe_line_pricing(pg_temp.presence_id(40),'quantity',3)$q$,
  '23514','External presence lines are not studio commerce.','native pricing writer refuses external quantity');
 SELECT pg_temp.presence_error($q$SELECT public.set_ffe_item_external_fulfilment(pg_temp.presence_id(40),pg_temp.presence_id(30),3,'convert-'||pg_temp.presence_id(40))$q$,
- '40001','external_request_changed','conversion retry refuses changed version payload');
+ 'PT409','external_request_changed','conversion retry refuses changed version payload');
 SELECT pg_temp.presence_actor(4);
 SELECT pg_temp.presence_error($q$SELECT public.set_ffe_item_external_fulfilment(pg_temp.presence_id(40),pg_temp.presence_id(30),2,'convert-'||pg_temp.presence_id(40))$q$,
  '42501','idempotency_key_reused','another authorized actor cannot replay a conversion receipt');

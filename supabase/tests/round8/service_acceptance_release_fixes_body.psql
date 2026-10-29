@@ -511,10 +511,10 @@ SELECT pg_temp.actor(3);
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present')$q$,pg_temp.req('p1')),'42501',
   'insufficient_privilege','D2/D4: a suspended studio''s admin cannot present');
 SELECT pg_temp.studio('active');
-SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present',repeat('0',64))$q$,pg_temp.req('p1')),'40001',
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present',repeat('0',64))$q$,pg_temp.req('p1')),'PT409',
   'stale_scope','D4: a scope hash that differs from the request is refused');
 SELECT pg_temp.expect_error(format($q$SELECT public.present_service_acceptance_offline(%L,r.scope_content_hash,repeat('0',64),'rf-present')
-  FROM public.service_acceptance_requests r WHERE r.id=%L$q$,pg_temp.req('p1'),pg_temp.req('p1')),'40001',
+  FROM public.service_acceptance_requests r WHERE r.id=%L$q$,pg_temp.req('p1'),pg_temp.req('p1')),'PT409',
   'stale_scope','D4: an evidence hash that differs from the request is refused');
 SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'')$q$,pg_temp.req('p1')),'23514',
   'client_request_id_invalid','D4: a blank client_request_id is refused');

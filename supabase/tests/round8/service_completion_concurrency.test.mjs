@@ -222,7 +222,7 @@ test('C6 completion is totally ordered with every contributing writer, both orde
         `${name}: expected one of ${JSON.stringify(codes)}, got ${r.sqlstate} ${r.message}`);
     };
     const succeeded = (r, name) => assert.equal(r.error, false, `${name}: ${r.sqlstate} ${r.message}`);
-    const writeFirstRefuses = [['23514', 'service_obligations_open'], ['40001', 'stale_obligations']];
+    const writeFirstRefuses = [['23514', 'service_obligations_open'], ['PT409', 'stale_obligations']];
 
     // C4 response (request q1 sent, nobody has answered).
     const q1 = await read(`(SELECT jsonb_build_object('id',id,'scope',scope_content_hash,'manifest',evidence_manifest_hash,
@@ -242,7 +242,7 @@ test('C6 completion is totally ordered with every contributing writer, both orde
     r = await race('C4 response-first', { actor: 6, sql: respond('accept', [], 'x-c4-b') },
       { actor: 1, sql: complete(v, 'k-c4-b') });
     succeeded(r.won, 'C4 response-first: the response commits');
-    refused(r.lost, [['40001', 'stale_obligations']], 'C4 response-first: completion sees the acceptance and refuses its stale hash');
+    refused(r.lost, [['PT409', 'stale_obligations']], 'C4 response-first: completion sees the acceptance and refuses its stale hash');
     await check(`(SELECT lifecycle='closed' AND aggregate_outcome='accepted_with_conditions' FROM public.service_acceptance_requests
       WHERE id=pg_temp.req('q1')) AND jsonb_array_length(pg_temp.derive()->'conditions')=2 AND pg_temp.codes()='{}'`,
     'C4: accepted with two open conditions, no blockers');
@@ -255,7 +255,7 @@ test('C6 completion is totally ordered with every contributing writer, both orde
     v = await view();
     r = await race('resolution-first', { actor: 1, sql: resolve(c1, 'r-1') }, { actor: 1, sql: complete(v, 'k-res-a') });
     succeeded(r.won, 'resolution-first: the resolution commits');
-    refused(r.lost, [['40001', 'stale_obligations']], 'resolution-first: completion refuses the pre-resolution hash');
+    refused(r.lost, [['PT409', 'stale_obligations']], 'resolution-first: completion refuses the pre-resolution hash');
     v = await view();
     r = await race('completion-first resolution', { actor: 1, sql: complete(v, 'k-res-b') }, { actor: 3, sql: resolve(c2, 'r-2') });
     succeeded(r.won, 'completion-first resolution: completion commits');
@@ -351,14 +351,14 @@ test('C6 completion is totally ordered with every contributing writer, both orde
     await revoke('three sessions');
     await ready('three sessions');
 
-    // A stale hash is refused (40001), and so is REPEATABLE READ.
+    // A stale hash is refused (PT409), and so is REPEATABLE READ.
     v = await view();
     let x = await a.query(`BEGIN; ${as(1)} ${complete({ ...v, hash: '0'.repeat(64) }, 'k-stale')}`);
     await a.ok('ROLLBACK;', 'stale ends');
-    refused(x, [['40001', 'stale_obligations']], 'a stale obligation hash');
+    refused(x, [['PT409', 'stale_obligations']], 'a stale obligation hash');
     x = await a.query(`BEGIN ISOLATION LEVEL REPEATABLE READ; ${as(1)} ${complete(v, 'k-rr')}`);
     await a.ok('ROLLBACK;', 'repeatable read ends');
-    refused(x, [['40001', 'service_completion_requires_read_committed']], 'REPEATABLE READ');
+    refused(x, [['25000', 'service_completion_requires_read_committed']], 'REPEATABLE READ');
 
     // place_product_in_project_v2 places a new live studio line (the governing case).
     await setup(`SET LOCAL session_replication_role=replica;
@@ -501,7 +501,7 @@ test('C6 completion is totally ordered with every contributing writer, both orde
     assert.deepEqual(v.codes, ['studio_installation_open:pkg.install'], 'a reported install still blocks');
     r = await race('verification-first', { actor: 1, sql: await verify(71, 'ver-a') }, { actor: 1, sql: complete(v, 'k-ver-a') });
     succeeded(r.won, 'verification-first: the verification commits');
-    refused(r.lost, [['40001', 'stale_obligations']], 'verification-first: completion refuses the pre-verification hash');
+    refused(r.lost, [['PT409', 'stale_obligations']], 'verification-first: completion refuses the pre-verification hash');
     // Completion-first needs a ready service: a second reported install on the verified
     // fulfilment leaves no blocker, and its verification is still a contributing write.
     await setup(`INSERT INTO sa_results VALUES('ev-72',to_jsonb(pg_temp.event(pg_temp.fid('d000',71),'installed',false)));`,

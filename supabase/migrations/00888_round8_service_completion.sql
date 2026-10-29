@@ -9,6 +9,10 @@
 -- excluded external work is informational; an outstanding balance is a separate
 -- financial hold (read as of the derivation, outside the obligation hash, R20).
 --
+-- stale_obligations uses PT409 (HTTP 409) and the isolation guard
+-- invalid_transaction_state, never 40001: PostgREST 14 retries 40001 without
+-- limit (RC7-e2-2, as 00837).
+--
 -- Not touched: close_project, the projects closure columns
 -- (status/closure_checklist/portfolio_snapshot) and the 00853 freeze trigger.
 -- C6 never writes public.projects.
@@ -585,7 +589,7 @@ RETURNS void LANGUAGE plpgsql STABLE SET search_path = public, pg_temp AS $$
 BEGIN
   -- Step 6 must read a snapshot taken after the exclusive key was granted.
   IF current_setting('transaction_isolation') <> 'read committed' THEN
-    RAISE EXCEPTION 'service_completion_requires_read_committed' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'service_completion_requires_read_committed' USING ERRCODE = 'invalid_transaction_state';
   END IF;
 END;
 $$;
@@ -674,7 +678,7 @@ BEGIN
     RAISE EXCEPTION 'acceptance_request_not_current' USING ERRCODE = 'check_violation';
   END IF;
   IF p_obligation_hash IS DISTINCT FROM v_derived->>'obligationHash' THEN
-    RAISE EXCEPTION 'stale_obligations' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_obligations' USING ERRCODE = 'PT409';
   END IF;
   SELECT COALESCE(array_agg((c->>'conditionId')::uuid ORDER BY c->>'conditionId'), '{}')
     INTO v_open FROM jsonb_array_elements(v_derived->'conditions') c;

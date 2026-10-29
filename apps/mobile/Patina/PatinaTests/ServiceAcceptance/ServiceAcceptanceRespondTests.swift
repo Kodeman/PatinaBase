@@ -65,8 +65,8 @@ struct RefusalCase: Sendable, CustomTestStringConvertible {
 }
 
 private let refusalCases: [RefusalCase] = [
-    RefusalCase(code: "40001", message: "stale_scope", expected: .stale),
-    RefusalCase(code: "40001", message: "stale_signer_policy", expected: .stale),
+    RefusalCase(code: "PT409", message: "stale_scope", expected: .stale),
+    RefusalCase(code: "PT409", message: "stale_signer_policy", expected: .stale),
     RefusalCase(code: "23505", message: "already_responded", expected: .alreadyResponded),
     RefusalCase(code: "55000", message: "request_not_open", expected: .requestNotOpen),
     RefusalCase(code: "55000", message: "scope_editions_inactive", expected: .paused),
@@ -233,7 +233,7 @@ struct ServiceAcceptanceRespondTests {
     @Test("stale waits for Reload, which drops the old submission and re-reads")
     func staleWaitsForReload() async throws {
         let request = try openRequest()
-        let fake = FakeServiceAcceptanceService(rows: [request], failures: [refusalBody("40001", "stale_scope")])
+        let fake = FakeServiceAcceptanceService(rows: [request], failures: [refusalBody("PT409", "stale_scope")])
         let model = ServiceAcceptanceModel(service: fake)
         await model.load()
         model.presentedRequestId = request.requestId

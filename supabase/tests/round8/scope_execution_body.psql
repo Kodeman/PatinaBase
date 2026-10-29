@@ -400,9 +400,9 @@ DO $$ DECLARE job uuid; p uuid; stale uuid; BEGIN
   FROM public.project_scope_edition_packages pk JOIN public.project_scope_editions e ON e.id=pk.edition_id
   WHERE e.project_id=job AND e.status='active'),'released installation clears owed-since without restarting design');
  PERFORM pg_temp.expect_error(format('SELECT public.countersign_design_services_agreement(%L,''Execution Designer'')',stale),
-  '40001','scope_edition_stale','stale addendum execution refuses under project lock');
+  'PT409','scope_edition_stale','stale addendum execution refuses under project lock');
  PERFORM pg_temp.expect_error(format('SELECT public.countersign_design_services_agreement(%L,''Execution Designer'')',stale),
-  '40001','scope_edition_stale','stale addendum retry also refuses');
+  'PT409','scope_edition_stale','stale addendum retry also refuses');
  PERFORM pg_temp.assert_true((SELECT count(*)=3 FROM public.project_commercial_execution_order WHERE project_id=job)
   AND NOT EXISTS(SELECT 1 FROM public.commercial_document_signatures WHERE proposal_id=stale AND party_role='studio')
   AND (SELECT commercial_state='client_signed' FROM public.proposals WHERE id=stale),

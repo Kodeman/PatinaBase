@@ -123,7 +123,7 @@ It also has these keys:
 - `storage_object_id`, immutable, in a private bucket as in `00835`, and `document_sha256`, the server-computed hash of the stored bytes (exact content binding, F11);
 - `paper_signed_on`, `signed_name`;
 - **the disposition the paper records (F11):** `disposition` (`accept`, `accept_with_conditions` or `return`), `conditions` (same shape and rules as a response) and `return_reason`. The recorder transcribes these from the paper. They are the signer's choice as written, not a studio judgment;
-- **the presented binding (F11):** `presented_request_number`, `presented_scope_content_hash`, `presented_evidence_manifest_hash` and `presented_signer_policy_revision`. The printed request carries its request number and both hashes (short form plus full form in a machine-readable code). The recorder transcribes them, and the RPC refuses any value that differs from the request (`serialization_failure`, `stale_scope`);
+- **the presented binding (F11):** `presented_request_number`, `presented_scope_content_hash`, `presented_evidence_manifest_hash` and `presented_signer_policy_revision`. The printed request carries its request number and both hashes (short form plus full form in a machine-readable code). The recorder transcribes them, and the RPC refuses any value that differs from the request (`PT409`, `stale_scope`);
 - `recorded_by` (a studio member) and `recorded_at`;
 - `review_state`: `pending_review`, `confirmed`, `rejected` or `lapsed`;
 - `lapsed_reason` (SQ-1857 T5): `request_terminal` or `signer_policy_revised`, set only with `lapsed`;
@@ -136,7 +136,7 @@ Only a `confirmed` intake creates a response with `method = 'paper_intake'`. The
 
 **Paper consent is bound to the revision it was given under (Revision 2026-10-23, SQ-1857 T5).** The previous text checked the presented revision only when the intake was *recorded*. Review checked the bytes and the lifecycle only, and a replacement increments the revision without touching pending intakes. So: A's intake recorded at revision 1, B replaced (revision 2), then A's intake confirmed, created a response carrying revision 1 against a revision-2 request, contradicting the response rule above and the authenticated path (§2.2). Both seams are now closed; either one alone would prevent the case, and both are kept so that neither depends on the other being implemented first:
 - **Lapse on replacement.** `replace_service_acceptance_signer`, in the same transaction and under the same locks as its increment, moves every `pending_review` intake on the request to `lapsed` with `lapsed_reason = 'signer_policy_revised'`. That includes intakes for signers other than the one replaced, because they too presented the old revision. The paper documents stay stored and readable; a signer whose paper lapsed signs a fresh printed request carrying the new revision.
-- **Re-check at confirmation.** `review_service_acceptance_paper_intake` with `confirmed`, after taking the §2.3 locks (request FOR UPDATE, then the signer rows) and before inserting the response, refuses unless all of these hold at that moment: the intake's signer is still `active` (`signer_not_active`); `presented_signer_policy_revision` equals the request's current revision (`serialization_failure`, `stale_signer_policy`); both presented hashes and the request number still equal the request's (`stale_scope`); the edition is still `active` and `scope_editions` is on; and no response exists for that signer on the request (`already_responded`). A `rejected` decision needs none of these and never creates a response.
+- **Re-check at confirmation.** `review_service_acceptance_paper_intake` with `confirmed`, after taking the §2.3 locks (request FOR UPDATE, then the signer rows) and before inserting the response, refuses unless all of these hold at that moment: the intake's signer is still `active` (`signer_not_active`); `presented_signer_policy_revision` equals the request's current revision (`PT409`, `stale_signer_policy`); both presented hashes and the request number still equal the request's (`stale_scope`); the edition is still `active` and `scope_editions` is on; and no response exists for that signer on the request (`already_responded`). A `rejected` decision needs none of these and never creates a response.
 - **No carry-over.** Earlier paper consent is **not** preserved across a replacement. If a later ruling wants it preserved, that is a new exception with its own evidence-time rule and a reviewed contract change; this contract does not provide one.
 - This is conditional on K5 permitting paper at all. It decides nothing about K5: if paper is forbidden, the intake RPCs stay revoked and these rules never run.
 
@@ -190,15 +190,15 @@ Whether paper intake counts at all is K5 (**OPEN**). The fields above are the sa
 - the new signer is bound to the project's client household (`signer_policy_unbound`);
 - if the slot is required, the new signer is reachable (`signer_policy_unreachable`);
 - the set still has at least one required signer (`signer_policy_no_required_signer`). The slot keeps its `required` flag, so this holds by construction, and is still checked;
-- `p_expected_signer_policy_revision` equals the current revision (`serialization_failure`, `stale_signer_policy`), so two concurrent replacements cannot both apply.
+- `p_expected_signer_policy_revision` equals the current revision (`PT409`, `stale_signer_policy`), so two concurrent replacements cannot both apply.
 A refusal leaves the request, its signers and its revision unchanged.
 
 **`respond_service_acceptance` refuses when:**
 - the caller is not the `profile_id` of an `active` signer on the request (`insufficient_privilege`);
 - the request is not `sent` (this includes every terminal lifecycle, §2.2a);
 - the edition is no longer `active`, or `scope_editions` is inactive;
-- the presented hashes differ (`serialization_failure`, `stale_scope`);
-- `p_signer_policy_revision` differs from the request's current revision (`serialization_failure`, `stale_signer_policy`, SQ-1851 R12). A page loaded before a replacement cannot be stamped as having seen the new policy;
+- the presented hashes differ (`PT409`, `stale_scope`);
+- `p_signer_policy_revision` differs from the request's current revision (`PT409`, `stale_signer_policy`, SQ-1851 R12). A page loaded before a replacement cannot be stamped as having seen the new policy;
 - the signer has already responded on this request under a different `client_request_id` (`unique_violation`, `already_responded`), or the caller has already answered another slot on it (00896);
 - the caller matches more than one active slot (`object_not_in_prerequisite_state`, `signer_identity_collision`, 00896).
 

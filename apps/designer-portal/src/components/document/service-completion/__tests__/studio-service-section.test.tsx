@@ -134,7 +134,7 @@ describe('studio service obligations', () => {
     mockObligations.mockReturnValue(read(reading()));
     mockComplete.mockImplementationOnce(async () => {
       mockMark.value = 1;
-      throw { code: '40001', message: 'stale_obligations' };
+      throw { code: 'PT409', message: 'stale_obligations' };
     });
     const { rerender } = render(<StudioServiceSection projectId="job-1" />);
     expect(screen.getByText('Nothing holds the studio\'s service.')).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe('studio service obligations', () => {
     rerender(<StudioServiceSection projectId="job-1" />);
     // The server refuses: reads 1 and 2 had begun, and the refresh starts read 3.
     mockMark.value = 2;
-    refuse({ code: '40001', message: 'stale_obligations' });
+    refuse({ code: 'PT409', message: 'stale_obligations' });
     expect(await screen.findByRole('alert')).toHaveTextContent(STALE_NOTE);
     expect(completeButton()).toBeDisabled();
     fireEvent.click(completeButton());

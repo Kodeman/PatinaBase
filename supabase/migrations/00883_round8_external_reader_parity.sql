@@ -1215,6 +1215,8 @@ BEGIN
      AND EXISTS(SELECT 1 FROM public.server_capabilities WHERE key='scope_editions' AND enabled) THEN
     SELECT doc.project_id INTO v_scope_current_project_id
     FROM public.project_commercial_documents doc WHERE doc.proposal_id=p_proposal_id FOR UPDATE;
+    -- 40001 on purpose: the document changed after the project-first read;
+    -- PostgREST's retry re-reads both, bounded: each further attempt needs another concurrent commit (RC7-e2-2).
     IF v_scope_current_project_id IS DISTINCT FROM v_scope_project_id THEN
       RAISE EXCEPTION 'scope_execution_document_moved' USING ERRCODE='serialization_failure';
     END IF;
@@ -1678,6 +1680,8 @@ BEGIN
   END IF;
   SELECT * INTO doc FROM public.project_commercial_documents
   WHERE id=p_document_id AND project_id=doc.project_id AND proposal_id=proposal.id FOR UPDATE;
+  -- 40001 on purpose: the document moved after the unlocked read; PostgREST's
+  -- retry re-reads it, bounded: each further attempt needs another concurrent commit (RC7-e2-2).
   IF NOT FOUND THEN RAISE EXCEPTION 'scope_execution_document_moved' USING ERRCODE = 'serialization_failure'; END IF;
   SELECT id INTO v_edition_id FROM public.project_scope_editions WHERE commercial_document_id = doc.id;
   IF FOUND THEN RETURN v_edition_id; END IF;
@@ -1697,7 +1701,7 @@ BEGIN
   IF NOT doc.is_origin AND (predecessor.id IS NULL OR predecessor.status NOT IN ('active','stale')
      OR (NOT p_reconciled AND (predecessor.status <> 'active'
         OR proposal.drafted_against_scope_edition_id IS DISTINCT FROM predecessor.id))) THEN
-    RAISE EXCEPTION 'scope_edition_stale' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'scope_edition_stale' USING ERRCODE = 'PT409';
   END IF;
   IF doc.is_origin AND EXISTS (SELECT 1 FROM public.project_scope_editions WHERE project_id = doc.project_id) THEN
     RAISE EXCEPTION 'scope_edition_origin_exists' USING ERRCODE = 'check_violation';

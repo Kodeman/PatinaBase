@@ -366,7 +366,7 @@ SELECT pg_temp.assert_true(current_setting('app.scope_parts_writer',true)='', 'd
 SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-b',gen_random_uuid())$q$,
 '23514','arrangement_already_applied','discard never permits arrangement switch');
 SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000002','fixture-a',gen_random_uuid())$q$,
-'40001','arrangement_effect_changed','discard makes replay drift refuse');
+'PT409','arrangement_effect_changed','discard makes replay drift refuse');
 SELECT set_config('request.jwt.claim.sub','f8680000-0000-4000-8000-000000000001',true);
 SELECT pg_temp.expect_error($q$SELECT public.apply_service_arrangement('f8683000-0000-4000-8000-000000000004','fixture-invalid',gen_random_uuid())$q$,
 '23514','scope_package_key_invalid','invalid arrangement rolls back');

@@ -92,6 +92,8 @@ BEGIN
   END IF;
   documents := receipt.document_ids;
  ELSE
+  -- 40001 on purpose (C2 §2.5): the order moved after before_lock; PostgREST's
+  -- retry takes a fresh snapshot, bounded: each further attempt needs another concurrent commit (RC7-e2-2).
   IF before_lock IS DISTINCT FROM public._scope_reconciliation_snapshot(p_project_id) THEN
    RAISE EXCEPTION 'scope_reconcile_order_moved' USING ERRCODE='serialization_failure';
   END IF;
@@ -106,6 +108,8 @@ BEGIN
   PERFORM public._assert_scope_reconciliation_authority(p_project_id,documents,receipt.source_proposal_ids);
   RETURN receipt.response;
  END IF;
+ -- 40001 on purpose (C2 §2.5): as above, a concurrent commit moved the order;
+ -- the retry is bounded: each further attempt needs another concurrent commit (RC7-e2-2).
  IF before_lock IS DISTINCT FROM public._scope_reconciliation_snapshot(p_project_id) THEN
   RAISE EXCEPTION 'scope_reconcile_order_moved' USING ERRCODE='serialization_failure';
  END IF;

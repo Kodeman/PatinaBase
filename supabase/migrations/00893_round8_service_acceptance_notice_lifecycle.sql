@@ -106,7 +106,7 @@ BEGIN
     RAISE EXCEPTION 'request_not_open' USING ERRCODE = 'object_not_in_prerequisite_state';
   END IF;
   IF p_expected_signer_policy_revision IS DISTINCT FROM v_request.signer_policy_revision THEN
-    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'serialization_failure';
+    RAISE EXCEPTION 'stale_signer_policy' USING ERRCODE = 'PT409';
   END IF;
   SELECT * INTO v_target FROM public.service_acceptance_signers WHERE id = p_signer_id AND request_id = p_request_id;
   IF v_target.id IS NULL OR v_target.status <> 'active' THEN

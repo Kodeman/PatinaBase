@@ -173,7 +173,7 @@ describe('service completion acts', () => {
 
   it('refetches the reading on a stale refusal and after success, never on an inactive denial', () => {
     const act = useCompleteStudioService('job-1') as unknown as Act<unknown>;
-    act.onError({ code: '40001', message: 'stale_obligations' });
+    act.onError({ code: 'PT409', message: 'stale_obligations' });
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: serviceCompletionKeys.project('job-1') });
     mocks.invalidateQueries.mockClear();
     act.onError({ code: '23514', message: 'service_obligations_open: acceptance_not_accepted' });
@@ -200,7 +200,7 @@ describe('service completion acts', () => {
       refreshed = derive.queryFn();
       return refreshed;
     });
-    (useCompleteStudioService('job-r1') as unknown as Act<unknown>).onError({ code: '40001', message: 'stale_obligations' });
+    (useCompleteStudioService('job-r1') as unknown as Act<unknown>).onError({ code: 'PT409', message: 'stale_obligations' });
     // The background read answers after the refusal, with the refused hash.
     settle({ data: obligations({ projectId: 'job-r1' }), error: null });
     const [before, after] = await Promise.all([background, refreshed]);
@@ -231,7 +231,7 @@ describe('service completion acts', () => {
     mocks.client = clientB;
     const deriveB = useStudioServiceObligations('job-f1') as unknown as Read<Reading>;
     const readingB = await deriveB.queryFn();
-    lateAct.onError({ code: '40001', message: 'stale_obligations' });
+    lateAct.onError({ code: 'PT409', message: 'stale_obligations' });
     // B's reading is not retired and B is not refreshed; A holds the mark.
     expect(completionHooks.staleReadingMark(clientB as never, 'job-f1')).toBeNull();
     expect(invalidateB).not.toHaveBeenCalled();

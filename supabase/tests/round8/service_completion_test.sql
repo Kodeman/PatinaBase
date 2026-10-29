@@ -565,7 +565,7 @@ SELECT pg_temp.actor(5);
 SELECT pg_temp.expect_error($q$SELECT pg_temp.complete('k-client')$q$,'42501',NULL,'the client cannot complete');
 SELECT pg_temp.actor(1);
 SELECT pg_temp.expect_error(format($q$SELECT public.complete_studio_service(%L,%L,repeat('0',64),'k-stale')$q$,
-  pg_temp.project(),pg_temp.req('a1')),'40001','stale_obligations','a stale obligation hash refuses');
+  pg_temp.project(),pg_temp.req('a1')),'PT409','stale_obligations','a stale obligation hash refuses');
 SELECT pg_temp.expect_error($q$SELECT pg_temp.complete(NULL)$q$,'23514','client_request_id_invalid','completion needs a key');
 CREATE TEMP TABLE before_completion AS
 SELECT (SELECT to_jsonb(p) FROM public.projects p WHERE p.id=pg_temp.project()) AS project,
