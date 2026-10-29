@@ -1,5 +1,10 @@
 import { test, expect } from "../fixtures/auth";
-import { psqlAsUser, psqlScalar, psqlRun } from "../helpers/psql";
+import {
+  psqlAsUser,
+  psqlAsUserRow,
+  psqlScalar,
+  psqlRun,
+} from "../helpers/psql";
 
 const DESIGNER = "f0180000-0000-4000-8000-000000000002";
 const STUDIO = "f0180000-0000-4000-8000-000000000001";
@@ -48,7 +53,7 @@ function removeObservation() {
   DELETE FROM public.field_captures WHERE client_capture_id='${TOKEN}';`);
 }
 
-test("A15 real Field RPC and Field note write retain room, author and private scope", async ({
+test("A15 real Field RPC and Field note write retain room and author; a capture retry is idempotent", async ({
   authenticatedPage: page,
 }) => {
   test.setTimeout(240_000);
@@ -83,6 +88,30 @@ test("A15 real Field RPC and Field note write retain room, author and private sc
     const captureId = psqlScalar(
       `SELECT id FROM field_captures WHERE client_capture_id='${TOKEN}'`,
     );
+    // Negative branch: the Field sync retries the same client_capture_id. The
+    // retry must be a no-op: same capture, created=false, no second row and
+    // no second minted library product.
+    const products = () =>
+      psqlScalar(`SELECT count(*) FROM products WHERE name='RC7 E3 field observation'
+        AND capture_source='field_capture' AND owner_user_id='${DESIGNER}'`);
+    const productsBefore = products();
+    const [replay] = psqlAsUserRow(
+      DESIGNER,
+      `SELECT public.commit_field_capture('${TOKEN}', 'library',
+      '{"schemaVersion":4,"captureKind":"note","title":"RC7 E3 field observation","notes":"${BODY}","photos":[],"confirmations":{},"proposals":{}}'::jsonb,
+      '${JOB}', '${ROOM}', NULL, '${STUDIO}')::text;`,
+    );
+    expect(JSON.parse(replay!)).toMatchObject({
+      capture_id: captureId,
+      created: false,
+      status: "saved",
+    });
+    expect(
+      psqlScalar(
+        `SELECT count(*) FROM field_captures WHERE client_capture_id='${TOKEN}'`,
+      ),
+    ).toBe("1");
+    expect(products()).toBe(productsBefore);
     // LocalCaptureSyncService.writeMarginNoteIfNeeded → MarginNoteWriteRequest
     // → SupabaseFieldWriteGateway.insertMarginNote: the same field actor.
     psqlAsUser(

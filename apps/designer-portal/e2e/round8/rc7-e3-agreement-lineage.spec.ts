@@ -177,9 +177,11 @@ CREATE TEMP TABLE e3_chain (result jsonb) ON COMMIT DROP;
 GRANT ALL ON e3_chain TO authenticated;
 CREATE TEMP TABLE e3_alias (opened jsonb) ON COMMIT DROP;
 GRANT ALL ON e3_alias TO authenticated;
+CREATE TEMP TABLE e3_neg (k text, v jsonb) ON COMMIT DROP;
+GRANT ALL ON e3_neg TO authenticated;
 SET LOCAL ROLE authenticated;
 DO $d$
-DECLARE p uuid := '${agreement}'; phase uuid; snap jsonb;
+DECLARE p uuid := '${agreement}'; phase uuid; snap jsonb; v_err text; v_replay jsonb;
 BEGIN
   PERFORM pg_temp.actor('${DESIGNER}');
   INSERT INTO public.proposal_phases (proposal_id, name, phase_key, duration_days, lane, fee_cents, sort_order)
@@ -208,11 +210,27 @@ BEGIN
     'rc7 e3 agreement lineage probe');
   snap := public.get_commercial_document_send_snapshot(p);
   PERFORM public.send_commercial_document(p, snap->>'documentFingerprint', NULL, now() + interval '30 days');
+  -- Negative branch: the designer cannot sign in the client's signer slot.
+  BEGIN
+    PERFORM public.sign_design_services_agreement(p, 'F01 Fictional Designer');
+    v_err := NULL;
+  EXCEPTION WHEN OTHERS THEN v_err := SQLSTATE || ': ' || SQLERRM;
+  END;
+  INSERT INTO e3_neg VALUES ('designerSign', jsonb_build_object('error', v_err,
+    'stateAfter', (SELECT commercial_state FROM proposals WHERE id = p)));
   PERFORM pg_temp.actor('${CLIENT}');
   PERFORM public.sign_design_services_agreement(p, 'RC7 Fictional Client');
   PERFORM pg_temp.actor('${DESIGNER}');
   INSERT INTO e3_chain VALUES
     (public.countersign_design_services_agreement(p, 'F01 Fictional Designer'));
+  -- Negative branch: a repeated countersign must not activate a second project
+  -- (refused, or an idempotent no-op on the same project).
+  BEGIN
+    v_replay := public.countersign_design_services_agreement(p, 'F01 Fictional Designer');
+    v_err := NULL;
+  EXCEPTION WHEN OTHERS THEN v_replay := NULL; v_err := SQLSTATE || ': ' || SQLERRM;
+  END;
+  INSERT INTO e3_neg VALUES ('countersignReplay', jsonb_build_object('error', v_err, 'result', v_replay));
   -- Former aliases, opened as the designer exactly as /doc/[id] does.
   INSERT INTO e3_alias VALUES (jsonb_build_object(
     'lead', public.document_open('${lead}'),
@@ -255,6 +273,8 @@ SELECT jsonb_build_object(
     JOIN leads l ON l.id = dc.lead_id
     WHERE pj.id = c.project),
   'aliases', (SELECT opened FROM e3_alias),
+  'negatives', (SELECT jsonb_object_agg(k, v) FROM e3_neg),
+  'projectsForDirection', (SELECT count(*) FROM projects WHERE proposal_id = '${direction}'),
   'leadDocumentState', (SELECT jsonb_agg(jsonb_build_object('kind', engagement_kind, 'engagementId', engagement_id,
       'proposalId', proposal_id, 'projectId', project_id)) FROM document_state WHERE lead_id = '${lead}'))
 FROM c;
@@ -329,6 +349,28 @@ test("A03 inquiry-born Direction carries its lineage through the signed agreemen
         "proposals.parent_proposal_id"
       ],
     ).toBe(0);
+    // Negative branches, read back in the same transaction.
+    const negatives = readback.negatives as Record<
+      string,
+      {
+        error: string | null;
+        stateAfter?: string;
+        result?: Record<string, unknown> | null;
+      }
+    >;
+    expect(
+      negatives.designerSign.error,
+      "the designer's own signature in the client slot is refused",
+    ).toBeTruthy();
+    expect(negatives.designerSign.stateAfter).toBe("sent");
+    const replay = negatives.countersignReplay;
+    if (replay.error === null) {
+      expect(replay.result).toMatchObject({
+        newlyExecuted: false,
+        projectId: countersign.projectId,
+      });
+    }
+    expect(readback.projectsForDirection).toBe(1);
     // The edition and the billing authority the countersign minted belong to
     // the returned project and name the Direction as their source.
     const projectId = countersign.projectId as string;
@@ -412,6 +454,49 @@ test.fixme("A03 cold-start agreement for a household with an open Direction offe
     await expect(sheet).toBeVisible();
     await sheet.getByTestId("client-picker-trigger").click();
     await page.getByTestId(`client-picker-option-${CLIENT}`).click();
+
+    // Settle on whichever comes first: the expected choice, or (today) the
+    // opener's navigation into a Contract Room.
+    await Promise.race([
+      page
+        .getByRole("button", { name: /Continue the existing Direction/ })
+        .waitFor({ timeout: 60_000 }),
+      page.waitForURL(/\/drafting\/[a-f0-9-]{36}/, { timeout: 60_000 }),
+    ]);
+    // DB readback BEFORE any assertion, so a forced run records what was
+    // written: every proposal on the household, its links, and the seed.
+    const household =
+      psqlRows(`SELECT id, document_kind, commercial_state, status,
+        coalesce(parent_proposal_id::text, ''), coalesce(designer_client_id::text, ''),
+        (id = (SELECT seeded_proposal_id FROM client_discovery WHERE designer_client_id='${relationship}'))::text
+      FROM proposals WHERE designer_client_id='${relationship}' ORDER BY created_at`).map(
+        ([id, kind, state, status, parent, rel, isSeed]) => ({
+          id,
+          kind,
+          state,
+          status,
+          parentProposalId: parent || null,
+          designerClientId: rel,
+          isDiscoverySeed: isSeed === "true",
+        }),
+      );
+    const evidence = {
+      url: page.url(),
+      direction,
+      discoverySeededProposalId: psqlScalar(
+        `SELECT seeded_proposal_id FROM client_discovery WHERE designer_client_id='${relationship}'`,
+      ),
+      household,
+    };
+    console.log(`[RC7-E3-5 readback] ${JSON.stringify(evidence)}`);
+    test.info().annotations.push({
+      type: "RC7-E3-5 readback",
+      description: JSON.stringify(evidence),
+    });
+    expect(
+      household,
+      "no second agreement row before the designer chooses",
+    ).toHaveLength(1);
 
     // Expected: a choice, and no second row until the designer makes it.
     await expect(
