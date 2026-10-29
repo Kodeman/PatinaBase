@@ -293,17 +293,28 @@ function conflictText(
   fields: readonly (readonly [string, SpecChanges])[],
   row: SpecChanges,
 ): string {
-  const said = fields.map(([field, changes]) => {
+  // The chosen image has no field to save from: its retry is named apart.
+  const image = fields.some(([field]) => field === "Image")
+    ? ["Image changed in another session. Press Enter in the link field to save yours again."]
+    : [];
+  const said = fields.flatMap(([field, changes]) => {
+    if (field === "Image") return [];
     const columns = Object.keys(changes) as SpecColumn[];
     if (columns.length !== 1 || !TEXT_COLUMNS.has(columns[0])) {
-      return `${field} changed in another session.`;
+      return [`${field} changed in another session.`];
     }
     const value = String(row[columns[0]] ?? "").trim();
-    return value
-      ? `${field} changed in another session to “${value}”.`
-      : `${field} cleared in another session.`;
+    return [
+      value
+        ? `${field} changed in another session to “${value}”.`
+        : `${field} cleared in another session.`,
+    ];
   });
-  return `${said.join(" ")} Save again to replace ${said.length > 1 ? "them" : "it"}.`;
+  if (said.length === 0) return image.join(" ");
+  return [
+    ...image,
+    `${said.join(" ")} Save again to replace ${said.length > 1 ? "them" : "it"}.`,
+  ].join(" ");
 }
 
 /**

@@ -55,6 +55,8 @@ A16 sample, hardware/appliance interface and site verification are reported fact
 
 Known debt (RC7-E6-3 fix lane): the Spec pane now answers a stale `row_version` save with the peer's row, keeps the draft and saves again. The spec-book workbench (`spec-book-workspace.tsx`), which also uses `useUpdateProjectFfeSpec`, still shows `This selection changed in another session. Refresh before saving.` and is not refetched on conflict, because it reseeds its open form from a refetched row and would drop the draft.
 
+Known debt (RC7-E6-3 fix lane): a chosen image that conflicts with another session stays in the Spec pane preview as a kept draft. Enter on the empty link field saves it again, and the alert says so. There is no control to clear it; it leaves only when it is saved, replaced by another choice, or the pane closes. It does not hold the sheet open.
+
 Harness debt: `e2e/helpers/psql.ts:21`, `e2e/round8/global-setup.ts:11`, `global-teardown.ts:8` fall back to `127.0.0.1:54322`. The E4 spec refuses 54321/54322 in `beforeAll`, and every invocation exports and asserts `SUPABASE_DB_URL` for 62122.
 
 ## Teardown

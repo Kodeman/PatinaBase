@@ -674,7 +674,7 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
       selected_media: [{ url: "https://example.com/peer.jpg" }],
     });
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Image changed in another session. Finish changed in another session to “Peer oak”. Save again to replace them.",
+      "Image changed in another session. Press Enter in the link field to save yours again. Finish changed in another session to “Peer oak”. Save again to replace it.",
     );
     // The chosen image stays, and Enter on the empty link saves it again.
     expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute(
