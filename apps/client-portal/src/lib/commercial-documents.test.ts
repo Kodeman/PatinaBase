@@ -1217,6 +1217,18 @@ describe('00883 client external-work projection', () => {
       priceDescription: external.priceDescription, instrument: null, allowance: null,
     });
   });
+  it('reads 00901 externalSelections after the studio selections, keeping external identity', () => {
+    const result = adaptClientSelections({ origin: 'commercial',
+      selections: [{ id: 'sofa', kind: 'furnishings', clientUnitPriceCents: 500, clientLineTotalCents: 1000 }],
+      externalSelections: [external],
+    });
+    expect(result.selections.map((row) => [row.id, row.kind])).toEqual([['sofa', 'furnishings'], ['external-line', 'external']]);
+    expect(result.selections[1]).toMatchObject({
+      responsibility: 'external', externalFulfilmentId: 'external-1', reportedPriceCents: 1250000,
+      clientUnitPriceCents: null, clientLineTotalCents: null, priceDescription: external.priceDescription,
+    });
+    expect(adaptClientSelections({ selections: [], externalSelections: null }).selections).toEqual([]);
+  });
   it('distinguishes absent prices from true zero and refuses external commerce instruments', () => {
     const rows = adaptClientSelections({ selections: [
       { id: 'missing' }, { id: 'zero', clientUnitPriceCents: 0, clientLineTotalCents: 0 },

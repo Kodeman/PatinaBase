@@ -15,6 +15,8 @@ SET LOCAL statement_timeout='45s';
 \ir ../../migrations/00885_round8_countersign_execution_time.sql
 \ir ../../migrations/00884_round8_external_package_reading.sql
 \ir ../../migrations/00887_round8_external_reading_grant_binding.sql
+\ir ../../migrations/00900_round8_external_install_hold_guard.sql
+\ir ../../migrations/00901_round8_client_threshold_external_field.sql
 -- An exact old-reader body can be overlaid here for the missing-evidence
 -- assertion control; fixture setup uses no new reader-only API.
 \if :{?external_reading_control}

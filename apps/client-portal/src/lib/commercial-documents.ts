@@ -1213,10 +1213,16 @@ function adaptClientSelectionInstrument(value: unknown): ClientSelectionInstrume
 export function adaptClientSelections(value: unknown): ClientProjectSelections {
   const raw = record(value);
   const origin = oneOf(raw.origin, ['commercial', 'legacy'] as const, 'legacy');
-  const rows = first(raw, 'selections');
+  // 00901: external lines arrive in their own field so older adapters, which
+  // read every `selections` row as studio money, never see them.
+  const ownRows = first(raw, 'selections');
+  const externalRows = first(raw, 'externalSelections');
+  const rows = [
+    ...(Array.isArray(ownRows) ? ownRows : []),
+    ...(Array.isArray(externalRows) ? externalRows : []),
+  ];
 
-  const selections: ClientSelection[] = Array.isArray(rows)
-    ? rows
+  const selections: ClientSelection[] = rows
       .map((item): ClientSelection | null => {
         const row = record(item);
         const id = text(row.id);
@@ -1259,8 +1265,7 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
           updatedAt: nullableText(first(row, 'updatedAt', 'updated_at')),
         };
       })
-      .filter((item): item is ClientSelection => item !== null)
-    : [];
+      .filter((item): item is ClientSelection => item !== null);
 
   return { origin, selections };
 }

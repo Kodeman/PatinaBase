@@ -342,9 +342,10 @@ BEGIN
   );
   PERFORM pg_temp.reset_role();
 
-  -- Every top-level key 00565 shipped is still there.
+  -- Every top-level key 00565 shipped is still there, plus 00901's additive
+  -- externalSelections.
   SELECT array_agg(k ORDER BY k) INTO v_keys FROM jsonb_object_keys(v_payload) AS k;
-  ASSERT v_keys = ARRAY['origin', 'projectId', 'projectName', 'selections'],
+  ASSERT v_keys = ARRAY['externalSelections', 'origin', 'projectId', 'projectName', 'selections'],
     'the reader''s top-level shape changed: ' || array_to_string(v_keys, ', ');
 
   ASSERT v_payload->>'origin' = 'commercial',
