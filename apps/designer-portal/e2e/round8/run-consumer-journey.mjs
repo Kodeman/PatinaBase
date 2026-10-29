@@ -14,15 +14,20 @@
  * workdir that holds only the five .temp version pins, with edge-runtime and a
  * functions env of exactly EMAIL_DEV_MODE=dry_run. It proves the stack from
  * Docker (CLI project label, published ports, container address and cluster
- * system identifier), switches pg_cron's active jobs off on the owned
+ * system identifier; it reads nothing from the shared stack), switches pg_cron's active jobs off on the owned
  * container, writes a sanitized receipt (no keys), then for each journey:
  * with --with-rc2 only, the five RC-2 legs in order (designer @rc2-send,
  * client @rc2-return, designer @rc2-resend, client @rc2-accept, designer
  * @rc2-complete; each send leg applies the fixture once, a fresh job). Then
  * (RC-7 e2, always) it starts the client portal on 3112 itself and runs the
- * rc7-e2 legs, each driving every actor in its own browser context:
- * @rc7-e2-acceptance (applies the base and rc7-e2 fixtures: fresh jobs),
- * @rc7-e2-paper, @rc7-e2-completion (A20–A23).
+ * rc7-e2 legs in one playwright.round8.config.ts run of
+ * rc7-e2-consumer-journey.spec.ts on the round-8 projects chromium and
+ * webkit-iphone, each driving every actor in its own browser context:
+ * @rc7-e2-acceptance (applies the base and rc7-e2 fixtures: fresh jobs per
+ * project), @rc7-e2-paper, @rc7-e2-completion (A20–A23). The client portal is
+ * then stopped (SIGTERM, SIGKILL after a grace period) and its port and the
+ * designer port must be free; any residue fails the journey. Below 20 GiB free
+ * disk it stops.
  * At the end it stops the owned stack with --no-backup (unless --keep-stack),
  * checks the full teardown census (containers and volumes, including removal of
  * child-only resources), and removes the scratch workdir.
@@ -59,10 +64,17 @@ const PINS = ['gotrue-version', 'postgres-version', 'rest-version', 'storage-mig
 const EXCLUDED_SERVICES = 'studio,mailpit,logflare,vector,imgproxy,postgres-meta';
 const LEGS = [['designer', '@rc2-send'], ['client', '@rc2-return'], ['designer', '@rc2-resend'],
   ['client', '@rc2-accept'], ['designer', '@rc2-complete']];
-// RC-7 e2 legs: [tag, tests in the leg]. Run through the designer config with
-// the client portal this runner keeps up on PORTS.client.
+// RC-7 e2 legs: [tag, tests in the leg]. One playwright.round8.config.ts run of
+// the lane entry on both round-8 projects, so round 8's global setup and
+// teardown run once around all three legs (its teardown removes the F01 studio
+// the legs share), with the client portal this runner keeps up on PORTS.client.
 const E2_LEGS = [['@rc7-e2-acceptance', 3], ['@rc7-e2-paper', 1], ['@rc7-e2-completion', 3]];
-const MIN_FREE_KIB = 9 * 1024 * 1024;
+const E2_PROJECTS = ['chromium', 'webkit-iphone'];
+const E2_EXPECTED = E2_LEGS.reduce((sum, [, tests]) => sum + tests, 0) * E2_PROJECTS.length;
+const E2_ARGS = ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
+  '--grep', E2_LEGS.map(([tag]) => tag).join('|'), ...E2_PROJECTS.flatMap((name) => ['--project', name]), '--workers=1'];
+// RC-7 common rule: stop below 20 GiB free.
+const MIN_FREE_KIB = 20 * 1024 * 1024;
 const PROVIDER_KEY = /RESEND|SMTP|SENDGRID|POSTMARK|MAILGUN|SES_|TWILIO/i;
 
 function parseArgs(argv) {
@@ -115,7 +127,7 @@ function freeKiB() {
 
 function requireDisk(evidence) {
   const free = freeKiB();
-  if (free < MIN_FREE_KIB) throw new Error(`free disk ${(free / 1048576).toFixed(2)} GiB is below 9 GiB; stopping`);
+  if (!(free >= MIN_FREE_KIB)) throw new Error(`free disk ${(free / 1048576).toFixed(2)} GiB is below 20 GiB; stopping`);
   log(evidence, `disk: ${(free / 1048576).toFixed(2)} GiB free`);
 }
 
@@ -229,12 +241,7 @@ function proveOwned(env) {
   if (urlSystemId !== systemId || urlAddr !== serverAddr) {
     throw new Error('the database URL does not reach the owned container');
   }
-  let sharedSystemId = null;
-  if (containers('com.supabase.cli.project=supabase').includes('supabase_db_supabase')) {
-    sharedSystemId = clusterId('supabase_db_supabase');
-    if (sharedSystemId === systemId) throw new Error('the owned cluster shares the shared stack\'s system identifier');
-  }
-  return { dbPort, apiPort, serverAddr, systemId, sharedSystemId, dbContainer: dbBox.Id.slice(0, 12) };
+  return { dbPort, apiPort, serverAddr, systemId, dbContainer: dbBox.Id.slice(0, 12) };
 }
 
 /**
@@ -268,17 +275,18 @@ function functionsReceipt() {
   return { container: edge, EMAIL_DEV_MODE: mode, providerKeyNames, envNameCount: names.length };
 }
 
-function runLeg(evidence, label, side, tag, legEnv, expected = 1) {
+function runLeg(evidence, label, side, tag, legEnv, expected = 1, args = ['--config', CONFIG, '--grep', tag]) {
   const dir = path.join(evidence, label);
   fs.mkdirSync(dir, { recursive: true });
-  const report = path.join(dir, `${side}-${tag}`);
-  const logPath = path.join(dir, `${side}-${tag}.log`);
+  const name = side === 'e2' ? 'e2-rc7' : `${side}-${tag}`;
+  const report = path.join(dir, name);
+  const logPath = path.join(dir, `${name}.log`);
   const out = fs.openSync(logPath, 'w');
-  const result = spawnSync('pnpm', ['exec', 'playwright', 'test', '--config', CONFIG, '--grep', tag], {
+  const result = spawnSync('pnpm', ['exec', 'playwright', 'test', ...args], {
     cwd: side === 'client' ? CLIENT_APP : DESIGNER,
     env: { ...legEnv, PLAYWRIGHT_OUTPUT_DIR: report, PLAYWRIGHT_EVIDENCE_DIR: report },
     stdio: ['ignore', out, out],
-    timeout: 20 * 60 * 1000,
+    timeout: (side === 'e2' ? 75 : 20) * 60 * 1000,
     killSignal: 'SIGTERM',
   });
   fs.closeSync(out);
@@ -318,14 +326,57 @@ async function startClientServer(evidence, label, legEnv) {
     if (child.exitCode !== null) break;
     await new Promise((resolve) => { setTimeout(resolve, 2000); });
   }
-  stopClientServer(evidence, child);
+  await stopClientServer(evidence, child);
   throw new Error(`client portal did not start on ${PORTS.client}; see ${logPath}`);
 }
 
-function stopClientServer(evidence, child) {
-  if (!child) return;
-  try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
-  log(evidence, `client portal stopped (pid ${child.pid})`);
+function sleep(ms) {
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
+}
+
+/** Waits until none of the ports is listening; true when all are free within the time. */
+async function portsReleased(ports, ms) {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const busy = [];
+    for (const port of ports) if (await portInUse(port)) busy.push(port);
+    if (busy.length === 0) return true;
+    if (Date.now() >= deadline) return false;
+    await sleep(500);
+  }
+}
+
+/** Whether any process of the client server's group is alive. */
+function groupAlive(child) {
+  try { process.kill(-child.pid, 0); return true; } catch { return false; }
+}
+
+/**
+ * Stops the client portal's process group: SIGTERM, then SIGKILL after the
+ * grace period, then waits for its port. False (residue) fails the journey:
+ * a live group member or a listening port after the escalation.
+ */
+async function stopClientServer(evidence, child, { graceMs = 20_000, settleMs = 15_000 } = {}) {
+  if (!child) return true;
+  const signal = (name) => { try { process.kill(-child.pid, name); } catch { /* group already gone */ } };
+  const exited = () => child.exitCode !== null || child.signalCode !== null;
+  const waitGone = async (ms) => {
+    const deadline = Date.now() + ms;
+    while ((!exited() || groupAlive(child)) && Date.now() < deadline) await sleep(250);
+    return exited() && !groupAlive(child);
+  };
+  signal('SIGTERM');
+  let gone = await waitGone(graceMs);
+  let escalated = false;
+  if (!gone) {
+    escalated = true;
+    signal('SIGKILL');
+    gone = await waitGone(settleMs);
+  }
+  const released = await portsReleased([PORTS.client], settleMs);
+  log(evidence, `client portal stop (pid ${child.pid}): ${escalated ? 'SIGTERM then SIGKILL' : 'SIGTERM'}; `
+    + `process group ${gone ? 'gone' : 'RESIDUE'}; port ${PORTS.client} ${released ? 'free' : 'STILL LISTENING'}`);
+  return gone && released;
 }
 
 function createOwnedWorkdir(parent = os.tmpdir()) {
@@ -385,7 +436,7 @@ async function journey(args) {
       at: new Date().toISOString(), project: PROJECT, workdir,
       cli: must('supabase', ['--version']).split('\n')[0], head: must('git', ['-C', ROOT, 'rev-parse', 'HEAD']),
       api: { url: env.API_URL, port: identity.apiPort }, db: { port: identity.dbPort, container: identity.dbContainer,
-        serverAddr: identity.serverAddr, systemId: identity.systemId }, sharedSystemId: identity.sharedSystemId,
+        serverAddr: identity.serverAddr, systemId: identity.systemId },
       functions: functionsReceipt(), cronLaunchActiveJobs,
       ledgerMax: psql(env.DB_URL, 'SELECT max(version) FROM supabase_migrations.schema_migrations;'),
       scopeEditionsAtStart: psql(env.DB_URL, "SELECT enabled FROM public.server_capabilities WHERE key='scope_editions';"),
@@ -414,16 +465,21 @@ async function journey(args) {
       if (ok) {
         const client = await startClientServer(evidence, label, legEnv);
         try {
-          for (const [tag, expected] of E2_LEGS) {
-            requireDisk(evidence);
-            const leg = runLeg(evidence, label, 'e2', tag, legEnv, expected);
-            log(evidence, `== ${label} e2 ${tag} exit=${leg.status} log=${leg.logPath}`);
-            for (const line of leg.lines) log(evidence, `   ${line.trim()}`);
-            if (!leg.ok) { ok = false; break; }
-          }
+          requireDisk(evidence);
+          const tags = E2_LEGS.map(([tag]) => tag).join('|');
+          const leg = runLeg(evidence, label, 'e2', tags, { ...legEnv, RC7_E2_ROUND8: '1',
+            SUPABASE_INTERNAL_URL: legEnv.NEXT_PUBLIC_SUPABASE_URL }, E2_EXPECTED, E2_ARGS);
+          log(evidence, `== ${label} e2 ${tags} on ${E2_PROJECTS.join(' + ')} exit=${leg.status} log=${leg.logPath}`);
+          for (const line of leg.lines) log(evidence, `   ${line.trim()}`);
+          if (!leg.ok) ok = false;
         } finally {
-          stopClientServer(evidence, client);
+          if (!(await stopClientServer(evidence, client))) ok = false;
         }
+      }
+      // Playwright's own designer server must be gone too.
+      if (!(await portsReleased([PORTS.designer], 30_000))) {
+        log(evidence, `residue: port ${PORTS.designer} is still listening after the run`);
+        ok = false;
       }
       log(evidence, `JOURNEY ${label} ${ok ? 'PASSED' : 'FAILED'}`);
       if (!ok) break;

@@ -1,9 +1,11 @@
 /**
  * RC-7 lane e2: service acceptance, paper, completion and care journeys
  * (A20–A23; R3b findings 2 and 4). Opt-in only: the `.journey.ts` name keeps it
- * out of every default discovery, and only playwright.consumer-journey.config.ts
- * matches it. run-consumer-journey.mjs runs it against the owned stack it
- * started and proved, with the client portal it keeps up on RC7_CLIENT_URL:
+ * out of every default discovery. run-consumer-journey.mjs runs it through
+ * rc7-e2-consumer-journey.spec.ts under playwright.round8.config.ts (projects
+ * chromium and webkit-iphone; each project applies its own fresh jobs), against
+ * the owned stack it started and proved, with the client portal it keeps up on
+ * RC7_CLIENT_URL. playwright.consumer-journey.config.ts (chromium) also matches it:
  *
  *   @rc7-e2-acceptance  applies consumer-journey-fixture.sql + rc7-e2-fixture.sql
  *                       (fresh jobs), then job A (client-buy, two required signers):
@@ -19,10 +21,11 @@
  *                       walkthrough, close, a later care question).
  *
  * Every actor works in their own browser context (the designer and client share
- * one localhost auth cookie name). Acts go through the product's UI, or its RPC
- * or API as the real signed-in actor where the UI has no control; every
- * transition is followed by a DB readback. Nothing here writes a request,
- * response, intake, completion or outbound row directly.
+ * one localhost auth cookie name), on the running project's device. Acts go
+ * through the product's UI, or its RPC or API over HTTP with the real actor's
+ * own session where the UI has no control; psql (postgres) only applies the
+ * fixtures and reads back. Every transition is followed by a DB readback.
+ * Nothing here writes a request, response, intake, completion or outbound row directly.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -30,6 +33,7 @@ import path from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 const DESIGNER = 'f0180000-0000-4000-8000-000000000002';
+const DESIGNER_EMAIL = 'f01-designer@test.invalid';
 const ADMIN_EMAIL = 'rc2-admin@test.invalid';
 const ACTOR = {
   client: { id: 'c2c20000-0000-4000-8000-000000000005', email: 'rc2-client@patina.test' },
@@ -78,29 +82,20 @@ function json<T = Record<string, unknown>>(query: string): T {
   return JSON.parse(sql(query)) as T;
 }
 
-/**
- * A script of RPC calls, each as the signed-in actor it names: `-- as <uuid>`
- * lines switch the request.jwt.claims the RPCs read, under the authenticated
- * role (the role every grant names), inside one transaction.
- */
-function asActors(script: string): string {
-  const body = script.split('\n').map((line) => {
-    const actor = /^-- as ([0-9a-f-]{36})$/.exec(line.trim());
-    return actor ? `SELECT set_config('request.jwt.claims', json_build_object('sub', '${actor[1]}', 'role', 'authenticated')::text, true) \\g /dev/null` : line;
-  }).join('\n');
-  return execFileSync('psql', ['-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', owned().dbUrl],
-    { encoding: 'utf8', input: `BEGIN;\nSET LOCAL ROLE authenticated;\n${body}\nCOMMIT;\n` }).trim();
-}
-
-/** A signed-in actor's own session against the API (no service key). */
+/** A signed-in actor's own session against the API (no service key); one per fixture application. */
+const sessions = new Map<string, string>();
 async function token(email: string): Promise<string> {
+  const cached = sessions.get(email);
+  if (cached) return cached;
   const { apiUrl, anonKey } = owned();
   const response = await fetch(`${apiUrl}/auth/v1/token?grant_type=password`, {
     method: 'POST', headers: { apikey: anonKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: PASSWORD }),
   });
   expect(response.status, `${email} signs in`).toBe(200);
-  return ((await response.json()) as { access_token: string }).access_token;
+  const access = ((await response.json()) as { access_token: string }).access_token;
+  sessions.set(email, access);
+  return access;
 }
 
 async function rpcAs(email: string, name: string, args: Record<string, unknown>) {
@@ -110,6 +105,13 @@ async function rpcAs(email: string, name: string, args: Record<string, unknown>)
     headers: { apikey: anonKey, Authorization: `Bearer ${await token(email)}`, 'Content-Type': 'application/json' },
   });
   return { status: response.status, body: await response.text() };
+}
+
+/** A transition as the real signed-in actor, through the API (authenticated HTTP, the actor's own JWT). */
+async function actAs<T = unknown>(email: string, name: string, args: Record<string, unknown>): Promise<T> {
+  const result = await rpcAs(email, name, args);
+  expect(result.status, `${name} as ${email}: ${result.body}`).toBeLessThan(300);
+  return (result.body ? JSON.parse(result.body) : null) as T;
 }
 
 // ── Fixture ────────────────────────────────────────────────────────────────
@@ -143,6 +145,7 @@ const sha256 = (body: Buffer) => createHash('sha256').update(body).digest('hex')
 async function applyFixtures() {
   const target = owned();
   const run = randomUUID();
+  sessions.clear();
   const files = [
     { path: `${run}/rc7-e2/a-101.pdf`, body: pdf(`RC7 fictional A-101 plan ${run}`) },
     { path: `${run}/rc7-e2/a-201.pdf`, body: pdf(`RC7 fictional A-201 elevations ${run}`) },
@@ -257,14 +260,31 @@ function phases(project: string): { id: string; name: string; status: string }[]
     ORDER BY sort_order, name), '[]') FROM public.project_phases WHERE project_id='${project}';`);
 }
 
+const today = () => new Date().toISOString().slice(0, 10);
+
+/** The closeout checklist close_project requires, every item completed. */
+const CHECKLIST = ['walkthrough', 'punch_list', 'payment', 'photography', 'photos', 'case_study']
+  .map((key) => ({ key, completed: true }));
+
+/** The designer closes the project (close_project, with their own session); the HTTP result, refused or not. */
+function closeProject(project: string, snapshot: Record<string, unknown> | null = null) {
+  return rpcAs(DESIGNER_EMAIL, 'close_project', { p_project_id: project, p_closure: CHECKLIST, p_snapshot: snapshot });
+}
+
+/** The financial closeout the service section shows beside (never inside) the obligations. */
+function financialHold(project: string): { openInvoiceCount: number; balanceCents: number; uncollectedContractCents: number } {
+  return json(`SELECT public._service_completion_financial_hold('${project}');`);
+}
+
 /** The designer completes each open phase through advance_project_phase (the phase control's RPC). */
-function completePhases(project: string) {
+async function completePhases(project: string) {
   // Completing one phase may start its successor: walk until none is in progress.
   for (let round = 0; round < 6; round += 1) {
     const open = phases(project).filter((row) => row.status === 'in_progress');
     if (open.length === 0) break;
     for (const phase of open) {
-      asActors(`-- as ${DESIGNER}\nSELECT public.advance_project_phase('${project}', '${phase.id}', 'in_progress') \\g /dev/null`);
+      await actAs(DESIGNER_EMAIL, 'advance_project_phase',
+        { p_project_id: project, p_phase_id: phase.id, p_expected_status: 'in_progress' });
     }
   }
   expect(phases(project).map((row) => row.status), 'every phase completed').toEqual(
@@ -275,7 +295,9 @@ function completePhases(project: string) {
 
 /** Each actor in its own context: the portals share one localhost cookie name. */
 async function signIn(browser: Browser, base: string, email: string, landing: string): Promise<Page> {
-  const context = await browser.newContext({ baseURL: base });
+  // The running project's device (Desktop Chrome, or iPhone 14 on webkit-iphone) applies to every actor.
+  const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch } = test.info().project.use;
+  const context = await browser.newContext({ baseURL: base, viewport, userAgent, deviceScaleFactor, isMobile, hasTouch });
   // As e2e/fixtures/auth.ts does: the first-sign-in welcome dialog never opens.
   await context.addInitScript(() => {
     try { window.localStorage.setItem('help-system.welcome-shown.first-project-walkthrough', '1'); } catch { /* none */ }
@@ -314,7 +336,7 @@ async function signIn(browser: Browser, base: string, email: string, landing: st
 
 const designerBase = () => test.info().project.use.baseURL!;
 
-async function designer(browser: Browser, email = 'f01-designer@test.invalid') {
+async function designer(browser: Browser, email = DESIGNER_EMAIL) {
   return signIn(browser, designerBase(), email, '/desk');
 }
 
@@ -479,30 +501,33 @@ async function respond(page: Page, answer: 'Accept' | 'Accept with conditions' |
 /** An executed amendment, as the real actors (the RPCs the agreement UI calls):
  *  the designer drafts an addendum that adds an excluded cabinetry package,
  *  sends it; the client signs; the designer countersigns. A material change. */
-function executeAmendment(project: string) {
-  const out = asActors(`-- as ${DESIGNER}
-SELECT (public.create_service_addendum('${project}', 'RC7 fictional cabinetry amendment')->>'proposalId') AS ap \\gset
-SELECT public.copy_agreement_parts_from_authority(:'ap', 'rc7 copy before amending') \\g /dev/null
-SELECT public.upsert_agreement_parts(:'ap', (SELECT jsonb_agg(jsonb_build_object('kind', kind, 'variant', variant,
-  'partKey', part_key, 'title', title, 'payload', payload, 'required', required, 'clientVisible', client_visible)
-  ORDER BY position) FROM public.proposal_agreement_parts WHERE proposal_id = :'ap')
-  || jsonb_build_array(jsonb_build_object('kind', 'scope_package', 'partKey', 'scope.cabinetry', 'title', 'Cabinetry',
-    'payload', jsonb_build_object('packageKey', 'pkg.cabinetry', 'label', 'Cabinetry', 'inclusion', 'excluded',
-      'responsibilities', jsonb_build_object('design', 'none', 'purchasing', 'client', 'payer', 'client',
-        'fabrication_contract', 'gc', 'installation', 'gc')))), 'rc7 amendment adds cabinetry') \\g /dev/null
-SELECT public.get_commercial_document_send_snapshot(:'ap')->>'documentFingerprint' AS fp \\gset
-SELECT public.send_commercial_document(:'ap', :'fp', NULL, now() + interval '30 days') \\g /dev/null
--- as ${ACTOR.client.id}
-SELECT public.sign_design_services_agreement(:'ap', 'RC2 Fictional Client') \\g /dev/null
--- as ${DESIGNER}
-SELECT public.countersign_design_services_agreement(:'ap', 'F01 Fictional Designer')->>'newlyExecuted';`);
-  expect(out.split('\n').pop(), 'the amendment executed').toBe('true');
+async function executeAmendment(project: string) {
+  const { proposalId: ap } = await actAs<{ proposalId: string }>(DESIGNER_EMAIL, 'create_service_addendum',
+    { p_project_id: project, p_title: 'RC7 fictional cabinetry amendment' });
+  await actAs(DESIGNER_EMAIL, 'copy_agreement_parts_from_authority', { p_proposal_id: ap, p_why: 'rc7 copy before amending' });
+  // The copied parts as the agreement editor holds them (a read), plus the cabinetry package.
+  const parts = json<unknown[]>(`SELECT COALESCE(jsonb_agg(jsonb_build_object('kind', kind, 'variant', variant,
+      'partKey', part_key, 'title', title, 'payload', payload, 'required', required, 'clientVisible', client_visible)
+      ORDER BY position), '[]') FROM public.proposal_agreement_parts WHERE proposal_id = '${ap}';`);
+  await actAs(DESIGNER_EMAIL, 'upsert_agreement_parts', { p_proposal_id: ap, p_why: 'rc7 amendment adds cabinetry',
+    p_parts: [...parts, { kind: 'scope_package', partKey: 'scope.cabinetry', title: 'Cabinetry',
+      payload: { packageKey: 'pkg.cabinetry', label: 'Cabinetry', inclusion: 'excluded',
+        responsibilities: { design: 'none', purchasing: 'client', payer: 'client', fabrication_contract: 'gc', installation: 'gc' } } }] });
+  const snapshot = await actAs<{ documentFingerprint: string }>(DESIGNER_EMAIL, 'get_commercial_document_send_snapshot',
+    { p_proposal_id: ap });
+  await actAs(DESIGNER_EMAIL, 'send_commercial_document', { p_proposal_id: ap,
+    p_expected_fingerprint: snapshot.documentFingerprint, p_personal_message: null,
+    p_valid_until: new Date(Date.now() + 30 * 86_400_000).toISOString() });
+  await actAs(ACTOR.client.email, 'sign_design_services_agreement', { p_proposal_id: ap, p_signed_name: 'RC2 Fictional Client' });
+  const executed = await actAs<{ newlyExecuted: unknown }>(DESIGNER_EMAIL, 'countersign_design_services_agreement',
+    { p_proposal_id: ap, p_signer_name: 'F01 Fictional Designer' });
+  expect(String(executed.newlyExecuted), 'the amendment executed').toBe('true');
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 
-test.describe.configure({ mode: 'serial' });
-test.setTimeout(600_000);
+// The timeout is set here, not by a config: the round8 config (60 s) and the consumer-journey config both run this file.
+test.describe.configure({ mode: 'serial', timeout: 600_000 });
 
 test.describe('RC-7 e2 acceptance — job A', () => {
   test.beforeAll(async () => {
@@ -569,7 +594,7 @@ test.describe('RC-7 e2 acceptance — job A', () => {
     // package) executes while request 2 is pending.
     const before = activeEdition(project);
     const r2Files = frozen(r2.id);
-    executeAmendment(project);
+    await executeAmendment(project);
     const after = activeEdition(project);
     expect(after.number).toBe(before.number + 1);
     expect(after.hash).not.toBe(before.hash);
@@ -632,13 +657,14 @@ test.describe('RC-7 e2 acceptance — job A', () => {
     // A20 replacement: the studio replaces the client's slot with the third
     // household member. The card's Replace form cannot offer the household on
     // this job (DEFECT RC7-e2-1, see the fixme below), so the designer sends the
-    // same RPC the form's hook sends (useReplaceServiceAcceptanceSigner), as
-    // themselves; the card then shows the replaced row.
+    // same RPC the form's hook sends (useReplaceServiceAcceptanceSigner), with
+    // their own session; the card then shows the replaced row.
     const clientSigner = sql(`SELECT id FROM public.service_acceptance_signers WHERE request_id='${r3.id}'
       AND slot='client' AND status='active';`);
-    asActors(`-- as ${DESIGNER}
-SELECT public.replace_service_acceptance_signer('${r3.id}', '${clientSigner}', NULL, '${THIRD_CARD}',
-  ${r3.revision}, 'Fictional: the client is travelling; the household member signs.', 'rc7-replace-${randomUUID()}') \\g /dev/null`);
+    await actAs(DESIGNER_EMAIL, 'replace_service_acceptance_signer', { p_request_id: r3.id, p_signer_id: clientSigner,
+      p_new_profile_id: null, p_new_household_person_id: THIRD_CARD, p_expected_signer_policy_revision: r3.revision,
+      p_reason: 'Fictional: the client is travelling; the household member signs.',
+      p_client_request_id: `rc7-replace-${randomUUID()}` });
     const section = await openCloseout(studio, project);
     const card = section.locator(`[data-service-acceptance-request="${r3.id}"]`);
     const signers = card.getByRole('list', { name: `Signers on request ${r3.number}` });
@@ -805,7 +831,8 @@ test.describe('RC-7 e2 completion and care', () => {
     const before = closure(project);
     // A GC-reported install punch item, as the designer records it (the install manifest's RPC).
     const chair = sql(`SELECT id FROM public.project_ffe_items WHERE project_id='${project}' AND name='RC7 client-bought chair';`);
-    asActors(`-- as ${DESIGNER}\nSELECT public.upsert_install_punch_item(jsonb_build_object('ffeItemId', '${chair}', 'note', 'Fictional: scuff on the chair leg, GC to touch up.')) \\g /dev/null`);
+    await actAs(DESIGNER_EMAIL, 'upsert_install_punch_item',
+      { p_request: { ffeItemId: chair, note: 'Fictional: scuff on the chair leg, GC to touch up.' } });
     expect(obligations(project)).toEqual({
       blockers: ['agreed_phase_open:pkg.living'],
       info: ['external_fulfilment_open:pkg.living', 'package_excluded:pkg.cabinetry', 'punch_item_open:-'],
@@ -826,7 +853,7 @@ test.describe('RC-7 e2 completion and care', () => {
     expect(completions(project)).toEqual([]);
 
     // The studio finishes the design phase; outside work and the punch item remain.
-    completePhases(project);
+    await completePhases(project);
     expect(obligations(project).blockers).toEqual([]);
     await studio.reload({ waitUntil: 'domcontentloaded' });
     await openCloseout(studio, project);
@@ -903,8 +930,8 @@ test.describe('RC-7 e2 completion and care', () => {
 
     // The studio installs its line and finishes its phases (the FF&E and phase controls' RPCs).
     const sofa = sql(`SELECT id FROM public.project_ffe_items WHERE project_id='${project}' AND scope_package_key='pkg.home';`);
-    asActors(`-- as ${DESIGNER}\nSELECT public.record_project_ffe_installed(ARRAY['${sofa}']::uuid[], current_date) \\g /dev/null`);
-    completePhases(project);
+    await actAs(DESIGNER_EMAIL, 'record_project_ffe_installed', { p_item_ids: [sofa], p_installed_on: today() });
+    await completePhases(project);
     expect(obligations(project)).toEqual({ blockers: [], info: ['package_excluded:pkg.cabinetry'] });
 
     await studio.reload({ waitUntil: 'domcontentloaded' });
@@ -921,19 +948,44 @@ test.describe('RC-7 e2 completion and care', () => {
       .toHaveText('Whole home: bought by the studio, installed by the studio');
     expect(closure(project)).toBe(before);
 
-    // close_project stays its own act: the client's open cabinetry line (outside the service) still refuses it.
-    const close = (() => {
-      try {
-        asActors(`-- as ${DESIGNER}\nSELECT public.close_project('${project}', (SELECT jsonb_agg(jsonb_build_object('key', k, 'completed', true)) FROM unnest(ARRAY['walkthrough','punch_list','payment','photography','photos','case_study']) k), NULL) \\g /dev/null`);
-        return 'closed';
-      } catch (error) {
-        return String((error as { stderr?: string }).stderr ?? error);
-      }
-    })();
-    console.log('[RC7 e2 F close_project]', close.split('\n')[0]);
-    expect(close).toMatch(/project cannot close: 1 FF&E item\(s\) are not installed/);
+    // close_project stays its own act: the client's open cabinetry line (outside the service) refuses it first.
+    const completedService = completions(project);
+    const outsideLine = await closeProject(project);
+    console.log('[RC7 e2 F close: outside line]', outsideLine.status, outsideLine.body);
+    expect(outsideLine.status).toBe(400);
+    expect(outsideLine.body).toMatch(/project cannot close: 1 FF&E item\(s\) are not installed/);
     expect(closure(project), 'a refused close leaves closure state as it was').toBe(before);
-    expect(completions(project)).toEqual([expect.objectContaining({ state: 'completed', revoked: null })]);
+
+    // Clear every non-financial blocker: the GC's cabinetry run is installed.
+    const kitchen = sql(`SELECT id FROM public.project_ffe_items WHERE project_id='${project}' AND scope_package_key='pkg.cabinetry';`);
+    await actAs(DESIGNER_EMAIL, 'record_project_ffe_installed', { p_item_ids: [kitchen], p_installed_on: today() });
+    expect(sql(`SELECT count(*) FROM public.project_ffe_items WHERE project_id='${project}' AND status <> 'installed';`)).toBe('0');
+    // Financial state, read back: the agreed fee is uncollected and nothing is invoiced.
+    expect(financialHold(project)).toEqual({ openInvoiceCount: 0, balanceCents: 0, uncollectedContractCents: 500000 });
+    const uncollected = await closeProject(project);
+    console.log('[RC7 e2 F close: financial]', uncollected.status, uncollected.body);
+    expect(uncollected.status).toBe(400);
+    expect(uncollected.body).toMatch(/project cannot close: contract total is not fully collected/);
+    expect(closure(project), 'the financial refusal leaves closure state as it was').toBe(before);
+    expect(completions(project), 'the financial hold never touches the service').toEqual(completedService);
+
+    // A separate step: the studio invoices the fee, issues it, and records the client's cheque (the invoice acts' RPCs).
+    const invoice = await actAs<{ id: string }>(DESIGNER_EMAIL, 'compose_project_invoice', {
+      p_project_id: project, p_expected_designer_id: DESIGNER, p_expected_client_id: ACTOR.full.id,
+      p_expected_studio_id: sql(`SELECT studio_id FROM public.projects WHERE id='${project}';`),
+      p_tax_rate: 0, p_payment_terms_days: 15, p_memo: 'RC7 fictional design fee', p_internal_notes: null,
+      p_lines: [{ kind: 'adhoc', milestone_id: null, ffe_item_id: null, description: 'RC7 fictional design fee',
+        quantity: 1, unit_amount_cents: 500000, metadata: {}, sort_order: 0 }],
+      p_entry_ids: [], p_billing_lines: [] });
+    await actAs(DESIGNER_EMAIL, 'issue_invoice', { p_invoice_id: invoice.id, p_due_date: null });
+    expect(financialHold(project), 'issued, not yet paid').toMatchObject({ openInvoiceCount: 1, balanceCents: 500000 });
+    await actAs(DESIGNER_EMAIL, 'record_invoice_payment', { p_invoice_id: invoice.id, p_amount_cents: 500000,
+      p_method: 'check', p_reference: 'RC7 fictional cheque 1001', p_received_at: new Date().toISOString(), p_note: null });
+    expect(financialHold(project)).toEqual({ openInvoiceCount: 0, balanceCents: 0, uncollectedContractCents: 0 });
+    const closed = await closeProject(project);
+    expect(closed.status, closed.body).toBe(200);
+    expect(sql(`SELECT status FROM public.projects WHERE id='${project}';`)).toBe('completed');
+    expect(completions(project), 'closing leaves the service completion as it was').toEqual(completedService);
   });
 
   test('@rc7-e2-completion job D (design only): silence, opening and a walkthrough record no acceptance; accept, complete, close; a later care question neither reopens nor bills', async ({ browser }) => {
@@ -947,7 +999,7 @@ test.describe('RC-7 e2 completion and care', () => {
       'RC7 fictional drawing set');
     // The design phase and the final walkthrough are done; the client has said nothing.
     expect(phases(project).map((phase) => phase.name)).toEqual(['Design', 'Final walkthrough']);
-    completePhases(project);
+    await completePhases(project);
     // A22: silence, an opened request, delivery and the walkthrough record no acceptance.
     expect(responses(row.id)).toEqual([]);
     expect(request(row.id)).toMatchObject({ lifecycle: 'sent', outcome: 'pending' });
@@ -976,10 +1028,39 @@ test.describe('RC-7 e2 completion and care', () => {
 
     // close_project is a separate act, with the walkthrough on its checklist.
     expect(sql(`SELECT status FROM public.projects WHERE id='${project}';`)).toBe('active');
-    asActors(`-- as ${DESIGNER}\nSELECT public.close_project('${project}', (SELECT jsonb_agg(jsonb_build_object('key', k, 'completed', true)) FROM unnest(ARRAY['walkthrough','punch_list','payment','photography','photos','case_study']) k), NULL) \\g /dev/null`);
-    expect(sql(`SELECT status FROM public.projects WHERE id='${project}';`)).toBe('completed');
+    const snapshot = { caption: 'RC7 fictional design-only closeout', photos: [] as string[] };
+    const closed = await closeProject(project, snapshot);
+    expect(closed.status, closed.body).toBe(200);
+    // Close persists its evidence: the checklist and the portfolio snapshot.
+    const closedState = json<{ status: string; checklist: unknown; snapshot: unknown }>(`SELECT json_build_object(
+        'status', status, 'checklist', closure_checklist, 'snapshot', portfolio_snapshot) FROM public.projects WHERE id='${project}';`);
+    console.log('[RC7 e2 D closed]', JSON.stringify(closedState));
+    expect(closedState).toEqual({ status: 'completed', checklist: CHECKLIST, snapshot });
     expect(responses(row.id), 'closing records no acceptance').toHaveLength(1);
     expect(completions(project), 'closing leaves the completion as it was').toEqual(completed);
+
+    // Freeze: post-close mutations are refused for both sides, and nothing moves.
+    const frozenClosure = closure(project);
+    const ledgerClosed = ledger(project);
+    const { apiUrl, anonKey } = owned();
+    const rewrite = await fetch(`${apiUrl}/rest/v1/projects?id=eq.${project}`, {
+      method: 'PATCH',
+      headers: { apikey: anonKey, Authorization: `Bearer ${await token(DESIGNER_EMAIL)}`,
+        'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ closure_checklist: [{ key: 'walkthrough', completed: false }] }),
+    });
+    const rewriteBody = await rewrite.text();
+    console.log('[RC7 e2 D post-close checklist rewrite]', rewrite.status, rewriteBody);
+    expect(rewrite.status, rewriteBody).toBe(400);
+    expect(rewriteBody).toMatch(/project closeout evidence may only change through close_project/);
+    const reopen = await rpcAs(ACTOR.design.email, 'create_client_scope_change_request', { p_project_id: project,
+      p_idempotency_key: randomUUID(), p_title: 'RC7 fictional post-close change',
+      p_description: 'Fictional: add a reading lamp to the design.' });
+    console.log('[RC7 e2 D post-close scope change]', reopen.status, reopen.body);
+    expect(reopen.status).toBe(400);
+    expect(reopen.body).toMatch(/completed_project/);
+    expect(closure(project), 'the refused writes leave the closeout as it was').toBe(frozenClosure);
+    expect(ledger(project), 'no scope change follows').toBe(ledgerClosed);
 
     // Post-close: the edition stays the agreed one, the care record still reads it.
     const edition = activeEdition(project);
@@ -993,7 +1074,6 @@ test.describe('RC-7 e2 completion and care', () => {
     // A later care question arrives on the project thread, from the client.
     const ledgerBefore = ledger(project);
     const thread = sql(`SELECT id FROM public.comms_threads WHERE project_id='${project}' AND kind='project';`);
-    const { apiUrl, anonKey } = owned();
     const asked = await fetch(`${apiUrl}/rest/v1/comms_messages`, {
       method: 'POST',
       headers: { apikey: anonKey, Authorization: `Bearer ${await token(ACTOR.design.email)}`,
