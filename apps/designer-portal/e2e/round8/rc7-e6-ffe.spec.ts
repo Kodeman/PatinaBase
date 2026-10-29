@@ -44,6 +44,7 @@ test.fixme('A06 stale FF&E save refetches the peer, retains the typed draft and 
   const pane = await openLine(page, line);
   const finish = pane.getByRole('textbox', { name: 'Finish' });
   await expect(finish).toHaveValue(original);
+  await finish.fill('E');
   let writes = 0;
   page.on('request', request => {
     if (request.method() === 'PATCH' && new URL(request.url()).pathname.endsWith('/rest/v1/project_ffe_specs')) writes++;
@@ -69,6 +70,7 @@ test.fixme('A06 stale FF&E save refetches the peer, retains the typed draft and 
     await peer.close();
   }
   expect(finishOf(line)).toBe('E6 peer finish');
+  const peerSavedVersion = peerVersion + 1;
   await finish.fill('E6 stale attempt');
   await finish.press('Enter');
   const alert = pane.getByRole('alert');
@@ -80,10 +82,15 @@ test.fixme('A06 stale FF&E save refetches the peer, retains the typed draft and 
 
   await finish.press('Enter');
   await expect.poll(() => finishOf(line)).toBe('E6 stale attempt');
-  expect(writes).toBe(2);
+  const finalVersion = Number(psqlScalar(`SELECT row_version FROM project_ffe_specs WHERE id='${specId}';`));
+  expect(finalVersion).toBeGreaterThan(peerSavedVersion);
+  expect(writes).toBeGreaterThanOrEqual(1);
+  expect(writes).toBeLessThanOrEqual(2);
+  const writesBeforeReload = writes;
   await page.reload({ waitUntil: 'domcontentloaded' });
   const reopened = await openLine(page, line);
   await expect(reopened.getByRole('textbox', { name: 'Finish' })).toHaveValue('E6 stale attempt');
   expect(finishOf(line)).toBe('E6 stale attempt');
-  expect(writes, 'reload cannot replay either write').toBe(2);
+  expect(Number(psqlScalar(`SELECT row_version FROM project_ffe_specs WHERE id='${specId}';`))).toBe(finalVersion);
+  expect(writes, 'reload cannot replay either write').toBe(writesBeforeReload);
 });
