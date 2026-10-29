@@ -384,9 +384,27 @@ async function sendNotices(page: Page, project: string, requestId: string, expec
   expect(notices.map((notice) => notice.to).sort(), 'one notice per signer still waiting').toEqual([...expectTo].sort());
   const section = await openCloseout(page, project);
   const card = section.locator(`[data-service-acceptance-request="${requestId}"]`);
-  await card.getByRole('button', { name: 'Review and send' }).click();
   const sheet = page.getByTestId('ready-to-send-sheet');
-  await expect(sheet).toBeVisible({ timeout: 30_000 });
+  // WebKit (iPhone) can take the first tap before the card hydrates: the button
+  // takes focus and nothing opens. Tap again until the sheet is up.
+  let taps = 0;
+  await expect(async () => {
+    if (!(await sheet.isVisible())) {
+      taps += 1;
+      if (taps > 1) {
+        // What the missed tap left behind, for the evidence doc.
+        console.log(`[RC7 e2 review-and-send] ${test.info().project.name} before tap ${taps}:`,
+          JSON.stringify(await page.evaluate(() => ({
+            backdrops: document.querySelectorAll('[data-testid="doc-sheet-backdrop"]').length,
+            dialogs: document.querySelectorAll('[role="dialog"]').length,
+            active: document.activeElement?.textContent?.trim().slice(0, 40) ?? null,
+          }))));
+      }
+      await card.getByRole('button', { name: 'Review and send' }).click();
+    }
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+  }).toPass({ timeout: 60_000 });
+  if (taps > 1) console.log(`[RC7 e2 review-and-send] ${test.info().project.name}: sheet opened on tap ${taps}`);
   for (const notice of notices) {
     const row = sheet.locator(`[data-outbound-row="${notice.id}"]`);
     await expect(row).toContainText(`To ${notice.to}`, { timeout: 30_000 });
@@ -528,6 +546,18 @@ async function executeAmendment(project: string) {
 
 // The timeout is set here, not by a config: the round8 config (60 s) and the consumer-journey config both run this file.
 test.describe.configure({ mode: 'serial', timeout: 600_000 });
+
+// The journeys execute agreements; the round8 global teardown's account purge
+// refuses designers holding executed editions (00390). Remove this lane's
+// fictional jobs first (rc7-e2-cleanup.sql), on the owned cluster only.
+test.afterAll(() => {
+  const target = owned();
+  const out = execFileSync('psql', ['-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1',
+    '-v', `owned_server_addr=${target.serverAddr}`, '-v', `owned_system_id=${target.systemId}`,
+    target.dbUrl, '-f', path.join(__dirname, 'rc7-e2-cleanup.sql')], { encoding: 'utf8' });
+  console.log('[RC7 e2 cleanup]', out.trim());
+  expect(JSON.parse(out.trim().split('\n').pop()!)).toMatchObject({ f01NonDraftProposals: 0 });
+});
 
 test.describe('RC-7 e2 acceptance — job A', () => {
   test.beforeAll(async () => {
@@ -957,7 +987,11 @@ test.describe('RC-7 e2 completion and care', () => {
     expect(closure(project), 'a refused close leaves closure state as it was').toBe(before);
 
     // Clear every non-financial blocker: the GC's cabinetry run is installed.
+    // Its delivery is the GC's, outside the studio's acts, so the fixture records
+    // it (postgres); the studio then marks it installed through the real RPC.
     const kitchen = sql(`SELECT id FROM public.project_ffe_items WHERE project_id='${project}' AND scope_package_key='pkg.cabinetry';`);
+    sql(`UPDATE public.project_ffe_items SET status='delivered' WHERE id='${kitchen}' AND status='ordered';`);
+    expect(sql(`SELECT status FROM public.project_ffe_items WHERE id='${kitchen}';`)).toBe('delivered');
     await actAs(DESIGNER_EMAIL, 'record_project_ffe_installed', { p_item_ids: [kitchen], p_installed_on: today() });
     expect(sql(`SELECT count(*) FROM public.project_ffe_items WHERE project_id='${project}' AND status <> 'installed';`)).toBe('0');
     // Financial state, read back: the agreed fee is uncollected and nothing is invoiced.
