@@ -25,6 +25,7 @@ import {
   serviceAcceptanceRefusal, useCreateServiceAcceptanceRequest, useRecordServiceAcceptancePaperIntake,
   useReplaceServiceAcceptanceSigner, useReviewServiceAcceptancePaperIntake, useServiceAcceptance,
   useServiceAcceptanceManifests, useStampServiceAcceptancePaper, useWithdrawServiceAcceptanceRequest,
+  usePresentServiceAcceptanceOffline,
 } from '../use-service-acceptance';
 import { serviceAcceptanceKeys } from '../../query-keys';
 import { outboundDraftKeys } from '../use-outbound-drafts';
@@ -81,6 +82,11 @@ describe('service acceptance read boundary', () => {
     // Recorded paper stays unstamped until WP-10C hashes the stored bytes.
     expect(mapped.paperIntakes[2]).toMatchObject({ reviewState: 'pending_review', documentSha256: null });
     expect(mapped.paperIntakes[0].documentSha256).toBe('a'.repeat(64));
+    // 00899: a request sent by email has no offline presentation.
+    expect(mapped).toMatchObject({ offlinePresentedAt: null, offlinePresentedBy: null });
+    const [offline] = readProjectServiceAcceptance(bundle([request({ offlinePresentedAt: '2026-10-27T22:52:00Z',
+      offlinePresentedBy: 'owner-1' })]), 'job-1').requests;
+    expect(offline).toMatchObject({ offlinePresentedAt: '2026-10-27T22:52:00Z', offlinePresentedBy: 'owner-1' });
   });
 
   it('fails closed on unknown vocabulary, malformed signers and foreign rows', () => {
@@ -153,6 +159,18 @@ describe('service acceptance studio acts (WP-10C)', () => {
     mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'Failed to fetch' } });
     await expect(act.mutationFn({ ...args, reason: 'Other' })).rejects.toBeTruthy();
     expect(lastKey()).not.toBe(first);
+  });
+
+  it('presents a draft on paper against its own hashes with a generated client_request_id (00899)', async () => {
+    mocks.rpc.mockResolvedValue({ data: { requestId: 'request-1', lifecycle: 'sent', replayed: false }, error: null });
+    const act = usePresentServiceAcceptanceOffline('job-1') as any;
+    await act.mutationFn({ requestId: 'request-1', scopeContentHash: 'scope-hash', evidenceManifestHash: 'manifest-hash' });
+    expect(mocks.rpc).toHaveBeenCalledWith('present_service_acceptance_offline', {
+      p_request_id: 'request-1', p_scope_content_hash: 'scope-hash', p_evidence_manifest_hash: 'manifest-hash',
+      p_client_request_id: expect.stringMatching(KEY),
+    });
+    act.onSuccess();
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: serviceAcceptanceKeys.project('job-1') });
   });
 
   it('replaces a signer against the presented policy revision', async () => {

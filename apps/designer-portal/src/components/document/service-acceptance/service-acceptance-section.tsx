@@ -14,6 +14,7 @@ import { Send } from 'lucide-react';
 import {
   useCreateServiceAcceptanceRequest,
   useOutboundDrafts,
+  usePresentServiceAcceptanceOffline,
   useProjectHousehold,
   useReplaceServiceAcceptanceSigner,
   useReviewServiceAcceptancePaperIntake,
@@ -34,7 +35,8 @@ import { DocumentAction, DocumentActionRow } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
 import { OPEN_STATUSES, ReadyToSendSheet } from '../outbound/ready-to-send-sheet';
 import {
-  INACTIVE_NOTE, LIFECYCLE, OUTCOME, SUPERSEDED, answerLabel, refusalCopy, responseLabel, shortDate, slotLabel,
+  INACTIVE_NOTE, LIFECYCLE, OUTCOME, SUPERSEDED, answerLabel, presentRefusalCopy, refusalCopy, responseLabel, shortDate,
+  slotLabel,
 } from './copy';
 import { PaperIntakeForm } from './paper-intake-form';
 
@@ -217,7 +219,11 @@ function RequestCard({ projectId, request, openNotices, predecessor, report, onI
           {request.withdrawReason ? `: ${request.withdrawReason}` : ''}.
         </p>
       )}
-      {request.sentAt && <p className="t-meta">Sent {shortDate(request.sentAt)}.</p>}
+      {request.sentAt && (
+        <p className="t-meta">
+          {request.offlinePresentedAt ? 'Presented on paper' : 'Sent'} {shortDate(request.sentAt)}.
+        </p>
+      )}
       {waitsForSend(request, openNotices.length) && (
         <ReviewAndSend projectId={projectId} request={request} openNotices={openNotices} />
       )}
@@ -244,6 +250,7 @@ function RequestCard({ projectId, request, openNotices, predecessor, report, onI
         </ul>
       )}
 
+      {request.lifecycle === 'draft' && <PresentOnPaper projectId={projectId} request={request} onInactive={onInactive} />}
       {open && <WithdrawRequest projectId={projectId} request={request} report={report} />}
     </li>
   );
@@ -415,6 +422,57 @@ function ReplaceSigner({ projectId, request, signer, report, onDone }: {
         </DocumentAction>
       </DocumentActionRow>
     </form>
+  );
+}
+
+// 00899: a request whose signers have no account to email reaches paper intake
+// only when the studio says it handed the request over in person. Nothing is
+// sent and no answer is recorded; the signed paper is still recorded and reviewed.
+function PresentOnPaper({ projectId, request, onInactive }: {
+  projectId: string; request: ServiceAcceptanceRequest; onInactive: () => void;
+}) {
+  const present = usePresentServiceAcceptanceOffline(projectId);
+  const [opened, setOpened] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!opened) {
+    return (
+      <DocumentActionRow surfaceKey="service-acceptance" regionKey="present-on-paper">
+        <DocumentAction actionKey="present-acceptance-on-paper" variant="tertiary" onClick={() => setOpened(true)}>
+          Presented on paper
+        </DocumentAction>
+      </DocumentActionRow>
+    );
+  }
+  return (
+    <div className="mt-2 space-y-2" role="group" aria-label={`Present request ${request.requestNumber} on paper`}>
+      <p className="t-body-sm">
+        Mark request {request.requestNumber} as handed to the client on paper? Nothing is emailed and no answer is
+        recorded. You can then record the signed paper for each signer.
+      </p>
+      {error && <p role="alert" className="t-body-sm">{error}</p>}
+      <DocumentActionRow surfaceKey="service-acceptance" regionKey="present-on-paper">
+        <DocumentAction actionKey="confirm-present-acceptance-on-paper" variant="secondary"
+          disabled={present.isPending} loading={present.isPending}
+          onClick={async () => {
+            if (present.isPending) return;
+            setError(null);
+            try {
+              await present.mutateAsync({ requestId: request.requestId, scopeContentHash: request.scopeContentHash,
+                evidenceManifestHash: request.evidenceManifestHash });
+              setOpened(false);
+            } catch (failure) {
+              const copy = presentRefusalCopy(failure);
+              if (copy == null) onInactive();
+              setError(copy);
+            }
+          }}>
+          Mark presented
+        </DocumentAction>
+        <DocumentAction actionKey="cancel-present-acceptance-on-paper" variant="tertiary" onClick={() => setOpened(false)}>
+          Not yet
+        </DocumentAction>
+      </DocumentActionRow>
+    </div>
   );
 }
 

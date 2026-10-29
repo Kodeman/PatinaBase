@@ -94,6 +94,14 @@ export function paperRefusalCopy(error: unknown): string | null {
   return refusalCopy(error);
 }
 
+/** Presenting a draft on paper (00899): only an active studio's owner or admin may. */
+export function presentRefusalCopy(error: unknown): string | null {
+  if (serviceAcceptanceRefusal(error) === 'insufficient_privilege') {
+    return 'Marking a request presented on paper needs an owner or admin of an active studio.';
+  }
+  return refusalCopy(error);
+}
+
 /** Null when acceptance is not switched on (the caller shows INACTIVE_NOTE). */
 export function refusalCopy(error: unknown): string | null {
   if (isServiceAcceptanceInactive(error)) return null;

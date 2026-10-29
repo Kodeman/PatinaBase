@@ -12,6 +12,7 @@ const mockEditions = jest.fn();
 const mockManifests = jest.fn();
 const mockPaper = jest.fn();
 const mockDrafts = jest.fn();
+const mockPresent = jest.fn();
 const mockUser = { id: 'owner-1' };
 jest.mock('@patina/supabase', () => ({
   useServiceAcceptance: () => mockRead(),
@@ -20,6 +21,7 @@ jest.mock('@patina/supabase', () => ({
   useServiceAcceptanceManifests: () => mockManifests(),
   useCreateServiceAcceptanceRequest: () => ({ mutateAsync: mockCreate, isPending: false }),
   useWithdrawServiceAcceptanceRequest: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  usePresentServiceAcceptanceOffline: () => ({ mutateAsync: mockPresent, isPending: false }),
   useReplaceServiceAcceptanceSigner: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useRecordServiceAcceptancePaperIntake: () => ({ mutateAsync: mockRecord, isPending: false }),
   useReviewServiceAcceptancePaperIntake: () => ({ mutateAsync: mockReview, isPending: false }),
@@ -62,7 +64,7 @@ const request = (over: Record<string, unknown> = {}) => ({
   scopeEditionId: 'edition-1', scopeContentHash: 'scope', evidenceManifestId: 'manifest-1', evidenceManifestHash: 'm',
   signerPolicyRevision: 1, lifecycle: 'draft', aggregateOutcome: 'pending', closedReason: null, closedAt: null,
   sentAt: null, supersededReason: null, supersededAt: null, withdrawnAt: null, withdrawReason: null,
-  outboundDraftId: 'draft-2', createdAt: '2026-10-27T10:00:00Z', signers: [signer()], paperIntakes: [], ...over,
+  offlinePresentedAt: null, offlinePresentedBy: null, outboundDraftId: 'draft-2', createdAt: '2026-10-27T10:00:00Z', signers: [signer()], paperIntakes: [], ...over,
 });
 const readOf = (requests: unknown[]) => ({
   data: { projectId: 'job-1', capability: 'inactive', requests }, isPending: false, isError: false, refetch: jest.fn(),
@@ -411,4 +413,41 @@ test('each response names its method, and click-through is never called a signat
   expect(screen.getByText('Keep the oak floor')).toBeInTheDocument();
   expect(screen.getByText(/Sam Rivera \(Co client\)/)).toBeInTheDocument();
   expect(container.textContent).not.toMatch(/e-?signature|signed online|sign here/i);
+});
+
+test('a draft is marked presented on paper only after a confirm, binding its hashes and sending nothing', async () => {
+  mockRead.mockReturnValue(readOf([request({ scopeContentHash: SCOPE, evidenceManifestHash: EVIDENCE, outboundDraftId: null })]));
+  mockPresent.mockResolvedValue({ requestId: 'request-2', lifecycle: 'sent', replayed: false });
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const card = screen.getByText(/Request 2 · Drafted, not sent/).closest('li')!;
+  fireEvent.click(within(card).getByRole('button', { name: 'Presented on paper' }));
+  expect(mockPresent).not.toHaveBeenCalled();
+  const confirm = within(card).getByRole('group', { name: 'Present request 2 on paper' });
+  expect(confirm).toHaveTextContent('Nothing is emailed and no answer is recorded.');
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Mark presented' }));
+  await waitFor(() => expect(mockPresent).toHaveBeenCalledWith({
+    requestId: 'request-2', scopeContentHash: SCOPE, evidenceManifestHash: EVIDENCE,
+  }));
+  expect(screen.queryByTestId('ready-to-send')).toBeNull();
+});
+
+test('a request presented on paper says so instead of "Sent", and offers no second presentation', () => {
+  mockRead.mockReturnValue(readOf([sentRequest({
+    outboundDraftId: null, offlinePresentedAt: '2026-10-27T11:00:00Z', offlinePresentedBy: 'owner-1',
+  })]));
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  const card = screen.getByText(/Request 2 · Sent to the client/).closest('li')!;
+  expect(within(card).getByText(/^Presented on paper .+2026\.$/)).toBeInTheDocument();
+  expect(within(card).queryByText(/^Sent /)).toBeNull();
+  expect(within(card).queryByRole('button', { name: 'Presented on paper' })).toBeNull();
+});
+
+test('a seat without studio authority hears why it cannot present on paper', async () => {
+  mockRead.mockReturnValue(readOf([request({ outboundDraftId: null })]));
+  mockPresent.mockRejectedValue({ code: '42501', message: 'insufficient_privilege' });
+  render(<ServiceAcceptanceSection projectId="job-1" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Presented on paper' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Mark presented' }));
+  expect(await screen.findByRole('alert'))
+    .toHaveTextContent('Marking a request presented on paper needs an owner or admin of an active studio.');
 });
