@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -148,6 +149,27 @@ describe('Round8PaperFrame', () => {
     const firstChapter = paper.querySelector('[data-paper-chapter]')!;
     expect(cover.compareDocumentPosition(firstChapter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(paper.lastElementChild?.getAttribute('data-slot')).toBe('colophon');
+  });
+
+  it('opens Design boards and the Specification book from their job chapters', () => {
+    roomFilesReady = true;
+    const { container } = renderFrame();
+    const design = container.querySelector('[data-paper-chapter="design"]') as HTMLElement;
+    const ffe = container.querySelector('[data-paper-chapter="ffe"]') as HTMLElement;
+    expect(within(design).getByRole('link', { name: 'Design boards' }))
+      .toHaveAttribute('href', '/doc/project-1/boards');
+    expect(within(ffe).getByRole('link', { name: 'Specification book' }))
+      .toHaveAttribute('href', '/doc/project-1/spec-book');
+  });
+
+  it.each(['install', 'care'])('keeps the existing Spec book door alone on the %s spread', (section) => {
+    const { container } = renderFrame({ pieces: {
+      ...pieces(section),
+      [`${section}Ffe`]: <Link href="/doc/project-1/spec-book">Spec book →</Link>,
+    } });
+    const ffe = container.querySelector('[data-paper-chapter="ffe"]') as HTMLElement;
+    expect(within(ffe).getAllByRole('link', { name: /spec book/i })).toHaveLength(1);
+    expect(within(ffe).queryByRole('link', { name: 'Specification book' })).toBeNull();
   });
 
   it('mounts only the chapters with content, in ROUND8_PAPER_ORDER, inside the schedule scope', () => {

@@ -43,6 +43,9 @@ import { FfeChapter } from '@/components/document/paper/chapters/ffe-chapter';
 import { Round8MarginContext } from '@/components/document/paper/margin-layout';
 import { JobHead } from '@/components/document/paper/job-head';
 import { PaperChapter } from '@/components/document/paper/paper-chapter';
+import { DocumentAction, DocumentActionRow } from '@/components/document/document-action';
+import { shelfRouteFor } from '@/lib/document/shelves';
+import { boardsRoutePath } from '@/lib/document/registry';
 import type { DocumentIndexKey } from '@/lib/document/document-index';
 import {
   ROUND8_PAPER_ORDER,
@@ -141,7 +144,18 @@ function chapterBodies(
     pieces.section === 'install' ? install : pieces.section === 'care' ? care : project;
   return {
     brief: pieces.brief ? <BriefAgreementChapter {...pieces.brief} /> : null,
-    design: pieces.design ? pieces.design(workRoom) : pieces.roomFiles,
+    design: (
+      <>
+        {pieces.design ? pieces.design(workRoom) : pieces.roomFiles}
+        {projectId && (
+          <DocumentActionRow surfaceKey="doc" regionKey="design-boards-door">
+            <DocumentAction actionKey="open-design-boards" variant="tertiary" href={boardsRoutePath(projectId)}>
+              Design boards
+            </DocumentAction>
+          </DocumentActionRow>
+        )}
+      </>
+    ),
     cabinetry: pieces.cabinetry,
     approvals: slots.approvals,
     schedule: (
@@ -151,7 +165,19 @@ function chapterBodies(
         {stage(pieces.scheduleSpine, null, null)}
       </>
     ),
-    ffe: stage(pieces.projectFfe, pieces.installFfe, pieces.careFfe),
+    ffe: (
+      <>
+        {stage(pieces.projectFfe, pieces.installFfe, pieces.careFfe)}
+        {projectId && pieces.section === 'project' && (
+          <DocumentActionRow surfaceKey="doc" regionKey="spec-book-door">
+            <DocumentAction actionKey="open-specification-book" variant="tertiary"
+              href={shelfRouteFor('specbook', projectId)!}>
+              Specification book
+            </DocumentAction>
+          </DocumentActionRow>
+        )}
+      </>
+    ),
     site: pieces.visits,
     financials: (
       <>

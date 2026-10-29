@@ -8,7 +8,7 @@ import {
 } from '@patina/supabase';
 
 /** C4 §2.8: a denied act while acceptance is off reads as a calm note. */
-export const INACTIVE_NOTE = "Service acceptance isn't switched on for this studio yet.";
+export const INACTIVE_NOTE = "Service acceptance isn't switched on for this studio.";
 
 // K5: a click-through is an authenticated acceptance, never a signature.
 const ANSWER: Record<ServiceAcceptanceAnswer, string> = {
