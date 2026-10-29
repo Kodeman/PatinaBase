@@ -1807,7 +1807,6 @@ export {
   useFfePlacementReceipts,
   useDamageClaims,
   useDeliveryCalendar,
-  useTodayProcurementCounts,
   useCreateReceivingInspection,
   useCompleteReceivingInspection,
   useRetryReceivingFollowUp,
@@ -1870,7 +1869,6 @@ export type {
   ReceivingInspectionItemInput,
   CreateReceivingInspectionResult,
   UpdateDamageClaimInput,
-  TodayProcurementCounts,
   // Sprint 3 / Wave 3.2 — QBO Bookkeeper Export
   QboExportInput,
   QboExportPreview,

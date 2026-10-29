@@ -11,6 +11,7 @@ import { calendarDaysPast } from '../utils/calendar-days';
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { fetchAllRows } from '../lib/fetch-all-rows';
 import type { OnlinePaymentMethod } from '@patina/shared/invoice';
 import { isLikelyInvoiceLinkToken } from '@patina/utils';
 import { emailDeliveryKeys } from './use-email-delivery';
@@ -350,11 +351,12 @@ async function recomputeDraftTotals(supabase: any, invoiceId: string): Promise<v
   if (invErr) throw invErr;
   if (invoice.status !== 'draft') return;
 
-  const { data: lines, error: linesErr } = await supabase
+  const lines = await fetchAllRows<{ id: string; amount_cents: number }>((from, to) => supabase
     .from('invoice_line_items')
-    .select('amount_cents')
-    .eq('invoice_id', invoiceId);
-  if (linesErr) throw linesErr;
+    .select('id, amount_cents')
+    .eq('invoice_id', invoiceId)
+    .order('id', { ascending: true })
+    .range(from, to));
 
   const subtotal = (lines ?? []).reduce(
     (sum: number, l: { amount_cents: number }) => sum + (l.amount_cents || 0),

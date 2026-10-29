@@ -11,13 +11,28 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 let mockTables: Record<string, unknown> = {};
+let failTable = "";
+let reads: Array<{ table: string; from: number; orders: string[] }> = [];
+let studioFilters: Array<[string, string[]]> = [];
 
 jest.mock('@patina/supabase', () => ({
+  fetchAllRows: jest.requireActual('@patina/supabase').fetchAllRows,
   createBrowserClient: () => ({
     from: (table: string) => {
       const result = { data: mockTables[table] ?? [], error: null };
       const chain: Record<string, unknown> = {};
-      for (const method of ['select', 'eq', 'order']) chain[method] = () => chain;
+      const orders: string[] = [];
+      for (const method of ['select', 'eq']) chain[method] = () => chain;
+      chain.in = (key: string, values: string[]) => { studioFilters.push([key, values]); return chain; };
+      chain.order = (column: string) => { orders.push(column); return chain; };
+      chain.range = (from: number, to: number) => {
+        reads.push({ table, from, orders: [...orders] });
+        return Promise.resolve({
+          ...result,
+          data: Array.isArray(result.data) ? result.data.slice(from, to + 1) : result.data,
+          error: table === failTable && from === 1000 ? new Error('later page refused') : null,
+        });
+      };
       chain.single = () => Promise.resolve(result);
       chain.then = (resolve: (value: unknown) => unknown, reject?: (e: unknown) => unknown) =>
         Promise.resolve(result).then(resolve, reject);
@@ -28,6 +43,7 @@ jest.mock('@patina/supabase', () => ({
 
 jest.mock('../use-margin-items', () => ({ invalidateMarginSurfaces: jest.fn() }));
 
+import { useStudioMargin } from '../use-studio-accounts';
 import {
   accountRoomRows,
   useAccountPage,
@@ -155,5 +171,72 @@ describe('useAccountPage — reads placements and splits the room budgets', () =
       Dining: 227_700,
       Kitchen: 265_650,
     });
+  });
+});
+
+
+describe('account complete reads', () => {
+  beforeEach(() => { reads = []; studioFilters = []; failTable = ''; });
+
+  it('uses all 2500 FF&E lines and room placements in the account total', async () => {
+    const items = Array.from({ length: 2500 }, (_, i) => line({ id: `line-${i}`, line_total_cents: 1, project_room_id: 'room-living' }));
+    mockTables = {
+      projects: { budget_cents: 2500, total_amount_cents: 2500, design_fee_cents: 0 },
+      project_ffe_items: items,
+      project_rooms: ROOMS,
+      project_payment_milestones: [],
+      project_ffe_placements: items.map((item, i) => ({ id: `place-${i}`, ffe_item_id: item.id, project_room_id: 'room-living', quantity: 1, sort_order: 0 })),
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(() => useAccountPage('project-1'), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.tradeCoverage.total).toBe(2500);
+    expect(result.current.data?.rooms.find(room => room.roomId === 'room-living')?.committedCents).toBe(2500);
+    for (const table of ['project_ffe_items', 'project_ffe_placements']) {
+      expect(reads.filter(read => read.table === table).map(read => read.from)).toEqual([0, 1000, 2000]);
+      expect(reads.filter(read => read.table === table).every(read => read.orders.at(-1) === 'id')).toBe(true);
+    }
+    client.clear();
+  });
+
+  it.each(['project_ffe_items', 'project_ffe_placements'])('rejects a later %s page instead of a partial account', async (table) => {
+    mockTables = {
+      projects: { budget_cents: 0, total_amount_cents: 0, design_fee_cents: 0 },
+      project_ffe_items: Array.from({ length: 2500 }, (_, i) => line({ id: `line-${i}` })),
+      project_rooms: [], project_payment_milestones: [],
+      project_ffe_placements: Array.from({ length: 2500 }, (_, i) => ({ id: `place-${i}`, ffe_item_id: `line-${i}`, project_room_id: 'room', quantity: 1, sort_order: 0 })),
+    };
+    failTable = table;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(() => useAccountPage('project-1'), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+    expect(result.current.error).toEqual(new Error('later page refused'));
+    client.clear();
+  });
+
+  it('reads 2500 studio-filtered lines and rejects later-page errors', async () => {
+    mockTables = { project_ffe_items: Array.from({ length: 2500 }, (_, i) => ({
+      id: `line-${i}`, unit_price_cents: 1, trade_price_cents: 1, quantity: 1,
+      status: 'ordered', currency: 'USD', purchase_order: { sent_at: '2026-10-01' },
+      project: { studio_id: 'studio' },
+    })) };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(() => useStudioMargin(['studio']), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.coverage.total).toBe(2500);
+    expect(studioFilters).toContainEqual(['project.studio_id', ['studio']]);
+    expect(reads.filter(read => read.table === 'project_ffe_items').map(read => read.from)).toEqual([0, 1000, 2000]);
+    client.clear();
+    failTable = 'project_ffe_items';
+    const failedClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const failedWrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client: failedClient }, children);
+    const failed = renderHook(() => useStudioMargin(['studio']), { wrapper: failedWrapper });
+    await waitFor(() => expect(failed.result.current.isError).toBe(true));
+    expect(failed.result.current.data).toBeUndefined();
+    failedClient.clear();
   });
 });

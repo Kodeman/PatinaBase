@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createBrowserClient } from "../client";
+import { fetchAllRows } from "../lib/fetch-all-rows";
+import { boundedIn } from "../lib/bounded-in";
 
 /**
  * The generated database types intentionally lag this module until the
@@ -214,70 +216,69 @@ export function useSpecBookWorkbench(projectId: string) {
     queryFn: async () => {
       const supabase = getSupabase();
       const book = await ensureProjectBook(projectId);
-      const itemsResult = await supabase
-        .from("project_ffe_items")
-        .select(
-          "*, primary_image_url, room:project_rooms!project_room_id(id, name), product:products!product_id(*)",
-        )
-        .eq("project_id", projectId)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true });
-      if (itemsResult.error) throw itemsResult.error;
-      const rawItems = asArray<Record<string, any>>(itemsResult.data);
+      const rawItems: Array<Record<string, any>> = [];
+      let cursor: string | null = null;
+      for (;;) {
+        let query = supabase
+          .from("project_ffe_items")
+          .select(
+            "*, primary_image_url, room:project_rooms!project_room_id(id, name), product:products!product_id(*)",
+          )
+          .eq("project_id", projectId)
+          .order("id", { ascending: true });
+        if (cursor) query = query.gt("id", cursor);
+        const { data, error } = await query.limit(1000);
+        if (error) throw error;
+        const page = asArray<Record<string, any>>(data);
+        rawItems.push(...page);
+        if (page.length < 1000) break;
+        cursor = page[page.length - 1].id;
+      }
+      rawItems.sort((a, b) =>
+        (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER)
+        || String(a.created_at).localeCompare(String(b.created_at))
+        || String(a.id).localeCompare(String(b.id)),
+      );
       const itemIds = rawItems.map((item) => item.id);
 
-      const [chaptersResult, settingsResult, specsResult, revisionsResult] =
-        await Promise.all([
-          supabase
-            .from("spec_book_chapters")
-            .select("*")
-            .eq("spec_book_id", book.id)
-            .order("position", { ascending: true })
-            .order("title", { ascending: true }),
-          supabase
-            .from("spec_book_item_settings")
-            .select("*")
-            .eq("spec_book_id", book.id)
-            .order("position", { ascending: true }),
-          supabase
-            .from("project_ffe_specs")
-            .select("*")
-            .in(
-              "ffe_item_id",
-              itemIds.length > 0
-                ? itemIds
-                : ["00000000-0000-0000-0000-000000000000"],
-            ),
-          supabase
-            .from("spec_book_revisions")
-            .select("*, artifacts:spec_book_artifacts(*)")
-            .eq("spec_book_id", book.id)
-            .order("created_at", { ascending: false }),
-        ]);
+      const [chapters, settings, specs, revisionRows] = await Promise.all([
+        fetchAllRows<SpecBookChapter>((from, to) => supabase
+          .from("spec_book_chapters").select("*")
+          .eq("spec_book_id", book.id)
+          .order("position", { ascending: true })
+          .order("title", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to)),
+        fetchAllRows<SpecBookItemSetting>((from, to) => supabase
+          .from("spec_book_item_settings").select("*")
+          .eq("spec_book_id", book.id)
+          .order("position", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to)),
+        boundedIn<ProjectFfeSpec>(itemIds, (chunk) => fetchAllRows<ProjectFfeSpec>((from, to) => supabase
+          .from("project_ffe_specs").select("*")
+          .in("ffe_item_id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to)).then(data => ({ data, error: null }))),
+        fetchAllRows<SpecBookRevision & { artifacts?: SpecBookArtifact[] }>((from, to) => supabase
+          .from("spec_book_revisions")
+          .select("*, artifacts:spec_book_artifacts(*)")
+          .eq("spec_book_id", book.id)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(from, to)),
+      ]);
 
-      const firstError = [
-        chaptersResult,
-        settingsResult,
-        specsResult,
-        revisionsResult,
-      ].find((result) => result.error)?.error;
-      if (firstError) throw firstError;
-
-      const settings = asArray<SpecBookItemSetting>(settingsResult.data);
-      const specs = asArray<ProjectFfeSpec>(specsResult.data);
       const settingsByItem = new Map(
         settings.map((setting) => [setting.ffe_item_id, setting]),
       );
       const specsByItem = new Map(
         specs.map((spec) => [spec.ffe_item_id, spec]),
       );
-      const revisionRows = asArray<
-        SpecBookRevision & { artifacts?: SpecBookArtifact[] }
-      >(revisionsResult.data);
 
       return {
         book,
-        chapters: asArray<SpecBookChapter>(chaptersResult.data),
+        chapters,
         items: rawItems.map((item) => {
           const customFields =
             item.custom_fields && typeof item.custom_fields === "object"

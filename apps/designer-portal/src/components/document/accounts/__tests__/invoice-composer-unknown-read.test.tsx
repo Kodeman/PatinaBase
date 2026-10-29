@@ -116,14 +116,16 @@ function from(name: string) {
   const builder = {
     select: () => builder,
     eq: () => builder,
-    order: () =>
-      name === "projects"
-        ? respond(projectsMode, () => table.map((p) => ({ ...p })), "projects")
-        : name === "studio_purchases"
-          ? respond(purchasesMode, () => purchaseRows, "purchases")
-          : name === "po_cost_lines"
-            ? respond(ridersMode, () => riderRows, "riders")
-            : respond(timeMode, () => [], "hours"),
+    order: () => name === "projects"
+      ? respond(projectsMode, () => table.map((p) => ({ ...p })), "projects")
+      : name === "studio_purchases" || name === "po_cost_lines"
+        ? builder
+        : respond(timeMode, () => [], "hours"),
+    range: (start: number, end: number) => name === "studio_purchases"
+      ? respond(purchasesMode, () => purchaseRows.slice(start, end + 1), "purchases")
+      : name === "po_cost_lines"
+        ? respond(ridersMode, () => riderRows.slice(start, end + 1), "riders")
+        : respond(timeMode, () => [], "hours"),
   };
   return builder;
 }

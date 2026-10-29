@@ -4,6 +4,7 @@ import { getSessionUserId } from '@patina/supabase';
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import {
+  boundedIn,
   commercialKeys,
   createBrowserClient,
   emailDeliveryKeys,
@@ -1264,12 +1265,13 @@ async function fetchAuthorizationLineDrift(
   const map = new Map<string, AuthorizationLineDrift>();
   if (ids.length === 0) return map;
   const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("project_ffe_items")
-    .select("id, line_total_cents, status")
-    .in("id", ids);
-  if (error) throw error;
-  for (const row of data ?? []) {
+  const data = await boundedIn<{ id: string; line_total_cents: number | null; status: string | null }>(
+    ids,
+    (chunk) => supabase.from("project_ffe_items")
+      .select("id, line_total_cents, status")
+      .in("id", chunk),
+  );
+  for (const row of data) {
     map.set(String(row.id), {
       ffeItemId: String(row.id),
       currentLineTotalCents:

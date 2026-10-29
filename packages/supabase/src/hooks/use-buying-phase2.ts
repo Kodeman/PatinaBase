@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { fetchAllRows } from '../lib/fetch-all-rows';
 import type { Database, Json } from '../database.types';
 import { invalidateFfeCaches, type PurchaseOrder } from './use-procurement';
 import { specBookKeys } from './use-spec-books';
@@ -304,13 +305,14 @@ export function useProjectSubmittals(projectId: string | null | undefined) {
   return useQuery({
     queryKey: buyingPhase2Keys.submittals(projectId ?? ''),
     queryFn: async (): Promise<FfeLineSubmittalRow[]> => {
-      const { data, error } = await getSupabase()
+      return fetchAllRows<FfeLineSubmittalRow>((from, to) => getSupabase()
         .from('ffe_line_submittals')
         .select('*')
         .eq('project_id', projectId as string)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+        .order('created_at', { ascending: true })
+        .order('source', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to));
     },
     enabled: !!projectId,
   });
@@ -389,14 +391,14 @@ export function useStudioPurchases(
   return useQuery({
     queryKey: buyingPhase2Keys.purchases(key),
     queryFn: async (): Promise<StudioPurchaseRow[]> => {
-      let query = getSupabase().from('studio_purchases').select('*');
-      query =
-        scope && 'projectId' in scope
+      return fetchAllRows<StudioPurchaseRow>((from, to) => {
+        let query = getSupabase().from('studio_purchases').select('*');
+        query = scope && 'projectId' in scope
           ? query.eq('project_id', scope.projectId)
           : query.eq('organization_id', (scope as { organizationId: string }).organizationId).is('project_id', null);
-      const { data, error } = await query.order('purchased_on', { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+        return query.order('purchased_on', { ascending: false })
+          .order('id', { ascending: true }).range(from, to);
+      });
     },
     enabled: !!scope,
   });
@@ -479,13 +481,13 @@ export function usePoCostLines(purchaseOrderId: string | null | undefined) {
   return useQuery({
     queryKey: buyingPhase2Keys.costLines(purchaseOrderId ?? ''),
     queryFn: async (): Promise<PoCostLineRow[]> => {
-      const { data, error } = await getSupabase()
+      return fetchAllRows<PoCostLineRow>((from, to) => getSupabase()
         .from('po_cost_lines')
         .select('*')
         .eq('purchase_order_id', purchaseOrderId as string)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to));
     },
     enabled: !!purchaseOrderId,
   });
@@ -792,9 +794,8 @@ export function useProcurementDrafts(
         .select('*')
         .eq('project_id', projectId as string);
       if (statuses) query = query.in('status', statuses);
-      const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as ProcurementDraftRow[];
+      query = query.order('created_at', { ascending: false }).order('id', { ascending: true });
+      return fetchAllRows<ProcurementDraftRow>((from, to) => query.range(from, to));
     },
     enabled: !!projectId,
   });
@@ -1328,13 +1329,13 @@ export function usePoAckBasis(purchaseOrderId: string | null | undefined) {
     queryKey: poAckBasisKey(purchaseOrderId ?? ''),
     queryFn: async (): Promise<PoAckBasis> => {
       const supabase = getSupabase();
-      const [po, items] = await Promise.all([
+      const [po, lines] = await Promise.all([
         supabase
           .from('purchase_orders')
           .select('id, project_id, vendor_id, requested_ship_on')
           .eq('id', purchaseOrderId as string)
           .maybeSingle(),
-        supabase
+        fetchAllRows<PoAckBasisLine>((from, to) => supabase
           .from('project_ffe_items')
           .select(
             `id, name, quantity, trade_price_cents, unit_price_cents,
@@ -1343,16 +1344,18 @@ export function usePoAckBasis(purchaseOrderId: string | null | undefined) {
           )
           .eq('purchase_order_id', purchaseOrderId as string)
           .order('sort_order', { ascending: true })
-          .order('created_at', { ascending: true }),
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to)),
       ]);
       if (po.error) throw po.error;
-      if (items.error) throw items.error;
+
       const one = <T>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
       return {
         vendorId: po.data?.vendor_id ?? null,
         projectId: po.data?.project_id ?? null,
         requestedShipOn: po.data?.requested_ship_on ?? null,
-        lines: ((items.data ?? []) as unknown as PoAckBasisLine[]).map((line) => ({
+        lines: lines.map((line) => ({
           ...line,
           spec: one(line.spec),
           product: one(line.product),
@@ -1892,13 +1895,13 @@ export function useProjectPoCostLines(projectId: string | null | undefined) {
   return useQuery({
     queryKey: [...buyingPhase2Keys.costLines('project'), projectId ?? ''],
     queryFn: async (): Promise<ProjectPoCostLine[]> => {
-      const { data, error } = await getSupabase()
+      return fetchAllRows<ProjectPoCostLine>((from, to) => getSupabase()
         .from('po_cost_lines')
         .select('*, purchase_order:purchase_orders!po_cost_lines_purchase_order_id_fkey!inner(id, po_number, project_id)')
         .eq('purchase_order.project_id', projectId as string)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as unknown as ProjectPoCostLine[];
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to) as any);
     },
     enabled: !!projectId,
   });

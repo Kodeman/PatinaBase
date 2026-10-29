@@ -1,4 +1,3 @@
-import { isCommittedBuyingLine } from '@/lib/document/buying-readings';
 import { getSessionUserId } from '@patina/supabase';
 /**
  * Hooks for Project Tracking — Opus System
@@ -345,44 +344,6 @@ export function useProjectRooms(projectId: string | null) {
   });
 }
 
-export function useProjectFFEItems(projectId: string | null) {
-  return useQuery({
-    queryKey: projectId ? queryKeys.projects.ffeItems(projectId) : ['project-ffe-items', 'null'],
-    queryFn: async () => {
-      if (!projectId) throw new Error('Project ID required');
-
-      if (!isUuid(projectId)) return mockData.getProjectFFEItems(projectId);
-
-      const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .select(`
-          *,
-          ffe_line_stage,
-          ffe_line_authorization,
-          room:project_rooms!project_room_id(id, name),
-          product:products!product_id(id, name, images, brand),
-          blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
-          item_claims:damage_claims!ffe_item_id(id, state, receiving_inspection_id, created_at, inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(photo_asset_ids)),
-          spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
-            readiness_status,
-            configuration_id, configuration_snapshot,
-            configuration_snapshot_hash, configuration_locked_at
-          ),
-          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, released_at, sent_at, delivered_date, carrier, tracking_number, bol_document_path, shipped_on, eta_history, vendor:vendors!purchase_orders_vendor_id_fkey(name), payments:po_payments(kind, state, due_date, paid_date))
-        `)
-        .eq('project_id', projectId)
-        .is('removed_at', null)
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
-    enabled: !!projectId,
-  });
-}
-
 // Time tracking (00177). Slug fixtures keep their mock data for demos; real
 // (UUID) projects aggregate project_time_entries + project_phases.estimated_hours
 // into the same MockTimeTracking shape via the shared fetchTimeSummary. A real
@@ -395,104 +356,6 @@ export function useProjectTimeTracking(projectId: string | null) {
       if (!projectId) throw new Error('Project ID required');
       if (!isUuid(projectId)) return Promise.resolve(mockData.getProjectTimeTracking(projectId));
       return fetchTimeSummary(getSupabase(), projectId);
-    },
-    enabled: !!projectId,
-  });
-}
-
-// Key metrics derived client-side from project + FFE items + phases.
-// Returns the same shape as mockData.getProjectKeyMetrics() so KeyMetricsRow
-// renders both data sources without conditional branches.
-export function useProjectKeyMetrics(projectId: string | null) {
-  return useQuery({
-    queryKey: projectId ? queryKeys.projects.keyMetrics(projectId) : ['projects', 'key-metrics', 'null'],
-    queryFn: async () => {
-      if (!projectId) throw new Error('Project ID required');
-
-      if (!isUuid(projectId)) return mockData.getProjectKeyMetrics(projectId);
-
-      const supabase = getSupabase();
-      const [projectRes, itemsRes, phasesRes, decisionsRes, milestonesRes] = await Promise.all([
-        supabase
-          .from('projects')
-          .select('budget_cents, committed_cents, actual_cents, design_fee_cents, start_date, target_end_date')
-          .eq('id', projectId)
-          .single(),
-        supabase
-          .from('project_ffe_items')
-          .select('id, status, purchase_order:purchase_orders!purchase_order_id(status, sent_at), studio_purchases(status)')
-          .eq('project_id', projectId)
-          .is('removed_at', null),
-        supabase.from('project_phases').select('id, status, progress, duration_weeks').eq('project_id', projectId),
-        supabase.from('client_decisions').select('id, status, due_date').eq('project_id', projectId),
-        supabase
-          .from('project_payment_milestones')
-          .select('id, status, amount_cents')
-          .eq('project_id', projectId),
-      ]);
-
-      const project = projectRes.data;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const items = (itemsRes.data ?? []) as any[];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const phases = (phasesRes.data ?? []) as any[];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const decisions = (decisionsRes.data ?? []) as any[];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const milestones = (milestonesRes.data ?? []) as any[];
-
-      const orderedCount = items.filter(isCommittedBuyingLine).length;
-      const totalItems = items.length;
-
-      const totalWeeks = phases.reduce((sum, p) => sum + (p.duration_weeks || 0), 0) || 12;
-      let weekNumber = 0;
-      if (project?.start_date) {
-        weekNumber = Math.max(
-          1,
-          Math.ceil((Date.now() - new Date(project.start_date).getTime()) / (7 * 86400000))
-        );
-      }
-      const avgPhaseProgress = phases.length
-        ? Math.round(phases.reduce((sum, p) => sum + (p.progress || 0), 0) / phases.length)
-        : 0;
-
-      const budgetTotal = project?.budget_cents || 0;
-      const committed = project?.committed_cents || 0;
-      const committedPct = budgetTotal > 0 ? Math.round((committed / budgetTotal) * 100) : 0;
-      const actual = project?.actual_cents || 0;
-      const overUnder = budgetTotal > 0 ? (actual - budgetTotal) / budgetTotal : 0;
-      const budgetStatus =
-        Math.abs(overUnder) < 0.05 ? 'On target' : overUnder > 0 ? 'Over budget' : 'Under budget';
-
-      const invoicedCents = milestones
-        .filter((m) => m.status === 'paid' || m.status === 'outstanding')
-        .reduce((sum, m) => sum + (m.amount_cents || 0), 0);
-      const outstandingCents = milestones
-        .filter((m) => m.status === 'outstanding')
-        .reduce((sum, m) => sum + (m.amount_cents || 0), 0);
-
-      const decisionsOpen = decisions.filter((d) => d.status === 'pending' || d.status === 'open').length;
-      const decisionsOverdue = decisions.filter(
-        (d) => d.status === 'pending' && d.due_date && new Date(d.due_date).getTime() < Date.now()
-      ).length;
-
-      return {
-        progress: avgPhaseProgress,
-        weekNumber,
-        totalWeeks,
-        budgetTotal,
-        budgetStatus,
-        committed,
-        committedPct,
-        invoiced: invoicedCents,
-        outstanding: outstandingCents,
-        ffeOrdered: orderedCount,
-        ffeTotal: totalItems,
-        decisionsOpen,
-        decisionsOverdue,
-        hoursSpent: 0, // wired in Sprint 3 (svc_projects time tracking)
-        hoursEstimated: 0,
-      };
     },
     enabled: !!projectId,
   });

@@ -8,6 +8,7 @@
 
 import { isCommittedBuyingLine, type BuyingCommitment } from '@/lib/document/buying-readings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchAllRows } from '@patina/supabase';
 import { createBrowserClient, useOptimisticMutation } from '@patina/supabase';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { invalidateMarginSurfaces } from './use-margin-items';
@@ -106,10 +107,10 @@ export function useAccountPage(projectId: string | null) {
       const supabase = getSupabase();
       const [
         { data: project, error: pErr },
-        { data: items, error: iErr },
+        items,
         { data: rooms, error: rErr },
         { data: milestones, error: mErr },
-        { data: placements, error: plErr },
+        placements,
       ] =
         await Promise.all([
           supabase
@@ -117,10 +118,12 @@ export function useAccountPage(projectId: string | null) {
             .select('budget_cents, total_amount_cents, design_fee_cents')
             .eq('id', projectId)
             .single(),
-          supabase
+          fetchAllRows<ItemSlice>((from, to) => supabase
             .from('project_ffe_items')
             .select('id, line_total_cents, trade_price_cents, unit_price_cents, quantity, status, project_room_id, item_type, currency, purchase_order:purchase_orders!purchase_order_id(status, sent_at), studio_purchases(status)')
-            .eq('project_id', projectId),
+            .eq('project_id', projectId)
+            .order('id', { ascending: true })
+            .range(from, to)),
           supabase
             .from('project_rooms')
             .select('id, name, budget_cents, sort_order')
@@ -131,17 +134,16 @@ export function useAccountPage(projectId: string | null) {
             .select('id, label, percentage, amount_cents, status, due_date, paid_at, trigger_kind, trigger_section_key, invoice_id, sort_order')
             .eq('project_id', projectId)
             .order('sort_order', { ascending: true }),
-          supabase
+          fetchAllRows<AccountPlacement>((from, to) => supabase
             .from('project_ffe_placements')
-            .select('ffe_item_id, project_room_id, quantity, sort_order')
-            .eq('project_id', projectId),
+            .select('id, ffe_item_id, project_room_id, quantity, sort_order')
+            .eq('project_id', projectId)
+            .order('id', { ascending: true })
+            .range(from, to)),
         ]);
       if (pErr) throw pErr;
-      if (iErr) throw iErr;
       if (rErr) throw rErr;
       if (mErr) throw mErr;
-      if (plErr) throw plErr;
-
       const all = (items ?? []) as ItemSlice[];
       const committed = all.filter(isCommittedBuyingLine);
 

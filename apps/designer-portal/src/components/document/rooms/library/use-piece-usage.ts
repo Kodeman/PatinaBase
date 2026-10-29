@@ -11,7 +11,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { createBrowserClient } from "@patina/supabase";
+import { boundedIn, createBrowserClient, fetchAllRows } from "@patina/supabase";
 
 export type UsageStage =
   | "brief"
@@ -100,12 +100,16 @@ export function usePieceUsage(productIds: readonly string[]) {
     staleTime: 60_000,
     queryFn: async (): Promise<Record<string, PieceUse[]>> => {
       const supabase = createBrowserClient();
-      const { data: lines, error } = await supabase
-        .from("project_ffe_items")
-        .select("product_id, project_id, project:projects(name)")
-        .in("product_id", ids)
-        .is("removed_at", null);
-      if (error) throw error;
+      const lines = await boundedIn<UsageLine & { id: string }>(
+        ids,
+        (chunk) => fetchAllRows<UsageLine & { id: string }>((from, to) => supabase
+          .from("project_ffe_items")
+          .select("id, product_id, project_id, project:projects(name)")
+          .in("product_id", chunk)
+          .is("removed_at", null)
+          .order("id", { ascending: true })
+          .range(from, to)).then(data => ({ data, error: null })),
+      );
 
       const projectIds = Array.from(
         new Set(
@@ -116,11 +120,10 @@ export function usePieceUsage(productIds: readonly string[]) {
       );
       if (projectIds.length === 0) return {};
 
-      const { data: docs, error: docError } = await supabase
+      const docs = await boundedIn<UsageDoc>(projectIds, (chunk) => supabase
         .from("document_state")
         .select("project_id, client_name, active_section")
-        .in("project_id", projectIds);
-      if (docError) throw docError;
+        .in("project_id", chunk));
 
       return groupPieceUsage(
         (lines ?? []) as UsageLine[],

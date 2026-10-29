@@ -19,6 +19,7 @@ import type {
   SetLinePlacementsResult,
 } from '@patina/types';
 import { createBrowserClient } from '../client';
+import { fetchAllRows } from '../lib/fetch-all-rows';
 import type { Database } from '../database.types';
 import { invalidateFfeCaches } from './use-procurement';
 import type { ProjectPalette } from './use-project-v2';
@@ -53,14 +54,15 @@ export function useProjectRoomPlacements(projectId: string | null) {
     queryKey: projectRoomPlacementsKey(projectId),
     queryFn: async (): Promise<FfeRoomPlacement[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (getSupabase() as any)
+      const data = await fetchAllRows<ProjectFfePlacementRow>((from, to) => (getSupabase() as any)
         .from('project_ffe_placements')
         .select('id, ffe_item_id, project_room_id, quantity, area_note, sort_order')
         .eq('project_id', projectId)
         .order('ffe_item_id', { ascending: true })
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return ((data ?? []) as ProjectFfePlacementRow[]).map((row) => ({
+        .order('sort_order', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to));
+      return data.map((row) => ({
         id: row.id,
         ffeItemId: row.ffe_item_id,
         projectRoomId: row.project_room_id,
