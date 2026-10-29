@@ -43,7 +43,7 @@ export type PaperOriginKind =
   | "deep-link";
 
 export interface StudioOverlayState {
-  overlay: 'books' | 'post' | 'search';
+  overlay: 'books' | 'orders' | 'post' | 'search';
   subject?: string;
   filter?: string;
   query?: string;
@@ -237,7 +237,7 @@ export function canReturnToPaperOrigin(origin: PaperOrigin): boolean {
     previous.url === new URL(paperOriginHref(origin), window.location.origin).href;
 }
 
-/** All three studio sheets keep their own scroll region; the paper never moves. */
+/** Every studio sheet keeps its own scroll region; the paper never moves. */
 export function studioOverlayScroll(root: HTMLElement): HTMLElement {
   return root.closest<HTMLElement>('[data-doc-sheet-scroll-region]') ?? root.querySelector<HTMLElement>('.cmd-scroll') ?? root;
 }
