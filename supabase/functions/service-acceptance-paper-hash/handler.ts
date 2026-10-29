@@ -9,7 +9,6 @@ const corsHeaders = {
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const bucketName = "service-acceptance-paper";
 const pageSize = 100;
-const maxPages = 20;
 
 interface Projection {
   projectId: string;
@@ -58,7 +57,7 @@ async function objectPath(
   objectId: string,
 ): Promise<string> {
   const bucket = admin.storage.from(bucketName);
-  for (let page = 0; page < maxPages; page++) {
+  for (let page = 0;; page++) {
     const { data, error } = await bucket.list(projectId, {
       limit: pageSize,
       offset: page * pageSize,

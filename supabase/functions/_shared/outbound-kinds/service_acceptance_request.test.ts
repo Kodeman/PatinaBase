@@ -39,6 +39,10 @@ function signer(overrides: Record<string, unknown>) {
 function admin(
   overrides: Record<string, unknown> = {},
   error: unknown = null,
+  binding: { profileId: string | null; email: string | null } = {
+    profileId: "card-profile",
+    email: "client@example.test",
+  },
 ): SupabaseClient {
   return {
     from: (table: string) => {
@@ -46,12 +50,23 @@ function admin(
         select: () => query,
         eq: (column: string, value: unknown) => {
           assertEquals(column, "id");
-          assertEquals(value, table === "projects" ? "project" : "request");
+          const expected = table === "projects" ? "project"
+            : table === "service_acceptance_requests" ? "request"
+            : table === "studio_contacts" ? "card"
+            : binding.profileId;
+          assertEquals(value, expected);
           return query;
         },
+        maybeSingle: () => query.single(),
         single: () =>
           Promise.resolve({
-            data: table === "projects" ? { name: "Oak & <House>" } : {
+            data: table === "projects"
+              ? { name: "Oak & <House>" }
+              : table === "studio_contacts"
+              ? { profile_id: binding.profileId }
+              : table === "profiles"
+              ? { email: binding.email }
+              : {
               id: "request",
               project_id: "project",
               lifecycle: "draft",
@@ -142,12 +157,13 @@ Deno.test("service acceptance renderer sends each active required signer's sibli
   assertEquals(partner.userId, "partner");
   assertStringIncludes(partner.text!, "/acceptance/request");
   const card = await renderEmail({
-    admin: admin(),
+    admin: admin({}, null, { profileId: null, email: null }),
     draft: {
       ...draft,
       id: "card-draft",
       to_contact_id: "card",
       to_client_id: null,
+      to_address: null,
     },
   });
   assertEquals(card.userId, undefined);
@@ -157,6 +173,23 @@ Deno.test("service acceptance renderer sends each active required signer's sibli
     draft: { ...draft, to_contact_id: "card", to_client_id: "card-profile" },
   });
   assertEquals(linkedCard.userId, "card-profile");
+});
+Deno.test("service acceptance renderer refuses a card relink or changed email until the designer regenerates its draft", async () => {
+  const linkedDraft = { ...draft, to_contact_id: "card", to_client_id: "card-profile" };
+  const unchanged = await renderEmail({ admin: admin(), draft: linkedDraft });
+  assertEquals(unchanged.userId, "card-profile");
+  for (const binding of [
+    { profileId: "different-profile", email: "client@example.test" },
+    { profileId: null, email: null },
+    { profileId: "card-profile", email: "new@example.test" },
+  ]) {
+    const refusal = await assertRejects(
+      () => renderEmail({ admin: admin({}, null, binding), draft: linkedDraft }),
+      Error,
+      "service_acceptance_recipient_changed_regenerate_draft",
+    );
+    assertStringIncludes(refusal.message, "Regenerate the acceptance draft for designer review");
+  }
 });
 Deno.test("service acceptance renderer refuses a foreign draft on the request (draft binding differs)", async () => {
   const foreign: {

@@ -20,6 +20,7 @@ interface Options {
   initialMismatch?: boolean;
   notFound?: boolean;
   paged?: boolean;
+  beyondTwoThousand?: boolean;
   exhausted?: boolean;
   replayed?: boolean;
   stampError?: { code: string; message: string };
@@ -94,7 +95,11 @@ function harness(options: Options = {}) {
       if (options.storageError) {
         return reply({ message: "secret internal detail" }, 500);
       }
-      if (options.exhausted || (options.paged && body.offset === 0)) {
+      if (
+        (options.exhausted && body.offset < 2100) ||
+        (options.beyondTwoThousand && body.offset < 2100) ||
+        (options.paged && body.offset === 0)
+      ) {
         return reply(
           Array.from(
             { length: 100 },
@@ -103,8 +108,11 @@ function harness(options: Options = {}) {
         );
       }
       if (options.paged) assertEquals(body.offset, 100);
+      if (options.exhausted || options.beyondTwoThousand) {
+        assertEquals(body.offset, 2100);
+      }
       return reply(
-        options.notFound ? [] : [{
+        options.notFound || options.exhausted ? [] : [{
           id: objectId,
           name: options.objectName ?? name,
         }],
@@ -223,12 +231,12 @@ Deno.test("initial identity mismatch refuses before downloading bytes", async ()
     2,
   );
 });
-Deno.test("native Storage listing follows multiple pages and stops at the page bound", async () => {
-  const h = harness({ paged: true });
-  const r = await h.post();
-  assertEquals(r.status, 200);
-  await r.body?.cancel();
-  assertEquals(h.calls.filter((c) => c.includes("/object/list/")).length, 2);
+Deno.test("native Storage listing finds an object beyond 2,000 entries and distinguishes exhaustion", async () => {
+  const found = harness({ beyondTwoThousand: true });
+  const foundResponse = await found.post();
+  assertEquals(foundResponse.status, 200);
+  assertEquals((await foundResponse.json()).documentSha256, sha);
+  assertEquals(found.calls.filter((c) => c.includes("/object/list/")).length, 22);
   const missing = harness({ exhausted: true });
   const missingResponse = await missing.post();
   assertEquals(missingResponse.status, 404);
@@ -237,8 +245,15 @@ Deno.test("native Storage listing follows multiple pages and stops at the page b
   });
   assertEquals(
     missing.calls.filter((c) => c.includes("/object/list/")).length,
-    20,
+    22,
   );
+});
+Deno.test("native Storage listing follows multiple pages", async () => {
+  const h = harness({ paged: true });
+  const r = await h.post();
+  assertEquals(r.status, 200);
+  await r.body?.cancel();
+  assertEquals(h.calls.filter((c) => c.includes("/object/list/")).length, 2);
 });
 Deno.test("missing object returns clear 404 without download or stamp", async () => {
   const h = harness({ notFound: true });

@@ -71,6 +71,23 @@ export async function renderEmail(
   ) {
     throw new Error("service_acceptance_request draft binding differs");
   }
+  if (draft.to_contact_id) {
+    const { data: card, error: cardError } = await admin.from("studio_contacts")
+      .select("profile_id").eq("id", draft.to_contact_id).maybeSingle();
+    if (cardError) throw cardError;
+    let email: string | null = null;
+    if (card?.profile_id) {
+      const { data: profile, error: profileError } = await admin.from("profiles")
+        .select("email").eq("id", card.profile_id).maybeSingle();
+      if (profileError) throw profileError;
+      email = profile?.email ?? null;
+    }
+    if (card?.profile_id !== draft.to_client_id || email !== draft.to_address) {
+      throw new Error(
+        "service_acceptance_recipient_changed_regenerate_draft: The household recipient changed. Regenerate the acceptance draft for designer review before sending.",
+      );
+    }
+  }
   const { data: project, error: projectError } = await admin.from("projects")
     .select("name").eq("id", request.project_id).single();
   if (projectError) throw projectError;
