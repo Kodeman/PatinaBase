@@ -12,6 +12,7 @@
 
 import { isCommittedBuyingLine, type BuyingCommitment } from '@/lib/document/buying-readings';
 import { useQuery } from '@tanstack/react-query';
+import { fetchAllRows } from '@patina/supabase';
 import { createBrowserClient } from '@patina/supabase';
 import { isMixed, sumByCurrency } from '@/lib/currency-totals';
 
@@ -52,12 +53,14 @@ export function useStudioMargin(studioIds: readonly string[]) {
     enabled: studioIds.length > 0,
     queryFn: async () => {
       const supabase = getSupabase();
-      const { data, error } = await supabase
+      const data = await fetchAllRows<ItemSlice>((from, to) => supabase
         .from('project_ffe_items')
         .select(
-          'unit_price_cents, trade_price_cents, quantity, status, currency, purchase_order:purchase_orders!purchase_order_id(status, sent_at), studio_purchases(status), project:projects!project_ffe_items_project_id_fkey(studio_id)',
-        );
-      if (error) throw error;
+          'id, unit_price_cents, trade_price_cents, quantity, status, currency, purchase_order:purchase_orders!purchase_order_id(status, sent_at), studio_purchases(status), project:projects!project_ffe_items_project_id_fkey!inner(studio_id)',
+        )
+        .in('project.studio_id', studioIds)
+        .order('id', { ascending: true })
+        .range(from, to));
 
       const books = new Set(studioIds);
       const committed = ((data ?? []) as ItemSlice[]).filter((i) => {

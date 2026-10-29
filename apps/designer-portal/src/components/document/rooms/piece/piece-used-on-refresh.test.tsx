@@ -21,29 +21,28 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@patina/supabase", () => ({
+  fetchAllRows: jest.requireActual("@patina/supabase").fetchAllRows,
+  boundedIn: jest.requireActual("@patina/supabase").boundedIn,
   useProjects: () => ({
     data: [{ id: "project-1", name: "Holloway Den", status: "active" }],
     isLoading: false,
   }),
   usePlaceProductInProjectV2: () => ({ mutateAsync: placeRpc }),
   createBrowserClient: () => ({
-    from: (table: string) => ({
-      select: () => ({
-        in: () =>
-          table === "project_ffe_items"
-            ? { is: async () => ({ data: liveLines, error: null }) }
-            : Promise.resolve({
-                data: [
-                  {
-                    project_id: "project-1",
-                    client_name: "The Hollowways",
-                    active_section: "proposal",
-                  },
-                ],
-                error: null,
-              }),
-      }),
-    }),
+    from: (table: string) => {
+      const chain = {
+        select: () => chain,
+        in: () => chain,
+        is: () => chain,
+        order: () => chain,
+        range: (from: number, to: number) => Promise.resolve({ data: liveLines.slice(from, to + 1), error: null }),
+        then: (resolve: (value: unknown) => unknown) => Promise.resolve({
+          data: [{ project_id: "project-1", client_name: "The Hollowways", active_section: "proposal" }],
+          error: null,
+        }).then(resolve),
+      };
+      return chain;
+    },
   }),
 }));
 
