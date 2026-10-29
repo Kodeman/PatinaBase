@@ -83,6 +83,14 @@ describe('useClients bounded project lookup', () => {
 });
 
 describe('boundedIn scheduling', () => {
+  it('reads each id once when the input repeats it across chunks', async () => {
+    const ids = [...Array.from({ length: 150 }, (_, i) => String(i)), '3', '149'];
+    const seen: string[] = [];
+    const result = await boundedIn(ids, async (chunk) => { seen.push(...chunk); return { data: chunk, error: null }; });
+    expect(seen.sort()).toEqual(Array.from({ length: 150 }, (_, i) => String(i)).sort());
+    expect(result).toHaveLength(150);
+  });
+
   it('limits concurrent reads to four and keeps merged chunk order', async () => {
     let active = 0;
     let peak = 0;

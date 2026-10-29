@@ -11,6 +11,9 @@ import { boundedIn } from "../lib/bounded-in";
  */
 const getSupabase = () => createBrowserClient() as any;
 
+// Postgres orders ISO timestamps and uuids by code unit; locale collation does not.
+const codeUnitOrder = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
 export type SpecBookAudience =
   | "client"
   | "vendor"
@@ -236,8 +239,8 @@ export function useSpecBookWorkbench(projectId: string) {
       }
       rawItems.sort((a, b) =>
         (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER)
-        || String(a.created_at).localeCompare(String(b.created_at))
-        || String(a.id).localeCompare(String(b.id)),
+        || codeUnitOrder(String(a.created_at), String(b.created_at))
+        || codeUnitOrder(String(a.id), String(b.id)),
       );
       const itemIds = rawItems.map((item) => item.id);
 

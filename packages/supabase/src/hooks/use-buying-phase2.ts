@@ -1621,14 +1621,14 @@ export function useInstallManifest(projectId: string | null | undefined) {
   return useQuery({
     queryKey: buyingPhase2Keys.installManifest(projectId ?? ''),
     queryFn: async (): Promise<InstallManifestItemRow[]> => {
-      const { data, error } = await getSupabase()
+      return fetchAllRows<InstallManifestItemRow>((from, to) => getSupabase()
         .from('install_manifest_items')
         .select('*')
         .eq('project_id', projectId as string)
         .order('install_on', { ascending: true, nullsFirst: false })
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to));
     },
     enabled: !!projectId,
   });
@@ -1720,14 +1720,14 @@ export function usePoSpecSnapshots(purchaseOrderId: string | null | undefined) {
   return useQuery({
     queryKey: buyingPhase2Keys.specSnapshots(purchaseOrderId ?? ''),
     queryFn: async (): Promise<PoSpecSnapshotRow[]> => {
-      const { data, error } = await getSupabase()
+      return fetchAllRows<PoSpecSnapshotRow>((from, to) => getSupabase()
         .from('po_spec_snapshots')
         .select('*')
         .eq('purchase_order_id', purchaseOrderId as string)
         .order('revision', { ascending: false })
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to));
     },
     enabled: !!purchaseOrderId,
   });

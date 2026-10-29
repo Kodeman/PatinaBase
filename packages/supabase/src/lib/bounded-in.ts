@@ -3,6 +3,8 @@ export async function boundedIn<T>(
   ids: readonly string[],
   read: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>,
 ): Promise<T[]> {
+  // A plain .in() matches each row once; repeated ids across chunks would not.
+  ids = Array.from(new Set(ids));
   const results: T[][] = [];
   let next = 0;
   const worker = async () => {
