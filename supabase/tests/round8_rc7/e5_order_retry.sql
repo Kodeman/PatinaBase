@@ -1,4 +1,4 @@
--- E5 A12: use the product's authenticated PO RPC, including a repeated attempt.
+-- E5 A12: legacy-origin authenticated PO grouping and sequential duplicate retry.
 -- Rolled back; no Stripe/payment call or external send.
 \set ON_ERROR_STOP on
 SELECT :'HOST' = '127.0.0.1' AND :'PORT' = '55122' AS owned_stack \gset
@@ -55,7 +55,7 @@ BEGIN
       'e5120000-0000-4000-8000-000000000001','e5120000-0000-4000-8000-000000000004','net_30',
       ARRAY['e5120000-0000-4000-8000-000000000011','e5120000-0000-4000-8000-000000000012']::uuid[]);
   EXCEPTION WHEN OTHERS THEN refusal:=SQLSTATE||':'||SQLERRM; END;
-  IF refusal NOT LIKE 'P0001:create_purchase_order: %already linked%'
+  IF refusal IS NULL OR refusal NOT LIKE 'P0001:create_purchase_order: %already linked%'
     OR (SELECT count(*) FROM public.purchase_orders WHERE project_id='e5120000-0000-4000-8000-000000000001')<>1 THEN
     RAISE EXCEPTION 'E5 A12 duplicate attempt was not refused as already linked'; END IF;
   RAISE NOTICE 'E5 A12 duplicate retry: refused %, PO count 1',refusal;

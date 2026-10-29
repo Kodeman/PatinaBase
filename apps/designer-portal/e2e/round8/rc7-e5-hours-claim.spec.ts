@@ -7,6 +7,10 @@ const DESIGNER = 'f0180000-0000-4000-8000-000000000002';
 const CLIENT = 'f0180000-0000-4000-8000-000000000003';
 const JOB = 'e5000000-0000-4000-8000-000000000001';
 const RATE = 'e5000000-0000-4000-8000-000000000002';
+const RATE_OLD = 'e5000000-0000-4000-8000-000000000003';
+const RATE_FUTURE = 'e5000000-0000-4000-8000-000000000004';
+const ISSUED = 'e5000000-0000-4000-8000-000000000005';
+const PAYMENT = 'e5000000-0000-4000-8000-000000000006';
 const TITLE = 'E5 fictional claim job';
 
 test.setTimeout(300_000);
@@ -30,22 +34,55 @@ async function logHour(page: Page, minutes: number, billable: boolean) {
   return hours;
 }
 
+async function bookTotals(page: Page) {
+  await expect(page.locator('[data-studio="round8"]')).toHaveAttribute('data-arrival-ready', '', { timeout: 60_000 });
+  await expect(page.locator('html')).not.toHaveClass(/\barr-(?:pre|on|press)\b/);
+  const door = page.locator('[data-studio-door="accounts"]');
+  if (await door.isVisible()) {
+    await door.click();
+  } else {
+    await page.getByRole('button', { name: 'More studio actions', exact: true }).click();
+    await page.getByRole('button', { name: 'Ledgers', exact: true }).click();
+    await page.locator('[data-mobile-ledger="accounts"]').click();
+  }
+  const book = page.getByRole('dialog', { name: 'Studio accounts', exact: true });
+  await expect(book.locator('[data-accounts-front-matter]')).toContainText('$200.00 issued; $50.00 received; $150.00 due.');
+  await page.keyboard.press('Escape');
+  await expect(book).not.toBeVisible();
+}
+
 test('A19: native hours, dated rate, unresolved rate, two-tab claim and void preserve balances', async ({ authenticatedPage: first }) => {
   test.setTimeout(300_000);
   expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').port).toBe('55121');
+  expect(new URL(process.env.SUPABASE_DB_URL ?? '').hostname).toBe('127.0.0.1');
+  expect(new URL(process.env.SUPABASE_DB_URL ?? '').port).toBe('55122');
   expect(psqlScalar(`SELECT count(*) FROM projects WHERE id='${JOB}';`)).toBe('0');
   expect(psqlScalar(`SELECT count(*) FROM studio_member_rates WHERE studio_id='${STUDIO}' AND user_id='${DESIGNER}';`)).toBe('0');
-  psqlRun(`INSERT INTO projects(id,name,status,created_by,designer_id,client_id,studio_id)
-    VALUES('${JOB}','${TITLE}','active','${DESIGNER}','${DESIGNER}','${CLIENT}','${STUDIO}');`);
+  expect(psqlScalar(`SELECT count(*) FROM invoices WHERE studio_id='${STUDIO}';`)).toBe('0');
+  psqlRun(`BEGIN;
+    INSERT INTO projects(id,name,status,created_by,designer_id,client_id,studio_id)
+    VALUES('${JOB}','${TITLE}','active','${DESIGNER}','${DESIGNER}','${CLIENT}','${STUDIO}');
+    INSERT INTO invoices(id,project_id,designer_id,client_id,studio_id,invoice_number,status,total_cents,subtotal_cents,due_date)
+    VALUES('${ISSUED}','${JOB}','${DESIGNER}','${CLIENT}','${STUDIO}','E5-ISSUED','sent',20000,20000,CURRENT_DATE+10);
+    INSERT INTO invoice_payments(id,invoice_id,amount_cents,method,status,received_at,recorded_by)
+    VALUES('${PAYMENT}','${ISSUED}',5000,'check','succeeded',now(),'${DESIGNER}');
+    COMMIT;`);
   try {
     await first.reload({ waitUntil: 'domcontentloaded' });
+    expect(psqlScalar(`SELECT status || '|' || amount_paid_cents FROM invoices WHERE id='${ISSUED}';`)).toBe('partially_paid|5000');
+    await bookTotals(first);
     await logHour(first, 17, true);
     expect(psqlScalar(`SELECT billable || '|' || rate_source || '|' || coalesce(hourly_rate_cents::text,'null') || '|' || (invoice_id IS NULL) FROM project_time_entries WHERE project_id='${JOB}' AND duration_minutes=17;`)).toBe('true|none|null|true');
     await first.keyboard.press('Escape');
     psqlRun(`INSERT INTO studio_member_rates(id,studio_id,user_id,hourly_rate_cents,effective_from,created_by)
-      VALUES('${RATE}','${STUDIO}','${DESIGNER}',20000,CURRENT_DATE-30,'${DESIGNER}');`);
+      VALUES('${RATE_OLD}','${STUDIO}','${DESIGNER}',12000,CURRENT_DATE-90,'${DESIGNER}');
+      INSERT INTO studio_member_rates(id,studio_id,user_id,hourly_rate_cents,effective_from,created_by)
+      VALUES('${RATE}','${STUDIO}','${DESIGNER}',20000,CURRENT_DATE-30,'${DESIGNER}');
+      INSERT INTO studio_member_rates(id,studio_id,user_id,hourly_rate_cents,effective_from,created_by)
+      VALUES('${RATE_FUTURE}','${STUDIO}','${DESIGNER}',50000,CURRENT_DATE+2,'${DESIGNER}');`);
+    expect(psqlScalar(`SELECT string_agg(hourly_rate_cents::text,',' ORDER BY effective_from) FROM studio_member_rates WHERE id IN ('${RATE_OLD}','${RATE}','${RATE_FUTURE}');`)).toBe('12000,20000,50000');
     await logHour(first, 30, true);
-    expect(psqlScalar(`SELECT t.billable || '|' || t.rate_source || '|' || t.hourly_rate_cents || '|' || t.rated_amount_cents || '|' || r.effective_from FROM project_time_entries t CROSS JOIN studio_member_rates r WHERE t.project_id='${JOB}' AND t.duration_minutes=30 AND r.id='${RATE}';`)).toMatch(/^true\|studio_member\|20000\|10000\|\d{4}-\d{2}-\d{2}$/);
+    expect(psqlScalar(`SELECT t.billable || '|' || t.rate_source || '|' || t.hourly_rate_cents || '|' || t.rated_amount_cents FROM project_time_entries t WHERE t.project_id='${JOB}' AND t.duration_minutes=30;`)).toBe('true|studio_member|20000|10000');
     await first.keyboard.press('Escape');
     await logHour(first, 47, false);
     expect(psqlScalar(`SELECT billable || '|' || (invoice_id IS NULL) FROM project_time_entries WHERE project_id='${JOB}' AND duration_minutes=47;`)).toBe('false|true');
@@ -85,17 +122,19 @@ test('A19: native hours, dated rate, unresolved rate, two-tab claim and void pre
       expect(psqlScalar(`SELECT count(*) FROM invoices WHERE id='${owner}' AND status='draft';`)).toBe('1');
       expect(psqlScalar(`SELECT count(*) FROM project_time_entries WHERE project_id='${JOB}' AND duration_minutes=47 AND invoice_id IS NULL;`)).toBe('1');
       expect(psqlScalar(`SELECT count(*) FROM project_time_entries WHERE project_id='${JOB}' AND rate_source='none' AND invoice_id IS NOT NULL;`)).toBe('0');
-      expect(psqlScalar(`SELECT coalesce(sum(total_cents) FILTER (WHERE status NOT IN ('draft','void')),0) || '|' ||
-        coalesce(sum(amount_paid_cents) FILTER (WHERE status<>'draft'),0) || '|' ||
-        coalesce(sum(greatest(total_cents-amount_paid_cents,0)) FILTER (WHERE status IN ('sent','partially_paid')),0)
-        FROM invoices WHERE project_id='${JOB}';`)).toBe('0|0|0');
-      const winner = await first.getByRole('dialog', { name: 'Invoice folio', exact: true }).isVisible() ? first : second;
+      const folioA = first.getByRole('dialog', { name: 'Invoice folio', exact: true });
+      const folioB = second.getByRole('dialog', { name: 'Invoice folio', exact: true });
+      await expect.poll(async () => await folioA.isVisible() || await folioB.isVisible()).toBe(true);
+      const winner = await folioA.isVisible() ? first : second;
       const loser = winner === first ? second : first;
-      await expect(loser.getByRole('dialog', { name: 'Draw an invoice', exact: true })).toContainText('Nothing was billed.');
+      await expect(loser.getByRole('dialog', { name: 'Draw an invoice', exact: true })).toContainText('Some of these hours were just billed on another invoice. Nothing was billed.');
+      expect(psqlScalar(`SELECT count(*) FROM invoices WHERE project_id='${JOB}' AND status='draft';`)).toBe('1');
       await loser.reload({ waitUntil: 'domcontentloaded' });
       const recovered = await hoursFor(loser);
       await recovered.getByRole('combobox', { name: 'Project', exact: true }).selectOption(JOB);
       await expect(recovered.getByText('Billed', { exact: true })).toBeVisible();
+      await loser.keyboard.press('Escape');
+      await bookTotals(loser);
       const folio = winner.getByRole('dialog', { name: 'Invoice folio', exact: true });
       await expect(folio).toBeVisible();
       await folio.getByRole('button', { name: 'Void', exact: true }).click();
@@ -103,21 +142,28 @@ test('A19: native hours, dated rate, unresolved rate, two-tab claim and void pre
       await folio.getByRole('button', { name: 'Void invoice', exact: true }).click();
       await expect.poll(() => psqlScalar(`SELECT status FROM invoices WHERE id='${owner}';`)).toBe('void');
       expect(psqlScalar(`SELECT count(*) FROM project_time_entries WHERE project_id='${JOB}' AND invoice_id IS NULL AND duration_minutes=30;`)).toBe('1');
-      expect(psqlScalar(`SELECT count(*) FROM invoices WHERE studio_id='${STUDIO}' AND project_id='${JOB}' AND status NOT IN ('draft','void');`)).toBe('0');
-      console.log('[E5 A19]', { arrived, owner, claimed: 1, invoices: 1, voidReleased: 1, issued: 0, received: 0, due: 0 });
+      expect(psqlScalar(`SELECT count(*) FROM invoices WHERE studio_id='${STUDIO}' AND project_id='${JOB}' AND status NOT IN ('draft','void');`)).toBe('1');
+      console.log('[E5 A19]', { arrived, owner, claimed: 1, drafts: 1, voidReleased: 1, issued: 20000, received: 5000, due: 15000 });
     } finally {
       release();
       await first.context().unroute('**/rest/v1/rpc/compose_project_invoice');
       await second.close();
     }
   } finally {
+    const invoiceIds = psqlScalar(`SELECT string_agg(quote_literal(id::text),',') FROM invoices WHERE project_id='${JOB}';`);
     psqlRun(`BEGIN; SET LOCAL session_replication_role=replica;
+      DELETE FROM invoice_payments WHERE invoice_id IN (SELECT id FROM invoices WHERE project_id='${JOB}');
       DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM invoices WHERE project_id='${JOB}');
       DELETE FROM project_time_entries WHERE project_id='${JOB}';
       DELETE FROM invoices WHERE project_id='${JOB}';
-      DELETE FROM studio_member_rates WHERE id='${RATE}' AND studio_id='${STUDIO}';
+      DELETE FROM studio_member_rates WHERE id IN ('${RATE_OLD}','${RATE}','${RATE_FUTURE}') AND studio_id='${STUDIO}';
       SET LOCAL session_replication_role=origin;
       DELETE FROM projects WHERE id='${JOB}' AND name='${TITLE}' AND designer_id='${DESIGNER}'; COMMIT;`);
-    expect(psqlScalar(`SELECT (SELECT count(*) FROM projects WHERE id='${JOB}') + (SELECT count(*) FROM invoices WHERE project_id='${JOB}');`)).toBe('0');
+    expect(psqlScalar(`SELECT (SELECT count(*) FROM projects WHERE id='${JOB}') || '|' ||
+      (SELECT count(*) FROM invoices WHERE project_id='${JOB}') || '|' ||
+      (SELECT count(*) FROM invoice_payments WHERE invoice_id IN (${invoiceIds})) || '|' ||
+      (SELECT count(*) FROM invoice_line_items WHERE invoice_id IN (${invoiceIds})) || '|' ||
+      (SELECT count(*) FROM project_time_entries WHERE project_id='${JOB}') || '|' ||
+      (SELECT count(*) FROM studio_member_rates WHERE id IN ('${RATE_OLD}','${RATE}','${RATE_FUTURE}'));`)).toBe('0|0|0|0|0|0');
   }
 });
