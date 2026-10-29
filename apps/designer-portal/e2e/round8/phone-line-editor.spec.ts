@@ -245,15 +245,22 @@ for (const width of [320, 390]) {
       await expect(finish).toHaveValue(draft);
       await expect(finish).toBeFocused();
       expect(finishOf(line)).toBe('C03 peer finish');
-      // RC7-E6-3: the conflict hands over the peer's row, so putting the field back means its value.
-      await finish.fill('C03 peer finish');
+      await expect(pane.getByRole('alert')).toContainText('“C03 peer finish”');
+      // RC7-E6-3: the kept draft saves again on the peer's row_version, without a reload.
+      const versionOf = () => Number(psqlScalar(`SELECT row_version FROM public.project_ffe_specs WHERE ffe_item_id='${line}';`));
+      const peerVersion = versionOf();
       await finish.press('Enter');
+      await expect.poll(() => finishOf(line), { message: 'the retried draft persists' }).toBe(draft);
+      expect(versionOf(), 'the retry advances row_version past the peer').toBeGreaterThan(peerVersion);
+      await expect(pane.getByRole('alert')).toHaveCount(0);
       await expect(finish).not.toHaveAttribute('aria-invalid', 'true');
+      await expect(finish).toBeFocused();
+      await expect(finish).toHaveValue(draft);
       const beforeReload = writes;
       await page.reload({ waitUntil: 'domcontentloaded' });
       pane = instrument(page).getByTestId('spec-fields-pane');
       finish = pane.getByRole('textbox', { name: 'Finish' });
-      await expect(finish).toHaveValue('C03 peer finish', { timeout: 60_000 });
+      await expect(finish).toHaveValue(draft, { timeout: 60_000 });
       expect(writes, 'reloading the stable line never replays a write').toBe(beforeReload);
       await expect.poll(() => new URL(page.url()).searchParams.get('line')).toBe(line);
       await instrument(page).getByRole('button', { name: /Return to the room/ }).click();

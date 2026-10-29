@@ -432,6 +432,104 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("an edit queued behind the refused write is not sent over the peer; it waits for its own save", async () => {
+    render(<Harness />);
+    await enter("Finish", "First");
+    // Edited again and left while the first write is out: it queues.
+    fireEvent.change(field("Finish"), { target: { value: "Second" } });
+    await act(async () => {
+      fireEvent.blur(field("Finish"));
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    peerSaves({ finish: "Peer walnut" });
+    await answer(0);
+
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(server).toMatchObject({ finish: "Peer walnut", row_version: 2 });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Finish changed in another session to “Peer walnut”. Save again to replace it.",
+    );
+    expect(field("Finish")).toHaveValue("Second");
+    expect(field("Finish")).toHaveAttribute("aria-invalid", "true");
+    expect(await flush()).toMatch("Finish changed in another session");
+    expect(mockSpecCalls).toHaveLength(1);
+
+    act(() => field("Finish").focus());
+    await act(async () => {
+      fireEvent.keyDown(field("Finish"), { key: "Enter" });
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { finish: "Second" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ finish: "Second", row_version: 3 });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(snapshot().dirty).toBe(false);
+  });
+
+  it("a queued edit of a column the peer left alone still sends on the peer's row", async () => {
+    render(<Harness />);
+    await enter("Finish", "First");
+    await type("Material", "Ash");
+    peerSaves({ finish: "Peer walnut" });
+    await answer(0);
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { material: "Ash" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ finish: "Peer walnut", material: "Ash", row_version: 3 });
+    expect(field("Finish")).toHaveValue("First");
+  });
+
+  it("untouched fields, including a saved value typed with spaces and Dimensions, follow the adopted row", async () => {
+    render(<Harness />);
+    await type("Finish", " Walnut ");
+    await answer(0);
+    expect(server).toMatchObject({ finish: "Walnut", row_version: 2 });
+
+    peerSaves({ finish: "Peer oak", selected_dimensions: { width: "90", unit: "in" } as never });
+    await enter("Material", "Ash");
+    await answer(1);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This selection changed in another session. Save again.",
+    );
+    // The saved " Walnut " was not an edit, so the field shows the peer's.
+    expect(field("Finish")).toHaveValue("Peer oak");
+    expect(screen.getByRole("textbox", { name: "width" })).toHaveValue("90");
+
+    // Passing through them writes nothing over the peer.
+    await type("Finish", "Peer oak");
+    await act(async () => {
+      fireEvent.blur(screen.getByRole("textbox", { name: "width" }));
+    });
+    expect(mockSpecCalls).toHaveLength(2);
+    expect(field("Material")).toHaveValue("Ash");
+  });
+
+  it("an edited Dimensions draft stays over the adopted row and names the change", async () => {
+    render(<Harness />);
+    const width = () => screen.getByRole("textbox", { name: "width" });
+    fireEvent.change(width(), { target: { value: "72" } });
+    peerSaves({ selected_dimensions: { width: "90", unit: "in" } as never });
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Dimensions changed in another session. Save again to replace it.",
+    );
+    expect(width()).toHaveValue("72");
+    await act(async () => {
+      fireEvent.blur(width());
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { selected_dimensions: { width: "72" } },
+    });
+  });
+
   it("says a cleared peer value, and a peer edit elsewhere on the row, in words", async () => {
     render(<Harness />);
     peerSaves({ finish: null });

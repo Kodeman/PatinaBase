@@ -259,6 +259,14 @@ function sameColumns(changes: SpecChanges, row: SpecChanges): boolean {
   );
 }
 
+/** True when the peer's row differs from `base` in a column `changes` names. */
+function peerChanged(changes: SpecChanges, base: SpecChanges, peer: SpecChanges): boolean {
+  const theirs: SpecChanges = Object.fromEntries(
+    Object.keys(changes).map((column) => [column, peer[column as SpecColumn]]),
+  );
+  return !sameColumns(theirs, base);
+}
+
 /**
  * RC7-E6-3 — the alert for a save another session got to first: what that
  * session left in each refused field.
@@ -270,10 +278,7 @@ function conflictText(
 ): string {
   const said = fields.flatMap(([field, changes]) => {
     const columns = Object.keys(changes) as SpecColumn[];
-    const theirs: SpecChanges = Object.fromEntries(
-      columns.map((column) => [column, peer[column]]),
-    );
-    if (sameColumns(theirs, base)) return [];
+    if (!peerChanged(changes, base, peer)) return [];
     if (columns.length !== 1 || !TEXT_COLUMNS.has(columns[0])) {
       return [`${field} changed in another session.`];
     }
@@ -309,10 +314,11 @@ function SpecText({
   const [draft, setDraft] = useState(value ?? "");
   // A field nobody has edited follows its row (a peer's save adopted after a
   // conflict); an edited draft stays until it saves or is put back.
+  // Compared trimmed, as saves are: a saved " Walnut " is the row's "Walnut".
   const [seen, setSeen] = useState(value ?? "");
   if ((value ?? "") !== seen) {
     setSeen(value ?? "");
-    if (draft === seen) setDraft(value ?? "");
+    if (draft.trim() === seen.trim()) setDraft(value ?? "");
   }
   const commit = () => {
     const next = draft.trim();
@@ -746,19 +752,31 @@ export function SpecFieldsPane({
               acked.current = peer;
               onSpecSaved(peer);
             }
-            const current = latest();
-            if (current.length === 0) return;
+            const alerted = new Map<string, { changes: SpecChanges; sticky: boolean }>(
+              latest().map(([field, sent]) => [field, sent]),
+            );
+            // An edit queued behind this write was made over the older row:
+            // where the peer changed its columns it is not sent, and waits
+            // for its own save after the alert.
+            if (peer) {
+              for (const [field, entry] of pendingSpec.current) {
+                if (!peerChanged(entry.changes, row, peer)) continue;
+                pendingSpec.current.delete(field);
+                alerted.set(field, entry);
+              }
+            }
+            if (alerted.size === 0) return;
             const message = peer
               ? conflictText(
-                  current.map(([field, sent]) => [field, sent.changes] as const),
+                  [...alerted].map(([field, entry]) => [field, entry.changes] as const),
                   row,
                   peer,
                 )
               : errorText(e, "The field was not saved.");
             setError(message);
-            hold.failed(current[0][0], message);
-            for (const [field, sent] of current) {
-              if (sent.sticky) hold.mark(field, message);
+            hold.failed([...alerted.keys()][0], message);
+            for (const [field, entry] of alerted) {
+              if (entry.sticky) hold.mark(field, message);
             }
           },
         )
@@ -1471,6 +1489,14 @@ function DimensionsField({
   onCommit: (next: Record<string, unknown> | null) => void;
 }) {
   const [draft, setDraft] = useState(value);
+  // As SpecText: untouched measurements follow the row; edited ones stay.
+  const [seen, setSeen] = useState(value);
+  const same = (a: unknown, b: unknown) =>
+    JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  if (!same(value, seen)) {
+    setSeen(value);
+    if (same(draft, seen)) setDraft(value);
+  }
   return (
     <div
       onBlur={(e) => {
