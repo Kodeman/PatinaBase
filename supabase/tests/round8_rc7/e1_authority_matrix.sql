@@ -21,29 +21,41 @@ DO $$ BEGIN RAISE EXCEPTION 'X02 inactive C4/C6 mutations have executable grants
 -- Native C2/C4/C6 transitions, including the offline evidence and completion paths.
 -- The upstream fixture is read-only; all activation, grants, and data roll back.
 \ir ../round8/service_acceptance_release_fixes_body.psql
-GRANT EXECUTE ON FUNCTION pg_temp.project(text) TO authenticated;
-
+GRANT EXECUTE ON FUNCTION pg_temp.project(text),pg_temp.ed(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_studio_service(uuid,uuid,text,text),
+ public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text),
+ public.create_service_acceptance_request(uuid,uuid,uuid,text) TO authenticated;
+CREATE TEMP TABLE e1_retry_args AS SELECT c.acceptance_request_id,c.obligation_hash,
+ r.id AS request_id,r.scope_content_hash,r.evidence_manifest_hash,r.signer_policy_revision
+ FROM public.studio_service_completions c CROSS JOIN public.service_acceptance_requests r
+ WHERE c.id=(pg_temp.v('done-dor')->>'completionId')::uuid AND r.id=pg_temp.req('r4');
+GRANT SELECT ON e1_retry_args TO authenticated;
+CREATE TEMP TABLE e1_retry_receipts(kind text, receipt jsonb);
+GRANT INSERT ON e1_retry_receipts TO authenticated;
 SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(completed_by=pg_temp.uid(2)
  AND client_request_id='rf-done-dor' AND obligation_hash IS NOT NULL AND length(request_hash)=64)
  FROM public.studio_service_completions WHERE id=(pg_temp.v('done-dor')->>'completionId')::uuid),
  'X09 completion has one actor-bound, obligation-hashed audit row');
-SELECT pg_temp.assert_true((public.complete_studio_service(pg_temp.project(),
- (SELECT acceptance_request_id FROM public.studio_service_completions
-  WHERE id=(pg_temp.v('done-dor')->>'completionId')::uuid),
- (SELECT obligation_hash FROM public.studio_service_completions
-  WHERE id=(pg_temp.v('done-dor')->>'completionId')::uuid),'rf-done-dor')->>'replayed')::boolean
+SELECT pg_temp.actor(2);
+SET LOCAL ROLE authenticated;
+INSERT INTO e1_retry_receipts SELECT 'completion',public.complete_studio_service(pg_temp.project(),
+ acceptance_request_id,obligation_hash,'rf-done-dor') FROM e1_retry_args;
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT (receipt->>'replayed')::boolean FROM e1_retry_receipts WHERE kind='completion')
  AND (SELECT count(*)=1 FROM public.studio_service_completions
  WHERE client_request_id='rf-done-dor' AND project_id=pg_temp.project()),
- 'X09 C6 completion retry returns receipt without duplicate');
+ 'X09 authenticated C6 completion retry returns receipt without duplicate');
 SELECT pg_temp.actor(5);
-SELECT pg_temp.assert_true((SELECT (public.respond_service_acceptance(r.id,'accept_with_conditions',
- '[{"text":"Touch up the paint"}]'::jsonb,NULL,r.scope_content_hash,r.evidence_manifest_hash,
- r.signer_policy_revision,'rf-r4-5')->>'replayed')::boolean
- FROM public.service_acceptance_requests r WHERE r.id=pg_temp.req('r4'))
+SET LOCAL ROLE authenticated;
+INSERT INTO e1_retry_receipts SELECT 'response',public.respond_service_acceptance(request_id,
+ 'accept_with_conditions','[{"text":"Touch up the paint"}]'::jsonb,NULL,scope_content_hash,
+ evidence_manifest_hash,signer_policy_revision,'rf-r4-5') FROM e1_retry_args;
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT (receipt->>'replayed')::boolean FROM e1_retry_receipts WHERE kind='response')
  AND (SELECT count(*)=1 AND bool_and(responder_profile_id=pg_temp.uid(5)
  AND presented_scope_content_hash IS NOT NULL AND length(request_hash)=64)
  FROM public.service_acceptance_responses WHERE request_id=pg_temp.req('r4') AND client_request_id='rf-r4-5'),
- 'X09 signer response retry preserves one actor-bound scope-hashed response');
+ 'X09 authenticated signer response retry preserves one actor-bound scope-hashed response');
 SELECT pg_temp.actor(1);
 SELECT pg_temp.assert_true((SELECT count(*)=2 AND bool_and(recorded_by=pg_temp.uid(1)
  AND presented_scope_content_hash IS NOT NULL AND length(request_hash)=64
@@ -156,6 +168,8 @@ SELECT pg_temp.expect_error(format('SELECT public.get_project_service_acceptance
  '42501','insufficient_privilege','X02 client cannot read studio C4 projection');
 RESET ROLE;
 
+-- RC7-E1-1: this older-request signer is NOT on r4; the C6 predicate admits
+-- any current sent-request signer on the project. Privacy ruling required.
 SELECT pg_temp.actor(8);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assert_true((SELECT count(*) FROM storage.objects WHERE id::text LIKE 'e1000000-%')=0
@@ -172,10 +186,18 @@ SELECT pg_temp.assert_true((SELECT count(*) FROM storage.objects WHERE id::text 
  'X02 unlinked contact has no bytes or C4 list');
 RESET ROLE;
 
--- Revocation changes the reader immediately; the evidence row remains intact.
+-- Same authenticated DELETE-by-id used by useRemoveMember; not a privileged status edit.
+CREATE TEMP TABLE e1_removed_members(id uuid);
+GRANT INSERT ON e1_removed_members TO authenticated;
 SELECT pg_temp.actor(1);
-UPDATE public.organization_members SET status='removed' WHERE user_id=pg_temp.uid(3)
- AND organization_id='f8961000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+WITH removed AS (DELETE FROM public.organization_members WHERE id=(
+ SELECT id FROM public.organization_members WHERE user_id=pg_temp.uid(3)
+ AND organization_id='f8961000-0000-4000-8000-000000000001') RETURNING id)
+INSERT INTO e1_removed_members SELECT id FROM removed;
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM e1_removed_members),
+ 'X02 studio owner removed the admin through authenticated member DELETE');
 SELECT pg_temp.actor(3);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assert_true((SELECT count(*) FROM storage.objects WHERE id::text LIKE 'e1000000-%')=0,
@@ -196,12 +218,14 @@ SELECT pg_temp.assert_true((SELECT count(*)=3 FROM storage.objects WHERE id::tex
  'X02 superuser readback: two valid objects and one malformed survive refusals');
 UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
 SELECT pg_temp.actor(1);
+SET LOCAL ROLE authenticated;
 SELECT pg_temp.expect_error(format('SELECT public.create_service_acceptance_request(%L,%L,%L,%L)',
  pg_temp.project(),pg_temp.ed(),'f8968000-0000-4000-8000-000000000001','e1-inactive'),
- '55000','scope_editions_inactive','X02 inactive C4 create refuses before mutation');
+ '55000','scope_editions_inactive','X02 inactive authenticated C4 create refuses inside the body');
 SELECT pg_temp.expect_error(format('SELECT public.complete_studio_service(%L,%L,%L,%L)',
  pg_temp.project(),pg_temp.req('r4'),repeat('a',64),'e1-inactive-completion'),
- '55000','scope_editions_inactive','X02 inactive C6 complete refuses before mutation');
+ '55000','scope_editions_inactive','X02 inactive authenticated C6 complete refuses inside the body');
+RESET ROLE;
 SELECT pg_temp.assert_true((public.get_project_service_acceptance(pg_temp.project())->>'capability')='inactive'
  AND (public.get_studio_service_completion(pg_temp.project())->>'capability')='inactive'
  AND NOT EXISTS(SELECT 1 FROM public.service_acceptance_requests WHERE client_request_id='e1-inactive')

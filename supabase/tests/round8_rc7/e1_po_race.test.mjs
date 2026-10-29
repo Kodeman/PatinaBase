@@ -17,15 +17,17 @@ const actor = 'e7110000-0000-4000-8000-777777777701';
 const project = 'e7110001-0000-4000-8000-000000000001';
 const vendor = 'e7110001-0000-4000-8000-000000000003';
 const item = 'e7112000-0000-4000-8000-000000000001';
-const create = `SET LOCAL ROLE authenticated;
+const shared = 'e7112000-0000-4000-8000-000000000002';
+const independent = 'e7112000-0000-4000-8000-000000000008';
+const create = items => `SET LOCAL ROLE authenticated;
   SET LOCAL request.jwt.claim.sub='${actor}';
   SET LOCAL request.jwt.claims='{"sub":"${actor}","role":"authenticated"}';
-  SELECT id FROM public.create_purchase_order('${project}','${vendor}','net_30',ARRAY['${item}']::uuid[]);`;
+  SELECT id FROM public.create_purchase_order('${project}','${vendor}','net_30',ARRAY[${items.map(id => `'${id}'`).join(',')}]::uuid[]);`;
 
 class Session {
   constructor() {
     this.buffer = ''; this.errors = ''; this.pending = null;
-    this.child = spawn('psql', [url, '-XAtq', '-v', 'ON_ERROR_STOP=1'], {
+    this.child = spawn('psql', [url, '-XAtq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'], {
       stdio: ['pipe', 'pipe', 'pipe'], detached: true,
       env: { ...process.env, PGCONNECT_TIMEOUT: '3', PGOPTIONS: '-c statement_timeout=15000 -c lock_timeout=10000' },
     });
@@ -110,8 +112,8 @@ test('duplicate grouped PO drafts for one FF&E item serialize', { timeout: 90000
     await a.query(`BEGIN; ${fixture} COMMIT;`);
     const b = open(); const bPid = Number(await b.query('SELECT pg_backend_pid();'));
     const aPid = Number(await a.query('SELECT pg_backend_pid();'));
-    const winner = await a.query(`BEGIN; ${create}`);
-    const loser = b.query(`BEGIN; ${create} COMMIT;`).then(value => ({ value }), error => ({ error }));
+    const winner = await a.query(`BEGIN; ${create([item,shared])}`);
+    const loser = b.query(`BEGIN; ${create([shared,independent])} COMMIT;`).then(value => ({ value }), error => ({ error }));
     await a.query(`DO $wait$ DECLARE deadline timestamptz:=clock_timestamp()+interval '5s'; BEGIN
       WHILE NOT ${aPid}=ANY(pg_blocking_pids(${bPid})) LOOP
         IF clock_timestamp()>deadline THEN RAISE EXCEPTION 'second PO did not wait on item'; END IF;
@@ -119,9 +121,12 @@ test('duplicate grouped PO drafts for one FF&E item serialize', { timeout: 90000
       END LOOP;
     END $wait$; COMMIT;`);
     const outcome = await loser;
-    assert.match(outcome.error?.message ?? '', /already|linked|ordered|not available|conflict/i,
-      'losing PO refuses the already-claimed item without deadlock');
+    assert.match(outcome.error?.message ?? '',
+      /ERROR:\s+P0001: create_purchase_order: 1 FF&E item\(s\) are already linked to a purchase order(?:\r?\n|$)/,
+      'overlapping {1,2}/{2,8} sets refuse exactly one claimed line without a partial loser PO');
     assert.equal(await a.query(`SELECT purchase_order_id='${winner}' FROM public.project_ffe_items WHERE id='${item}';`), 't');
+    assert.equal(await a.query(`SELECT purchase_order_id='${winner}' FROM public.project_ffe_items WHERE id='${shared}';`), 't');
+    assert.equal(await a.query(`SELECT purchase_order_id IS NULL FROM public.project_ffe_items WHERE id='${independent}';`), 't');
     assert.equal(await a.query(`SELECT count(*)=1 FROM public.purchase_orders WHERE project_id='${project}'
       AND id NOT IN (SELECT id FROM public.purchase_orders WHERE id::text LIKE 'e7111000-%');`), 't');
   } finally {

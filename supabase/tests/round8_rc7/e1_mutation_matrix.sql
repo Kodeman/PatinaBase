@@ -8,6 +8,27 @@ DO $$ BEGIN RAISE EXCEPTION 'E1 mutation matrix requires inactive owned 58122'; 
 \endif
 BEGIN;
 SET LOCAL statement_timeout='90s';
+-- Shipped inactive ACL, before this transaction grants anything. A missing RPC is not a pass.
+DO $$ DECLARE signatures text[] := ARRAY[
+ 'respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text)',
+ 'record_service_acceptance_paper_intake(uuid,uuid,uuid,date,text,text,jsonb,text,integer,text,text,integer,text)',
+ 'review_service_acceptance_paper_intake(uuid,text,text,text,text)',
+ 'present_service_acceptance_offline(uuid,text,text,text)',
+ 'replace_service_acceptance_signer(uuid,uuid,uuid,uuid,integer,text,text)',
+ 'withdraw_service_acceptance_request(uuid,text,text)',
+ 'complete_studio_service(uuid,uuid,text,text)',
+ 'revoke_studio_service_completion(uuid,text)',
+ 'resolve_service_acceptance_condition(uuid,uuid,text,jsonb,text)',
+ 'stamp_service_acceptance_paper_hash(uuid,text,text,text)']; signature text; rpc regprocedure;
+BEGIN
+ FOREACH signature IN ARRAY signatures LOOP
+  rpc := to_regprocedure('public.'||signature);
+  IF rpc IS NULL OR has_function_privilege('authenticated',rpc,'EXECUTE')
+    OR has_function_privilege('anon',rpc,'EXECUTE') THEN
+   RAISE EXCEPTION 'shipped inactive RPC ACL is open or missing: %',signature;
+  END IF;
+ END LOOP;
+END $$;
 \ir ../round8/service_acceptance_release_fixes_body.psql
 SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role)
@@ -93,6 +114,17 @@ GRANT EXECUTE ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,text
  public.revoke_studio_service_completion(uuid,text),
  public.resolve_service_acceptance_condition(uuid,uuid,text,jsonb,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.stamp_service_acceptance_paper_hash(uuid,text,text,text) TO service_role;
+-- The capability must deny the authenticated caller inside the body, not via REVOKE.
+UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
+SELECT pg_temp.actor(1);
+SET LOCAL ROLE authenticated;
+INSERT INTO e1_outcomes SELECT 1,'inactive_granted',name,pg_temp.probe(command)
+ FROM e1_ops WHERE name<>'stamp_hash';
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=9 AND bool_and(result->>'state'='55000'
+ AND result->>'message'='scope_editions_inactive') FROM e1_outcomes WHERE phase='inactive_granted'),
+ 'X02 nine authenticated mutation RPCs refuse inside the inactive capability gate with grants present');
+UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
 SELECT pg_temp.actor(NULL);
 SET LOCAL ROLE service_role;
 SELECT pg_temp.assert_true(pg_temp.probe((SELECT command FROM e1_ops WHERE name='stamp_hash'))->'ok'->>'documentSha256'
@@ -102,8 +134,17 @@ RESET ROLE;
 SELECT format('SELECT pg_temp.actor(%s); SET LOCAL ROLE %s; INSERT INTO e1_outcomes SELECT %s,%L,name,pg_temp.probe(command) FROM e1_ops; RESET ROLE;',
  COALESCE(n::text,'NULL'),CASE WHEN n IS NULL THEN 'anon' ELSE 'authenticated' END,COALESCE(n::text,'NULL'),'active')
 FROM unnest(ARRAY[1,2,3,4,5,6,10,11,12,13,14,NULL::integer]) n \gexec
-UPDATE public.organization_members SET status='removed' WHERE user_id=pg_temp.uid(3)
- AND organization_id='f8961000-0000-4000-8000-000000000001';
+CREATE TEMP TABLE e1_member_deletions(id uuid);
+GRANT INSERT ON e1_member_deletions TO authenticated;
+SELECT pg_temp.actor(1);
+SET LOCAL ROLE authenticated;
+WITH removed AS (DELETE FROM public.organization_members WHERE id=(SELECT id
+ FROM public.organization_members WHERE user_id=pg_temp.uid(3)
+ AND organization_id='f8961000-0000-4000-8000-000000000001') RETURNING id)
+INSERT INTO e1_member_deletions SELECT id FROM removed;
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=1 FROM e1_member_deletions),
+ 'X02 removed admin loses privileges after the authenticated product-path DELETE');
 SELECT pg_temp.actor(3); SET LOCAL ROLE authenticated;
 INSERT INTO e1_outcomes SELECT 3,'revoked',name,pg_temp.probe(command) FROM e1_ops;
 RESET ROLE;
@@ -120,11 +161,12 @@ REVOKE EXECUTE ON FUNCTION public.respond_service_acceptance(uuid,text,jsonb,tex
 SELECT format('SELECT pg_temp.actor(%s); SET LOCAL ROLE %s; INSERT INTO e1_outcomes SELECT %s,%L,name,pg_temp.probe(command) FROM e1_ops; RESET ROLE;',
  COALESCE(n::text,'NULL'),CASE WHEN n IS NULL THEN 'anon' ELSE 'authenticated' END,COALESCE(n::text,'NULL'),'inactive')
 FROM unnest(ARRAY[1,2,3,4,5,6,10,11,12,13,14,NULL::integer]) n \gexec
-SELECT pg_temp.assert_true((SELECT count(*)=250 FROM e1_outcomes),
- 'X02 all ten mutation RPCs called in active and inactive modes for eleven authenticated actors and anon, plus removed admin');
+SELECT pg_temp.assert_true((SELECT count(*)=259 FROM e1_outcomes),
+ 'X02 250 actor/RPC probes plus nine granted authenticated inactive capability refusals');
 SELECT pg_temp.assert_true(NOT EXISTS (
  SELECT 1 FROM e1_outcomes o
  CROSS JOIN LATERAL (SELECT CASE
+  WHEN phase='inactive_granted' THEN '55000'
   WHEN phase='inactive' OR actor IS NULL OR actor IN (4,10,11,12,13,14)
     OR phase='revoked' OR operation='stamp_hash' THEN '42501'
   WHEN actor IN (5,6) THEN CASE WHEN operation='respond' THEN '55000' ELSE '42501' END
@@ -149,5 +191,5 @@ SELECT pg_temp.assert_true((SELECT count(*)=0 FROM public.service_acceptance_req
  AND (SELECT count(*)=0 FROM public.studio_service_completions WHERE client_request_id='e1-matrix-complete')
  AND (SELECT count(*)=0 FROM public.service_acceptance_responses WHERE client_request_id='e1-matrix-r'),
  'X02 probes roll back every successful mutation; refusals leave no duplicate');
-DO $$ BEGIN RAISE NOTICE 'E1 C4/C6 mutation matrix: 250 actor/RPC outcomes asserted'; END $$;
+DO $$ BEGIN RAISE NOTICE 'E1 C4/C6 mutation matrix: 259 actor/RPC outcomes asserted'; END $$;
 ROLLBACK;

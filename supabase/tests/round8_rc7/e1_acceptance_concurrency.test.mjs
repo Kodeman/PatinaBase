@@ -1,8 +1,6 @@
-// US-52 release review, fix lane F-A defect 1 (00896): a household card relinked
-// while its new profile responds. Two sessions race on the committed schema, in
-// both orders, on an owned LOCAL DB window only. Never installs migrations or
-// toggles scope_editions. Refuses without ownership.
-// Run: node --test --test-concurrency=1 supabase/tests/round8/service_acceptance_relink_concurrency.test.mjs
+// E1 adaptation of the round8 00896 relink fixture, with authenticated product-path
+// card updates and responses on the isolated 58122 database. Requires e1_activation.sql.
+// Run: node --test supabase/tests/round8_rc7/e1_acceptance_concurrency.test.mjs
 // Required env: SERVICE_ACCEPTANCE_DB_WINDOW=owned; scope_editions enabled; outbound workers stopped.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,7 +26,8 @@ function section(name) {
 }
 // A transaction-local caller, so a later statement never inherits it.
 const as = n => `SET LOCAL request.jwt.claim.sub=${literal(uid(n))};
-  SET LOCAL request.jwt.claims=${literal(JSON.stringify({ sub: uid(n), role: 'authenticated' }))};`;
+  SET LOCAL request.jwt.claims=${literal(JSON.stringify({ sub: uid(n), role: 'authenticated' }))};
+  SET LOCAL ROLE authenticated;`;
 
 // Each process owns one backend. ON_ERROR_STOP makes an expected SQL refusal
 // terminal for that client; finally closes/awaits every process before cleanup.
@@ -146,13 +145,14 @@ test('E1 C4 relink in both orders, collision, and simultaneous required signers'
     assert.equal(preflight, 't', 'committed 00896-00899, capability on, and empty owned fixture prefix required');
     fixtureOwned = true;
     await a.query(`BEGIN; ${section('assertion helpers')} ${section('fixture')} ${section('native helpers')}
-      ${section('origin')} COMMIT;`);
+      ${section('origin')} GRANT EXECUTE ON FUNCTION pg_temp.respond(uuid,text) TO authenticated; COMMIT;`);
     const aPid = await a.query('SELECT pg_backend_pid();');
     // Session a keeps the fixture's pg_temp helpers; each step runs as one short transaction.
     const step = async (actor, sql) => a.query(`BEGIN; SELECT pg_temp.actor(${actor}) \\g /dev/null
       ${sql}
       COMMIT;`);
-    const check = async (actor, sql, message) => assert.equal(await step(actor, `SELECT (${sql});`), 't', message);
+    const check = async (actor, sql, message) => assert.equal(await step(actor,
+      `${actor === 7 ? 'SET LOCAL ROLE authenticated;' : ''} SELECT (${sql});`), 't', message);
     // The winner holds its locks in session a; the loser must queue behind them in b.
     async function race(winner, loser) {
       const b = open();
@@ -177,13 +177,15 @@ test('E1 C4 relink in both orders, collision, and simultaneous required signers'
         FROM public.service_acceptance_requests WHERE id=pg_temp.req(${literal(key)});`));
     };
     // Plain SQL only: session b has none of a's pg_temp helpers.
-    const relink = (c, n) => `UPDATE public.studio_contacts SET profile_id=${literal(uid(n))} WHERE id=${literal(card(c))};`;
+    const relink = (c, n) => `${as(1)} UPDATE public.studio_contacts SET profile_id=${literal(uid(n))}
+      WHERE id=${literal(card(c))} RETURNING id;`;
     const respond = (req, n, key) => `${as(n)} SELECT public.respond_service_acceptance(${literal(req.id)},'accept','[]',NULL,
       ${literal(req.scope)},${literal(req.manifest)},${Number(req.revision)},${literal(key)})::text;`;
     const responses = req => `(SELECT jsonb_agg(jsonb_build_object('slot',s.slot,'by',x.responder_profile_id) ORDER BY s.slot)
       FROM public.service_acceptance_responses x JOIN public.service_acceptance_signers s ON s.id=x.signer_id
       WHERE x.request_id=${literal(req.id)})`;
-    const answer = async (n, key, k) => JSON.parse(await step(n, `SELECT pg_temp.respond(pg_temp.req(${literal(key)}),${literal(k)})::text;`));
+    const answer = async (n, key, k) => JSON.parse(await step(n, `SET LOCAL ROLE authenticated;
+      SELECT pg_temp.respond(pg_temp.req(${literal(key)}),${literal(k)})::text;`));
 
     // Order 1: the relink commits first. The co_client card moves onto 7, who
     // already holds the partner card; 7's queued response re-reads the links
@@ -225,7 +227,8 @@ test('E1 C4 relink in both orders, collision, and simultaneous required signers'
     assert.equal(await step(7, `SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'rc-r2-7b')$q$,pg_temp.req('r2')),
       '55000','signer_identity_collision','response first: 7 cannot take the co_client slot') \\g /dev/null
       SELECT n FROM assertion_count;`).then(n => Number(n) > 0), true);
-    assert.equal(JSON.parse(await step(7, `SELECT pg_temp.respond(pg_temp.req('r2'),'rc-r2-7')::text;`)).replayed, true,
+    assert.equal(JSON.parse(await step(7, `SET LOCAL ROLE authenticated;
+      SELECT pg_temp.respond(pg_temp.req('r2'),'rc-r2-7')::text;`)).replayed, true,
       'response first: 7 still replays its own receipt');
     await step(1, `SELECT pg_temp.replace(pg_temp.req('r2'),'co_client',pg_temp.card(5),'rc-r2-repair') \\g /dev/null`);
     const refused = await step(7, `SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'rc-r2-7c')$q$,pg_temp.req('r2')),

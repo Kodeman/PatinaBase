@@ -44,7 +44,7 @@ const choose = option => `${claims} SELECT (public.apply_client_decision('${deci
 class Session {
   constructor() {
     this.buffer = ''; this.errors = ''; this.pending = null;
-    this.child = spawn('psql', [url, '-XAtq', '-v', 'ON_ERROR_STOP=1'], {
+    this.child = spawn('psql', [url, '-XAtq', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'], {
       stdio: ['pipe', 'pipe', 'pipe'], detached: true,
       env: { ...process.env, PGCONNECT_TIMEOUT: '3', PGOPTIONS: '-c statement_timeout=15000 -c lock_timeout=10000' },
     });
@@ -139,8 +139,9 @@ test('competing client choices on the same selection decision serialize', { time
     END $wait$; COMMIT;`);
     const outcome = await loser;
     assert.equal(winner, 'responded');
-    assert.match(outcome.error?.message ?? '', /stale|conflict|different|already|serialization/i,
-      'competing choice refuses without overwriting the selected option');
+    assert.match(outcome.error?.message ?? '',
+      new RegExp(`ERROR:\\s+40001: decision ${decision} was already resolved with another option(?:\\r?\\n|$)`),
+      'competing choice returns the exact stale-choice SQLSTATE and message');
     assert.equal(await a.query(`SELECT status='responded' AND selected_by='${actor}'
       FROM public.client_decisions WHERE id='${decision}';`), 't');
     assert.equal(await a.query(`SELECT count(*)=1 AND bool_and(id='${first}') FROM public.client_decision_options
