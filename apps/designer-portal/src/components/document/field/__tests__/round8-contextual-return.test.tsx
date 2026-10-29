@@ -66,7 +66,7 @@ function clickRoom(before?: () => void) {
 
 describe('contextual Field reading', () => {
   it.each([
-    ['plan_print', 'Print', 'd2f47188-61f4-4bf1-b843-f62e67218633', 'subject_print_label', 'A-201 · Kitchen elevation'],
+    ['plan_print', 'Print', 'd2f47188-61f4-4bf1-b843-f62e67218633', 'subject_print_label', 'A-201 rev B · Kitchen elevation'],
     ['plan_issue', 'Issue', 'a5fbdb65-5bea-4c86-87b8-b4c6b60689fd', 'subject_issue_label', 'Issue 2 · Drawing set'],
   ] as const)(
     'reads labeled %s provenance without inventing adjacent lineage or acceptance', (kind, label, id, key, humanLabel) => {
@@ -99,33 +99,63 @@ describe('contextual Field reading', () => {
     expect(mockMedia).toHaveBeenCalled();
   });
 
+  it('keeps the room return usable without claiming a hidden room is untitled', () => {
+    const roomId = '1432fd92-b0ca-4bb4-b7fd-90c6b634692c';
+    show({ field_capture_id: '5eb1a898-73b2-4f86-b7e9-58521ac0b69f', capture_visible: true,
+      project_room_id: roomId, capture_kind: 'note' });
+    expect(screen.getByRole('link', { name: 'Return to room' }))
+      .toHaveAttribute('href', `/doc/project?unfold=pieces&lens=spec&room=${roomId}`);
+    expectNoVisibleUuid();
+  });
+
+  it.each([
+    ['ffe_item', 'FF&E item', 'subject_ffe_label', 'Oak table'],
+    ['purchase_order', 'Purchase order', 'subject_order_label', 'PO-104'],
+    ['coordination_item', 'Coordination item', 'subject_coordination_label', 'Confirm fabric'],
+    ['project_package', 'Project package', 'subject_package_label', 'CAB-01 · Cabinetry'],
+  ] as const)('shows the recorded %s label or only its kind when hidden', (kind, kindLabel, key, label) => {
+    const id = '3a314327-32ad-42ee-bb39-cd928c186d46';
+    const first = show({ subject_kind: kind, subject_id: id, [key]: label });
+    expect(value('Subject').textContent).toBe(`${kindLabel} · ${label}`);
+    expectNoVisibleUuid();
+    first.unmount();
+    show({ subject_kind: kind, subject_id: id });
+    expect(value('Subject').textContent).toBe(kindLabel);
+    expectNoVisibleUuid();
+  });
+
   it('does not infer a room or private media from an invisible capture', () => {
-    show({ field_capture_id: 'capture-exact', capture_visible: false, project_room_id: 'private-room',
+    const captureId = 'da53547c-8e22-4843-b715-178589706fbb';
+    const roomId = '8692f45b-6764-4b61-aec3-af76a601d865';
+    show({ field_capture_id: captureId, capture_visible: false, project_room_id: roomId,
       capture_title: 'Private capture', capture_room_name: 'Private bedroom',
       audio_path: 'private-audio', photo_paths: ['private-photo'], has_audio: true });
     expect(value('Source')).toHaveTextContent('Field capture unavailable');
     expect(value('Room')).toHaveTextContent('Not recorded');
+    expectNoVisibleUuid();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
-    expect(screen.queryByText(/private-room|private-audio|private-photo|Private bedroom|Private capture/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/private-audio|private-photo|Private bedroom|Private capture/)).not.toBeInTheDocument();
     expect(mockMedia).not.toHaveBeenCalled();
     expect(screen.getByText('The capture is unavailable to you.')).toBeInTheDocument();
     expect(screen.queryByText(/author’s/)).not.toBeInTheDocument();
   });
 
   it('preserves an explicit project-room subject independently of unavailable capture metadata', () => {
-    show({ subject_kind: 'project_room', subject_id: 'explicit-room', subject_room_name: 'Living room', field_capture_id: 'capture',
-      capture_visible: false, project_room_id: 'private-room', capture_room_name: 'Private bedroom' });
+    const roomId = 'f2b76be9-597e-46f1-8a2f-0b9069f91862';
+    show({ subject_kind: 'project_room', subject_id: roomId, subject_room_name: 'Living room', field_capture_id: '4dfd18db-8f0e-40fd-90d4-50af5cf095d1',
+      capture_visible: false, project_room_id: '7321c8e6-76ae-439a-b486-376f5351c81f', capture_room_name: 'Private bedroom' });
     expect(value('Subject')).toHaveTextContent('Room · Living room');
-    expect(screen.getByRole('link', { name: 'Return to room · Living room' })).toHaveAttribute('href', '/doc/project?unfold=pieces&lens=spec&room=explicit-room');
-    expect(screen.queryByText(/private-room|Private bedroom/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Return to room · Living room' })).toHaveAttribute('href', `/doc/project?unfold=pieces&lens=spec&room=${roomId}`);
+    expectNoVisibleUuid();
+    expect(screen.queryByText(/Private bedroom/)).not.toBeInTheDocument();
   });
 
-  it('uses honest placeholders when a recorded subject or capture lacks labels', () => {
+  it('shows only the kind when a subject label is not visible', () => {
     const id = '4b88235c-5ad3-4e89-a1c2-94e4fc7d2420';
     show({ subject_kind: 'plan_print', subject_id: id, field_capture_id: id,
       capture_visible: true, capture_kind: 'note', capture_date: '2026-10-26T12:00:00Z' });
-    expect(value('Subject')).toHaveTextContent('Print · Untitled print');
-    expect(value('Print')).toHaveTextContent('Untitled print');
+    expect(value('Subject').textContent).toBe('Print');
+    expect(value('Print').textContent).toBe('Print');
     expect(value('Source')).toHaveTextContent('Field capture · note · 26 October');
     expectNoVisibleUuid();
     expect(screen.getByLabelText('Note context')).not.toHaveTextContent(id);

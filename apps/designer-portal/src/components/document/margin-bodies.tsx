@@ -837,26 +837,36 @@ export function NoteContext({ row, projectId, onBeforeRoomOpen }: {
   const id = recorded(p.subject_id);
   const capture = recorded(p.field_capture_id);
   const captureLabel = (title: unknown, captureKind: unknown, date: unknown) => {
-    const name = recorded(title) ?? recorded(captureKind)?.replaceAll('_', ' ') ?? 'Untitled capture';
-    return `${name}${recorded(date) ? ` · ${fmtDay(date as string)}` : ''}`;
+    const name = recorded(title) ?? recorded(captureKind)?.replaceAll('_', ' ');
+    const day = recorded(date);
+    return [name, day ? fmtDay(day) : null].filter(Boolean).join(' · ') || null;
   };
-  const subjectLabel = kind === 'project_room' ? recorded(p.subject_room_name) ?? 'Untitled room'
-    : kind === 'plan_print' ? recorded(p.subject_print_label) ?? 'Untitled print'
-    : kind === 'plan_issue' ? recorded(p.subject_issue_label) ?? 'Untitled issue'
-    : kind === 'field_capture' ? captureLabel(p.subject_capture_title, p.subject_capture_kind, p.subject_capture_date)
-    : kind === 'ffe_item' ? 'Untitled item'
-    : kind ? `Untitled ${kind.replaceAll('_', ' ')}` : null;
   const subjectKindLabel: Record<string, string> = {
     project_room: 'Room', plan_print: 'Print', plan_issue: 'Issue',
     field_capture: 'Field capture', ffe_item: 'FF&E item',
+    purchase_order: 'Purchase order', coordination_item: 'Coordination item',
+    project_package: 'Project package',
   };
-  const subject = kind && id ? kind === 'plan_issue' ? subjectLabel : `${subjectKindLabel[kind] ?? kind.replaceAll('_', ' ')} · ${subjectLabel}` : 'Not recorded';
+  const kindLabel = kind ? subjectKindLabel[kind] ?? kind.replaceAll('_', ' ') : null;
+  const subjectLabel = kind === 'project_room' ? recorded(p.subject_room_name)
+    : kind === 'plan_print' ? recorded(p.subject_print_label)
+    : kind === 'plan_issue' ? recorded(p.subject_issue_label)
+    : kind === 'field_capture' ? captureLabel(p.subject_capture_title, p.subject_capture_kind, p.subject_capture_date)
+    : kind === 'ffe_item' ? recorded(p.subject_ffe_label)
+    : kind === 'purchase_order' ? recorded(p.subject_order_label)
+    : kind === 'coordination_item' ? recorded(p.subject_coordination_label)
+    : kind === 'project_package' ? recorded(p.subject_package_label) : null;
+  const subject = kindLabel && id
+    ? kind === 'plan_issue' && subjectLabel ? subjectLabel
+      : subjectLabel ? `${kindLabel} · ${subjectLabel}` : kindLabel
+    : 'Not recorded';
   // A capture's room is usable only when the joined capture was visible.
   const room = p.capture_visible === true ? recorded(p.project_room_id) : null;
   const roomId = kind === 'project_room' ? id : room;
-  const roomName = (kind === 'project_room' ? recorded(p.subject_room_name) : room ? recorded(p.capture_room_name) : null) ?? 'Untitled room';
+  const roomName = kind === 'project_room' ? recorded(p.subject_room_name) : room ? recorded(p.capture_room_name) : null;
+  const captureName = p.capture_visible === true ? captureLabel(p.capture_title, p.capture_kind, p.capture_date) : null;
   const source = capture
-    ? p.capture_visible === true ? `Field capture · ${captureLabel(p.capture_title, p.capture_kind, p.capture_date)}` : 'Field capture unavailable'
+    ? p.capture_visible === true ? `Field capture${captureName ? ` · ${captureName}` : ''}` : 'Field capture unavailable'
     : 'Studio note';
   return (
     <dl aria-label="Note context" className="mb-2 text-[12px] text-[var(--text-muted)]">
@@ -884,11 +894,11 @@ export function NoteContext({ row, projectId, onBeforeRoomOpen }: {
             );
           }}
         >
-          Return to room · {roomName}
+          Return to room{roomName ? ` · ${roomName}` : ''}
         </Link>
       ) : 'Not recorded'}</dd>
-      <dt>Print</dt><dd>{kind === 'plan_print' && id ? subjectLabel : 'Not recorded'}</dd>
-      <dt>Issue</dt><dd>{kind === 'plan_issue' && id ? subjectLabel : 'Not recorded'}</dd>
+      <dt>Print</dt><dd>{kind === 'plan_print' && id ? subjectLabel ?? 'Print' : 'Not recorded'}</dd>
+      <dt>Issue</dt><dd>{kind === 'plan_issue' && id ? subjectLabel ?? 'Issue' : 'Not recorded'}</dd>
       <dt>Scope</dt><dd>Not recorded</dd>
       <dt>Author</dt><dd>{recorded(p.author_name) ?? 'Not recorded'}</dd>
       <dt>Next owner</dt><dd>Not recorded</dd>

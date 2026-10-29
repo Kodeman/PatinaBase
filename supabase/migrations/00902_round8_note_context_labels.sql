@@ -216,9 +216,9 @@ from (
 union all
 
 -- ── note (R14 — designer-authored marginalia; studio-only via RLS) ──────────
--- 00874 changed only this branch relative to 00282. This definition retains
--- all 11 view columns and every other 00874 branch unchanged; only the note
--- payload and RLS-governed label joins below are extended.
+-- 00282 → 00543 → 00613 → 00874: this definition retains all 11 view
+-- columns and every other 00874 branch unchanged; only the note payload and
+-- RLS-governed label joins below are extended.
 --
 --   What changes, and why:
 --   1. `title` STAYS `left(n.body, 80)`. It is the rail's one-line lede and
@@ -276,8 +276,14 @@ select
     'capture_date', fc.captured_at,
     'capture_room_name', capture_room.name,
     'subject_room_name', subject_room.name,
-    'subject_print_label', concat_ws(' · ', nullif(btrim(subject_sheet.sheet_number), ''), nullif(btrim(subject_sheet.title), '')),
-    'subject_issue_label', concat_ws(' · ', 'Issue ' || subject_issue.issue_number, nullif(btrim(subject_issue.name), '')),
+    'subject_print_label', case when subject_sheet.id is not null then nullif(concat_ws(' · ',
+      concat_ws(' ', nullif(btrim(subject_sheet.sheet_number), ''), 'rev ' || subject_print.rev_letter),
+      nullif(btrim(subject_sheet.title), '')), '') end,
+    'subject_issue_label', nullif(concat_ws(' · ', 'Issue ' || subject_issue.issue_number, nullif(btrim(subject_issue.name), '')), ''),
+    'subject_ffe_label', subject_ffe.name,
+    'subject_order_label', coalesce(nullif(btrim(subject_order.po_number), ''), nullif(btrim(subject_order.vendor_po_number), ''), nullif(btrim(subject_order.sidemark), '')),
+    'subject_coordination_label', subject_coordination.title,
+    'subject_package_label', nullif(concat_ws(' · ', nullif(btrim(subject_package.code), ''), nullif(btrim(subject_package.title), '')), ''),
     'subject_capture_title', subject_capture.title,
     'subject_capture_kind', subject_capture.capture_kind,
     'subject_capture_date', subject_capture.captured_at,
@@ -323,6 +329,10 @@ left join project_rooms subject_room on subject_room.id = n.subject_id and subje
 left join plan_prints subject_print on subject_print.id = n.subject_id and n.subject_kind = 'plan_print'
 left join plan_sheets subject_sheet on subject_sheet.id = subject_print.sheet_id and subject_sheet.project_id = n.project_id
 left join plan_issues subject_issue on subject_issue.id = n.subject_id and subject_issue.project_id = n.project_id and n.subject_kind = 'plan_issue'
+left join project_ffe_items subject_ffe on subject_ffe.id = n.subject_id and subject_ffe.project_id = n.project_id and n.subject_kind = 'ffe_item'
+left join purchase_orders subject_order on subject_order.id = n.subject_id and subject_order.project_id = n.project_id and n.subject_kind = 'purchase_order'
+left join client_decisions subject_coordination on subject_coordination.id = n.subject_id and subject_coordination.project_id = n.project_id and n.subject_kind = 'coordination_item'
+left join project_packages subject_package on subject_package.id = n.subject_id and subject_package.project_id = n.project_id and n.subject_kind = 'project_package'
 left join field_captures subject_capture on subject_capture.id = n.subject_id and subject_capture.project_id = n.project_id and n.subject_kind = 'field_capture'
 
 union all
