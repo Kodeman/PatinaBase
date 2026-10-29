@@ -322,6 +322,7 @@ export interface PresentServiceAcceptanceOfflineArgs {
   requestId: string; scopeContentHash: string; evidenceManifestHash: string;
 }
 export interface ServiceAcceptanceOfflineReceipt {
+  /** The presentation's effect: a replay reads 'sent' even after a later withdrawal or close (00899). */
   requestId: string; lifecycle: 'sent'; sentAt: string; offlinePresentedAt: string; offlinePresentedBy: string;
   replayed: boolean;
 }

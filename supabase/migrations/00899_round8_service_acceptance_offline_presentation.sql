@@ -19,8 +19,9 @@
 --     plan (authenticated) with its exact inverse;
 --   * takes the §2.3 locks (project FOR UPDATE, edition, request, signers);
 --   * replays its receipt for the same caller and payload before any
---     lifecycle check (R15); another caller or payload under the key is
---     idempotency_key_reused;
+--     lifecycle check (R15), always with lifecycle 'sent' (the effect it
+--     recorded, not the request's current lifecycle); another caller or
+--     payload under the key is idempotency_key_reused;
 --   * needs lifecycle 'draft' (request_not_open), and both presented hashes
 --     equal to the request's with its edition still active (stale_scope);
 --   * moves the request draft -> sent with sent_at = offline_presented_at =
@@ -246,7 +247,9 @@ BEGIN
     IF v_request.offline_presented_by <> v_uid OR v_request.offline_present_request_hash <> v_hash THEN
       RAISE EXCEPTION 'idempotency_key_reused' USING ERRCODE = 'unique_violation';
     END IF;
-    RETURN jsonb_build_object('requestId', v_request.id, 'lifecycle', v_request.lifecycle,
+    -- The receipt is the presentation's effect, so a replay always reads
+    -- 'sent', even after a later withdrawal, supersession or close.
+    RETURN jsonb_build_object('requestId', v_request.id, 'lifecycle', 'sent',
       'sentAt', v_request.sent_at, 'offlinePresentedAt', v_request.offline_presented_at,
       'offlinePresentedBy', v_request.offline_presented_by, 'replayed', true);
   END IF;

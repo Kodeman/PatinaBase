@@ -435,8 +435,48 @@ SET LOCAL session_replication_role=replica;
 INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
 ('f8968000-0000-4000-8000-000000000002',pg_temp.project('origin2'),NULL,'service_acceptance','[]',repeat('b',64),repeat('2',64),'rf-2',pg_temp.uid(1));
 SET LOCAL session_replication_role=origin;
+-- A nonempty manifest: one plan print, whose client projection is its sheet
+-- and whose served file is a project-documents object.
+CREATE FUNCTION pg_temp.plan_manifest(origin text, n integer) RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE p uuid := pg_temp.project(origin); path text := pg_temp.project(origin)::text||'/release-evidence-'||n||'.pdf';
+  doc uuid := ('f896d000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+  sheet uuid := ('f896d100-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+  batch uuid := ('f896d200-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+  print uuid := ('f896d300-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid;
+BEGIN
+  SET LOCAL session_replication_role=replica;
+  INSERT INTO public.project_documents(id,project_id,title,storage_path,client_visible,uploaded_by)
+  VALUES (doc,p,'Release plan '||n,path,false,pg_temp.uid(1));
+  INSERT INTO storage.objects(bucket_id,name,owner_id,metadata)
+  VALUES ('project-documents',path,pg_temp.uid(1)::text,'{"mimetype":"application/pdf"}');
+  INSERT INTO public.plan_sheets(id,project_id,sheet_number,title,state,current_print_number,current_print_id,created_by)
+  VALUES (sheet,p,'A-90'||n,'Release sheet '||n,'shared',1,print,pg_temp.uid(1));
+  INSERT INTO public.plan_print_batches(id,project_id,idempotency_key,request_hash,item_count)
+  VALUES (batch,p,'rf-batch-'||n,repeat('9',64),1);
+  INSERT INTO public.plan_prints(id,sheet_id,batch_id,print_number,rev_letter,project_document_id,sha256,source,created_by)
+  VALUES (print,sheet,batch,1,'A',doc,repeat('c',64),'upload',pg_temp.uid(1));
+  SET LOCAL session_replication_role=origin;
+  RETURN public.create_evidence_manifest(p,NULL,'service_acceptance',jsonb_build_array(
+    jsonb_build_object('kind','plan_print','id',print,'sha256',repeat('c',64),'rev','A')),'rf-manifest-'||n);
+END $$;
+CREATE FUNCTION pg_temp.manifest_hash(k text) RETURNS text LANGUAGE sql AS $$
+  SELECT manifest_hash FROM public.evidence_manifests WHERE id=(pg_temp.v(k)->>'manifestId')::uuid;
+$$;
+-- Both send-time snapshot tables for a request, as one comparable value.
+CREATE FUNCTION pg_temp.snap(req uuid) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object(
+    'members',(SELECT jsonb_agg(to_jsonb(s) ORDER BY s.ordinal) FROM public.service_acceptance_evidence_snapshots s
+      WHERE s.request_id=req),
+    'objects',(SELECT jsonb_agg(to_jsonb(o) ORDER BY o.ordinal,o.object_name)
+      FROM public.service_acceptance_evidence_snapshot_objects o WHERE o.request_id=req));
+$$;
+CREATE FUNCTION pg_temp.timing(req uuid) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object('lifecycle',lifecycle,'sentAt',sent_at,'offlinePresentedAt',offline_presented_at,
+    'offlinePresentedBy',offline_presented_by) FROM public.service_acceptance_requests WHERE id=req;
+$$;
 SELECT pg_temp.actor(1);
-INSERT INTO sa_results VALUES('p1',pg_temp.create('rf-p1','origin2','f8968000-0000-4000-8000-000000000002'));
+INSERT INTO sa_results VALUES('m2',pg_temp.plan_manifest('origin2',2));
+INSERT INTO sa_results VALUES('p1',pg_temp.create('rf-p1','origin2',pg_temp.v('m2')->>'manifestId'));
 SELECT pg_temp.assert_true((SELECT lifecycle='draft' AND sent_at IS NULL FROM public.service_acceptance_requests WHERE id=pg_temp.req('p1'))
   AND (SELECT count(*)=2 AND bool_and(to_address IS NULL AND status='awaiting_review' AND delivered_at IS NULL)
     FROM public.outbound_drafts WHERE ref_type='service_acceptance_request' AND ref_id=pg_temp.req('p1')),
@@ -489,9 +529,26 @@ SELECT pg_temp.assert_true((SELECT lifecycle='sent' AND sent_at=offline_presente
     AND offline_present_client_request_id='rf-present' AND offline_present_request_hash ~ '^[0-9a-f]{64}$'
     AND scope_edition_id=pg_temp.ed('origin2')
     AND scope_content_hash=(SELECT content_hash FROM public.project_scope_editions WHERE id=pg_temp.ed('origin2'))
-    AND evidence_manifest_hash=repeat('b',64) AND aggregate_outcome='pending'
+    AND evidence_manifest_hash=pg_temp.manifest_hash('m2') AND aggregate_outcome='pending'
   FROM public.service_acceptance_requests WHERE id=pg_temp.req('p1')),
   'D4: the request is sent, bound to the same edition and evidence hash, attributed to the admin');
+SELECT pg_temp.assert_true((SELECT count(*)=1 AND bool_and(member_kind='plan_print'
+      AND member_id='f896d300-0000-4000-8000-000000000002' AND title='A-902 Release sheet 2' AND issued_at IS NOT NULL)
+    FROM public.service_acceptance_evidence_snapshots WHERE request_id=pg_temp.req('p1'))
+  AND (SELECT count(*)=1 AND bool_and(bucket_id='project-documents'
+      AND object_name=pg_temp.project('origin2')::text||'/release-evidence-2.pdf'
+      AND object_id=(SELECT id FROM storage.objects WHERE bucket_id='project-documents'
+        AND name=pg_temp.project('origin2')::text||'/release-evidence-2.pdf'))
+    FROM public.service_acceptance_evidence_snapshot_objects WHERE request_id=pg_temp.req('p1')),
+  'D4 freeze: the presentation snapshots the member''s projection (sheet title, issued time) and pins its served object');
+INSERT INTO sa_results VALUES('p1-snap',pg_temp.snap(pg_temp.req('p1')));
+SELECT pg_temp.expect_error(format($q$UPDATE public.service_acceptance_evidence_snapshots SET title='Changed'
+  WHERE request_id=%L$q$,pg_temp.req('p1')),'23514','cannot be changed','D4 freeze: the member snapshot cannot be changed');
+SELECT pg_temp.expect_error(format($q$DELETE FROM public.service_acceptance_evidence_snapshots WHERE request_id=%L$q$,
+  pg_temp.req('p1')),'23514','cannot be changed','D4 freeze: the member snapshot cannot be deleted');
+SELECT pg_temp.expect_error(format($q$DELETE FROM public.service_acceptance_evidence_snapshot_objects WHERE request_id=%L$q$,
+  pg_temp.req('p1')),'23514','cannot be changed','D4 freeze: the pinned object cannot be unpinned');
+SELECT pg_temp.assert_true(pg_temp.snap(pg_temp.req('p1'))=pg_temp.v('p1-snap'),'D4 freeze: the snapshot is unchanged');
 SELECT pg_temp.assert_true((SELECT jsonb_agg(to_jsonb(d) ORDER BY d.id) FROM public.outbound_drafts d
     WHERE ref_type='service_acceptance_request' AND ref_id=pg_temp.req('p1'))=pg_temp.v('p1-drafts')
   AND NOT EXISTS (SELECT 1 FROM public.service_acceptance_responses WHERE request_id=pg_temp.req('p1')),
@@ -546,5 +603,145 @@ SELECT pg_temp.assert_true((SELECT count(*)=2 AND bool_and(method='paper_intake'
   AND NOT EXISTS (SELECT 1 FROM public.outbound_drafts WHERE ref_type='service_acceptance_request'
     AND ref_id=pg_temp.req('p1') AND (delivered_at IS NOT NULL OR status IN ('sending','sent'))),
   'D4: both answers are reviewed paper, never a client response, and no notice was ever delivered');
+SELECT pg_temp.assert_true(pg_temp.snap(pg_temp.req('p1'))=pg_temp.v('p1-snap'),
+  'D4 freeze: paper review and the close leave the snapshot as presented');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.assert_true((SELECT r->>'lifecycle'='sent' AND (r->>'replayed')::boolean
+    AND r->>'sentAt'=pg_temp.v('present')->>'sentAt' FROM pg_temp.present(pg_temp.req('p1'),'rf-present') r)
+  AND (SELECT lifecycle='closed' FROM public.service_acceptance_requests WHERE id=pg_temp.req('p1')),
+  'D4 replay: after the close the receipt still reads its own effect, sent');
+
+-- Replay after a withdrawal: the receipt stays 'sent'; the request stays withdrawn.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('w1',pg_temp.create('rf-w1','origin2',pg_temp.v('m2')->>'manifestId'));
+SELECT pg_temp.actor(3);
+INSERT INTO sa_results VALUES('w1-present',pg_temp.present(pg_temp.req('w1'),'rf-present-w1'));
+SELECT pg_temp.actor(1);
+SELECT public.withdraw_service_acceptance_request(pg_temp.req('w1'),'Scope is changing','rf-w1-withdraw');
+SELECT pg_temp.actor(3);
+SELECT pg_temp.assert_true((SELECT r->>'lifecycle'='sent' AND (r->>'replayed')::boolean
+    AND r->>'offlinePresentedAt'=pg_temp.v('w1-present')->>'offlinePresentedAt'
+    FROM pg_temp.present(pg_temp.req('w1'),'rf-present-w1') r)
+  AND (SELECT lifecycle='withdrawn' FROM public.service_acceptance_requests WHERE id=pg_temp.req('w1')),
+  'D4 replay: after a withdrawal the receipt reads sent and the request stays withdrawn');
+
+-- A held notice delivered after the presentation changes nothing: the
+-- after-send finds the request already sent (household policy, origin project).
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('m1',pg_temp.plan_manifest('origin',1));
+INSERT INTO sa_results VALUES('h1',pg_temp.create('rf-h1','origin',pg_temp.v('m1')->>'manifestId'));
+SELECT pg_temp.actor(3);
+SELECT pg_temp.present(pg_temp.req('h1'),'rf-present-h1');
+INSERT INTO sa_results VALUES('h1-snap',pg_temp.snap(pg_temp.req('h1')));
+INSERT INTO sa_results VALUES('h1-timing',pg_temp.timing(pg_temp.req('h1')));
+SELECT pg_temp.assert_true(jsonb_array_length(pg_temp.v('h1-snap')->'members')=1
+  AND jsonb_array_length(pg_temp.v('h1-snap')->'objects')=1
+  AND NOT EXISTS (SELECT 1 FROM public.outbound_drafts WHERE ref_type='service_acceptance_request'
+    AND ref_id=pg_temp.req('h1') AND (delivered_at IS NOT NULL OR status<>'awaiting_review')),
+  'D4 freeze: a household request presented on paper is frozen and its notices are still held');
+SELECT pg_temp.actor(1);
+SELECT pg_temp.deliver(pg_temp.req('h1'));
+SELECT pg_temp.assert_true((SELECT status='sent' AND delivered_at IS NOT NULL FROM public.outbound_drafts
+    WHERE id=(SELECT outbound_draft_id FROM public.service_acceptance_requests WHERE id=pg_temp.req('h1')))
+  AND pg_temp.timing(pg_temp.req('h1'))=pg_temp.v('h1-timing')
+  AND pg_temp.snap(pg_temp.req('h1'))=pg_temp.v('h1-snap'),
+  'D4 freeze: delivering a held notice later keeps the sent and presented times and the snapshot');
+
+-- Delivery first: the email send freezes the evidence; presenting is refused and changes nothing.
+INSERT INTO sa_results VALUES('h2',pg_temp.create('rf-h2','origin',pg_temp.v('m1')->>'manifestId'));
+SELECT pg_temp.deliver(pg_temp.req('h2'));
+INSERT INTO sa_results VALUES('h2-snap',pg_temp.snap(pg_temp.req('h2')));
+INSERT INTO sa_results VALUES('h2-timing',pg_temp.timing(pg_temp.req('h2')));
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present-h2')$q$,pg_temp.req('h2')),'55000',
+  'request_not_open','D4: a request delivered by email cannot then be presented on paper');
+SELECT pg_temp.assert_true(jsonb_array_length(pg_temp.v('h2-snap')->'objects')=1
+  AND pg_temp.snap(pg_temp.req('h2'))=pg_temp.v('h2-snap') AND pg_temp.timing(pg_temp.req('h2'))=pg_temp.v('h2-timing')
+  AND pg_temp.v('h2-timing')->'offlinePresentedAt'='null'::jsonb,
+  'D4: the refused presentation leaves the delivered request and its snapshot as sent');
+
+-- A freeze that fails rolls the whole presentation back.
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('h3',pg_temp.create('rf-h3','origin',pg_temp.v('m1')->>'manifestId'));
+SAVEPOINT freeze_fails;
+SET LOCAL session_replication_role=replica;
+DELETE FROM storage.objects WHERE bucket_id='project-documents' AND name=pg_temp.project()::text||'/release-evidence-1.pdf';
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(3);
+SELECT pg_temp.expect_error(format($q$SELECT pg_temp.present(%L,'rf-present-h3')$q$,pg_temp.req('h3')),'23514',
+  'service_acceptance_evidence_object_missing','D4: presenting refuses when a served object is missing');
+SELECT pg_temp.assert_true(pg_temp.timing(pg_temp.req('h3'))=jsonb_build_object('lifecycle','draft','sentAt',NULL,
+    'offlinePresentedAt',NULL,'offlinePresentedBy',NULL)
+  AND (SELECT offline_present_client_request_id IS NULL FROM public.service_acceptance_requests WHERE id=pg_temp.req('h3'))
+  AND pg_temp.snap(pg_temp.req('h3'))=jsonb_build_object('members',NULL,'objects',NULL),
+  'D4: the failed freeze leaves the request a draft with no presentation and no snapshot');
+ROLLBACK TO SAVEPOINT freeze_fails;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Defect 2 on completion: the designer of record of a non-active studio.
+-- ───────────────────────────────────────────────────────────────────────────
+SELECT pg_temp.actor(1);
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.plan_issues(id,project_id,issue_number,name,idempotency_key,request_hash,set_checksum,sheet_count,created_by)
+VALUES ('f896e000-0000-4000-8000-000000000001',pg_temp.project(),90,'Completion evidence','rf-issue',repeat('1',64),
+  repeat('2',64),1,pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('r4',pg_temp.create('rf-r4'));
+SELECT pg_temp.deliver(pg_temp.req('r4'));
+SELECT pg_temp.actor(5);
+SELECT public.respond_service_acceptance(r.id,'accept_with_conditions','[{"text":"Touch up the paint"}]'::jsonb,NULL,
+  r.scope_content_hash,r.evidence_manifest_hash,r.signer_policy_revision,'rf-r4-5')
+FROM public.service_acceptance_requests r WHERE r.id=pg_temp.req('r4');
+SELECT pg_temp.actor(6); SELECT pg_temp.respond(pg_temp.req('r4'),'rf-r4-6');
+SELECT pg_temp.actor(7); SELECT pg_temp.respond(pg_temp.req('r4'),'rf-r4-7');
+SELECT pg_temp.actor(1);
+CREATE FUNCTION pg_temp.condition4() RETURNS uuid LANGUAGE sql AS $$
+  SELECT (c->>'conditionId')::uuid FROM public.service_acceptance_responses x, jsonb_array_elements(x.conditions) c
+  WHERE x.request_id=pg_temp.req('r4') AND x.response='accept_with_conditions';
+$$;
+CREATE FUNCTION pg_temp.settle(k text) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.resolve_service_acceptance_condition(pg_temp.req('r4'),pg_temp.condition4(),'Done on site',
+    '{"issueId":"f896e000-0000-4000-8000-000000000001"}'::jsonb,k);
+$$;
+-- Hand the job to 2, a plain member, so only the designer-of-record branch
+-- can grant (the owner and admin would also pass the admin branch).
+SET LOCAL session_replication_role=replica;
+UPDATE public.projects SET designer_id=pg_temp.uid(2) WHERE id=pg_temp.project();
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(2);
+SELECT pg_temp.assert_true((SELECT lifecycle='closed' AND aggregate_outcome='accepted_with_conditions'
+    FROM public.service_acceptance_requests WHERE id=pg_temp.req('r4'))
+  AND pg_temp.condition4() IS NOT NULL
+  AND (SELECT designer_id=pg_temp.uid(2) AND studio_id='f8961000-0000-4000-8000-000000000001'
+    FROM public.projects WHERE id=pg_temp.project())
+  AND NOT public._is_service_acceptance_studio_admin(pg_temp.project())
+  AND public._can_complete_studio_service(pg_temp.project()),
+  'D2 fixture: 2, a plain member, is the designer of record of studio A''s job, accepted with one condition');
+SELECT pg_temp.studio('suspended');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.complete('rf-done-dor')$q$,'42501','insufficient_privilege',
+  'D2: a suspended studio''s designer of record cannot complete the service');
+SELECT pg_temp.assert_true((public.get_studio_service_completion(pg_temp.project())->>'projectId')::uuid=pg_temp.project(),
+  'D2: the designer of record still reads the completion record (self-read unchanged)');
+SELECT pg_temp.studio('active');
+SELECT pg_temp.actor(2);
+INSERT INTO sa_results VALUES('done-dor',pg_temp.complete('rf-done-dor'));
+SELECT pg_temp.assert_true(pg_temp.v('done-dor')->>'state'='completed_with_conditions',
+  'D2 control: on an active studio the designer of record completes, with the condition open');
+SELECT pg_temp.studio('deactivated');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.expect_error($q$SELECT pg_temp.settle('rf-settle')$q$,'42501','insufficient_privilege',
+  'D2: a deactivated studio''s designer of record cannot resolve the condition');
+SELECT pg_temp.assert_true((SELECT state='completed_with_conditions' FROM public.studio_service_completions
+    WHERE id=(pg_temp.v('done-dor')->>'completionId')::uuid)
+  AND NOT EXISTS (SELECT 1 FROM public.service_acceptance_condition_resolutions WHERE request_id=pg_temp.req('r4')),
+  'D2: the refusal records no resolution and does not advance the completion');
+SELECT pg_temp.studio('active');
+SELECT pg_temp.actor(2);
+SELECT pg_temp.settle('rf-settle');
+SELECT pg_temp.assert_true((SELECT state='completed' FROM public.studio_service_completions
+    WHERE id=(pg_temp.v('done-dor')->>'completionId')::uuid),
+  'D2 control: on an active studio the designer of record resolves it, and the completion advances to completed');
 
 DO $$ BEGIN RAISE NOTICE 'release fixes: PASS % assertions', (SELECT n FROM assertion_count); END $$;
