@@ -142,8 +142,10 @@ SELECT pg_temp.ih_release('ih-hold-1','ih-release-1');
 SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_install('ih-install-released')$q$,'55000','fulfilment_units_uninstructed',
  'install refused after release while the released unit is uninstructed');
 SELECT pg_temp.ih_instruct(ARRAY['k-2'],'ih-instruct-k2');
-SELECT pg_temp.ih_assert((pg_temp.ih_install('ih-install')->>'replayed')::boolean IS FALSE AND pg_temp.ih_status()='instructed',
- 'install recorded after release and every unit instructed; reported only, not yet installed');
+-- Status is read in its own statement: a STABLE read beside the write sees the pre-call snapshot.
+SELECT pg_temp.ih_assert((pg_temp.ih_install('ih-install')->>'replayed')::boolean IS FALSE,
+ 'install recorded after release and every unit instructed');
+SELECT pg_temp.ih_assert(pg_temp.ih_status()='instructed','the reported install is not yet installed');
 
 -- 4. A hold that lands after the install was reported refuses verification.
 SELECT pg_temp.ih_hold(ARRAY['k-1'],'ih-hold-2');
@@ -167,8 +169,9 @@ SELECT pg_temp.ih_actor(1);
 -- 6. Released and fully instructed: verification installs, and installed stays terminal.
 SELECT pg_temp.ih_release('ih-hold-2','ih-release-2');
 SELECT pg_temp.ih_actor(2);
-SELECT pg_temp.ih_assert(public.verify_external_fulfilment_event(pg_temp.ih_event('ih-install'),'ih-verify')->>'status'='installed'
- AND pg_temp.ih_status()='installed','verification installs after every hold is released and every unit instructed');
+SELECT pg_temp.ih_assert(public.verify_external_fulfilment_event(pg_temp.ih_event('ih-install'),'ih-verify')->>'status'='installed',
+ 'verification installs after every hold is released and every unit instructed');
+SELECT pg_temp.ih_assert(pg_temp.ih_status()='installed','the fulfilment reads installed');
 SELECT pg_temp.ih_actor(1);
 SELECT pg_temp.ih_error($q$SELECT pg_temp.ih_hold(ARRAY['k-1'],'ih-hold-late')$q$,'55000','fulfilment_terminal',
  'installed stays terminal: a later hold is refused');
@@ -193,8 +196,9 @@ SELECT pg_temp.ih_assert((SELECT bool_and(contracting_party_kind='none') FROM pu
  WHERE id IN (pg_temp.ih_fid('ih-chair'),pg_temp.ih_fid('ih-chair-held'))),'client-bought furnishings carry no fabrication contract');
 SELECT pg_temp.ih_install('ih-chair-install','ih-chair');
 SELECT pg_temp.ih_actor(2);
-SELECT pg_temp.ih_assert(public.verify_external_fulfilment_event(pg_temp.ih_event('ih-chair-install','ih-chair'),'ih-chair-verify')->>'status'='installed'
- AND pg_temp.ih_status('ih-chair')='installed'
+SELECT pg_temp.ih_assert(public.verify_external_fulfilment_event(pg_temp.ih_event('ih-chair-install','ih-chair'),'ih-chair-verify')->>'status'='installed',
+ 'client furnishing verification answers installed');
+SELECT pg_temp.ih_assert(pg_temp.ih_status('ih-chair')='installed'
  AND NOT EXISTS(SELECT 1 FROM public.project_external_fulfilment_events WHERE fulfilment_id=pg_temp.ih_fid('ih-chair') AND event_kind='fabrication_instruction'),
  'client furnishing with no instructions installs');
 SELECT pg_temp.ih_actor(1);
