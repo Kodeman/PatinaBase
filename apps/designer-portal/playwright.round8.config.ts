@@ -1,10 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 import path from 'node:path';
 import base from './playwright.config';
+import { round8Stack } from './e2e/round8/owned-stack';
 
-if (new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname !== '127.0.0.1') {
-  throw new Error('Round-8 e2e requires NEXT_PUBLIC_SUPABASE_URL on 127.0.0.1.');
-}
+// Runs in the runner and in every worker, so e2e/helpers/psql.ts never reaches
+// its shared-stack default under this config.
+round8Stack('Round-8 e2e');
 for (const key of ['NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY']) {
   if (!process.env[key]) throw new Error(`Round-8 e2e requires ${key} from the local environment.`);
 }

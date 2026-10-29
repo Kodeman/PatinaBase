@@ -1,14 +1,11 @@
 import { psqlRun, psqlScalar } from '../helpers/psql';
+import { round8Stack } from './owned-stack';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const ACTORS = ['f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000003'];
 
 export default async function globalTeardown(): Promise<void> {
-  const api = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
-  const db = new URL(process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres');
-  if (api.hostname !== '127.0.0.1' || db.hostname !== '127.0.0.1') {
-    throw new Error('F01 teardown requires Supabase and Postgres on 127.0.0.1; refusing fixture cleanup.');
-  }
+  round8Stack('F01 teardown');
 
   // Remove the F01 studio and each actor's personal organization, but never
   // an organization that has a member outside this fictional fixture.
