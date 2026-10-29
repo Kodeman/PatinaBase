@@ -1,33 +1,79 @@
 -- RC-7 E4: only initial actors, agreed scope and unfinished evidence are seeded.
 -- Every C5 event, binding, approval, manifest and instruction is a native act in the spec.
+-- The fixture activates the inactive C2/C3/C5 surfaces itself and records what it
+-- changed in schema rc7_e4_activation. That schema is the marker the spec's
+-- teardown requires before it reverts the activation and deletes anything.
 BEGIN;
 DO $$ BEGIN
- IF (SELECT system_identifier FROM pg_control_system()) <> 7702030541241491498 THEN
-  RAISE EXCEPTION 'E4 fixture refuses a different Postgres system identifier'; END IF;
- IF EXISTS (SELECT 1 FROM public.projects WHERE id::text LIKE 'e4070000-%') THEN
+ IF to_regnamespace('rc7_e4_activation') IS NOT NULL
+   OR EXISTS (SELECT 1 FROM public.projects WHERE id::text LIKE 'e4070000-%') THEN
   RAISE EXCEPTION 'E4 fixture residue'; END IF;
  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id='f0180000-0000-4000-8000-000000000002') THEN
   RAISE EXCEPTION 'F01 designer missing'; END IF;
+END $$;
+CREATE SCHEMA rc7_e4_activation;
+CREATE TABLE rc7_e4_activation.prior(capability_enabled boolean NOT NULL, granted regprocedure[] NOT NULL);
+-- C5 writers and C2 scope writers as the reviewed activation grants them; C3's
+-- grant_fabrication_authority/revoke_fabrication_authority and C1's
+-- create_evidence_manifest go to authenticated as the C3 activation table specifies.
+DO $$ DECLARE fn regprocedure; granted regprocedure[]:='{}'; BEGIN
+ FOREACH fn IN ARRAY ARRAY[
+  'public.create_external_fulfilment(uuid,uuid,text,text,text[],uuid,uuid,text)',
+  'public.record_external_fulfilment_event(uuid,text,jsonb,text[],text)',
+  'public.verify_external_fulfilment_event(uuid,text)',
+  'public.bind_fulfilment_evidence(uuid,uuid,text[],text)',
+  'public.record_fabrication_instruction(uuid,uuid,uuid,text[],jsonb,uuid)',
+  'public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text)',
+  'public.grant_fabrication_authority(uuid,date,text,date,integer,uuid[],text)',
+  'public.revoke_fabrication_authority(uuid,text)',
+  'public.create_evidence_manifest(uuid,uuid,text,jsonb,text)',
+  'public.apply_service_arrangement(uuid,text,uuid)',
+  'public.assign_ffe_items_to_scope_package(uuid,uuid[],text,text)',
+  'public.reconcile_scope_edition(uuid,uuid,uuid)']::regprocedure[] LOOP
+  IF NOT has_function_privilege('authenticated',fn,'EXECUTE') THEN
+   EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated',fn);
+   granted:=granted||fn;
+  END IF;
+ END LOOP;
+ INSERT INTO rc7_e4_activation.prior
+  SELECT enabled,granted FROM public.server_capabilities WHERE key='scope_editions';
+ IF NOT FOUND THEN RAISE EXCEPTION 'E4 fixture: scope_editions capability row missing'; END IF;
+ UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
 END $$;
 SET LOCAL session_replication_role=replica;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,aud,role) VALUES
  ('e4070000-0000-4000-8000-000000000011','e4-maker@test.invalid','',now(),now(),now(),'authenticated','authenticated'),
  ('e4070000-0000-4000-8000-000000000012','e4-gc@test.invalid','',now(),now(),now(),'authenticated','authenticated'),
- ('e4070000-0000-4000-8000-000000000013','e4-client@test.invalid','',now(),now(),now(),'authenticated','authenticated');
+ ('e4070000-0000-4000-8000-000000000013','e4-client@test.invalid','',now(),now(),now(),'authenticated','authenticated'),
+ ('e4070000-0000-4000-8000-000000000014','e4-studio-admin@test.invalid','',now(),now(),now(),'authenticated','authenticated');
 INSERT INTO public.profiles(id,email,full_name,is_designer) VALUES
  ('e4070000-0000-4000-8000-000000000011','e4-maker@test.invalid','E4 Cabinet Maker',false),
  ('e4070000-0000-4000-8000-000000000012','e4-gc@test.invalid','E4 General Contractor',false),
- ('e4070000-0000-4000-8000-000000000013','e4-client@test.invalid','E4 Fictional Client',false);
+ ('e4070000-0000-4000-8000-000000000013','e4-client@test.invalid','E4 Fictional Client',false),
+ ('e4070000-0000-4000-8000-000000000014','e4-studio-admin@test.invalid','E4 Studio Admin (verifier)',true);
+-- Verification needs an active studio owner/admin who did not record the event.
+-- That is a second studio member, never the GC.
 INSERT INTO public.organization_members(user_id,organization_id,role,status) VALUES
- ('e4070000-0000-4000-8000-000000000012','f0180000-0000-4000-8000-000000000001','admin','active');
+ ('e4070000-0000-4000-8000-000000000014','f0180000-0000-4000-8000-000000000001','admin','active');
 INSERT INTO public.projects(id,name,designer_id,created_by,client_id,studio_id,status) VALUES
  ('e4070000-0000-4000-8000-000000000201','E4 Cabinetry Kitchen','f0180000-0000-4000-8000-000000000002',
  'f0180000-0000-4000-8000-000000000002','e4070000-0000-4000-8000-000000000013','f0180000-0000-4000-8000-000000000001','active');
--- An ordinary, priced intent line is converted through the product RPC in the journey.
+INSERT INTO public.project_rooms(id,project_id,name,sort_order) VALUES
+ ('e4070000-0000-4000-8000-000000000850','e4070000-0000-4000-8000-000000000201','E4 Kitchen',0);
+INSERT INTO public.vendors(id,name,orders_email,contact_info,default_payment_terms) VALUES
+ ('e4070000-0000-4000-8000-000000000860','E4 Cabinet Vendor','e4-vendor@test.invalid',
+ jsonb_build_object('email','e4-vendor@test.invalid'),'thirty_seventy');
+-- An ordinary, priced, selected, vendor-bound line is converted through the product
+-- RPC in the journey. The priced lighting line stays studio work as the budget control.
 INSERT INTO public.project_ffe_selection_threads(id,project_id,primary_ffe_item_id,created_by) VALUES
- ('e4070000-0000-4000-8000-000000000841','e4070000-0000-4000-8000-000000000201','e4070000-0000-4000-8000-000000000840','f0180000-0000-4000-8000-000000000002');
-INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,item_type,quantity,unit_price_cents,line_total_cents,currency) VALUES
- ('e4070000-0000-4000-8000-000000000840','e4070000-0000-4000-8000-000000000201','Four kitchen cabinets','e4070000-0000-4000-8000-000000000841','fixed',1,2840000,2840000,'USD');
+ ('e4070000-0000-4000-8000-000000000841','e4070000-0000-4000-8000-000000000201','e4070000-0000-4000-8000-000000000840','f0180000-0000-4000-8000-000000000002'),
+ ('e4070000-0000-4000-8000-000000000843','e4070000-0000-4000-8000-000000000201','e4070000-0000-4000-8000-000000000842','f0180000-0000-4000-8000-000000000002');
+INSERT INTO public.project_ffe_items(id,project_id,name,selection_thread_id,item_type,quantity,unit_price_cents,line_total_cents,currency,
+ project_room_id,assignment_scope,ffe_category,design_disposition,vendor_id,vendor_name) VALUES
+ ('e4070000-0000-4000-8000-000000000840','e4070000-0000-4000-8000-000000000201','Four kitchen cabinets','e4070000-0000-4000-8000-000000000841','fixed',1,2840000,2840000,'USD',
+ 'e4070000-0000-4000-8000-000000000850','room','Cabinetry','selected','e4070000-0000-4000-8000-000000000860','E4 Cabinet Vendor'),
+ ('e4070000-0000-4000-8000-000000000842','e4070000-0000-4000-8000-000000000201','Kitchen pendants','e4070000-0000-4000-8000-000000000843','fixed',1,450000,450000,'USD',
+ 'e4070000-0000-4000-8000-000000000850','room','Lighting','selected',NULL,NULL);
 INSERT INTO public.proposals(id,project_id,designer_id,client_id,title,status,document_kind,commercial_state) VALUES
  ('e4070000-0000-4000-8000-000000000911','e4070000-0000-4000-8000-000000000201','f0180000-0000-4000-8000-000000000002',
  'e4070000-0000-4000-8000-000000000013','E4 agreed design scope','accepted','design_services','executed');
@@ -53,11 +99,13 @@ INSERT INTO public.designer_clients(id,designer_id,client_id,status) VALUES
 INSERT INTO public.client_decisions(id,designer_client_id,designer_id,project_id,title,status,court,coordination_kind) VALUES
  ('e4070000-0000-4000-8000-000000000601','e4070000-0000-4000-8000-000000000902','f0180000-0000-4000-8000-000000000002','e4070000-0000-4000-8000-000000000201','E4 shop drawings; appliance clearances, sample and site verification','pending','designer','submittal'),
  ('e4070000-0000-4000-8000-000000000602','e4070000-0000-4000-8000-000000000902','f0180000-0000-4000-8000-000000000002','e4070000-0000-4000-8000-000000000201','E4 hardware substitution: K3/K4 drilling, approvals, price and schedule','pending','designer','submittal'),
- ('e4070000-0000-4000-8000-000000000603','e4070000-0000-4000-8000-000000000902','f0180000-0000-4000-8000-000000000002','e4070000-0000-4000-8000-000000000201','E4 detailed route maker verification','pending','designer','submittal');
+ ('e4070000-0000-4000-8000-000000000603','e4070000-0000-4000-8000-000000000902','f0180000-0000-4000-8000-000000000002','e4070000-0000-4000-8000-000000000201','E4 detailed route maker verification','pending','designer','submittal'),
+ ('e4070000-0000-4000-8000-000000000604','e4070000-0000-4000-8000-000000000902','f0180000-0000-4000-8000-000000000002','e4070000-0000-4000-8000-000000000201','E4 journey hardware substitution: K3/K4 drilling, approvals, price and schedule','pending','designer','submittal');
 INSERT INTO public.coordination_item_revisions(id,decision_id,rev_number,status,note) VALUES
  ('e4070000-0000-4000-8000-000000000701','e4070000-0000-4000-8000-000000000601',1,'submitted','Maker drawing, sample and verified field measure'),
  ('e4070000-0000-4000-8000-000000000702','e4070000-0000-4000-8000-000000000602',1,'submitted','Proposed pull changes K3/K4 drilling; +$380; +7 days; GC, maker and studio copied'),
- ('e4070000-0000-4000-8000-000000000703','e4070000-0000-4000-8000-000000000603',1,'submitted','Maker verified designer detail and appliance interfaces');
+ ('e4070000-0000-4000-8000-000000000703','e4070000-0000-4000-8000-000000000603',1,'submitted','Maker verified designer detail and appliance interfaces'),
+ ('e4070000-0000-4000-8000-000000000704','e4070000-0000-4000-8000-000000000604',1,'submitted','Proposed pull changes K3/K4 drilling; +$380; +7 days; GC, maker and studio copied');
 INSERT INTO public.plan_sheets(id,project_id,sheet_number,title) VALUES
  ('e4070000-0000-4000-8000-000000000821','e4070000-0000-4000-8000-000000000201','E4-1','Kitchen cabinet intent');
 INSERT INTO public.plan_prints(id,sheet_id,batch_id,print_number,rev_letter,project_document_id,sha256) VALUES
