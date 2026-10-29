@@ -53,12 +53,14 @@ for (const viewport of ZOOMED_VIEWPORTS) {
       });
     }
 
-    authenticatedTest('the job drawer keeps Account and settings fully visible', async ({ authenticatedPage: page }) => {
+    authenticatedTest('Account and settings stays fully visible', async ({ authenticatedPage: page }) => {
       await page.goto('about:blank');
       await page.goto(`/doc/${JOB}`, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('[data-document-shell][data-paper-renderer="round8"]')).toBeVisible({ timeout: 60_000 });
-      await page.getByRole('button', { name: 'More studio actions' }).click();
-      await page.getByRole('button', { name: 'Ledgers', exact: true }).click();
+      if (viewport.width < 1180) {
+        await page.getByRole('button', { name: 'More studio actions' }).click();
+        await page.getByRole('button', { name: 'Ledgers', exact: true }).click();
+      }
       await fullyInsideViewport(page, page.getByRole('button', { name: 'Account and settings' }));
     });
   });
