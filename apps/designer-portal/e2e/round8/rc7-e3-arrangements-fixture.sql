@@ -3,7 +3,7 @@
 -- the actual Postgres cluster, not its forwarded container port.
 BEGIN;
 DO $$ BEGIN
-  IF (SELECT system_identifier::text FROM pg_control_system()) <> '7702029588411166762' THEN
+  IF (SELECT system_identifier::text FROM pg_control_system()) <> '7702055901180289066' THEN
     RAISE EXCEPTION 'RC7-E3 refuses non-owned cluster';
   END IF;
 END $$;
