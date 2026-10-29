@@ -13,7 +13,8 @@
       "p1": "c1552944-f1db-4526-b2f4-9070e4001f4d",
       "s1": "8e360fe7-ead7-435d-ba88-1fb1b2006b47",
       "s2": "5dd0e201-7341-4a23-97fe-a21f36feb862"
-    }
+    },
+    "rewrittenFor00901": "get_client_project_threshold bodies re-shaped to 00901 (ba45b1c86): kind external rows moved verbatim, in order, from selections to externalSelections; no other field changed"
   },
   "actors": {
     "studio_owner": {
@@ -5937,7 +5938,9 @@
         "body": {
           "origin": "commercial",
           "projectId": "3082850d-1e1b-4fec-a0ac-b41065a0fcca",
-          "selections": [
+          "selections": [],
+          "projectName": "E7 household job",
+          "externalSelections": [
             {
               "id": "e7e7c000-0000-4000-8000-000000000002",
               "kind": "external",
@@ -5966,8 +5969,7 @@
               "clientUnitPriceCents": null,
               "externalFulfilmentId": "2751c8e4-24c4-4226-80b2-e54e7c3b71ef"
             }
-          ],
-          "projectName": "E7 household job"
+          ]
         }
       }
     },

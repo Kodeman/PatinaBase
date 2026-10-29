@@ -193,9 +193,10 @@ describe("RC7-E7 X08 client threshold selections with an external line", () => {
     actors.client_lead["get_client_project_threshold.job1"].body;
   const externalId = "e7e7c000-0000-4000-8000-000000000002";
 
-  it("the recorded payload carries the client-safe external line and no studio price", () => {
-    const rows = (threshold as { selections: Record<string, unknown>[] })
-      .selections;
+  it("the recorded payload carries the client-safe external line in externalSelections (00901) and no studio price", () => {
+    const rows = (
+      threshold as { externalSelections: Record<string, unknown>[] }
+    ).externalSelections;
     const external = rows.find((row) => row.id === externalId);
     expect(external).toMatchObject({
       kind: "external",
@@ -224,18 +225,12 @@ describe("RC7-E7 X08 client threshold selections with an external line", () => {
       expect(sameBlob(rel)).toBe(false);
     });
 
-    // DEFECT RC7-e7-1 (MEDIUM): get_client_project_threshold appends C5
-    // external lines (kind 'external', no studio price) to the unversioned
-    // legacy `selections` array (00883:773). The pre-round-8 adapter
-    // (commercial-documents.ts adaptClientSelections: oneOf(row.kind,
-    // ['furnishings','trade'], 'furnishings') and number(undefined) -> 0) then
-    // draws the client-bought piece as an ordinary studio furnishing at $0.
-    // A client-portal rollback after C5 activation is a supported path
-    // (ROLLOUT.md), so this is reachable. Intended behaviour, asserted below:
-    // legacy `selections` never carries an external line (they move to a new
-    // additive field), so the older adapter never sees one. Skipped until the
-    // fix lane lands; then re-export the payloads and un-skip.
-    it.skip("DEFECT RC7-e7-1: the older adapter never sees an external line in legacy selections", () => {
+    // RC7-e7-1 (MEDIUM) fixed by ba45b1c86 (00901): 00883:773 appended C5
+    // external lines to the unversioned legacy `selections`, which the
+    // pre-round-8 adapter drew as a $0 studio furnishing. 00901 moves them to
+    // the additive `externalSelections`; the payload's threshold body was
+    // re-shaped to 00901 (see meta.rewrittenFor00901).
+    it("RC7-e7-1: the older adapter never sees an external line in legacy selections", () => {
       const rows = (threshold as { selections: Record<string, unknown>[] })
         .selections;
       expect(rows.filter((row) => row.kind === "external")).toEqual([]);
