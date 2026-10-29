@@ -106,8 +106,8 @@ test.describe('RC7 E6 exact job entry matrix on live rows', () => {
     expect(readback()).toBe(marked);
   });
 
-  // DEFECT RC7-E6-2: Orders closes without recording a return marker for its opener.
-  test.fixme('order entry returns to the exact order row, scroll and focus without replay', async ({ authenticatedPage: page }) => {
+  // RC7-E6-2 fixed by e5fba0bb3/2116982a4: Orders records a return marker for its opener.
+  test('order entry returns to the exact order row, scroll and focus without replay', async ({ authenticatedPage: page }) => {
     await settled(page);
     const before = readback();
     await page.keyboard.press('ControlOrMeta+k');

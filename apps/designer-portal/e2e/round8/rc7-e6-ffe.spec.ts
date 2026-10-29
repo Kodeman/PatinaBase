@@ -31,8 +31,8 @@ async function openLine(page: Page, line: string) {
   return instrument.getByTestId('spec-fields-pane');
 }
 
-// DEFECT RC7-E6-3: use-spec-books.ts:373 tells the editor to refresh; spec-fields-pane.tsx:695 neither refetches the peer version nor shows its value alongside the local draft.
-test.fixme('A06 stale FF&E save refetches the peer, retains the typed draft and retries once', async ({ authenticatedPage: page, browser }) => {
+// RC7-E6-3 fixed by 937ed121b/63f978a02: a stale save refetches the peer version and shows its value beside the local draft.
+test('A06 stale FF&E save refetches the peer, retains the typed draft and retries once', async ({ authenticatedPage: page, browser }) => {
   test.setTimeout(300_000);
   expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port).toBe('61121');
   expect(new URL(process.env.SUPABASE_DB_URL!).port).toBe('61122');
