@@ -250,6 +250,50 @@ E8's visual spec rewrites the committed `evidence/rc/visual-rc7/*` captures (and
 
 In 2 of 3 runs, one WebKit "Review and send" first tap did not open the sheet. The soft assert at `rc7-e2-consumer-journey.journey.ts:465` ("the first Review and send tap opens the sheet") logged `taps=2`, and the serial describe block skipped the rest (the "did not run" counts above). On each miss the diagnostic recorded `{"backdrops":0,"dialogs":0,"active":"(self.__next_s=…"}`: the active element was the Next bootstrap script, so the tap probably landed before hydration. Request ids: `95e1183a…` (r2) and `cc7ed6ac…` (r3). Across the three runs, 2 of 14 logged WebKit first taps missed. Chromium was 9/9 on every run. This is not a new defect: the observation is already open as RC7-E2-OBS-1. Confidence that it is a product (pre-hydration tap) issue rather than harness timing is low-to-medium. It needs a ruling on whether the button should be inert or deferred until hydration.
 
+### OBS-1 investigation addendum (tip `5386a159e`, FIX4 merged)
+
+**Method.** I ran the E2 journey four times on **webkit-iphone only** with `--trace on`, each on a fresh owned stack (block 651, project `patina-rc7-gate-e2`, ports 3910/3912). Every run started from 10.9–21.1 GB free memory and 270–275 GiB free disk. I used temporary, untracked copies of the runner and journey; both are deleted now. The only changes in the copies were projects = webkit-iphone, `--trace on`, and instrumentation in `sendNotices` armed just before the tap:
+- capture-phase listeners for pointerdown, pointerup, mousedown, mouseup, click and scroll, each logging the target and `elementFromPoint` at the event's coordinates;
+- a MutationObserver for the sheet, its dialog and its backdrop;
+- the button's bounding box before and after the click.
+
+**Result.**
+- **No miss reproduced: 18 of 18 first taps opened the sheet** (r1 5, r2 4, r3 4, r4 5).
+- Job D, the `:1111` miss site, never ran. Job F failed first in every run (see below), and the serial block skipped the three tests after it.
+- With Phase B's 2 misses in 14 WebKit taps, the overall rate is 2 in 32.
+- The traces and logs stay in `$SP/rc7-gate/obs1/r{1..4}/` (about 570 MB) and are not in git.
+
+**What the traces show.** The tap target is still moving when Playwright clicks. In the R1 tap (run 1), Playwright logged `element is not stable`, then `done scrolling`, and then, 74 ms later, `element is outside of the viewport`: something scrolled the page away after Playwright had scrolled the button into view. Playwright retried and the tap landed (pointerdown, pointerup and click all on the button at (80,331)). The other taps show the same pattern:
+- at arming, `[data-arrival-ready]` was often absent (`arrival=not-ready`);
+- scrollY jumped twice between arming and the tap (3749 → 5802 → 8422);
+- the button's page y changed by up to 1183 px between just before and just after the click (1408 → 2591).
+
+**Ruled out.**
+1. A ghost click on a closing backdrop or sheet. `sendNotices` always runs right after `openCloseout`'s `page.goto` (`rc7-e2-consumer-journey.journey.ts:400`), so the document is fresh and no earlier sheet exists. The Phase B miss probes also saw 0 backdrops and 0 dialogs.
+2. Pre-hydration, as Opus already showed.
+3. Focus as evidence. The Phase B miss's "active" text `(self.__next_s=…` is just the start of `<body>`'s textContent, and WebKit doesn't focus clicked buttons.
+
+**Most likely cause (moderate confidence, not reproduced).** The doc page's arrival landing scroll races the tap:
+- `apps/designer-portal/src/app/(document)/doc/[id]/page.tsx:1724-1738`: after arrival, a job recently seen in this browser (the journey revisits the same jobs) gets `el.scrollIntoView({ block: 'start' })` on its active section.
+- `arrival-mount.tsx:126,130` treats only wheel, touchmove and scroll keys as the reader's own scroll, so Playwright's programmatic scroll doesn't cancel the landing.
+- `openCloseout` (`journey.ts:399-405`) waits for the section and for the "Reading" text to go, but not for `[data-arrival-ready]` or for the landing.
+- Playwright 1.58 checks the hit target only on the first pointer event of a click. If the landing scroll moves the page between pointerdown and pointerup (WebKit spaces them 5–12 ms apart), the click event goes to a common ancestor, `onClick` never fires, and Playwright still reports `click action done`. That matches the miss signature: no error, no dialog, no backdrop.
+
+**Proposed fix (test side, no product edit).**
+- In `openCloseout` (`journey.ts:399`), after the `goto`, wait for `[data-document-shell][data-arrival-ready]` (as E6's `openLine` does).
+- Then wait for the landing to settle, for example by polling until `scrollY` is the same on two consecutive animation frames.
+- Then scroll the section into view.
+
+The product side is a ruling, not a fix: whether a landing scroll that fires once the page is interactive should yield to any scroll that happened after arrival, programmatic ones included. Until the fixed `openCloseout` has run long enough to bring the miss rate down from about 2 in 32 to zero, this stays an observation.
+
+**Separate finding: job F fails 4 of 4 on WebKit at `5386a159e`** (`@rc7-e2-completion job F`, `journey.ts:1020`). The two failure points:
+- **Runs 1 and 4:** `[data-studio-service] [data-blocker="studio_line_open"]` was not visible after 120 s (`journey.ts:1042`). The page snapshot shows "The client hasn't accepted the studio's services yet" even though the DB had the request `closed`/`accepted`.
+- **Runs 2 and 3:** `draft()` hung at `selectOption` (`journey.ts:412`) until the 600 s test timeout, while the snapshot shows the combobox present.
+
+Job F passed on WebKit in Phase B r1 and r3 at `c6434e3dd`. Between the two tips, FIX4 (`46fb4d68a`) changed `studio-service-section.tsx` (heading `tabIndex`, focus return), and this run was webkit-only with instrumentation. **The cause is not isolated.** The next step is to run the unmodified runner (both projects) at `5386a159e` and at `74a22bd5a`. The traces are in `$SP/rc7-gate/obs1/r*/run1/e2-rc7/test-results/*closure-not-the-service*`.
+
+**Teardown.** The runner stopped each stack (exit 0; containers 0, volumes 0). No listeners remain on 3910, 3912 or 651xx, and there are 0 `patina-rc7-gate*` containers or volumes.
+
 ## Not verified
 
 - `platform_acl_compatibility_test.sql` stays red on its documented, un-ruled `$auth_helpers$` block; this is outside round 8.
