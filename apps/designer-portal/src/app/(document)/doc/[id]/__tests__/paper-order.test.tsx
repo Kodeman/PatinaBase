@@ -169,6 +169,14 @@ jest.mock('@/components/document/care-band', () => ({
   CareBand: ({ indexRoot }: { indexRoot?: boolean }) =>
     indexRoot ? <div data-index-region="care" /> : <div data-care-band />,
 }));
+// The Closeout chapter lazy-loads the acceptance and completion instruments;
+// their reads are not this suite's subject.
+jest.mock('@/components/document/service-acceptance/service-acceptance-section', () => ({
+  ServiceAcceptanceSection: () => null,
+}));
+jest.mock('@/components/document/service-completion/studio-service-section', () => ({
+  StudioServiceSection: () => null,
+}));
 jest.mock('@/components/document/account-band', () => ({
   AccountBand: () => <div data-account-band />,
 }));
