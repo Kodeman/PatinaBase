@@ -21,12 +21,12 @@ DO $$ BEGIN RAISE EXCEPTION 'X02 inactive C4/C6 mutations have executable grants
 -- Native C2/C4/C6 transitions, including the offline evidence and completion paths.
 -- The upstream fixture is read-only; all activation, grants, and data roll back.
 \ir ../round8/service_acceptance_release_fixes_body.psql
-GRANT EXECUTE ON FUNCTION pg_temp.project(text),pg_temp.ed(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.project(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.complete_studio_service(uuid,uuid,text,text),
  public.respond_service_acceptance(uuid,text,jsonb,text,text,text,integer,text,text),
  public.create_service_acceptance_request(uuid,uuid,uuid,text) TO authenticated;
 CREATE TEMP TABLE e1_retry_args AS SELECT c.acceptance_request_id,c.obligation_hash,
- r.id AS request_id,r.scope_content_hash,r.evidence_manifest_hash,r.signer_policy_revision
+ pg_temp.ed() AS edition_id,r.id AS request_id,r.scope_content_hash,r.evidence_manifest_hash,r.signer_policy_revision
  FROM public.studio_service_completions c CROSS JOIN public.service_acceptance_requests r
  WHERE c.id=(pg_temp.v('done-dor')->>'completionId')::uuid AND r.id=pg_temp.req('r4');
 GRANT SELECT ON e1_retry_args TO authenticated;
@@ -220,7 +220,7 @@ UPDATE public.server_capabilities SET enabled=false WHERE key='scope_editions';
 SELECT pg_temp.actor(1);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.expect_error(format('SELECT public.create_service_acceptance_request(%L,%L,%L,%L)',
- pg_temp.project(),pg_temp.ed(),'f8968000-0000-4000-8000-000000000001','e1-inactive'),
+ pg_temp.project(),(SELECT edition_id FROM e1_retry_args),'f8968000-0000-4000-8000-000000000001','e1-inactive'),
  '55000','scope_editions_inactive','X02 inactive authenticated C4 create refuses inside the body');
 SELECT pg_temp.expect_error(format('SELECT public.complete_studio_service(%L,%L,%L,%L)',
  pg_temp.project(),pg_temp.req('r4'),repeat('a',64),'e1-inactive-completion'),

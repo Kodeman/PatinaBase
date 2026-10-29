@@ -145,7 +145,7 @@ test('E1 C4 relink in both orders, collision, and simultaneous required signers'
     assert.equal(preflight, 't', 'committed 00896-00899, capability on, and empty owned fixture prefix required');
     fixtureOwned = true;
     await a.query(`BEGIN; ${section('assertion helpers')} ${section('fixture')} ${section('native helpers')}
-      ${section('origin')} GRANT EXECUTE ON FUNCTION pg_temp.respond(uuid,text) TO authenticated; COMMIT;`);
+      ${section('origin')} COMMIT;`);
     const aPid = await a.query('SELECT pg_backend_pid();');
     // Session a keeps the fixture's pg_temp helpers; each step runs as one short transaction.
     const step = async (actor, sql) => a.query(`BEGIN; SELECT pg_temp.actor(${actor}) \\g /dev/null
@@ -169,12 +169,15 @@ test('E1 C4 relink in both orders, collision, and simultaneous required signers'
       await b.close(); sessions.delete(b);
       return { won, ...outcome };
     }
+    const requests = new Map();
     const sentRequest = async key => {
       await step(1, `INSERT INTO sa_results VALUES(${literal(key)},pg_temp.create(${literal(`rc-${key}`)}));
         SELECT pg_temp.deliver(pg_temp.req(${literal(key)}));`);
-      return JSON.parse(await a.query(`SELECT jsonb_build_object('id',id,'scope',scope_content_hash,
+      const request = JSON.parse(await a.query(`SELECT jsonb_build_object('id',id,'scope',scope_content_hash,
         'manifest',evidence_manifest_hash,'revision',signer_policy_revision)::text
         FROM public.service_acceptance_requests WHERE id=pg_temp.req(${literal(key)});`));
+      requests.set(key,request);
+      return request;
     };
     // Plain SQL only: session b has none of a's pg_temp helpers.
     const relink = (c, n) => `${as(1)} UPDATE public.studio_contacts SET profile_id=${literal(uid(n))}
@@ -184,8 +187,13 @@ test('E1 C4 relink in both orders, collision, and simultaneous required signers'
     const responses = req => `(SELECT jsonb_agg(jsonb_build_object('slot',s.slot,'by',x.responder_profile_id) ORDER BY s.slot)
       FROM public.service_acceptance_responses x JOIN public.service_acceptance_signers s ON s.id=x.signer_id
       WHERE x.request_id=${literal(req.id)})`;
-    const answer = async (n, key, k) => JSON.parse(await step(n, `SET LOCAL ROLE authenticated;
-      SELECT pg_temp.respond(pg_temp.req(${literal(key)}),${literal(k)})::text;`));
+    const answer = async (n, key, k) => {
+      const id = requests.get(key).id;
+      const current = JSON.parse(await a.query(`SELECT jsonb_build_object('id',id,'scope',scope_content_hash,
+        'manifest',evidence_manifest_hash,'revision',signer_policy_revision)::text
+        FROM public.service_acceptance_requests WHERE id=${literal(id)};`));
+      return JSON.parse(await step(n,respond(current,n,k)));
+    };
 
     // Order 1: the relink commits first. The co_client card moves onto 7, who
     // already holds the partner card; 7's queued response re-reads the links
@@ -227,8 +235,7 @@ test('E1 C4 relink in both orders, collision, and simultaneous required signers'
     assert.equal(await step(7, `SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'rc-r2-7b')$q$,pg_temp.req('r2')),
       '55000','signer_identity_collision','response first: 7 cannot take the co_client slot') \\g /dev/null
       SELECT n FROM assertion_count;`).then(n => Number(n) > 0), true);
-    assert.equal(JSON.parse(await step(7, `SET LOCAL ROLE authenticated;
-      SELECT pg_temp.respond(pg_temp.req('r2'),'rc-r2-7')::text;`)).replayed, true,
+    assert.equal(JSON.parse(await step(7, respond(r2,7,'rc-r2-7'))).replayed, true,
       'response first: 7 still replays its own receipt');
     await step(1, `SELECT pg_temp.replace(pg_temp.req('r2'),'co_client',pg_temp.card(5),'rc-r2-repair') \\g /dev/null`);
     const refused = await step(7, `SELECT pg_temp.expect_error(format($q$SELECT pg_temp.respond(%L,'rc-r2-7c')$q$,pg_temp.req('r2')),

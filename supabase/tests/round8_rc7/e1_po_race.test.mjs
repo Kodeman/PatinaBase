@@ -100,7 +100,7 @@ const cleanup = `BEGIN;
   END IF;
   END $clean$; COMMIT;`;
 
-test('duplicate grouped PO drafts for one FF&E item serialize', { timeout: 90000 }, async () => {
+test('overlapping grouped PO sets serialize without partially claiming the loser set', { timeout: 90000 }, async () => {
   assert.equal(process.env.E1_DB_WINDOW, 'owned');
   const sessions = new Set(); const open = () => { const s = new Session(); sessions.add(s); return s; };
   const a = open(); let fixtureOwned = false;

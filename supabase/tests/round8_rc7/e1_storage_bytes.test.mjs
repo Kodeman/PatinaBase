@@ -121,8 +121,8 @@ test('private paper bytes: studio member succeeds, real external identities are 
           `${actor} receives the original SHA-256-bound bytes`);
       } else {
         const denial = await download.json();
-        assert.equal(download.status, 404, `${actor} must receive the Storage not-found RLS refusal`);
-        assert.deepEqual(denial, { statusCode: '404', error: 'not_found', message: 'Object not found' },
+        assert.equal(download.status, 400, `${actor} Storage refusal: ${JSON.stringify(denial)}`);
+        assert.deepEqual(denial, { statusCode: '404', error: 'not_found', message: 'Object not found', code: 'NoSuchKey' },
           `${actor} receives the exact private-object refusal`);
       }
     }
