@@ -7,6 +7,9 @@ import type { DocumentFrameSlots } from '../frame-slots';
 import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 
 import { rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-origin';
+import { LENS_RESOLVE_MAX_MS } from '@/lib/document/lens-constants';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // The Closeout chapter's acceptance instrument reads its own data; its
 // behaviour is proven in service-acceptance/__tests__.
@@ -391,4 +394,64 @@ it('refreshes the mounted JobHead from People to same-job Accounts without repla
   expect(container.querySelector('[data-job-head-return]')).toHaveAttribute('href', '/desk');
   fireEvent.click(screen.getByRole('link', { name: 'Studio' }));
   expect(takeDeskReturn()?.studioOverlay).toMatchObject({ overlay: 'books', filter: 'receivables', focusKey: 'invoice-1:open-invoice-document', scrollTop: 67 });
+});
+
+/*
+ * RC7-E8-4 — the paper body holds until the lens resolves it. jsdom evaluates
+ * no stylesheet, so the rule is read from round8.css and its selector is run
+ * against the frame's real DOM.
+ */
+describe('RC7-E8-4 — the paper body holds until the lens resolves it', () => {
+  const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const round8Css = strip(readFileSync(join(__dirname, '..', '..', 'paper', 'round8.css'), 'utf8'));
+  const globalsCss = strip(readFileSync(join(__dirname, '..', '..', '..', '..', 'app', 'globals.css'), 'utf8'));
+  const holds = [...round8Css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, selector, body]) => ({ selector: selector.trim().replace(/\s+/g, ' '), body: body.trim() }))
+    .filter(({ selector }) => selector.includes(':not([data-lens-resolved])'));
+
+  it('is one rule on the round-8 shell, keyed on the lens resolution', () => {
+    expect(holds).toHaveLength(1);
+    expect(holds[0]!.selector).toBe(
+      '[data-paper-renderer="round8"][data-document-shell]:not([data-lens-resolved]) [data-document-paper] > :not([data-paper-cover])',
+    );
+  });
+
+  it('holds paint only: layout, focus and landings are untouched', () => {
+    const properties = holds[0]!.body
+      .split(';')
+      .map((decl) => decl.split(':')[0]!.trim())
+      .filter(Boolean);
+    expect(properties).toEqual(['opacity', 'animation']);
+  });
+
+  it('lets go by itself past the lens deadline, onto full opacity', () => {
+    const failsafe = /animation:\s*doc-fade 1ms linear (\d+)ms both/.exec(holds[0]!.body);
+    expect(failsafe).not.toBeNull();
+    expect(Number(failsafe![1])).toBeGreaterThan(LENS_RESOLVE_MAX_MS);
+    expect(globalsCss).toMatch(
+      /@keyframes doc-fade\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}\s*to\s*\{\s*opacity:\s*1;\s*\}\s*\}/,
+    );
+  });
+
+  it('holds every chapter and the colophon, never the cover, and only until resolved', () => {
+    roomFilesReady = true;
+    visitsReady = true;
+    const { container } = renderFrame();
+    const held = () => Array.from(container.querySelectorAll<HTMLElement>(holds[0]!.selector));
+    const isHeld = (el: Element) => held().some((root) => root.contains(el));
+
+    const chapters = Array.from(container.querySelectorAll('[data-paper-chapter]'));
+    expect(chapters.length).toBeGreaterThan(0);
+    expect(chapters.every(isHeld)).toBe(true);
+    expect(isHeld(container.querySelector('[data-slot="colophon"]')!)).toBe(true);
+    const cover = container.querySelector('[data-paper-cover]')!;
+    expect(held().some((root) => root === cover || root.contains(cover) || cover.contains(root))).toBe(false);
+    // The job head and the contents margin stand outside the paper.
+    expect(isHeld(container.querySelector('[data-job-head]')!)).toBe(false);
+    expect(isHeld(container.querySelector('[data-slot="margin"]')!)).toBe(false);
+
+    // The lens writes the attribute on the shell when its first pass commits.
+    container.querySelector('[data-document-shell]')!.setAttribute('data-lens-resolved', 'true');
+    expect(held()).toEqual([]);
+  });
 });
