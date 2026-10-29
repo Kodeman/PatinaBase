@@ -20,7 +20,21 @@ import { existsSync } from 'node:fs';
 const DB_URL =
   process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
-if (!/(127\.0\.0\.1|localhost)/.test(DB_URL)) {
+// The destination is the URL's host, unless a libpq parameter overrides it —
+// so check the parsed host and refuse any override.
+function isLocalPostgres(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') return false;
+  if (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') return false;
+  return !['host', 'hostaddr', 'service', 'servicefile'].some((key) => url.searchParams.has(key));
+}
+
+if (!isLocalPostgres(DB_URL)) {
   throw new Error(
     `REFUSING to run psql e2e helpers against a non-local Postgres URL: "${DB_URL}". ` +
       `This module only ever talks to the local Supabase stack.`,

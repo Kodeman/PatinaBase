@@ -26,7 +26,7 @@ The round-8 Closeout chapter lazy-loads `ServiceAcceptanceSection` and `StudioSe
 
 ### 2. G4 scale-profile "Silent truncation: DB N, fetched 0" (fixed in `2dec0372b`)
 
-`e2e/round8/scale-profile.spec.ts` filtered request and response capture on the literal origin `http://127.0.0.1:54321`. On the owned stack (57321) it recorded no `project_ffe_items` responses, so `fetched` was always 0 while the page still rendered N rows. The origin now comes from `NEXT_PUBLIC_SUPABASE_URL`; the file already requires that URL to be loopback. After the fix, the evidence JSON records `rows` 36, 80 and 500 on both projects, matching the DB.
+`e2e/round8/scale-profile.spec.ts` filtered request and response capture on the literal origin `http://127.0.0.1:54321`. On the owned stack (57321) it recorded no `project_ffe_items` responses, so `fetched` was always 0 while the page still rendered N rows. The origin now comes from `NEXT_PUBLIC_SUPABASE_URL`; the file already requires that URL to be loopback. After the fix, the evidence JSON on both projects records fetched counts of 80, 80 and 500, each matching the DB, and rendered counts of 36, 80 and 500. The 36-line case renders a room subset of the 80-line job.
 
 This fix uncovers a real failure at 2,000 lines, which RC-3b's zero count hid. See "Remaining failures".
 
