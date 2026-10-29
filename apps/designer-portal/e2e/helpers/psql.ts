@@ -23,6 +23,8 @@ const DB_URL =
 // libpq and WHATWG `URL` disagree on edge syntax (`#`, query overrides), so the
 // URL psql receives is rebuilt from the validated parts, never passed through.
 function localConnection(raw: string): string | null {
+  // A query or fragment could retarget libpq (`?port=`, `?dbname=`); refuse, never drop.
+  if (raw.includes('?') || raw.includes('#')) return null;
   let url: URL;
   try {
     url = new URL(raw);
