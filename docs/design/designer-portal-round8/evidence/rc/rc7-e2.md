@@ -3,7 +3,7 @@
 ## Header
 
 - Worktree `/Users/kody/Code/patina-r8-rc7-e2`, branch `r8-rc7-e2`. Counted runs c1/c2 tested tip `47d500f1e` (base `3cf79663c` + lane commits `56bbb23cf`, `7ca21c5dc`, `28f3bf3e9`, `47d500f1e`); their stack receipts record head `47d500f1e`.
-- Review fixes (Opus cross-provider review, fix-then-accept) land after `037952e6b`: `5912de176`, `9b7be17fe`, then `86c8f482a` (DEFECT RC7-e2-2 repro). Second review fixes (Codex, fix-then-accept): `1221598e1` (JSON-report probe classifier, required `--workdir`, production Sanity blocked in the browser, backend-state diagnostic) and the doc commit after it. No browser run has tested `1221598e1` yet; the two defect probes re-run on it once that is cleared. The review-fix counted runs r2 and r3 tested tip `86c8f482a`; their receipts record that head. Development runs r1 (at `9b7be17fe`) and r1b (at `86c8f482a`) failed and are recorded under Commands.
+- Review fixes (Opus cross-provider review, fix-then-accept) land after `037952e6b`: `5912de176`, `9b7be17fe`, then `86c8f482a` (DEFECT RC7-e2-2 repro). Second review fixes (Codex, fix-then-accept): `1221598e1` (JSON-report probe classifier, required `--workdir`, production Sanity blocked in the browser, backend-state diagnostic) and the doc commit after it. The two defect probes re-ran on `c991321de` (same test files as `1221598e1`), and the JSON classifier judged both the defect (Commands: probe1-v2, probe2-v2). The review-fix counted runs r2 and r3 tested tip `86c8f482a`; their receipts record that head. Development runs r1 (at `9b7be17fe`) and r1b (at `86c8f482a`) failed and are recorded under Commands.
 - Owned stack: `project_id` `patina-rc7-e2`; API 57121, DB 57122, shadow 57120, pooler 57129, inspector 57183. Designer portal 3110, client portal 3112. `edge-runtime` kept; `EMAIL_DEV_MODE=dry_run`.
 - Counted-run stacks: one fresh stack per run, started and stopped by the runner (receipts under Commands).
 - Migration head applied: numbered head `00899` (`00899_round8_service_acceptance_offline_presentation`). Proven by query in every review-fix receipt: `numberedHead: "00899"`, `migration00899: "00899 round8_service_acceptance_offline_presentation"`. The ledger also holds `20260910152111_create_contact_messages`, and `max(version)` sorts as text, so the c1/c2 receipts' `ledgerMax 20260910152111` is not the head. From the review-fix runs on, `rc7-e2-run.mjs` writes `numberedHead` (`SELECT max(version) FROM supabase_migrations.schema_migrations WHERE version ~ '^[0-9]{5}$'`) and `migration00899` (`SELECT version || ' ' || name … WHERE version = '00899'`) into the receipt.
@@ -192,7 +192,29 @@ RC7_E2_ROUND8=1 playwright test … --grep '@rc7-e2-defect-<n> ' --project chrom
 
 All review-fix receipts (`<label>/stack-receipt.json`): `cronLaunchActiveJobs: off`, `numberedHead: 00899`, `migration00899: 00899 round8_service_acceptance_offline_presentation`, `ledgerMax 20260910152111`. No run was infra-interrupted: there was no exit 2 and no PGRST002. Logs are under `/Users/kody/.claude/rc7-evidence/e2/review-r8/<label>.log` and `<label>/run1/e2-*.log`.
 
-The probe1 and probe2 verdicts above came from the log-text check that Codex later showed can report a false green (see Files). Read by hand, each log has exactly one error, at :1232 (probe1, `Expected: 0 Received: 1`) and at :1286 (probe2, the 504 diff). The two probes have not yet been re-run on the JSON classifier at `1221598e1`.
+The probe1 and probe2 verdicts above came from the log-text check that Codex later showed can report a false green (see Files). Read by hand, each log has exactly one error, at :1232 (probe1, `Expected: 0 Received: 1`) and at :1286 (probe2, the 504 diff). Both were then re-run on the JSON classifier:
+
+```
+node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence $E/probe1-v2 --runs 1 --workdir $W --defect-probe 1
+node apps/designer-portal/e2e/round8/rc7-e2-run.mjs --evidence $E/probe2-v2 --runs 1 --workdir $W --defect-probe 2
+```
+
+Before each run the script checked that swap free was over 500 MB and Docker container memory was at or under 90%. Both checks passed on the first reading. The E1 stack (`patina-rc7-e1`) and the shared stack were up and untouched.
+
+| Run | Head | Pre-run (UTC, swap used / total, Docker mem) | Stack receipt (system id, server) | JSON report | Runner |
+|---|---|---|---|---|---|
+| probe1-v2 | `c991321de` | 18:43:48Z, 17948.69M / 19456.00M, 2.52 / 7.75 GiB (32.5%) | `7702162404657991721`, 172.25.0.2 | stats `{expected 0, unexpected 1, flaky 0, skipped 0}`, 0 global errors; 1 result `failed`, 1 error at :1242 | `probe is the defect: 1 failed at rc7-e2-consumer-journey.journey.ts:1242`; `RESULT: PASSED`; clean client stop; `containers left 0; volumes left 0` |
+| probe2-v2 | `c991321de` | 18:45:46Z, 14948.19M / 16384.00M, 2.53 / 7.75 GiB (32.6%) | `7702162909866053674` | the same stats and 0 global errors; 1 result `failed`, 1 error at :1303 | `probe is the defect: 1 failed at rc7-e2-consumer-journey.journey.ts:1303`; `RESULT: PASSED`; clean client stop; `containers left 0; volumes left 0` |
+
+Probe2-v2 readbacks:
+
+```
+[RC7 e2 defect-2 direct] false 36ms ERROR:  stale_scope
+[RC7 e2 defect-2 api] 504 60002ms {"message":"The upstream server is timing out"}
+[RC7 e2 defect-2 backends after] [{"pid" : 460, "application" : "PostgREST 14.5", "state" : "active", "queryAgeS" : 0.0, "xactAgeS" : 0.0, "waitEventType" : null, "waitEvent" : null}]
+```
+
+JSON reports: `review-r8/probe<n>-v2/run1/e2-defect-probe-<n>.json`.
 
 New readbacks in r2 and r3, once per project:
 
@@ -267,7 +289,7 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
     4. The card shows `was replaced` and the active `RC7 Fictional Third`.
     5. `replacementAudit()` reads back the replaced row: reason, `replaced_by` = designer, revision + 1, and the successor card active and required.
   - Result on this base: the form shows `No other household member is on file for this job.` (`service-acceptance-section.tsx:434`) instead of offering the third household card. The test fails at step 2.
-  - Confirmed failing at that step: at `47d500f1e` (Commands), and again with the extended repro at `86c8f482a` (probe1: `1 failed` at :1232, `Expected: 0 Received: 1`).
+  - Confirmed failing at that step: at `47d500f1e` (Commands), again with the extended repro at `86c8f482a` (probe1: `1 failed` at :1232, `Expected: 0 Received: 1`), and at `c991321de` (probe1-v2: the JSON classifier judged it the defect, at :1242).
 - Root cause:
   - `packages/supabase/src/hooks/use-households.ts:303-322` (`useProjectHousehold`) reads `projects.client_profile_id` and matches it to `designer_clients.client_id`.
   - `client_profile_id` is FK'd to `client_profiles(id)`, a disjoint uuid space (`supabase/migrations/00555_*.sql:523-528` says so). It is NULL on every local project (58/58).
@@ -289,8 +311,9 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
   - Steps: job P; draft `rc7-sa-1` in the UI; the designer's `present_service_acceptance_offline`; then `record_service_acceptance_paper_intake` with the scope hash's last digit changed.
   - The database refuses at once as the designer (`authenticated`, rolled back): `ERROR: stale_scope`, 37 ms.
   - The same call through `/rest/v1/rpc` as the designer returns HTTP 504 `The upstream server is timing out` after 60 004 ms. 0 intakes are written.
-  - A bare count of `pg_stat_activity` rows whose query text matched read 1 after the 504. It did not read `state`, and an idle pooled connection keeps its last query, so it does not show a running call. Since `1221598e1` the repro logs each matching backend's `state`, `application_name`, query and transaction age, and wait event instead.
-  - Probe2 failed at :1286, as required.
+  - probe2-v2 (`c991321de`): direct 36 ms, API 504 after 60 002 ms. Right after the 504, one PostgREST 14.5 backend was `active` on the matching call, with a query and transaction under 0.1 s old and no wait event. A fresh statement 60 s into the call is consistent with repeated re-execution, but one snapshot does not prove the retry hypothesis.
+  - Earlier (probe2 at `86c8f482a`): a bare count of `pg_stat_activity` rows whose query text matched read 1 after the 504. It did not read `state`, and an idle pooled connection keeps its last query, so it does not show a running call. Since `1221598e1` the repro logs each matching backend's `state`, `application_name`, query and transaction age, and wait event instead.
+  - Probe2 failed at :1286, as required. Probe2-v2 at `c991321de` failed at :1303 (the same step), and the JSON classifier judged it the defect.
 - Hypothesis (unverified; not traced in PostgREST source and not shown by the database; a separate fix lane is establishing the mechanism):
   - The RPCs raise a deterministic refusal with SQLSTATE `40001` (for example `00886_round8_service_acceptance.sql:900`, inside `record_service_acceptance_paper_intake` (:856): `RAISE EXCEPTION 'stale_scope' USING ERRCODE = 'serialization_failure'`).
   - PostgREST's transaction layer treats `40001` as a transient serialization failure and retries the transaction. The refusal would recur on every retry, so the call would run until Kong's 60 s upstream timeout.
@@ -324,7 +347,8 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
 - Screen reader: no assistive-technology pass.
 - Duplicate-send protection on `Review and send`: never exercised (one `Send` per sheet). The notice counts prove row-count integrity only.
 - The RC7-e2-2 mechanism (PostgREST retrying `40001`): a hypothesis. A separate fix lane owns it.
-- The JSON probe classifier on real Playwright output: unit tests only (real-shaped reports) until the two probes re-run at `1221598e1`.
+- The JSON probe classifier has run on real Playwright output only for the true-defect case (probe1-v2, probe2-v2). Its rejection branches are unit-tested on real-shaped reports.
+- The Sanity block on a live request: probe1-v2 and probe2-v2 made no Sanity request (0 blocked, 0 `Sanity fetch failed` lines). The block is untested until a full journey run.
 
 ## Teardown
 
@@ -336,8 +360,9 @@ The earlier chromium-only counted runs at `56bbb23cf` (`playwright.consumer-jour
   - No write to 54321/54322 and no connection to them.
   - Correction: the counted run at `56bbb23cf` did read the shared stack once per journey. The runner's identity proof ran `docker exec supabase_db_supabase psql … -c 'SELECT system_identifier FROM pg_control_system();'` inside the shared DB container. It was read-only and recorded `sharedSystemId` `7701004642274893866` in the receipt.
   - Since `28f3bf3e9` the runner no longer makes that read; the c1/c2 receipts carry no shared id.
+- probe1-v2 and probe2-v2: each logged a clean client stop and `supabase stop --no-backup exit=0; containers left 0; volumes left 0`. Census at 2026-10-29T18:48:54Z: 3110, 3112, 57120, 57121, 57122, 57123, 57124, 57127, 57129 and 57183 all free; containers 0 and volumes 0 for label `patina-rc7-e2`.
 - No `--linked`, Strata or PostHog.
 - Correction: every run read production Sanity (`kv3qrinl.apicdn.sanity.io`, read-only help-CMS content). The help-system hook (`packages/help-system/src/hooks/useHelpContent.ts`) fetches it from the browser.
   - r2's log has 16 `[help-system] Sanity fetch failed` lines. All 16 are `[browser]`-forwarded from the designer portal, and all ended in a request error. The client portal's dev log has none, and no server-side fetch appears.
-  - Since `1221598e1` every journey browser context aborts `*.sanity.io` requests (`context.route`), and `afterAll` logs `[RC7 e2 sanity requests blocked] N`. The browser still logs `Sanity fetch failed` for each aborted request.
+  - Since `1221598e1`, every journey browser context aborts `*.sanity.io` requests (`context.route`), and `afterAll` logs `[RC7 e2 sanity requests blocked] N`. The browser still logs `Sanity fetch failed` for each aborted request.
   - App config is not edited. Other lanes' journeys still make these reads (Harness debt).
