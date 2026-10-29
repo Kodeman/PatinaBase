@@ -676,6 +676,53 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Image changed in another session. Finish changed in another session to “Peer oak”. Save again to replace them.",
     );
+    // The chosen image stays, and Enter on the empty link saves it again.
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute(
+      "src",
+      "https://example.com/mine.jpg",
+    );
+    await act(async () => {
+      fireEvent.keyDown(link, { key: "Enter" });
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { selected_media: [{ url: "https://example.com/mine.jpg" }] },
+    });
+  });
+
+  it("A, then image B sent, then C chosen before B lands: C sends on B's row with no alert", async () => {
+    server = { ...server, selected_media: [{ url: "https://example.com/a.jpg" }] as never };
+    render(<Harness />);
+    const link = screen.getByRole("textbox", { name: "Paste an image link" });
+    const choose = async (url: string) => {
+      fireEvent.change(link, { target: { value: url } });
+      await act(async () => {
+        fireEvent.keyDown(link, { key: "Enter" });
+      });
+    };
+    await choose("https://example.com/b.jpg");
+    await choose("https://example.com/c.jpg");
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute(
+      "src",
+      "https://example.com/c.jpg",
+    );
+    await answer(0);
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 2,
+      changes: { selected_media: [{ url: "https://example.com/c.jpg" }] },
+    });
+    await answer(1);
+    expect(server).toMatchObject({
+      selected_media: [{ url: "https://example.com/c.jpg" }],
+      row_version: 3,
+    });
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute(
+      "src",
+      "https://example.com/c.jpg",
+    );
   });
 
   it("a focus the pane moves after a conflict never commits another conflicted field", async () => {

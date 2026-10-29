@@ -364,6 +364,7 @@ function useSpecEdit<T>(column: SpecColumn, value: T, version: number) {
   };
   return {
     shown: draft ? draft.value : row,
+    dirty: draft !== null,
     change,
     edit,
     conflicted: () => conflicted.current,
@@ -711,7 +712,16 @@ export function SpecFieldsPane({
   const productName = line.product_id
     ? (line.product?.name ?? line.name)
     : null;
-  const image = lineImageUrl(line, spec);
+  // The chosen image is a draft like a typed field's: it shows until saved.
+  const imageEdit = useSpecEdit(
+    "selected_media",
+    spec?.selected_media,
+    spec?.row_version ?? 0,
+  );
+  const image = lineImageUrl(
+    line,
+    spec && { ...spec, selected_media: imageEdit.shown },
+  );
   const unit = (ROUGH_IN_UNITS as readonly string[]).includes(line.unit ?? "")
     ? (line.unit as FfeLineUnit)
     : "each";
@@ -765,7 +775,6 @@ export function SpecFieldsPane({
   };
   /** Each field's latest commit; an answer to an older one changes nothing. */
   const latestSpec = useRef(new Map<string, SpecWrite>());
-  const imageGen = useRef(0);
   const pendingSpec = useRef(new Map<string, SpecWrite>());
   const sendingSpec = useRef<Map<string, SpecWrite> | null>(null);
 
@@ -1092,6 +1101,16 @@ export function SpecFieldsPane({
   };
 
   const saveLink = (raw: string) => {
+    // An empty link saves the chosen image kept after a conflict again.
+    if (!raw.trim() && imageEdit.dirty) {
+      writeSpec(
+        "Image",
+        { selected_media: imageEdit.shown },
+        imageEdit.edit(),
+        false,
+      );
+      return;
+    }
     const url = imageLink(raw);
     if (!url) {
       setImageNote(raw.trim() ? LINK_INVALID_SENTENCE : DROP_LINK_SENTENCE);
@@ -1099,25 +1118,9 @@ export function SpecFieldsPane({
     }
     setImageNote(null);
     setLink("");
-    // The link field empties as it sends, so a refusal leaves no draft. Its
-    // base is the image the row held when this one was chosen.
-    let base: SpecChanges = { selected_media: acked.current?.selected_media };
-    imageGen.current += 1;
-    writeSpec(
-      "Image",
-      { selected_media: [{ url }] },
-      {
-        gen: imageGen.current,
-        base: () => base,
-        ack: (row) => {
-          base = { selected_media: row.selected_media };
-        },
-        rebase: (row) => {
-          base = { selected_media: row.selected_media };
-        },
-      },
-      false,
-    );
+    const media = [{ url }];
+    imageEdit.change(media);
+    writeSpec("Image", { selected_media: media }, imageEdit.edit(), false);
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
