@@ -440,19 +440,18 @@
   }
 }
 
-/* RC7-E8-4 — the paper body holds until the lens resolves it. Every chapter
-   mounts at once and its body resolves on its own read, so on a cold load the
-   chapters below the first screen stand inside it and are pushed out one body
-   at a time (cold-load CLS 1.16 on the F01 job). The lens already decides when
-   the paper has its real height (D-B46: no paper read fetching, no loading
-   register, scrollHeight held three frames, or LENS_RESOLVE_MAX_MS) and writes
-   `data-lens-resolved` on the shell in the frame its first pass commits. Until
-   then everything below the cover keeps its layout but does not paint — the
-   arrival veil's opacity hold (arrival.css), so focus and landings still reach
-   it. The cover (letterhead, ticket, band) is never held. `doc-fade` filled
-   backwards is the hold; its 3,500ms delay is the failsafe past the lens's own
-   3,000ms deadline, so a lens that never answers cannot leave the paper blank. */
-[data-paper-renderer="round8"][data-document-shell]:not([data-lens-resolved]) [data-document-paper] > :not([data-paper-cover]) {
+/* RC7-E8-4 — the paper body reveals chapter by chapter, top down. Every
+   chapter mounts at once and its body resolves on its own read, so on a cold
+   load the chapters inside the first screen were pushed down once per body
+   above them (cold-load CLS 1.16 on the F01 job). Each child of the paper
+   below the cover keeps its layout but does not paint until
+   `use-chapter-reveal.ts` marks it `data-paper-shown` (everything above it has
+   settled, by the lens's own signals) or the lens has resolved the whole paper
+   (`data-lens-resolved` on the shell). An opacity hold, as the arrival veil's
+   (arrival.css), so focus and landings still reach it. The cover is never
+   held. `doc-fade` filled backwards is the hold; its 3,500ms delay is each
+   child's failsafe past the lens's own 3,000ms deadline. */
+[data-paper-renderer="round8"][data-document-shell]:not([data-lens-resolved]) [data-document-paper] > :not([data-paper-cover]):not([data-paper-shown]) {
   opacity: 0;
   animation: doc-fade 1ms linear 3500ms both;
 }

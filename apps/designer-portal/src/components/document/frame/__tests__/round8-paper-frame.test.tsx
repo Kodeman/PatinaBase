@@ -7,7 +7,9 @@ import type { DocumentFrameSlots } from '../frame-slots';
 import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 
 import { rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-origin';
-import { LENS_RESOLVE_MAX_MS } from '@/lib/document/lens-constants';
+import { LENS_RESOLVE_MAX_MS, LENS_RESOLVE_STABLE_FRAMES } from '@/lib/document/lens-constants';
+import { UNFOLD_REGION_EVENT } from '@/lib/document/document-index';
+import { revealStep, SHOWN_ATTRIBUTE, type RevealState } from '../use-chapter-reveal';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -397,61 +399,161 @@ it('refreshes the mounted JobHead from People to same-job Accounts without repla
 });
 
 /*
- * RC7-E8-4 — the paper body holds until the lens resolves it. jsdom evaluates
- * no stylesheet, so the rule is read from round8.css and its selector is run
- * against the frame's real DOM.
+ * RC7-E8-4 — the paper body reveals chapter by chapter, top down. jsdom
+ * evaluates no stylesheet, so the hold is read from round8.css and its selector
+ * run against the frame's real DOM; the reveal order is driven frame by frame.
  */
-describe('RC7-E8-4 — the paper body holds until the lens resolves it', () => {
+describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
   const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
   const round8Css = strip(readFileSync(join(__dirname, '..', '..', 'paper', 'round8.css'), 'utf8'));
   const globalsCss = strip(readFileSync(join(__dirname, '..', '..', '..', '..', 'app', 'globals.css'), 'utf8'));
   const holds = [...round8Css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
     .map(([, selector, body]) => ({ selector: selector.trim().replace(/\s+/g, ' '), body: body.trim() }))
     .filter(({ selector }) => selector.includes(':not([data-lens-resolved])'));
+  const HOLD =
+    '[data-paper-renderer="round8"][data-document-shell]:not([data-lens-resolved]) [data-document-paper] > :not([data-paper-cover]):not([data-paper-shown])';
 
-  it('is one rule on the round-8 shell, keyed on the lens resolution', () => {
+  it('is one rule on the round-8 shell, released per child or by the lens', () => {
     expect(holds).toHaveLength(1);
-    expect(holds[0]!.selector).toBe(
-      '[data-paper-renderer="round8"][data-document-shell]:not([data-lens-resolved]) [data-document-paper] > :not([data-paper-cover])',
-    );
+    expect(holds[0]!.selector).toBe(HOLD);
   });
 
-  it('holds paint only: layout, focus and landings are untouched', () => {
-    const properties = holds[0]!.body
-      .split(';')
-      .map((decl) => decl.split(':')[0]!.trim())
-      .filter(Boolean);
+  it('holds paint only, with a per-child failsafe past the lens deadline', () => {
+    const properties = holds[0]!.body.split(';').map((decl) => decl.split(':')[0]!.trim()).filter(Boolean);
     expect(properties).toEqual(['opacity', 'animation']);
-  });
-
-  it('lets go by itself past the lens deadline, onto full opacity', () => {
     const failsafe = /animation:\s*doc-fade 1ms linear (\d+)ms both/.exec(holds[0]!.body);
-    expect(failsafe).not.toBeNull();
-    expect(Number(failsafe![1])).toBeGreaterThan(LENS_RESOLVE_MAX_MS);
+    expect(Number(failsafe?.[1])).toBeGreaterThan(LENS_RESOLVE_MAX_MS);
     expect(globalsCss).toMatch(
       /@keyframes doc-fade\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}\s*to\s*\{\s*opacity:\s*1;\s*\}\s*\}/,
     );
   });
 
-  it('holds every chapter and the colophon, never the cover, and only until resolved', () => {
+  const heldIn = (container: HTMLElement) => (el: Element) =>
+    Array.from(container.querySelectorAll(HOLD)).some((root) => root.contains(el));
+  const chapter = (container: HTMLElement, key: string) =>
+    container.querySelector(`[data-paper-chapter="${key}"]`)!;
+  // The page's schedule scope is providers only (no element), so each chapter
+  // is its own child of the paper; the harness default wraps them in a div.
+  const asOnPage = () => renderFrame({ slots: slots({ scheduleScope: (children) => <>{children}</> }) });
+
+  it('mounts holding every chapter and the colophon, never the cover, head or margin', () => {
     roomFilesReady = true;
     visitsReady = true;
     const { container } = renderFrame();
-    const held = () => Array.from(container.querySelectorAll<HTMLElement>(holds[0]!.selector));
-    const isHeld = (el: Element) => held().some((root) => root.contains(el));
-
+    const isHeld = heldIn(container);
     const chapters = Array.from(container.querySelectorAll('[data-paper-chapter]'));
     expect(chapters.length).toBeGreaterThan(0);
     expect(chapters.every(isHeld)).toBe(true);
     expect(isHeld(container.querySelector('[data-slot="colophon"]')!)).toBe(true);
-    const cover = container.querySelector('[data-paper-cover]')!;
-    expect(held().some((root) => root === cover || root.contains(cover) || cover.contains(root))).toBe(false);
-    // The job head and the contents margin stand outside the paper.
+    expect(isHeld(container.querySelector('[data-paper-cover] [data-slot="letterhead"]')!)).toBe(false);
     expect(isHeld(container.querySelector('[data-job-head]')!)).toBe(false);
     expect(isHeld(container.querySelector('[data-slot="margin"]')!)).toBe(false);
-
-    // The lens writes the attribute on the shell when its first pass commits.
     container.querySelector('[data-document-shell]')!.setAttribute('data-lens-resolved', 'true');
-    expect(held()).toEqual([]);
+    expect(container.querySelectorAll(HOLD)).toHaveLength(0);
+  });
+
+  /** A paper of four children whose tops the test sets, frame by frame. */
+  function paperOf(keys: string[]) {
+    const paper = document.createElement('main');
+    paper.innerHTML =
+      '<div data-paper-cover=""></div>' +
+      keys.map((key) => `<section data-paper-chapter="${key}" data-index-region="${key}"></section>`).join('');
+    const tops = new Map<Element, number>();
+    for (const el of [paper, ...Array.from(paper.children)]) {
+      el.getBoundingClientRect = () => ({ top: tops.get(el) ?? 0 }) as DOMRect;
+    }
+    const shown = () =>
+      Array.from(paper.querySelectorAll(`[${SHOWN_ATTRIBUTE}]`)).map((el) => el.getAttribute('data-paper-chapter'));
+    const at = (key: string) => paper.querySelector(`[data-paper-chapter="${key}"]`)!;
+    return { paper, tops, shown, at };
+  }
+  const frames = (paper: Element, state: RevealState, n: number) => {
+    for (let i = 0; i < n; i++) revealStep(paper, state);
+  };
+
+  it('reveals in paper order once the tops have held for the lens frame count', () => {
+    const { paper, shown } = paperOf(['brief', 'design', 'schedule']);
+    const state: RevealState = { tops: new WeakMap() };
+    frames(paper, state, LENS_RESOLVE_STABLE_FRAMES);
+    expect(shown()).toEqual([]);
+    frames(paper, state, 1);
+    expect(shown()).toEqual(['brief', 'design', 'schedule']);
+  });
+
+  it('stops at the first chapter below a loading register, and at a top still moving', () => {
+    const { paper, tops, shown, at } = paperOf(['brief', 'design', 'schedule', 'ffe']);
+    const busy = document.createElement('p');
+    busy.setAttribute('aria-busy', 'true');
+    at('design').appendChild(busy);
+    const state: RevealState = { tops: new WeakMap() };
+    frames(paper, state, LENS_RESOLVE_STABLE_FRAMES + 1);
+    // design is revealed (nothing above it is loading); what it pushes is not.
+    expect(shown()).toEqual(['brief', 'design']);
+
+    busy.remove();
+    let y = 400;
+    tops.set(at('schedule'), y);
+    tops.set(at('ffe'), y + 100);
+    for (let i = 0; i < LENS_RESOLVE_STABLE_FRAMES + 1; i++) {
+      // design is still growing: schedule's top moves every frame.
+      y += 50;
+      tops.set(at('schedule'), y);
+      tops.set(at('ffe'), y + 100);
+      revealStep(paper, state);
+    }
+    expect(shown()).toEqual(['brief', 'design']);
+    frames(paper, state, LENS_RESOLVE_STABLE_FRAMES);
+    expect(shown()).toEqual(['brief', 'design', 'schedule', 'ffe']);
+  });
+
+  it('holds what lies below a region the lens still holds quiet, until it resolves', () => {
+    const { paper, shown, at } = paperOf(['design', 'approvals', 'schedule']);
+    const quiet = document.createElement('section');
+    quiet.setAttribute('data-density', 'quiet');
+    at('approvals').appendChild(quiet);
+    const state: RevealState = { tops: new WeakMap() };
+    frames(paper, state, LENS_RESOLVE_STABLE_FRAMES + 1);
+    // At resolution a quiet region whose own data reads full takes its height at once.
+    expect(shown()).toEqual(['design', 'approvals']);
+    quiet.setAttribute('data-density', 'full');
+    revealStep(paper, state);
+    expect(shown()).toEqual(['design', 'approvals', 'schedule']);
+  });
+
+  it('holds everything while the cover itself is still loading', () => {
+    const { paper, shown } = paperOf(['brief', 'design']);
+    paper.querySelector('[data-paper-cover]')!.innerHTML = '<span class="animate-pulse"></span>';
+    frames(paper, { tops: new WeakMap() }, LENS_RESOLVE_STABLE_FRAMES + 2);
+    expect(shown()).toEqual([]);
+  });
+
+  it('reveals a jumped-to chapter and every chapter above it at once', () => {
+    roomFilesReady = true;
+    visitsReady = true;
+    const { container } = asOnPage();
+    const isHeld = heldIn(container);
+    act(() => {
+      window.dispatchEvent(new CustomEvent(UNFOLD_REGION_EVENT, { detail: { region: 'schedule' } }));
+    });
+    for (const key of ['design', 'approvals', 'schedule']) expect(isHeld(chapter(container, key))).toBe(false);
+    expect(isHeld(chapter(container, 'ffe'))).toBe(true);
+    // A legacy region key lands on the chapter that carries it (money → 08 Financials).
+    act(() => {
+      window.dispatchEvent(new CustomEvent(UNFOLD_REGION_EVENT, { detail: { region: 'money' } }));
+    });
+    for (const key of ['ffe', 'site', 'financials']) expect(isHeld(chapter(container, key))).toBe(false);
+    expect(isHeld(chapter(container, 'closeout'))).toBe(true);
+  });
+
+  it('reveals the chapter a landing focuses, and every chapter above it', () => {
+    const { container } = asOnPage();
+    const isHeld = heldIn(container);
+    const heading = container.querySelector<HTMLElement>('#closeout-chapter-heading')!;
+    act(() => heading.focus());
+    expect(document.activeElement).toBe(heading);
+    for (const key of ['approvals', 'schedule', 'ffe', 'financials', 'closeout']) {
+      expect(isHeld(chapter(container, key))).toBe(false);
+    }
+    expect(isHeld(chapter(container, 'record'))).toBe(true);
   });
 });

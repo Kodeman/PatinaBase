@@ -1000,7 +1000,10 @@ const CabinetryChapter = lazy(() => import('@/components/document/paper/chapters
 // through the cache), so it never stands as an empty heading. The page owns
 // the data path; the frame only places these gates around its chapters.
 function WhenVisits({ projectId, children }: { projectId: string; children: ReactNode }) {
-  const { data: visits, isError } = useProjectVisits(projectId);
+  const { data: visits, isError, isLoading } = useProjectVisits(projectId);
+  // RC7-E8-4: the gate's read in flight is a loading register, so the paper
+  // below does not reveal (use-chapter-reveal.ts) before this chapter can mount.
+  if (isLoading) return <span hidden aria-busy="true" />;
   // VisitsBlock's own rule: a failed read prints "Field data unavailable",
   // which is content — an outage is not a field-less project.
   return isError || (visits && visits.length > 0) ? children : null;
@@ -1009,7 +1012,8 @@ function WhenVisits({ projectId, children }: { projectId: string; children: Reac
 // CP-01 — 03 Cabinetry mounts on the same native reading its chapter makes:
 // a GC-bought cabinet package, or a failed read (which the chapter reports).
 function WhenCabinetry({ projectId, children }: { projectId: string; children: ReactNode }) {
-  const { data, isError } = useExternalFulfilmentReadings(projectId);
+  const { data, isError, isLoading } = useExternalFulfilmentReadings(projectId);
+  if (isLoading) return <span hidden aria-busy="true" />;
   return isError || data?.some((row) => row.kind === 'gc_cabinetry') ? children : null;
 }
 
