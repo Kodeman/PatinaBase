@@ -13,6 +13,8 @@
  * - F11: a failed Dimensions field is marked invalid, as text fields are.
  * - F12: item label, rooms, labor and COM writes reach the same hold.
  * - Legacy (no owner): the same one-at-a-time writes; no hold, no marks.
+ * - RC7-E6-3: a stale save keeps the draft, names the peer's value and saves
+ *   again on the refreshed row_version.
  */
 
 import { useState } from "react";
@@ -41,6 +43,11 @@ const mutation = (fn: (input: never) => unknown) => ({
 });
 
 jest.mock("@patina/supabase", () => ({
+  ProjectFfeSpecConflictError: class extends Error {
+    constructor(readonly current: unknown) {
+      super("This selection changed in another session. Refresh before saving.");
+    }
+  },
   useUpdateProjectFfeSpec: () =>
     mutation(
       (input: Call["input"]) =>
@@ -128,14 +135,16 @@ const line = {
 
 /** The row as the table holds it; a write on an older version conflicts. */
 let server: SpecLensSpec;
-const CONFLICT = "This selection changed in another session. Refresh before saving.";
+const { ProjectFfeSpecConflictError: Conflict } = jest.requireMock("@patina/supabase") as {
+  ProjectFfeSpecConflictError: new (current: SpecLensSpec) => Error;
+};
 
-/** Answers write `i` as the table would. */
+/** Answers write `i` as the table would: a stale version gets the row as it is. */
 async function answer(i: number) {
   const call = mockSpecCalls[i];
   await act(async () => {
     if (call.input.expectedRowVersion !== server.row_version) {
-      call.reject(new Error(CONFLICT));
+      call.reject(new Conflict({ ...server }));
       return;
     }
     server = {
@@ -338,6 +347,116 @@ it("clear then Esc — embedded clear waits for the in-flight row writer on its 
   expect(server).toMatchObject({ finish: null, row_version: 3 });
   expect(onLeave).toHaveBeenCalledTimes(1);
   expect(snapshot().dirty).toBe(false);
+});
+
+describe("RC7-E6-3 (A06): a save another session got to first", () => {
+  /** Another session saves the row; this pane still holds the older version. */
+  const peerSaves = (changes: Partial<SpecLensSpec>) => {
+    server = { ...server, ...changes, row_version: server.row_version + 1 };
+  };
+  async function enter(name: string, value: string) {
+    const input = field(name);
+    act(() => input.focus());
+    fireEvent.change(input, { target: { value } });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+  }
+
+  it.each([
+    ["Finish", "finish"],
+    ["Material", "material"],
+    ["Color", "color_fabric"],
+    ["Exact location", "exact_location"],
+  ] as const)(
+    "%s keeps its draft and focus, names the peer's value, and saves on the refreshed row_version",
+    async (name, column) => {
+      render(<Harness />);
+      peerSaves({ [column]: "Peer walnut" });
+      await enter(name, "Mine");
+      await answer(0);
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        `${name} changed in another session to “Peer walnut”. Save again to replace it.`,
+      );
+      expect(field(name)).toHaveValue("Mine");
+      expect(field(name)).toHaveFocus();
+      expect(field(name)).toHaveAttribute("aria-invalid", "true");
+      // The pane's row is the peer's now; the draft did not reset to it.
+      expect(shown).toMatchObject({ [column]: "Peer walnut", row_version: 2 });
+      expect(snapshot().dirty).toBe(true);
+
+      await act(async () => {
+        fireEvent.keyDown(field(name), { key: "Enter" });
+      });
+      expect(mockSpecCalls).toHaveLength(2);
+      expect(mockSpecCalls[1].input).toMatchObject({
+        expectedRowVersion: 2,
+        changes: { [column]: "Mine" },
+      });
+      await answer(1);
+
+      expect(server).toMatchObject({ [column]: "Mine", row_version: 3 });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(field(name)).not.toHaveAttribute("aria-invalid");
+      expect(field(name)).toHaveFocus();
+      expect(snapshot().dirty).toBe(false);
+    },
+  );
+
+  it("Notes, written on blur, keeps its draft and saves again on the refreshed row_version", async () => {
+    render(<Harness />);
+    peerSaves({ trade_notes: null, finish: "Peer finish" });
+    peerSaves({ trade_notes: "Peer note" });
+    await type("Notes", "My note");
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Notes changed in another session to “Peer note”. Save again to replace it.",
+    );
+    expect(field("Notes")).toHaveValue("My note");
+    // Finish was never edited here, so it shows what the peer saved, and
+    // passing through it writes nothing over the peer.
+    expect(field("Finish")).toHaveValue("Peer finish");
+    await type("Finish", "Peer finish");
+    expect(mockSpecCalls).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.blur(field("Notes"));
+    });
+    expect(mockSpecCalls[1].input).toMatchObject({
+      expectedRowVersion: 3,
+      changes: { trade_notes: "My note" },
+    });
+    await answer(1);
+    expect(server).toMatchObject({ trade_notes: "My note", finish: "Peer finish", row_version: 4 });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("says a cleared peer value, and a peer edit elsewhere on the row, in words", async () => {
+    render(<Harness />);
+    peerSaves({ finish: null });
+    await enter("Finish", "Mine");
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Finish cleared in another session. Save again to replace it.",
+    );
+
+    // Put back to what the peer left: nothing to write, and the mark clears.
+    fireEvent.change(field("Finish"), { target: { value: "" } });
+    await act(async () => {
+      fireEvent.keyDown(field("Finish"), { key: "Enter" });
+    });
+    expect(mockSpecCalls).toHaveLength(1);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    peerSaves({ material: "Peer ash" });
+    await enter("Color", "Moss");
+    await answer(1);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This selection changed in another session. Save again.",
+    );
+    expect(field("Color")).toHaveValue("Moss");
+  });
 });
 
 describe("F6: one writer per row", () => {

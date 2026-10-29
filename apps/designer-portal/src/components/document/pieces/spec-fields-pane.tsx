@@ -32,6 +32,7 @@ import {
   type RefObject,
 } from "react";
 import {
+  ProjectFfeSpecConflictError,
   usePlaceProductInProjectV2,
   useSetFfeLineBuildFields,
   useSetFfeLineCommercials,
@@ -258,6 +259,35 @@ function sameColumns(changes: SpecChanges, row: SpecChanges): boolean {
   );
 }
 
+/**
+ * RC7-E6-3 — the alert for a save another session got to first: what that
+ * session left in each refused field.
+ */
+function conflictText(
+  fields: readonly (readonly [string, SpecChanges])[],
+  base: SpecChanges,
+  peer: SpecChanges,
+): string {
+  const said = fields.flatMap(([field, changes]) => {
+    const columns = Object.keys(changes) as SpecColumn[];
+    const theirs: SpecChanges = Object.fromEntries(
+      columns.map((column) => [column, peer[column]]),
+    );
+    if (sameColumns(theirs, base)) return [];
+    if (columns.length !== 1 || !TEXT_COLUMNS.has(columns[0])) {
+      return [`${field} changed in another session.`];
+    }
+    const value = String(peer[columns[0]] ?? "").trim();
+    return [
+      value
+        ? `${field} changed in another session to “${value}”.`
+        : `${field} cleared in another session.`,
+    ];
+  });
+  if (said.length === 0) return "This selection changed in another session. Save again.";
+  return `${said.join(" ")} Save again to replace ${said.length > 1 ? "them" : "it"}.`;
+}
+
 /** A text field written on blur or Enter; the pane decides if it changed. */
 function SpecText({
   label,
@@ -277,6 +307,13 @@ function SpecText({
   onCommit: (next: string | null) => void;
 }) {
   const [draft, setDraft] = useState(value ?? "");
+  // A field nobody has edited follows its row (a peer's save adopted after a
+  // conflict); an edited draft stays until it saves or is put back.
+  const [seen, setSeen] = useState(value ?? "");
+  if ((value ?? "") !== seen) {
+    setSeen(value ?? "");
+    if (draft === seen) setDraft(value ?? "");
+  }
   const commit = () => {
     const next = draft.trim();
     onCommit(next === "" ? null : next);
@@ -645,14 +682,17 @@ export function SpecFieldsPane({
   );
   const sendingSpec = useRef<{
     changes: SpecChanges;
-    fields: Map<string, { seq: number; sticky: boolean }>;
+    fields: Map<string, { seq: number; sticky: boolean; changes: SpecChanges }>;
   } | null>(null);
 
   const sendSpec = () => {
     const row = acked.current;
     if (sendingSpec.current || !alive.current || !row) return;
     const changes: SpecChanges = {};
-    const fields = new Map<string, { seq: number; sticky: boolean }>();
+    const fields = new Map<
+      string,
+      { seq: number; sticky: boolean; changes: SpecChanges }
+    >();
     for (const [field, entry] of pendingSpec.current) {
       // What it shows is what the row now holds: nothing to write.
       if (sameColumns(entry.changes, row)) revert(field);
@@ -661,6 +701,7 @@ export function SpecFieldsPane({
         fields.set(field, {
           seq: latestSpec.current.get(field) ?? 0,
           sticky: entry.sticky,
+          changes: entry.changes,
         });
       }
     }
@@ -690,9 +731,30 @@ export function SpecFieldsPane({
             for (const [field] of latest()) revert(field);
           },
           (e: unknown) => {
+            if (!alive.current) return;
+            // A stale row_version: take the row the other session left, so
+            // the drafts stay on screen and the next save carries its version.
+            const peer =
+              e instanceof ProjectFfeSpecConflictError &&
+              e.current?.id === row.id
+                ? e.current
+                : null;
+            if (
+              peer &&
+              (!acked.current || peer.row_version > acked.current.row_version)
+            ) {
+              acked.current = peer;
+              onSpecSaved(peer);
+            }
             const current = latest();
-            if (!alive.current || current.length === 0) return;
-            const message = errorText(e, "The field was not saved.");
+            if (current.length === 0) return;
+            const message = peer
+              ? conflictText(
+                  current.map(([field, sent]) => [field, sent.changes] as const),
+                  row,
+                  peer,
+                )
+              : errorText(e, "The field was not saved.");
             setError(message);
             hold.failed(current[0][0], message);
             for (const [field, sent] of current) {

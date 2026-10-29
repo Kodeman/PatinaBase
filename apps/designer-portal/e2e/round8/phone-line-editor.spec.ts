@@ -245,7 +245,8 @@ for (const width of [320, 390]) {
       await expect(finish).toHaveValue(draft);
       await expect(finish).toBeFocused();
       expect(finishOf(line)).toBe('C03 peer finish');
-      await finish.fill(original);
+      // RC7-E6-3: the conflict hands over the peer's row, so putting the field back means its value.
+      await finish.fill('C03 peer finish');
       await finish.press('Enter');
       await expect(finish).not.toHaveAttribute('aria-invalid', 'true');
       const beforeReload = writes;
