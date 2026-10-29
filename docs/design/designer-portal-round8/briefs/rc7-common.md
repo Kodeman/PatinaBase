@@ -29,6 +29,7 @@ RC-6 R3b ([`evidence/rc/rc6-reviews/r3b-evidence-full.md`](../evidence/rc/rc6-re
 - **Local activation.** Turn C2/C4/C6 on only on your owned stack, through SQL that refuses unless the DB is yours (check the system identifier or the port). RC-5 §4.3 and `supabase/tests/service_acceptance_activation_plan_test.sql` show the method.
 - **Hard-coded shared ports.** Some existing suites and helpers hard-code `54321`/`54322`, for example the dblink DSNs in `supabase/tests/00845_*` and `00848_*`, which go through the Docker host gateway. Before running any existing file, run `grep -nE '5432[12]'` on it. If it matches, run a scratch copy with your own port swapped in (grep the copy first), and record the match as harness debt.
 - **Docker memory.** All owned stacks share the Docker VM's 7.75 GiB. If your Postgres exits, check `docker inspect … --format '{{.State.OOMKilled}}'` before suspecting the product.
+- **Turn cron off.** Once your stack is up, run `ALTER SYSTEM SET cron.launch_active_jobs = off; SELECT pg_reload_conf();`. Cron job start-up crashed backends in several lanes on 2026-10-29 (exit code 2, then recovery and PostgREST PGRST002 503s). If you need a scheduled job's effect, call its SQL function directly.
 - **Heavy work.** Playwright runs with `--workers=1`. Run one heavy command at a time in your lane. Check `df -h /Users/kody` first and stop if less than 20 GiB is free.
 - **Before you finish:**
   - stop your stack;
