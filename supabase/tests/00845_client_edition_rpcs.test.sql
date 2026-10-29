@@ -58,7 +58,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(109);
+SELECT plan(110);
 
 -- ─── grants ────────────────────────────────────────────────────────────────
 
@@ -1044,10 +1044,28 @@ UPDATE us49_editorial SET before_text = jsonb_set(before_text::jsonb, '{assets}'
     THEN jsonb_set(asset, '{caption,when}', to_jsonb(substr(asset #>> '{caption,when}', 2)))
     ELSE asset END ORDER BY position)
     FROM jsonb_array_elements(before_text::jsonb -> 'assets') WITH ORDINALITY AS a(asset,position)), '[]'::jsonb))::text;
+-- 00883 deliberately added item `responsibility` and `externalFulfilmentId`.
+-- Pin their values for this studio-only fixture, then strip only those two keys
+-- from the current side so every other envelope byte is still compared.
+SELECT ok(
+  (SELECT count(*) > 0
+          AND count(*) FILTER (WHERE NOT (item ->> 'responsibility' = 'studio'
+                                          AND item -> 'externalFulfilmentId' = 'null'::jsonb)) = 0
+   FROM us49_editorial,
+        jsonb_array_elements(after_text::jsonb -> 'rooms') AS r(room),
+        jsonb_array_elements(room -> 'items') AS i(item)),
+  'before/after: every fixture item reads responsibility studio with a null externalFulfilmentId (00883)');
+UPDATE us49_editorial SET after_text = jsonb_set(after_text::jsonb, '{rooms}',
+  COALESCE((SELECT jsonb_agg(jsonb_set(room, '{items}',
+      COALESCE((SELECT jsonb_agg(item - 'responsibility' - 'externalFulfilmentId' ORDER BY item_position)
+                FROM jsonb_array_elements(room -> 'items') WITH ORDINALITY AS i(item,item_position)), '[]'::jsonb))
+    ORDER BY room_position)
+    FROM jsonb_array_elements(after_text::jsonb -> 'rooms') WITH ORDINALITY AS r(room,room_position)), '[]'::jsonb))::text
+ WHERE after_text IS NOT NULL;
 SELECT is(
   (SELECT count(*) FROM us49_editorial WHERE before_text IS DISTINCT FROM after_text OR after_text IS NULL),
   0::bigint,
-  'before/after: envelopes match 00842 except the ruled 00852 unpadded caption date');
+  'before/after: envelopes match 00842 except the ruled 00852 unpadded caption date and the 00883 item responsibility keys');
 SELECT is(
   (SELECT count(*) FROM us49_editorial),
   (SELECT count(*) + 1 FROM public.projects WHERE client_id IS NOT NULL),
