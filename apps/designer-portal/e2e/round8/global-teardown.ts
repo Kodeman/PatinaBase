@@ -2,13 +2,15 @@ import { psqlRun, psqlScalar } from '../helpers/psql';
 import { round8Stack } from './owned-stack';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
+const STUDIO = 'f0180000-0000-4000-8000-000000000001';
 const ACTORS = ['f0180000-0000-4000-8000-000000000002', 'f0180000-0000-4000-8000-000000000003'];
 
 export default async function globalTeardown(): Promise<void> {
   round8Stack('F01 teardown');
 
-  // Remove the F01 studio and each actor's personal organization, but never
-  // an organization that has a member outside this fictional fixture.
+  // Remove the F01 studio (with every seat on it, including ones other round-8
+  // fixtures add) and each actor's personal organization, but never another
+  // organization that has a member outside this fictional fixture.
   psqlRun(`
     BEGIN;
     CREATE TEMP TABLE f01_issues ON COMMIT DROP AS
@@ -37,34 +39,103 @@ export default async function globalTeardown(): Promise<void> {
     DELETE FROM public.project_documents WHERE id IN (SELECT project_document_id FROM f01_prints);
     SET LOCAL session_replication_role = origin;
 
+    -- Journeys execute agreements on F01-owned jobs, and an executed edition is
+    -- immutable (guard_proposal_copy_immutability, 00390), so the auth.users
+    -- cascade below cannot remove them. Purge every project of the F01 studio
+    -- or actors, and every proposal of the actors, with all rows that reference
+    -- them transitively by foreign key (the RC7-E2 cleanup walk). Refuse if the
+    -- walk would reach an account, organization, contact or household row.
+    CREATE TEMP TABLE f01_doomed (rel regclass, rid tid, depth int, PRIMARY KEY (rel, rid)) ON COMMIT DROP;
+    INSERT INTO f01_doomed
+      SELECT 'public.projects'::regclass, ctid, 0 FROM public.projects
+      WHERE id = '${JOB}' OR studio_id = '${STUDIO}'
+         OR designer_id IN ('${ACTORS[0]}', '${ACTORS[1]}');
+    INSERT INTO f01_doomed
+      SELECT 'public.proposals'::regclass, ctid, 0 FROM public.proposals
+      WHERE designer_id IN ('${ACTORS[0]}', '${ACTORS[1]}');
+    DO $$
+    DECLARE
+      d int := 0;
+      added bigint;
+      n bigint;
+      fk record;
+    BEGIN
+      LOOP
+        added := 0;
+        FOR fk IN
+          SELECT c.conrelid, c.confrelid,
+            (SELECT string_agg(format('c.%I = p.%I', ca.attname, pa.attname), ' AND ')
+               FROM unnest(c.conkey, c.confkey) AS k(child, parent)
+               JOIN pg_attribute ca ON ca.attrelid = c.conrelid AND ca.attnum = k.child
+               JOIN pg_attribute pa ON pa.attrelid = c.confrelid AND pa.attnum = k.parent) AS cond
+          FROM pg_constraint c
+          WHERE c.contype = 'f' AND c.confrelid IN (SELECT DISTINCT rel FROM f01_doomed WHERE depth = d)
+        LOOP
+          EXECUTE format('INSERT INTO f01_doomed SELECT %L::regclass, c.ctid, %s FROM %s c JOIN %s p ON %s
+              WHERE p.ctid = ANY (ARRAY(SELECT rid FROM f01_doomed WHERE rel = %L::regclass AND depth = %s))
+              ON CONFLICT DO NOTHING',
+            fk.conrelid, d + 1, fk.conrelid::regclass, fk.confrelid::regclass, fk.cond, fk.confrelid, d);
+          GET DIAGNOSTICS n = ROW_COUNT;
+          added := added + n;
+        END LOOP;
+        EXIT WHEN added = 0;
+        d := d + 1;
+        IF d > 25 THEN RAISE EXCEPTION 'F01 teardown: the reference walk did not settle'; END IF;
+      END LOOP;
+      IF EXISTS (SELECT 1 FROM f01_doomed x JOIN pg_class k ON k.oid = x.rel JOIN pg_namespace s ON s.oid = k.relnamespace
+                 WHERE s.nspname <> 'public' OR k.relkind <> 'r'
+                    OR x.rel IN ('public.profiles'::regclass, 'public.organizations'::regclass,
+                      'public.organization_members'::regclass, 'public.studio_contacts'::regclass,
+                      'public.client_households'::regclass)) THEN
+        RAISE EXCEPTION 'F01 teardown: the reference walk reached % - refusing',
+          (SELECT string_agg(DISTINCT x.rel::text, ', ') FROM f01_doomed x JOIN pg_class k ON k.oid = x.rel
+           JOIN pg_namespace s ON s.oid = k.relnamespace
+           WHERE s.nspname <> 'public' OR k.relkind <> 'r'
+              OR x.rel IN ('public.profiles'::regclass, 'public.organizations'::regclass,
+                'public.organization_members'::regclass, 'public.studio_contacts'::regclass,
+                'public.client_households'::regclass));
+      END IF;
+    END $$;
+    SET LOCAL session_replication_role = replica;
+    DO $$
+    DECLARE r record;
+    BEGIN
+      FOR r IN SELECT rel, array_agg(rid) AS rids FROM f01_doomed GROUP BY rel LOOP
+        EXECUTE format('DELETE FROM %s WHERE ctid = ANY (%L::tid[])', r.rel, r.rids);
+      END LOOP;
+    END $$;
+    SET LOCAL session_replication_role = origin;
+
     SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
     DELETE FROM public.room_scans WHERE id = 'f0180000-0000-4000-8000-000000000020';
     DELETE FROM public.projects WHERE id = '${JOB}';
     DELETE FROM public.audit_logs
       WHERE organization_id IN (
         SELECT o.id FROM public.organizations o
-        WHERE o.id IN (
-          SELECT organization_id FROM public.organization_members
-          WHERE user_id IN ('${ACTORS[0]}', '${ACTORS[1]}')
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM public.organization_members m
-          WHERE m.organization_id = o.id
-            AND m.user_id NOT IN ('${ACTORS[0]}', '${ACTORS[1]}')
-        )
+        WHERE o.id = '${STUDIO}'
+          OR (o.id IN (
+            SELECT organization_id FROM public.organization_members
+            WHERE user_id IN ('${ACTORS[0]}', '${ACTORS[1]}')
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM public.organization_members m
+            WHERE m.organization_id = o.id
+              AND m.user_id NOT IN ('${ACTORS[0]}', '${ACTORS[1]}')
+          ))
       )
         OR user_id IN ('${ACTORS[0]}', '${ACTORS[1]}');
     SET LOCAL ROLE service_role;
     DELETE FROM public.organizations o
-    WHERE o.id IN (
-      SELECT organization_id FROM public.organization_members
-      WHERE user_id IN ('${ACTORS[0]}', '${ACTORS[1]}')
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM public.organization_members m
-      WHERE m.organization_id = o.id
-        AND m.user_id NOT IN ('${ACTORS[0]}', '${ACTORS[1]}')
-    );
+    WHERE o.id = '${STUDIO}'
+      OR (o.id IN (
+        SELECT organization_id FROM public.organization_members
+        WHERE user_id IN ('${ACTORS[0]}', '${ACTORS[1]}')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.organization_members m
+        WHERE m.organization_id = o.id
+          AND m.user_id NOT IN ('${ACTORS[0]}', '${ACTORS[1]}')
+      ));
     RESET ROLE;
     DELETE FROM auth.users WHERE id IN ('${ACTORS[0]}', '${ACTORS[1]}');
     DO $$ BEGIN
