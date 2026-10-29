@@ -2371,6 +2371,10 @@ BEGIN
     RAISE EXCEPTION 'project % has no executed design-services authority', p_project_id
       USING ERRCODE = 'check_violation';
   END IF;
+  -- Lock order project -> proposal -> document (C2 §2.5): KEY SHARE is the weakest
+  -- mode that waits on reconcile/countersign's project FOR UPDATE, and the one the
+  -- document FK insert below would take anyway, only now before the source proposal's.
+  PERFORM 1 FROM public.projects WHERE id = p_project_id FOR KEY SHARE;
   SELECT authority.source_proposal_id
   INTO v_source_proposal_id
   FROM public.project_billing_authorities authority
