@@ -78,8 +78,10 @@ Kody retired Sidequest as this program's engineering control plane on 29 October
 
 ## Open questions for Kody
 
-1. **Ship 00892 to Strata on its own?** It guards the project-documents RLS uuid cast, and production listings are likely failing now. It needs an explicit "ship".
-2. **Household-card consent.** `studio_contacts.profile_id` can be set by any active non-guest studio member, with no consent from the person. After 00894/00895, that link lets the linked account respond to service acceptance and read completion. Should linking require the person's consent before C4/C6 activation? This does not block the RC.
+Both questions were resolved on 29 October 2026, along with the evidence-wave ruling. See DECISIONS.md:
+- K6: household-card links need no consent step; the studio's assertion is enough.
+- K7: 00892 and 00867 are held for the round-8 ship.
+- K8: an evidence wave (RC-7) runs before any ship.
 
 ## Accepted debt (recorded, not fixed)
 

@@ -76,7 +76,7 @@ RC-5 defects D1–D10 are closed (ship-chain docs, harness pin `a7efddc42`, door
 
 ## Activation gates (C4 / C6 stay off until each holds)
 
-1. **Kody's household-card consent ruling** (R1-6 / R2-2).
+1. ~~Kody's household-card consent ruling (R1-6 / R2-2).~~ Resolved 2026-10-29 (K6): the studio's assertion is enough.
 2. **D9 renderer coverage:** no C4/C6 activation while any designer still renders legacy.
 3. **Order:** C2 before or together with C4, then C6.
 4. **Evidence:** the R3b coverage gaps are closed, or Kody accepts them by name. A human screen-reader pass is required either way.
