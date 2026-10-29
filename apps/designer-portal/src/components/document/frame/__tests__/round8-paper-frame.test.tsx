@@ -150,6 +150,17 @@ describe('Round8PaperFrame', () => {
     expect(paper.lastElementChild?.getAttribute('data-slot')).toBe('colophon');
   });
 
+  it('opens Design boards and the Specification book from their job chapters', () => {
+    roomFilesReady = true;
+    const { container } = renderFrame();
+    const design = container.querySelector('[data-paper-chapter="design"]') as HTMLElement;
+    const ffe = container.querySelector('[data-paper-chapter="ffe"]') as HTMLElement;
+    expect(within(design).getByRole('link', { name: 'Design boards' }))
+      .toHaveAttribute('href', '/doc/project-1/boards');
+    expect(within(ffe).getByRole('link', { name: 'Specification book' }))
+      .toHaveAttribute('href', '/doc/project-1/spec-book');
+  });
+
   it('mounts only the chapters with content, in ROUND8_PAPER_ORDER, inside the schedule scope', () => {
     const { container } = renderFrame();
 
