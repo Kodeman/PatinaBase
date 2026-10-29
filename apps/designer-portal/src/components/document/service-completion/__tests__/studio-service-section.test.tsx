@@ -239,6 +239,34 @@ describe('studio service obligations', () => {
   });
 });
 
+describe('form dismissals', () => {
+  it('returns focus to the remounted resolve action after Cancel', () => {
+    mockObligations.mockReturnValue(read(reading({ conditions: [CONDITION] })));
+    mockCompletion.mockReturnValue(record([completion({ state: 'completed_with_conditions', openConditionIds: ['condition-1'] })]));
+    render(<StudioServiceSection projectId="job-1" />);
+    const opener = screen.getByRole('button', { name: 'Resolve this condition' });
+    expect(opener).not.toHaveFocus();
+    fireEvent.click(opener);
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    fireEvent.click(cancel);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Resolve this condition' }));
+  });
+
+  it('returns focus to the remounted revoke action after Cancel', () => {
+    mockObligations.mockReturnValue(read(reading()));
+    mockCompletion.mockReturnValue(record([completion()]));
+    render(<StudioServiceSection projectId="job-1" />);
+    const opener = screen.getByRole('button', { name: 'Revoke this completion' });
+    expect(opener).not.toHaveFocus();
+    fireEvent.click(opener);
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    fireEvent.click(cancel);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Revoke this completion' }));
+  });
+});
+
 describe('conditions (K3 option A)', () => {
   it('completes with conditions open, resolves one with a reference, and reads complete once the last closes', async () => {
     mockObligations.mockReturnValue(read(reading({

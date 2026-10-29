@@ -1034,3 +1034,34 @@ describe('§H round 8 · every text/stock pair the mapping prints', () => {
     expect(offences).toEqual([]);
   });
 });
+
+// RC7-E8: measure the inks actually printed at the reported paper text sites.
+describe('RC7-E8 · closeout and schedule text on paper', () => {
+  const source = (file: string) => readFileSync(join(SRC_ROOT, 'components/document', file), 'utf8');
+  const phase = source('schedule/phase-section.tsx');
+  const ghost = source('schedule/ghost-add-line.tsx');
+  const dependency = source('coordination/task-dep-line.tsx');
+  const care = source('care-band.tsx');
+  const pair = (label: string, value: string | undefined, ground: string) => {
+    expect(value).toBeDefined();
+    const ink = value!.startsWith('var(') ? resolveToken(value!.slice(4, -1))
+      : value!.startsWith('--') ? resolveToken(value!) : value!;
+    expect(failuresBelowAA([[label, ink, ground]])).toEqual([]);
+  };
+
+  it('reads future phases and the ghost placeholder on off-white', () => {
+    pair('future phase', phase.match(/future: '[^']*text-\[var\((--[a-z-]+)\)\]/)?.[1], '#FAF7F2');
+    pair('phase placeholder', ghost.match(/placeholder:text-\[var\((--[a-z-]+)\)\]/)?.[1], '#FAF7F2');
+    expect(ghost).toContain('placeholder:opacity-100');
+  });
+
+  it('reads the ready and sequence dependency notes on warm paper', () => {
+    pair('ready', dependency.match(/const DEP_READY_INK = '([^']+)'/)?.[1], '#FBF9F5');
+    pair('sequence', dependency.match(/style=\{\{ color: '([^']+)' \}\}/)?.[1], '#FBF9F5');
+  });
+
+  it('reads portfolio labels and the closeout warning on their tinted grounds', () => {
+    pair('portfolio label', care.match(/const LABEL_CLS =\s*'[^']*text-\[var\((--[a-z-]+)\)\]/)?.[1], '#F0EAE1');
+    pair('outstanding warning', care.match(/text-\[var\((--[a-z-]+)\)\]"[^>]*>\s*Closeout tasks outstanding/)?.[1], '#EDE4DB');
+  });
+});
