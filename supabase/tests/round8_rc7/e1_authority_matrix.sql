@@ -175,8 +175,9 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.assert_true((SELECT count(*) FROM storage.objects WHERE id::text LIKE 'e1000000-%')=0
  AND (pg_temp.listed(pg_temp.req('r4'))->>'count')::int=0,
  'X02 linked but nonsigner household member has no bytes or acceptance list');
--- DEFECT RC7-E1-1: positive cross-request C6 result is excluded from passing
--- authority gates; e1_household_privacy_defect.sql asserts the desired denial.
+-- DEFECT RC7-E1-1: the cross-request C6 audience assertions live in the excluded
+-- defect_e1_c6_audience.sql (8 reads [], r4 signer 6 reads one); promote both here
+-- once the client-projection row filter lands, and raise the expected count to 110.
 RESET ROLE;
 
 SELECT pg_temp.actor(10);
@@ -231,5 +232,11 @@ SELECT pg_temp.assert_true((public.get_project_service_acceptance(pg_temp.projec
  AND NOT EXISTS(SELECT 1 FROM public.service_acceptance_requests WHERE client_request_id='e1-inactive')
  AND NOT EXISTS(SELECT 1 FROM public.studio_service_completions WHERE client_request_id='e1-inactive-completion'),
  'X02 inactive readers report the gate; refused mutations wrote no row');
-DO $$ BEGIN RAISE NOTICE 'E1 X02/X09: % assertions passed', (SELECT n FROM assertion_count); END $$;
+DO $$ DECLARE expected constant integer := 108; actual integer := (SELECT n FROM assertion_count);
+BEGIN
+ IF actual IS DISTINCT FROM expected THEN
+  RAISE EXCEPTION 'E1 X02/X09: expected % assertions, ran %', expected, actual;
+ END IF;
+ RAISE NOTICE 'E1 X02/X09: % assertions passed', actual;
+END $$;
 ROLLBACK;
