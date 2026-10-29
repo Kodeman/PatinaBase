@@ -21,11 +21,13 @@ async function userHasDesignerPortalRole(userId: string): Promise<boolean> {
   if (!serviceRoleKey) return true;
   try {
     const adminClient = createAdminClient(serviceRoleKey);
-    const { data } = await adminClient
+    const { data, error } = await adminClient
       .from('user_roles')
       .select('roles!inner(domain)')
       .eq('user_id', userId)
       .in('roles.domain', DESIGNER_PORTAL_DOMAINS);
+    // supabase-js reports a failed read as { data: null, error }, not a throw.
+    if (error) return true;
     return (data ?? []).length > 0;
   } catch {
     return true;

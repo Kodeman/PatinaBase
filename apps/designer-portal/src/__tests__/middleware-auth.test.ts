@@ -308,6 +308,17 @@ describe('Designer auth middleware: getClaims session verification', () => {
     expectRedirect(await run('/desk', sessionCookie(await signEs256(keyA, claims()))), '/unauthorized');
     expect(roleLookup).toHaveBeenCalledWith('user_id', SUB);
   });
+
+  it('a failed role read is not "no role": a PostgREST error fails open instead of /unauthorized', async () => {
+    // supabase-js resolves query errors as { data: null, error } rather than throwing (RC7-E6-1).
+    roleLookup = jest.fn(() => ({
+      in: jest.fn(async () => ({ data: null, error: { code: 'PGRST002', message: 'schema cache' } })),
+    }));
+    createAdminClient.mockReturnValue({ from: () => ({ select: () => ({ eq: roleLookup }) }) });
+
+    expectPassThrough(await run('/doc/abc', sessionCookie(await signEs256(keyA, claims()))));
+    expect(roleLookup).toHaveBeenCalledWith('user_id', SUB);
+  });
 });
 
 describe('Designer auth middleware: page routing', () => {
