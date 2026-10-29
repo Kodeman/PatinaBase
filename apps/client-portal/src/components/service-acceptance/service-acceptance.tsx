@@ -83,7 +83,7 @@ function IssuedDocument({ path, title }: { path: string; title: string }) {
     finally { setOpening(false); }
   }
   return <li><button type="button" className="underline" disabled={opening} onClick={() => void open()}>{title}</button>
-    {fallbackUrl && <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className="underline">Open {title} in a new tab</a>}
+    <span aria-live="polite">{fallbackUrl && <>Your browser blocked the new window. <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className="underline">Open {title} in a new tab</a></>}</span>
     {failed && <p role="alert">Couldn’t open this file. Try again.</p>}</li>;
 }
 

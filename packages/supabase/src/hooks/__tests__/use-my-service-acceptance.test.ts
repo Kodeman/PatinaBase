@@ -159,6 +159,11 @@ it('keeps only client-safe evidence fields even when the server sends more', () 
   expect(read).toEqual(evidence());
   expect(JSON.stringify(read)).not.toMatch(/private|payer|fabrication|roomIds|provenance|sha256|costCents|Price|sku|mill|budgetCents|url/);
 });
+it('trims Postgres microsecond issue times to milliseconds', () => {
+  const precise: any = evidence();
+  precise.evidence.members[0].issuedAt = '2026-10-27T15:00:00.123456+00:00';
+  expect(readMyServiceAcceptanceEvidence(precise).evidence.members[0].issuedAt).toBe('2026-10-27T15:00:00.123+00:00');
+});
 it('reads native string[] commission requirements and materials exactly, in order', () => {
   const content = readMyServiceAcceptanceEvidence(evidence()).evidence.members[3].content;
   expect(content?.requirements).toEqual(['Seat height 18 in', 'Arms flush with the table']);

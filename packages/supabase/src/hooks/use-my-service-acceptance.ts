@@ -50,7 +50,8 @@ function text(value: unknown): string {
   return value;
 }
 function issuedDate(value: unknown): string {
-  const date = text(value);
+  // Postgres timestamps carry microseconds; keep the milliseconds every Date parser accepts.
+  const date = text(value).replace(/(\.\d{3})\d+/, '$1');
   const day = date.slice(0, 10);
   const parsed = new Date(date);
   const calendar = new Date(`${day}T00:00:00Z`);
