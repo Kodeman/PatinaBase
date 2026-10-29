@@ -168,7 +168,7 @@ function chapterBodies(
     ffe: (
       <>
         {stage(pieces.projectFfe, pieces.installFfe, pieces.careFfe)}
-        {projectId && (
+        {projectId && pieces.section === 'project' && (
           <DocumentActionRow surfaceKey="doc" regionKey="spec-book-door">
             <DocumentAction actionKey="open-specification-book" variant="tertiary"
               href={shelfRouteFor('specbook', projectId)!}>
