@@ -15,9 +15,9 @@ function ownedStack() {
   const db = new URL(process.env.SUPABASE_DB_URL ?? "");
   if (
     api.hostname !== "127.0.0.1" ||
-    api.port !== "56121" ||
+    api.port !== (process.env.RC7_E3_API_PORT ?? "56121") ||
     db.hostname !== "127.0.0.1" ||
-    db.port !== "56122"
+    db.port !== (process.env.RC7_E3_DB_PORT ?? "56122")
   ) {
     throw new Error("RC7-E3 refuses an unowned arrangement stack");
   }

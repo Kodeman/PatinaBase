@@ -10,8 +10,9 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-const API_PORT = "56121";
-const DB_PORT = "56122";
+// RC7_E3_API_PORT / RC7_E3_DB_PORT move the guard to another owned block.
+const API_PORT = process.env.RC7_E3_API_PORT ?? "56121";
+const DB_PORT = process.env.RC7_E3_DB_PORT ?? "56122";
 
 function refuse(reason) {
   console.error(`RC7-E3 preflight refused: ${reason}`);
@@ -28,6 +29,9 @@ function parse(name) {
   }
 }
 
+if ([API_PORT, DB_PORT].some((port) => port === "54321" || port === "54322")) {
+  refuse("the shared stack ports 54321/54322 are never an owned block");
+}
 const api = parse("NEXT_PUBLIC_SUPABASE_URL");
 if (api.hostname !== "127.0.0.1" || api.port !== API_PORT) {
   refuse(`NEXT_PUBLIC_SUPABASE_URL must be 127.0.0.1:${API_PORT}`);

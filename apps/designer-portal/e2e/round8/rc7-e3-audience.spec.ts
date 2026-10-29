@@ -12,8 +12,8 @@ import { psqlScalar } from "../helpers/psql";
 test.fixme("A14 private, client, maker, GC and supplier paths survive uncertain send and retry", async () => {
   const api = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
   const db = new URL(process.env.SUPABASE_DB_URL ?? "");
-  expect(`${api.hostname}:${api.port}`).toBe("127.0.0.1:56121");
-  expect(`${db.hostname}:${db.port}`).toBe("127.0.0.1:56122");
+  expect(`${api.hostname}:${api.port}`).toBe(`127.0.0.1:${process.env.RC7_E3_API_PORT ?? "56121"}`);
+  expect(`${db.hostname}:${db.port}`).toBe(`127.0.0.1:${process.env.RC7_E3_DB_PORT ?? "56122"}`);
   const expected = process.env.RC7_E3_SYSTEM_IDENTIFIER;
   if (!expected || !/^\d+$/.test(expected)) {
     throw new Error(

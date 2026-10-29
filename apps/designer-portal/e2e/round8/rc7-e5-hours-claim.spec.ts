@@ -53,9 +53,9 @@ async function bookTotals(page: Page) {
 
 test('A19: native hours, dated rate, unresolved rate, two-tab claim and void preserve balances', async ({ authenticatedPage: first }) => {
   test.setTimeout(300_000);
-  expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').port).toBe('55121');
+  expect(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').port).toBe(process.env.RC7_E5_API_PORT ?? '55121');
   expect(new URL(process.env.SUPABASE_DB_URL ?? '').hostname).toBe('127.0.0.1');
-  expect(new URL(process.env.SUPABASE_DB_URL ?? '').port).toBe('55122');
+  expect(new URL(process.env.SUPABASE_DB_URL ?? '').port).toBe(process.env.RC7_E5_DB_PORT ?? '55122');
   expect(psqlScalar(`SELECT count(*) FROM projects WHERE id='${JOB}';`)).toBe('0');
   expect(psqlScalar(`SELECT count(*) FROM studio_member_rates WHERE studio_id='${STUDIO}' AND user_id='${DESIGNER}';`)).toBe('0');
   expect(psqlScalar(`SELECT count(*) FROM invoices WHERE studio_id='${STUDIO}';`)).toBe('0');
