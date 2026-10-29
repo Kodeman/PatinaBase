@@ -5,17 +5,24 @@
  *
  *   node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --evidence <dir> [--runs 2]
  *       [--workdir <existing scratch parent>] [--pins-from <dir with the .temp version pins>] [--keep-stack]
+ *       [--with-rc2]
  *   node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --refusal-check <db url> --evidence <dir>
  *
- * Journey mode starts ONE owned Supabase stack (project patina-rc2-journey,
- * ports +3000: API 57321, DB 57322) from this checkout's supabase/ in a scratch
+ * Journey mode starts ONE owned Supabase stack (project patina-rc7-e2, RC-7 lane
+ * e2 port block 571: API 57121, DB 57122, shadow 57120, pooler 57129, inspector
+ * 57183; designer portal 3110, client portal 3112) from this checkout's supabase/ in a scratch
  * workdir that holds only the five .temp version pins, with edge-runtime and a
  * functions env of exactly EMAIL_DEV_MODE=dry_run. It proves the stack from
  * Docker (CLI project label, published ports, container address and cluster
- * system identifier), writes a sanitized receipt (no keys), then runs the legs
- * in order for each journey: designer @rc2-send, client @rc2-return, designer
- * @rc2-resend, client @rc2-accept, designer @rc2-complete. Each journey's send
- * leg applies the fixture once (a fresh job); legs never tear anything down.
+ * system identifier), switches pg_cron's active jobs off on the owned
+ * container, writes a sanitized receipt (no keys), then for each journey:
+ * with --with-rc2 only, the five RC-2 legs in order (designer @rc2-send,
+ * client @rc2-return, designer @rc2-resend, client @rc2-accept, designer
+ * @rc2-complete; each send leg applies the fixture once, a fresh job). Then
+ * (RC-7 e2, always) it starts the client portal on 3112 itself and runs the
+ * rc7-e2 legs, each driving every actor in its own browser context:
+ * @rc7-e2-acceptance (applies the base and rc7-e2 fixtures: fresh jobs),
+ * @rc7-e2-paper, @rc7-e2-completion (A20–A23).
  * At the end it stops the owned stack with --no-backup (unless --keep-stack),
  * checks the full teardown census (containers and volumes, including removal of
  * child-only resources), and removes the scratch workdir.
@@ -29,7 +36,7 @@
  * Never point it at Strata; it refuses anything but loopback, and refuses the
  * shared stack (54321/54322).
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -42,19 +49,24 @@ const ROOT = path.resolve(DESIGNER, '../..');
 const CLIENT_APP = path.join(ROOT, 'apps/client-portal');
 const FIXTURE = path.join(HERE, 'consumer-journey-fixture.sql');
 const CONFIG = 'playwright.consumer-journey.config.ts';
-const PROJECT = 'patina-rc2-journey';
-const OFFSET = 3000;
+const PROJECT = 'patina-rc7-e2';
+const OFFSET = 2800;
+const INSPECTOR_PORT = '57183';
+const PORTS = { designer: '3110', client: '3112' };
 const SHARED = { api: '54321', db: '54322' };
 const OWNED = { api: String(54321 + OFFSET), db: String(54322 + OFFSET) };
 const PINS = ['gotrue-version', 'postgres-version', 'rest-version', 'storage-migration', 'storage-version'];
 const EXCLUDED_SERVICES = 'studio,mailpit,logflare,vector,imgproxy,postgres-meta';
 const LEGS = [['designer', '@rc2-send'], ['client', '@rc2-return'], ['designer', '@rc2-resend'],
   ['client', '@rc2-accept'], ['designer', '@rc2-complete']];
+// RC-7 e2 legs: [tag, tests in the leg]. Run through the designer config with
+// the client portal this runner keeps up on PORTS.client.
+const E2_LEGS = [['@rc7-e2-acceptance', 3], ['@rc7-e2-paper', 1], ['@rc7-e2-completion', 3]];
 const MIN_FREE_KIB = 9 * 1024 * 1024;
 const PROVIDER_KEY = /RESEND|SMTP|SENDGRID|POSTMARK|MAILGUN|SES_|TWILIO/i;
 
 function parseArgs(argv) {
-  const args = { runs: 2, keepStack: false };
+  const args = { runs: 2, keepStack: false, withRc2: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => {
@@ -69,6 +81,7 @@ function parseArgs(argv) {
     else if (flag === '--pins-from') args.pinsFrom = path.resolve(value());
     else if (flag === '--refusal-check') args.refusalCheck = value();
     else if (flag === '--keep-stack') args.keepStack = true;
+    else if (flag === '--with-rc2') args.withRc2 = true;
     else throw new Error(`unknown argument ${flag}`);
   }
   if (!args.evidence) throw new Error('--evidence <dir> is required');
@@ -147,7 +160,7 @@ function prepareWorkdir(workdir, pinsFrom) {
   const config = fs.readFileSync(configPath, 'utf8')
     .replace(/^project_id = "supabase"$/m, `project_id = "${PROJECT}"`)
     .replace(/^(\s*(?:port|shadow_port) = )(543\d\d)$/gm, (_, key, port) => `${key}${Number(port) + OFFSET}`)
-    .replace(/^(\s*inspector_port = )(\d+)$/m, (_, key, port) => `${key}${Number(port) + OFFSET}`);
+    .replace(/^(\s*inspector_port = )(\d+)$/m, (_, key) => `${key}${INSPECTOR_PORT}`);
   if (!config.includes(`project_id = "${PROJECT}"`) || !config.includes(`port = ${OWNED.db}`)
     || !config.includes(`port = ${OWNED.api}`)) {
     throw new Error('could not rewrite config.toml to the owned project and ports');
@@ -224,6 +237,25 @@ function proveOwned(env) {
   return { dbPort, apiPort, serverAddr, systemId, sharedSystemId, dbContainer: dbBox.Id.slice(0, 12) };
 }
 
+/**
+ * Orchestrator ruling (RC-7, 2026-10-29): pg_cron jobs starting on the owned
+ * stacks crashed Postgres backends on the shared Docker VM. The journey sends
+ * through the edge function directly and needs no scheduled job, so active
+ * jobs are switched off on the owned container (as its own superuser, inside
+ * it) and the setting is read back.
+ */
+function quietCron(identity) {
+  const box = `supabase_db_${PROJECT}`;
+  if (clusterId(box) !== identity.systemId) throw new Error(`${box} is not the proven owned cluster`);
+  const sql = (query) => must('docker', ['exec', box, 'sh', '-c',
+    `PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U supabase_admin -d postgres -X -q -t -A -c "${query}"`]);
+  sql('ALTER SYSTEM SET cron.launch_active_jobs = off;');
+  sql('SELECT pg_reload_conf();');
+  const setting = sql('SHOW cron.launch_active_jobs;');
+  if (setting !== 'off') throw new Error(`cron.launch_active_jobs reads ${setting} on the owned stack`);
+  return setting;
+}
+
 /** The functions environment as the edge runtime sees it: names only, plus the dry-run mode. */
 function functionsReceipt() {
   const edge = `supabase_edge_runtime_${PROJECT}`;
@@ -236,14 +268,14 @@ function functionsReceipt() {
   return { container: edge, EMAIL_DEV_MODE: mode, providerKeyNames, envNameCount: names.length };
 }
 
-function runLeg(evidence, label, side, tag, legEnv) {
+function runLeg(evidence, label, side, tag, legEnv, expected = 1) {
   const dir = path.join(evidence, label);
   fs.mkdirSync(dir, { recursive: true });
   const report = path.join(dir, `${side}-${tag}`);
   const logPath = path.join(dir, `${side}-${tag}.log`);
   const out = fs.openSync(logPath, 'w');
   const result = spawnSync('pnpm', ['exec', 'playwright', 'test', '--config', CONFIG, '--grep', tag], {
-    cwd: side === 'designer' ? DESIGNER : CLIENT_APP,
+    cwd: side === 'client' ? CLIENT_APP : DESIGNER,
     env: { ...legEnv, PLAYWRIGHT_OUTPUT_DIR: report, PLAYWRIGHT_EVIDENCE_DIR: report },
     stdio: ['ignore', out, out],
     timeout: 20 * 60 * 1000,
@@ -256,8 +288,44 @@ function runLeg(evidence, label, side, tag, legEnv) {
   const lines = text.split('\n').filter((line) => !line.includes('[WebServer]') && /✓|✘|^\s*\d+ \w/.test(line));
   const summary = lines.filter((line) => /^\s*\d+ (passed|failed|flaky|skipped|did not run|interrupted)\b/.test(line))
     .map((line) => line.trim().replace(/ \(.*\)$/, ''));
-  return { ok: result.status === 0 && summary.length === 1 && summary[0] === '1 passed',
+  return { ok: result.status === 0 && summary.length === 1 && summary[0] === `${expected} passed`,
     status: result.status ?? result.signal, logPath, lines };
+}
+
+/**
+ * RC-7 e2: the client portal on PORTS.client for the e2 legs, against the
+ * owned API (the client config's own webServer env). Its own process group,
+ * so stopClientServer ends next dev and its workers.
+ */
+async function startClientServer(evidence, label, legEnv) {
+  const logPath = path.join(evidence, label, 'client-portal-dev.log');
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  const out = fs.openSync(logPath, 'w');
+  const child = spawn('pnpm', ['exec', 'next', 'dev', '--webpack', '-p', PORTS.client], {
+    cwd: CLIENT_APP, detached: true, stdio: ['ignore', out, out],
+    env: { ...legEnv, SUPABASE_INTERNAL_URL: legEnv.NEXT_PUBLIC_SUPABASE_URL },
+  });
+  fs.closeSync(out);
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`http://localhost:${PORTS.client}/auth/signin`);
+      if (response.ok) {
+        log(evidence, `client portal up on ${PORTS.client} (pid ${child.pid}) log=${logPath}`);
+        return child;
+      }
+    } catch { /* not listening yet */ }
+    if (child.exitCode !== null) break;
+    await new Promise((resolve) => { setTimeout(resolve, 2000); });
+  }
+  stopClientServer(evidence, child);
+  throw new Error(`client portal did not start on ${PORTS.client}; see ${logPath}`);
+}
+
+function stopClientServer(evidence, child) {
+  if (!child) return;
+  try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
+  log(evidence, `client portal stopped (pid ${child.pid})`);
 }
 
 function createOwnedWorkdir(parent = os.tmpdir()) {
@@ -298,7 +366,7 @@ async function journey(args) {
   requireDisk(evidence);
   const existing = containers(`com.supabase.cli.project=${PROJECT}`);
   if (existing.length > 0) throw new Error(`containers of ${PROJECT} already exist (${existing.join(', ')}); not owned by this run`);
-  for (const port of [OWNED.api, OWNED.db, '3200', '3202']) {
+  for (const port of [OWNED.api, OWNED.db, PORTS.designer, PORTS.client]) {
     if (await portInUse(port)) throw new Error(`port ${port} is already in use`);
   }
   const workdir = createOwnedWorkdir(args.workdir);
@@ -312,12 +380,13 @@ async function journey(args) {
     must('supabase', ['start', '--workdir', workdir, '-x', EXCLUDED_SERVICES], { timeout: 20 * 60 * 1000 });
     const env = stackEnv(workdir);
     const identity = proveOwned(env);
+    const cronLaunchActiveJobs = quietCron(identity);
     const receipt = {
       at: new Date().toISOString(), project: PROJECT, workdir,
       cli: must('supabase', ['--version']).split('\n')[0], head: must('git', ['-C', ROOT, 'rev-parse', 'HEAD']),
       api: { url: env.API_URL, port: identity.apiPort }, db: { port: identity.dbPort, container: identity.dbContainer,
         serverAddr: identity.serverAddr, systemId: identity.systemId }, sharedSystemId: identity.sharedSystemId,
-      functions: functionsReceipt(),
+      functions: functionsReceipt(), cronLaunchActiveJobs,
       ledgerMax: psql(env.DB_URL, 'SELECT max(version) FROM supabase_migrations.schema_migrations;'),
       scopeEditionsAtStart: psql(env.DB_URL, "SELECT enabled FROM public.server_capabilities WHERE key='scope_editions';"),
     };
@@ -329,16 +398,32 @@ async function journey(args) {
       SUPABASE_URL: env.API_URL, SUPABASE_SERVICE_ROLE_KEY: env.SERVICE_ROLE_KEY, SUPABASE_DB_URL: env.DB_URL,
       RC2_OWNED_DB_PORT: identity.dbPort, RC2_OWNED_API_PORT: identity.apiPort,
       RC2_OWNED_SERVER_ADDR: identity.serverAddr, RC2_OWNED_SYSTEM_ID: identity.systemId,
+      PLAYWRIGHT_DESIGNER_PORT: PORTS.designer, PLAYWRIGHT_CLIENT_PORT: PORTS.client,
+      RC7_CLIENT_URL: `http://localhost:${PORTS.client}`,
     };
     for (let n = 1; n <= args.runs; n += 1) {
       const label = `run${n}`;
       let ok = true;
-      for (const [side, tag] of LEGS) {
+      for (const [side, tag] of args.withRc2 ? LEGS : []) {
         requireDisk(evidence);
         const leg = runLeg(evidence, label, side, tag, legEnv);
         log(evidence, `== ${label} ${side} ${tag} exit=${leg.status} log=${leg.logPath}`);
         for (const line of leg.lines) log(evidence, `   ${line.trim()}`);
         if (!leg.ok) { ok = false; break; }
+      }
+      if (ok) {
+        const client = await startClientServer(evidence, label, legEnv);
+        try {
+          for (const [tag, expected] of E2_LEGS) {
+            requireDisk(evidence);
+            const leg = runLeg(evidence, label, 'e2', tag, legEnv, expected);
+            log(evidence, `== ${label} e2 ${tag} exit=${leg.status} log=${leg.logPath}`);
+            for (const line of leg.lines) log(evidence, `   ${line.trim()}`);
+            if (!leg.ok) { ok = false; break; }
+          }
+        } finally {
+          stopClientServer(evidence, client);
+        }
       }
       log(evidence, `JOURNEY ${label} ${ok ? 'PASSED' : 'FAILED'}`);
       if (!ok) break;

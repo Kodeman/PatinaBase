@@ -23,7 +23,7 @@ function harness(t, options = {}) {
   const evidence = path.join(scratch, 'evidence');
   for (const dir of [repo, home, parent, evidence]) fs.mkdirSync(dir);
   fs.writeFileSync(path.join(parent, 'unrelated-evidence.txt'), 'keep');
-  const state = { prepared: [], deleted: [], logs: [], commands: [], stackAttempted: false };
+  const state = { prepared: [], deleted: [], logs: [], commands: [], legs: [], clientServer: [], stackAttempted: false };
   const mocks = {
     requireDisk() {},
     portInUse: async () => false,
@@ -56,11 +56,17 @@ function harness(t, options = {}) {
       if (options.stopError) throw new Error('stop could not launch');
       return { status: options.stopStatus ?? 0 };
     },
-    stackEnv: () => ({ API_URL: 'http://127.0.0.1:57321', DB_URL: 'mock-db' }),
+    stackEnv: () => ({ API_URL: 'http://127.0.0.1:57121', DB_URL: 'mock-db' }),
     proveOwned: () => ({}),
+    quietCron: () => 'off',
     functionsReceipt: () => ({}),
     psql: () => '',
-    runLeg: () => ({ ok: options.legOk ?? true, status: 0, logPath: 'mock-leg', lines: [] }),
+    runLeg: (_evidence, _label, side, tag, _env, expected = 1) => {
+      state.legs.push([side, tag, expected]);
+      return { ok: options.legOk ?? true, status: 0, logPath: 'mock-leg', lines: [] };
+    },
+    startClientServer: async () => { state.clientServer.push('start'); return { pid: 0 }; },
+    stopClientServer: () => { state.clientServer.push('stop'); },
     log: (_evidence, line) => state.logs.push(line),
   };
   const context = vm.createContext({
@@ -126,6 +132,31 @@ test('successful teardown removes only the owned child, not its parent or siblin
   const stop = h.commands.find((command) => command[1] === 'stop');
   assert.equal(stop[3], h.prepared[0], 'stop uses the exclusively created child');
   assert.ok(stop.includes('--no-backup'));
+});
+
+test('RC-7 e2: by default only the e2 legs run, inside one client-portal start/stop', async (t) => {
+  const h = harness(t);
+  assert.equal(await h.journey(), true);
+  assert.deepEqual(h.legs.map(([side, tag]) => `${side} ${tag}`),
+    ['e2 @rc7-e2-acceptance', 'e2 @rc7-e2-paper', 'e2 @rc7-e2-completion']);
+  assert.deepEqual(h.clientServer, ['start', 'stop']);
+});
+
+test('RC-7 e2: --with-rc2 runs the five RC-2 legs, then the e2 legs inside one client-portal start/stop', async (t) => {
+  const h = harness(t);
+  assert.equal(await h.journey({ withRc2: true }), true);
+  assert.deepEqual(h.legs.map(([side, tag]) => `${side} ${tag}`), [
+    'designer @rc2-send', 'client @rc2-return', 'designer @rc2-resend', 'client @rc2-accept', 'designer @rc2-complete',
+    'e2 @rc7-e2-acceptance', 'e2 @rc7-e2-paper', 'e2 @rc7-e2-completion']);
+  assert.deepEqual(h.legs.slice(5).map(([, , expected]) => expected), [3, 1, 3], 'each e2 leg expects its own test count');
+  assert.deepEqual(h.clientServer, ['start', 'stop']);
+});
+
+test('RC-7 e2: a failed RC-2 leg never starts the client portal or the e2 legs', async (t) => {
+  const h = harness(t, { legOk: false });
+  assert.equal(await h.journey({ withRc2: true }), false);
+  assert.deepEqual(h.legs.map(([, tag]) => tag), ['@rc2-send']);
+  assert.deepEqual(h.clientServer, []);
 });
 
 test('partial startup failure still attempts teardown and preserves recovery on failed stop', async (t) => {
