@@ -21,8 +21,14 @@
  * and the sampler stops.
  *
  * A landing never meets an invisible chapter: a jump (the unfold request every
- * chapter, region and FF&E-line jump dispatches) and any focus arriving inside
- * a held chapter reveal it and everything above it at once.
+ * chapter, region and FF&E-line jump dispatches), a page landing that scrolls
+ * itself (`scrollIntoRevealed`, `revealPaperThrough`), any focus arriving
+ * inside a held chapter, and any scroll away from where the paper opened
+ * (find-in-page, a screen reader's cursor) reveal the chapter it reaches and
+ * everything above it at once.
+ *
+ * The sampler stops once every chapter shows, at lens resolution, or at the
+ * CSS failsafe (`REVEAL_FAILSAFE_MS`), whichever comes first.
  */
 
 import { useLayoutEffect, type RefObject } from 'react';
@@ -32,6 +38,8 @@ import { UNFOLD_REGION_EVENT } from '@/lib/document/document-index';
 import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 
 export const SHOWN_ATTRIBUTE = 'data-paper-shown';
+/** round8.css's per-chapter `doc-fade` delay: nothing is held past it. */
+export const REVEAL_FAILSAFE_MS = 3500;
 /** What can still move the paper below it: a body printing its loading
  *  register, or a region the lens still holds `quiet` — at resolution a region
  *  whose own data reads `full` takes its height at once (D-B46). */
@@ -53,6 +61,28 @@ export function revealThrough(paper: Element, target: Element | null): void {
   for (let i = 0; i <= index; i++) children[i]!.setAttribute(SHOWN_ATTRIBUTE, '');
 }
 
+/** Reveal through `target` when it lies in a round-8 paper. A landing that
+ *  scrolls on its own calls this before its scroll. */
+export function revealPaperThrough(target: Element | null): void {
+  const paper = target?.closest('[data-paper-renderer="round8"] [data-document-paper]');
+  if (paper) revealThrough(paper, target);
+}
+
+/** `el.scrollIntoView(options)`, with its chapter and all above it revealed first. */
+export function scrollIntoRevealed(el: Element, options?: ScrollIntoViewOptions): void {
+  revealPaperThrough(el);
+  el.scrollIntoView(options);
+}
+
+/** Reveal through the lowest held child that meets the viewport. */
+function revealInView(paper: Element): void {
+  const inView = heldChildren(paper).filter((child) => {
+    const rect = child.getBoundingClientRect();
+    return rect.top < window.innerHeight && rect.bottom > 0;
+  });
+  revealThrough(paper, inView[inView.length - 1] ?? null);
+}
+
 /** The element a jump to `key` lands in: its region root, or the chapter that
  *  carries that legacy region. */
 function jumpTarget(paper: Element, key: string): Element | null {
@@ -72,9 +102,9 @@ export interface RevealState {
  * One frame of the sampler. Every child's top is measured each frame, so the
  * frames a top has held accrue in parallel; a child is revealed only once all
  * above it are, nothing above it prints a register, and its own top has held.
- * Exported for the unit suite.
+ * True once every child shows. Exported for the unit suite.
  */
-export function revealStep(paper: Element, state: RevealState): void {
+export function revealStep(paper: Element, state: RevealState): boolean {
   const origin = paper.getBoundingClientRect().top;
   const cover = paper.querySelector(':scope > [data-paper-cover]');
   let open = cover?.querySelector(UNSETTLED_SELECTOR) == null;
@@ -89,6 +119,7 @@ export function revealStep(paper: Element, state: RevealState): void {
     }
     if (child.matches(UNSETTLED_SELECTOR) || child.querySelector(UNSETTLED_SELECTOR)) open = false;
   }
+  return heldChildren(paper).every((child) => child.hasAttribute(SHOWN_ATTRIBUTE));
 }
 
 export function useChapterReveal(gridRef: RefObject<HTMLElement | null>): void {
@@ -98,23 +129,35 @@ export function useChapterReveal(gridRef: RefObject<HTMLElement | null>): void {
     const shell = grid?.closest('[data-document-shell]');
     if (!paper || !shell) return;
     const state: RevealState = { tops: new WeakMap() };
+    const started = performance.now();
     let frame = 0;
     const tick = () => {
       if (shell.hasAttribute('data-lens-resolved')) return;
-      revealStep(paper, state);
+      if (performance.now() - started >= REVEAL_FAILSAFE_MS) return;
+      if (revealStep(paper, state)) return;
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
+    // A scroll that left where the paper opened was the reader's or the
+    // browser's (find-in-page, a screen reader's cursor): show what it reached.
+    // Unscrolled, the first screen stays with the sampler.
+    const openedAt = window.scrollY;
+    const onScroll = () => {
+      if (window.scrollY === openedAt || shell.hasAttribute('data-lens-resolved')) return;
+      revealInView(paper);
+    };
     const onJump = (event: Event) => {
       const key = (event as CustomEvent<{ region?: string }>).detail?.region;
       if (key) revealThrough(paper, jumpTarget(paper, key));
     };
     const onFocus = (event: FocusEvent) => revealThrough(paper, event.target as Element);
     window.addEventListener(UNFOLD_REGION_EVENT, onJump);
+    window.addEventListener('scroll', onScroll, { passive: true });
     paper.addEventListener('focusin', onFocus as EventListener);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener(UNFOLD_REGION_EVENT, onJump);
+      window.removeEventListener('scroll', onScroll);
       paper.removeEventListener('focusin', onFocus as EventListener);
     };
   }, [gridRef]);

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Round8PaperFrame, { type Round8Pieces, type Round8PaperFrameProps } from '../round8-paper-frame';
 import type { DocumentFrameSlots } from '../frame-slots';
@@ -9,7 +9,14 @@ import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 import { rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-origin';
 import { LENS_RESOLVE_MAX_MS, LENS_RESOLVE_STABLE_FRAMES } from '@/lib/document/lens-constants';
 import { UNFOLD_REGION_EVENT } from '@/lib/document/document-index';
-import { revealStep, SHOWN_ATTRIBUTE, type RevealState } from '../use-chapter-reveal';
+import {
+  REVEAL_FAILSAFE_MS,
+  revealStep,
+  scrollIntoRevealed,
+  SHOWN_ATTRIBUTE,
+  useChapterReveal,
+  type RevealState,
+} from '../use-chapter-reveal';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -423,6 +430,8 @@ describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
     expect(properties).toEqual(['opacity', 'animation']);
     const failsafe = /animation:\s*doc-fade 1ms linear (\d+)ms both/.exec(holds[0]!.body);
     expect(Number(failsafe?.[1])).toBeGreaterThan(LENS_RESOLVE_MAX_MS);
+    // The sampler gives up exactly when the CSS would have shown everything anyway.
+    expect(Number(failsafe?.[1])).toBe(REVEAL_FAILSAFE_MS);
     expect(globalsCss).toMatch(
       /@keyframes doc-fade\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}\s*to\s*\{\s*opacity:\s*1;\s*\}\s*\}/,
     );
@@ -555,5 +564,118 @@ describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
       expect(isHeld(chapter(container, key))).toBe(false);
     }
     expect(isHeld(chapter(container, 'record'))).toBe(true);
+  });
+
+  /**
+   * The hook on a hand-built round-8 shell. Each chapter is laid out at a page
+   * offset, and its rect follows `window.scrollY`. The sampler's frames run
+   * only when the test flushes them.
+   */
+  function mounted(layout: Record<string, [top: number, height: number]>) {
+    const shell = document.createElement('div');
+    shell.setAttribute('data-document-shell', '');
+    shell.setAttribute('data-paper-renderer', 'round8');
+    const grid = document.createElement('div');
+    const { paper, shown, at } = paperOf(Object.keys(layout));
+    paper.setAttribute('data-document-paper', '');
+    grid.appendChild(paper);
+    shell.appendChild(grid);
+    document.body.appendChild(shell);
+    for (const [key, [top, height]] of Object.entries(layout)) {
+      at(key).getBoundingClientRect = () =>
+        ({ top: top - window.scrollY, bottom: top + height - window.scrollY }) as DOMRect;
+    }
+    const queue: FrameRequestCallback[] = [];
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => queue.push(cb));
+    jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const hook = renderHook(() => useChapterReveal({ current: grid }));
+    const flush = () => queue.splice(0).forEach((cb) => cb(performance.now()));
+    const scrollTo = (y: number) => {
+      Object.defineProperty(window, 'scrollY', { value: y, configurable: true });
+      act(() => {
+        window.dispatchEvent(new Event('scroll'));
+      });
+    };
+    return { shell, paper, shown, at, queue, flush, scrollTo, hook };
+  }
+  afterEach(() => {
+    jest.restoreAllMocks();
+    Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
+    document.body.innerHTML = '';
+  });
+  const LAYOUT: Record<string, [number, number]> = {
+    brief: [300, 300],
+    design: [600, 400],
+    schedule: [1000, 600],
+    ffe: [1600, 600],
+    record: [2200, 400],
+  };
+
+  it('stops sampling once every chapter shows', () => {
+    const { shown, queue, flush } = mounted(LAYOUT);
+    for (let i = 0; i <= LENS_RESOLVE_STABLE_FRAMES; i++) flush();
+    expect(shown()).toEqual(Object.keys(LAYOUT));
+    expect(queue).toHaveLength(0);
+  });
+
+  it('stops sampling at the CSS failsafe when the lens never resolves', () => {
+    const { paper, shown, queue, flush } = mounted(LAYOUT);
+    paper.querySelector('[data-paper-cover]')!.innerHTML = '<span aria-busy="true"></span>';
+    const now = jest.spyOn(performance, 'now').mockReturnValue(performance.now());
+    for (let i = 0; i < 10; i++) flush();
+    expect(queue).toHaveLength(1);
+    now.mockReturnValue(now() + REVEAL_FAILSAFE_MS);
+    flush();
+    expect(queue).toHaveLength(0);
+    expect(shown()).toEqual([]);
+  });
+
+  it('stops sampling at lens resolution', () => {
+    const { shell, queue, flush } = mounted(LAYOUT);
+    flush();
+    shell.setAttribute('data-lens-resolved', 'true');
+    flush();
+    expect(queue).toHaveLength(0);
+  });
+
+  it('leaves the first screen to the sampler while nobody has scrolled', () => {
+    const { shown, scrollTo } = mounted(LAYOUT);
+    // A scroll event at the opening position (a layout nudge, a no-op scrollTo).
+    scrollTo(0);
+    expect(shown()).toEqual([]);
+  });
+
+  it('reveals what a scroll away from the opening reaches, and everything above it', () => {
+    const { shown, scrollTo } = mounted(LAYOUT);
+    // find-in-page / a screen reader's cursor: the viewport now spans 1100–1868.
+    scrollTo(1100);
+    expect(window.innerHeight).toBe(768);
+    expect(shown()).toEqual(['brief', 'design', 'schedule', 'ffe']);
+  });
+
+  it('a returning reader is landed on a chapter that is already revealed', () => {
+    const { at, shown } = mounted(LAYOUT);
+    const target = at('ffe');
+    let shownAtScroll: (string | null)[] = [];
+    target.scrollIntoView = jest.fn(() => {
+      shownAtScroll = shown();
+    });
+    scrollIntoRevealed(target, { block: 'start' });
+    expect(target.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    expect(shownAtScroll).toEqual(['brief', 'design', 'schedule', 'ffe']);
+  });
+
+  it('page.tsx scrolls to a chapter only through the reveal', () => {
+    const page = readFileSync(
+      join(__dirname, '..', '..', '..', '..', 'app', '(document)', 'doc', '[id]', 'page.tsx'),
+      'utf8',
+    );
+    // The returning reader's landing reveals before it scrolls.
+    expect(page).toMatch(/scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
+    // The one bare scroll left lands on the letterhead, which is never held.
+    expect(page.match(/\.scrollIntoView\(/g)).toEqual(['.scrollIntoView(']);
+    expect(page).toMatch(/head\.scrollIntoView\(/);
+    expect(page).not.toMatch(/window\.scroll(To|By)?\(/);
+    expect(page).toMatch(/revealPaperThrough\(section\);\s*landSection\(/);
   });
 });

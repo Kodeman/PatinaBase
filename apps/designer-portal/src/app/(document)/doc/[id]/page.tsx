@@ -99,6 +99,7 @@ import {
 } from '@/hooks/use-document-running-index';
 import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
 import { landSection } from '@/lib/document/land-section';
+import { revealPaperThrough, scrollIntoRevealed } from '@/components/document/frame/use-chapter-reveal';
 import { useLensDensity, useLensResolved } from '@/hooks/use-lens-density';
 import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
@@ -1390,7 +1391,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
         // SQ-544 (walk D6, P-2) — the section lands at its start unless that
         // would rest the focused control under the dock.
-        if (section) landSection(section, focusTarget, reduceMotion ? 'auto' : 'smooth');
+        if (section) {
+          revealPaperThrough(section);
+          landSection(section, focusTarget, reduceMotion ? 'auto' : 'smooth');
+        }
         focusTarget?.focus({ preventScroll: true });
         // Idempotence rests on the target declaring its own state: an expandable
         // focus target must publish aria-expanded, or a second activation would
@@ -1515,7 +1519,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     const section = document.querySelector<HTMLElement>('[data-project-approval-document]');
     if (!section) return;
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    section.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+    scrollIntoRevealed(section, { block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
     const target =
       section.querySelector<HTMLElement>('#project-approvals-title') ?? section;
     target.focus({ preventScroll: true });
@@ -1737,7 +1741,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       const el = mainRef.current?.querySelector('[data-active-section]') ??
         (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null);
       if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-        el.scrollIntoView({ block: 'start' });
+        scrollIntoRevealed(el, { block: 'start' });
       }
     });
   }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection]);
@@ -2306,11 +2310,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       const reduceMotion = window.matchMedia?.(
         '(prefers-reduced-motion: reduce)',
       ).matches;
-      const land = () =>
-        document.getElementById(elementId)?.scrollIntoView({
-          block: 'start',
-          behavior: reduceMotion ? 'auto' : 'smooth',
-        });
+      const land = () => {
+        const el = document.getElementById(elementId);
+        if (el) scrollIntoRevealed(el, { block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+      };
       // The promotion above is flushed, so a region that was merely quiet has
       // its body already: land now, in the same turn as the press. Only an
       // unfold — a React state change the event above asked for — needs the
