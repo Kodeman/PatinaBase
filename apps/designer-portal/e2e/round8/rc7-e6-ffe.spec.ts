@@ -1,10 +1,12 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures/auth';
-import { psqlScalar } from '../helpers/psql';
+import { psqlRun, psqlScalar } from '../helpers/psql';
 
 const JOB = 'f0180000-0000-4000-8000-000000000010';
 const ROOM = 'f0180000-0000-4000-8000-000000000011';
 const NAME = 'F01 Living Room selection 01';
+// A crashed earlier run can leave the peer or retry value on the row; setup resets it to this.
+const ORIGINAL = 'E6 original finish';
 
 const finishOf = (id: string) => psqlScalar(`SELECT coalesce(finish, '') FROM project_ffe_specs WHERE ffe_item_id='${id}';`);
 
@@ -38,8 +40,15 @@ test.fixme('A06 stale FF&E save refetches the peer, retains the typed draft and 
   expect(line).toMatch(/^[0-9a-f-]{36}$/);
   expect(psqlScalar(`SELECT count(*) FROM project_ffe_items WHERE project_id='${JOB}' AND removed_at IS NULL;`)).toBe('80');
   expect(psqlScalar(`SELECT count(*) FROM project_ffe_items WHERE project_room_id='${ROOM}' AND removed_at IS NULL;`)).toBe('36');
-  const original = finishOf(line);
+  expect(psqlScalar(`SELECT current_setting('rc7.e6_stack', true);`)).toBe('patina-rc7-e6');
   const specId = psqlScalar(`SELECT id FROM project_ffe_specs WHERE ffe_item_id='${line}';`);
+  expect(specId).toMatch(/^[0-9a-f-]{36}$/);
+  psqlRun(`DO $$ BEGIN
+    IF current_setting('rc7.e6_stack', true) IS DISTINCT FROM 'patina-rc7-e6' THEN RAISE EXCEPTION 'not the E6 owned stack'; END IF;
+    UPDATE project_ffe_specs SET finish='${ORIGINAL}' WHERE id='${specId}';
+  END $$;`);
+  const original = finishOf(line);
+  expect(original).toBe(ORIGINAL);
   const peerVersion = Number(psqlScalar(`SELECT row_version FROM project_ffe_specs WHERE id='${specId}';`));
   const pane = await openLine(page, line);
   const finish = pane.getByRole('textbox', { name: 'Finish' });
@@ -74,7 +83,7 @@ test.fixme('A06 stale FF&E save refetches the peer, retains the typed draft and 
   await finish.fill('E6 stale attempt');
   await finish.press('Enter');
   const alert = pane.getByRole('alert');
-  await expect(alert).toContainText(/Finish changed in another session to "E6 peer finish"\. Save again to replace it\./);
+  await expect(alert).toContainText(/Finish changed in another session to [“"]E6 peer finish[”"]\. Save again to replace it\./);
   await expect(alert).not.toContainText(/Refresh/);
   await expect(finish).toHaveValue('E6 stale attempt');
   await expect(finish).toBeFocused();
