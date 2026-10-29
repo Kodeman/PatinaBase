@@ -1,7 +1,7 @@
 /**
  * RC-7 lane e2: service acceptance, paper, completion and care journeys
  * (A20–A23; R3b findings 2 and 4). Opt-in only: the `.journey.ts` name keeps it
- * out of every default discovery. run-consumer-journey.mjs runs it through
+ * out of every default discovery. rc7-e2-run.mjs runs it through
  * rc7-e2-consumer-journey.spec.ts under playwright.round8.config.ts (projects
  * chromium and webkit-iphone; each project applies its own fresh jobs), against
  * the owned stack it started and proved, with the client portal it keeps up on
@@ -54,7 +54,7 @@ const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
 function owned() {
   const env = (key: string) => {
     const value = process.env[key];
-    if (!value) throw new Error(`RC7 e2 journey refused: ${key} is not set; run run-consumer-journey.mjs`);
+    if (!value) throw new Error(`RC7 e2 journey refused: ${key} is not set; run rc7-e2-run.mjs`);
     return value;
   };
   const ids = { dbPort: env('RC2_OWNED_DB_PORT'), apiPort: env('RC2_OWNED_API_PORT'),
@@ -112,6 +112,12 @@ async function actAs<T = unknown>(email: string, name: string, args: Record<stri
   const result = await rpcAs(email, name, args);
   expect(result.status, `${name} as ${email}: ${result.body}`).toBeLessThan(300);
   return (result.body ? JSON.parse(result.body) : null) as T;
+}
+
+/** A refusal as PostgREST returns it: the HTTP status, the SQLSTATE and the RAISE message. */
+function refusal(result: { status: number; body: string }): { status: number; code?: string; message?: string } {
+  const body = JSON.parse(result.body) as { code?: string; message?: string };
+  return { status: result.status, code: body.code, message: body.message };
 }
 
 // ── Fixture ────────────────────────────────────────────────────────────────
@@ -204,6 +210,17 @@ function newestRequest(project: string): RequestRow {
 
 function requestCount(project: string): number {
   return Number(sql(`SELECT count(*) FROM public.service_acceptance_requests WHERE project_id='${project}';`));
+}
+
+/** The audit of a replaced client slot: the replaced row, its successor and the request revision. */
+function replacementAudit(requestId: string): Record<string, unknown> {
+  return json(`SELECT json_build_object('status', s.status, 'reason', s.replacement_reason,
+      'by', s.replaced_by, 'at', s.replaced_at IS NOT NULL, 'revision', s.replacement_policy_revision,
+      'successorCard', n.household_person_id, 'successorStatus', n.status, 'successorRequired', n.required,
+      'requestRevision', r.signer_policy_revision)
+    FROM public.service_acceptance_signers s JOIN public.service_acceptance_signers n ON n.id = s.replaced_by_signer_id
+    JOIN public.service_acceptance_requests r ON r.id = s.request_id
+    WHERE s.request_id='${requestId}' AND s.slot='client' AND s.status='replaced';`);
 }
 
 type ResponseRow = { slot: string; answer: string; method: string; responder: string | null; intake: string | null;
@@ -374,6 +391,12 @@ function openNotices(requestId: string): { id: string; to: string | null }[] {
       AND status='awaiting_review';`);
 }
 
+/** Notices of a request by status: a duplicate send or a duplicate draft changes these counts. */
+function noticeCounts(requestId: string): { sent: number; total: number } {
+  return json(`SELECT json_build_object('sent', count(*) FILTER (WHERE status = 'sent'), 'total', count(*))
+    FROM public.outbound_drafts WHERE ref_type='service_acceptance_request' AND ref_id='${requestId}';`);
+}
+
 /**
  * V22: Review and send on the request card, check every notice still waiting
  * for this request, Send; then the DB reads each notice sent with a dry-run
@@ -382,29 +405,29 @@ function openNotices(requestId: string): { id: string; to: string | null }[] {
 async function sendNotices(page: Page, project: string, requestId: string, expectTo: string[]) {
   const notices = openNotices(requestId);
   expect(notices.map((notice) => notice.to).sort(), 'one notice per signer still waiting').toEqual([...expectTo].sort());
+  const countsBefore = noticeCounts(requestId);
   const section = await openCloseout(page, project);
   const card = section.locator(`[data-service-acceptance-request="${requestId}"]`);
   const sheet = page.getByTestId('ready-to-send-sheet');
-  // WebKit (iPhone) can take the first tap before the card hydrates: the button
-  // takes focus and nothing opens. Tap again until the sheet is up.
-  let taps = 0;
-  await expect(async () => {
-    if (!(await sheet.isVisible())) {
-      taps += 1;
-      if (taps > 1) {
-        // What the missed tap left behind, for the evidence doc.
-        console.log(`[RC7 e2 review-and-send] ${test.info().project.name} before tap ${taps}:`,
-          JSON.stringify(await page.evaluate(() => ({
-            backdrops: document.querySelectorAll('[data-testid="doc-sheet-backdrop"]').length,
-            dialogs: document.querySelectorAll('[role="dialog"]').length,
-            active: document.activeElement?.textContent?.trim().slice(0, 40) ?? null,
-          }))));
-      }
-      await card.getByRole('button', { name: 'Review and send' }).click();
-    }
-    await expect(sheet).toBeVisible({ timeout: 10_000 });
-  }).toPass({ timeout: 60_000 });
-  if (taps > 1) console.log(`[RC7 e2 review-and-send] ${test.info().project.name}: sheet opened on tap ${taps}`);
+  const review = card.getByRole('button', { name: 'Review and send' });
+  // One retap at most, so a missed first tap is recorded with what it left
+  // behind; any send that needed it fails the test (RC7-E2-OBS-1).
+  let taps = 1;
+  await review.click();
+  if (!(await sheet.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false))) {
+    console.log(`[RC7 e2 review-and-send] ${test.info().project.name} request ${requestId} missed tap 1:`,
+      JSON.stringify(await page.evaluate(() => ({
+        backdrops: document.querySelectorAll('[data-testid="doc-sheet-backdrop"]').length,
+        dialogs: document.querySelectorAll('[role="dialog"]').length,
+        active: document.activeElement?.textContent?.trim().slice(0, 40) ?? null,
+      }))));
+    taps = 2;
+    await review.click();
+  }
+  await expect(sheet).toBeVisible({ timeout: 20_000 });
+  console.log(`[RC7 e2 review-and-send] ${test.info().project.name} request ${requestId}: taps=${taps}`);
+  test.info().annotations.push({ type: 'review-and-send-taps', description: `${requestId}: ${taps}` });
+  expect.soft(taps, 'the first Review and send tap opens the sheet').toBe(1);
   for (const notice of notices) {
     const row = sheet.locator(`[data-outbound-row="${notice.id}"]`);
     await expect(row).toContainText(`To ${notice.to}`, { timeout: 30_000 });
@@ -425,6 +448,9 @@ async function sendNotices(page: Page, project: string, requestId: string, expec
   }
   await page.keyboard.press('Escape');
   await expect.poll(() => request(requestId).lifecycle, { timeout: 30_000 }).toBe('sent');
+  // Exactly the checked notices were sent, once each, and no notice row was added.
+  expect(noticeCounts(requestId), 'sent notices for the request').toEqual(
+    { sent: countsBefore.sent + notices.length, total: countsBefore.total });
 }
 
 /** The client's door on their house page names the request; opening it records nothing. */
@@ -553,8 +579,8 @@ test.describe.configure({ mode: 'serial', timeout: 600_000 });
 test.afterAll(() => {
   const target = owned();
   const out = execFileSync('psql', ['-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1',
-    '-v', `owned_server_addr=${target.serverAddr}`, '-v', `owned_system_id=${target.systemId}`,
-    target.dbUrl, '-f', path.join(__dirname, 'rc7-e2-cleanup.sql')], { encoding: 'utf8' });
+    '-v', `owned_port=${target.dbPort}`, '-v', `owned_server_addr=${target.serverAddr}`,
+    '-v', `owned_system_id=${target.systemId}`, target.dbUrl, '-f', path.join(__dirname, 'rc7-e2-cleanup.sql')], { encoding: 'utf8' });
   console.log('[RC7 e2 cleanup]', out.trim());
   expect(JSON.parse(out.trim().split('\n').pop()!)).toMatchObject({ f01NonDraftProposals: 0 });
 });
@@ -639,8 +665,7 @@ test.describe('RC-7 e2 acceptance — job A', () => {
       p_scope_content_hash: r2.scopeHash, p_evidence_manifest_hash: r2.evidenceHash,
       p_signer_policy_revision: r2.revision, p_client_request_id: `rc7-late-${randomUUID()}`,
     });
-    expect(late.status, late.body).toBeGreaterThanOrEqual(400);
-    expect(late.body).toMatch(/request_not_open/);
+    expect(refusal(late), late.body).toEqual({ status: 500, code: '55000', message: 'request_not_open' });
     expect(responses(r2.id)).toHaveLength(1);
 
     // Old evidence stays readable: the client opens request 2 and still reads
@@ -661,7 +686,15 @@ test.describe('RC-7 e2 acceptance — job A', () => {
     const section = await openCloseout(studio, project);
     await expect(section.locator(`[data-service-acceptance-request="${r2.id}"]`))
       .toContainText('Replaced because the agreed scope changed.', { timeout: 60_000 });
-    // A draft cannot be made on the superseded edition: the next draft binds edition 2.
+    // A draft cannot be made on the superseded edition: the designer's own
+    // create_service_acceptance_request (the Draft button's RPC) is refused.
+    const requestsBefore = requestCount(project);
+    const stale = await rpcAs(DESIGNER_EMAIL, 'create_service_acceptance_request', { p_project_id: project,
+      p_scope_edition_id: before.id, p_evidence_manifest_id: manifest(project, 'rc2-sa-2'),
+      p_client_request_id: `rc7-stale-edition-${randomUUID()}` });
+    console.log('[RC7 e2 R2 draft on the superseded edition]', stale.status, stale.body);
+    expect(refusal(stale), stale.body).toEqual({ status: 500, code: '55000', message: 'scope_edition_not_active' });
+    expect(requestCount(project), 'the refused draft writes no request').toBe(requestsBefore);
   });
 
   test('@rc7-e2-acceptance R3: new evidence on the new edition; one of two accepts; a signer is replaced (audited, the old signer refused); the replacement accepts with a condition', async ({ browser }) => {
@@ -673,6 +706,9 @@ test.describe('RC-7 e2 acceptance — job A', () => {
     const r3 = await draft(studio, project, manifest(project, 'rc2-sa-2'));
     expect(r3.edition, 'request 3 binds the amended edition').toBe(edition.id);
     expect(r3.scopeHash).not.toBe(r2.scopeHash);
+    // The evidence set is the same manifest as request 2's (rc2-sa-2): what is
+    // new is the bound scope edition and request 3's own send-time freeze.
+    expect(r3.evidenceHash, 'same manifest as request 2').toBe(r2.evidenceHash);
     await sendNotices(studio, project, r3.id, [ACTOR.client.email, ACTOR.partner.email]);
     // New evidence required: request 3 froze its own snapshot; nothing carried over.
     expect(frozen(r3.id).members).toEqual(['plan_issue:RC2 fictional drawing set, revised']);
@@ -702,13 +738,7 @@ test.describe('RC-7 e2 acceptance — job A', () => {
       .toContainText('was replaced', { timeout: 60_000 });
     await expect(signers.locator('li[data-signer-status="active"]').filter({ hasText: 'RC7 Fictional Third' }))
       .toContainText('Waiting');
-    const audit = json<Record<string, unknown>>(`SELECT json_build_object('status', s.status, 'reason', s.replacement_reason,
-        'by', s.replaced_by, 'at', s.replaced_at IS NOT NULL, 'revision', s.replacement_policy_revision,
-        'successorCard', n.household_person_id, 'successorStatus', n.status, 'successorRequired', n.required,
-        'requestRevision', r.signer_policy_revision)
-      FROM public.service_acceptance_signers s JOIN public.service_acceptance_signers n ON n.id = s.replaced_by_signer_id
-      JOIN public.service_acceptance_requests r ON r.id = s.request_id
-      WHERE s.request_id='${r3.id}' AND s.slot='client' AND s.status='replaced';`);
+    const audit = replacementAudit(r3.id);
     console.log('[RC7 e2 replacement audit]', JSON.stringify(audit));
     expect(audit).toMatchObject({ status: 'replaced', reason: 'Fictional: the client is travelling; the household member signs.',
       by: DESIGNER, at: true, successorCard: THIRD_CARD, successorStatus: 'active', successorRequired: true,
@@ -727,8 +757,8 @@ test.describe('RC-7 e2 acceptance — job A', () => {
       p_signer_policy_revision: r3.revision + 1, p_client_request_id: `rc7-old-${randomUUID()}`,
     });
     console.log('[RC7 e2 old signer refusal]', refused.status, refused.body);
-    expect(refused.status).toBeGreaterThanOrEqual(400);
-    expect(refused.body).toMatch(/signer_not_active|insufficient_privilege/);
+    // 55000 surfaces as HTTP 500 through PostgREST (observation RC7-E2-OBS-3).
+    expect(refusal(refused), refused.body).toEqual({ status: 500, code: '55000', message: 'signer_not_active' });
     expect(responses(r3.id).map((row) => row.slot)).toEqual(['partner']);
 
     // V22: the replacement's own notice, reviewed and sent by the designer.
@@ -783,6 +813,27 @@ test.describe('RC-7 e2 paper — job P', () => {
     expect(sent.scopeHash).toBe(edition.hash);
     expect(frozen(row.id).members).toEqual(['plan_issue:RC7 fictional drawing set']);
 
+    // A paper whose scope or evidence code does not match the request is refused
+    // (record_service_acceptance_paper_intake, the Record paper form's RPC, as the
+    // designer): checked before the stored PDF, so nothing is uploaded or written.
+    const clientSlot = sql(`SELECT id FROM public.service_acceptance_signers WHERE request_id='${row.id}'
+      AND slot='client' AND status='active';`);
+    const paperArgs = (scope: string, evidence: string) => ({ p_request_id: row.id, p_signer_id: clientSlot,
+      p_storage_object_id: randomUUID(), p_paper_signed_on: today(), p_signed_name: PAPER_CARDS.one,
+      p_disposition: 'accept', p_conditions: [], p_return_reason: null, p_presented_request_number: sent.number,
+      p_presented_scope_content_hash: scope, p_presented_evidence_manifest_hash: evidence,
+      p_presented_signer_policy_revision: sent.revision, p_client_request_id: `rc7-paper-mismatch-${randomUUID()}` });
+    const otherHash = (hash: string) => `${hash.slice(0, -1)}${hash.endsWith('0') ? '1' : '0'}`;
+    for (const [what, args] of [['scope code', paperArgs(otherHash(sent.scopeHash), sent.evidenceHash)],
+      ['evidence code', paperArgs(sent.scopeHash, otherHash(sent.evidenceHash))]] as const) {
+      const mismatch = await rpcAs(DESIGNER_EMAIL, 'record_service_acceptance_paper_intake', args);
+      console.log(`[RC7 e2 paper ${what} mismatch]`, mismatch.status, mismatch.body);
+      expect(mismatch.status, `${what}: ${mismatch.body}`).toBeGreaterThanOrEqual(400);
+      expect(refusal(mismatch), what).toMatchObject({ code: '40001', message: 'stale_scope' });
+    }
+    expect(sql(`SELECT count(*) FROM public.service_acceptance_paper_intakes WHERE request_id='${row.id}';`),
+      'the refused papers record nothing').toBe('0');
+
     const admin = await designer(browser, ADMIN_EMAIL);
     for (const [index, name] of [PAPER_CARDS.one, PAPER_CARDS.two].entries()) {
       section = await openCloseout(studio, project);
@@ -816,6 +867,23 @@ test.describe('RC-7 e2 paper — job P', () => {
       expect(intake).toMatchObject({ state: 'pending_review', sha: sha256(paper), recordedBy: DESIGNER,
         number: sent.number, scope: sent.scopeHash, evidence: sent.evidenceHash, name, disposition: 'accept' });
       expect(responses(row.id), 'recorded paper is not yet an answer').toHaveLength(index);
+      if (index === 0) {
+        // K5: the recorder cannot confirm their own paper, though they are a
+        // studio owner/admin who may review (review_service_acceptance_paper_intake as the designer).
+        expect(sql(`SELECT m.role FROM public.organization_members m JOIN public.organizations o
+            ON o.id = m.organization_id AND o.status = 'active'
+          WHERE m.organization_id = public.project_recorded_studio('${project}') AND m.user_id = '${DESIGNER}'
+            AND m.status = 'active';`)).toMatch(/^(owner|admin)$/);
+        const own = await rpcAs(DESIGNER_EMAIL, 'review_service_acceptance_paper_intake', { p_intake_id: intakeId,
+          p_decision: 'confirmed', p_expected_document_sha256: sha256(paper), p_note: null,
+          p_client_request_id: `rc7-own-review-${randomUUID()}` });
+        console.log('[RC7 e2 paper own review]', own.status, own.body);
+        expect(own.status, own.body).toBeGreaterThanOrEqual(400);
+        expect(refusal(own)).toMatchObject({ code: '42501', message: 'insufficient_privilege' });
+        expect(sql(`SELECT review_state || '|' || (reviewed_by IS NULL) FROM public.service_acceptance_paper_intakes
+          WHERE id='${intakeId}';`), 'the refused self-review leaves the intake waiting').toBe('pending_review|true');
+        expect(responses(row.id)).toHaveLength(0);
+      }
 
       // K5: a second owner/admin compares the stored PDF, then confirms.
       const review = await openCloseout(admin, project);
@@ -1062,6 +1130,16 @@ test.describe('RC-7 e2 completion and care', () => {
 
     // close_project is a separate act, with the walkthrough on its checklist.
     expect(sql(`SELECT status FROM public.projects WHERE id='${project}';`)).toBe('active');
+    // An incomplete checklist (the walkthrough not ticked) is refused, and nothing moves.
+    const openClosure = closure(project);
+    const incomplete = await rpcAs(DESIGNER_EMAIL, 'close_project', { p_project_id: project,
+      p_closure: CHECKLIST.map((item) => item.key === 'walkthrough' ? { ...item, completed: false } : item),
+      p_snapshot: null });
+    console.log('[RC7 e2 D close: incomplete checklist]', incomplete.status, incomplete.body);
+    expect(refusal(incomplete), incomplete.body).toEqual({ status: 400, code: '23514',
+      message: 'project closeout checklist must include every required item as completed' });
+    expect(closure(project), 'the refused close leaves closure state as it was').toBe(openClosure);
+    expect(completions(project), 'the refused close leaves the completion as it was').toEqual(completed);
     const snapshot = { caption: 'RC7 fictional design-only closeout', photos: [] as string[] };
     const closed = await closeProject(project, snapshot);
     expect(closed.status, closed.body).toBe(200);
@@ -1126,20 +1204,36 @@ test.describe('RC-7 e2 completion and care', () => {
   });
 });
 
-test.describe('RC-7 e2 defects (repro only; not in a runner leg)', () => {
+test.describe('RC-7 e2 defects (repro only; not in a counted runner leg)', () => {
   // DEFECT RC7-e2-1: the request card's Replace form finds no household on a composed job: useProjectHousehold reads projects.client_profile_id (FK to client_profiles, never set) instead of projects.client_id.
-  test.fixme('@rc7-e2-defect the Replace form offers the job household\'s other members', async ({ browser }) => {
+  test('@rc7-e2-defect the Replace form offers the job household\'s other members and replaces the signer', async ({ browser }) => {
+    // Fixme unless rc7-e2-run.mjs --defect-probe lifts it (RC7_E2_DEFECT_PROBE=1).
+    test.fixme(process.env.RC7_E2_DEFECT_PROBE !== '1', 'DEFECT RC7-e2-1');
     await applyFixtures();
     const project = jobOf(ACTOR.client.id);
     const studio = await designer(browser);
     const row = await draft(studio, project, manifest(project, 'rc2-sa-1'));
     const section = await openCloseout(studio, project);
     const card = section.locator(`[data-service-acceptance-request="${row.id}"]`);
-    await card.getByRole('list', { name: `Signers on request ${row.number}` })
-      .locator('li[data-signer-status="active"]').filter({ hasText: '(Client)' })
+    const signers = card.getByRole('list', { name: `Signers on request ${row.number}` });
+    await signers.locator('li[data-signer-status="active"]').filter({ hasText: '(Client)' })
       .getByRole('button', { name: 'Replace this person' }).click();
     const replace = card.getByRole('form', { name: 'Replace Client' });
+    // The defect step: on this base the form says no household member is on file.
     await expect(replace.getByText('No other household member is on file for this job.')).toHaveCount(0);
     await expect(replace.getByLabel('New person').locator(`option[value="${THIRD_CARD}"]`)).toHaveCount(1);
+
+    // Past the offer: the designer replaces the client with the third household member in the form.
+    await replace.getByLabel('New person').selectOption(THIRD_CARD);
+    const reason = 'Fictional: the client is travelling; the household member signs (UI).';
+    await replace.getByLabel('Reason for the change').fill(reason);
+    await replace.getByRole('button', { name: 'Replace', exact: true }).click();
+    await expect(signers.locator('li[data-signer-status="replaced"]')).toContainText('was replaced', { timeout: 60_000 });
+    await expect(signers.locator('li[data-signer-status="active"]').filter({ hasText: 'RC7 Fictional Third' }))
+      .toBeVisible({ timeout: 60_000 });
+    const audit = replacementAudit(row.id);
+    console.log('[RC7 e2 defect replacement audit]', JSON.stringify(audit));
+    expect(audit).toMatchObject({ status: 'replaced', reason, by: DESIGNER, at: true, successorCard: THIRD_CARD,
+      successorStatus: 'active', successorRequired: true, requestRevision: row.revision + 1, revision: row.revision + 1 });
   });
 });

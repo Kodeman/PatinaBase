@@ -23,13 +23,10 @@ function harness(t, options = {}) {
   const evidence = path.join(scratch, 'evidence');
   for (const dir of [repo, home, parent, evidence]) fs.mkdirSync(dir);
   fs.writeFileSync(path.join(parent, 'unrelated-evidence.txt'), 'keep');
-  const state = { prepared: [], deleted: [], logs: [], commands: [], legs: [], clientServer: [], signals: [],
-    stackAttempted: false, clock: 0 };
+  const state = { prepared: [], deleted: [], logs: [], commands: [], stackAttempted: false };
   const mocks = {
     requireDisk() {},
-    // Ports are free unless a test names one as busy once the legs have run.
-    portInUse: async (port) => state.legs.length > 0 && (options.busyAfterLegs ?? []).includes(port),
-    sleep: async (ms) => { state.clock += ms; },
+    portInUse: async () => false,
     containers: () => state.stackAttempted ? (options.containers ?? []) : [],
     defaultPins: () => '/unused-pins',
     prepareWorkdir(workdir) {
@@ -59,28 +56,13 @@ function harness(t, options = {}) {
       if (options.stopError) throw new Error('stop could not launch');
       return { status: options.stopStatus ?? 0 };
     },
-    stackEnv: () => ({ API_URL: 'http://127.0.0.1:57121', DB_URL: 'mock-db' }),
+    stackEnv: () => ({ API_URL: 'http://127.0.0.1:57321', DB_URL: 'mock-db' }),
     proveOwned: () => ({}),
-    quietCron: () => 'off',
     functionsReceipt: () => ({}),
     psql: () => '',
-    runLeg: (_evidence, _label, side, tag, env, expected = 1, args = []) => {
-      state.legs.push([side, tag, expected, args, env.RC7_E2_ROUND8]);
-      return { ok: options.legOk ?? true, status: 0, logPath: 'mock-leg', lines: [] };
-    },
-    startClientServer: async () => { state.clientServer.push('start'); return { pid: 0 }; },
-    stopClientServer: async () => { state.clientServer.push('stop'); return options.clientStopOk ?? true; },
+    runLeg: () => ({ ok: options.legOk ?? true, status: 0, logPath: 'mock-leg', lines: [] }),
     log: (_evidence, line) => state.logs.push(line),
   };
-  if (options.diskKiB !== undefined) {
-    // The real disk guard, over a mocked df reading.
-    delete mocks.requireDisk;
-    mocks.freeKiB = () => options.diskKiB;
-  }
-  if (options.realStop) delete mocks.stopClientServer;
-  class FakeDate extends Date {
-    static now() { return state.clock; }
-  }
   const context = vm.createContext({
     fs: {
       ...fs,
@@ -93,15 +75,12 @@ function harness(t, options = {}) {
     },
     os: { ...os, homedir: () => home }, path,
     fileURLToPath: () => path.join(repo, 'apps/designer-portal/e2e/round8/run-consumer-journey.mjs'),
-    moduleUrl: 'file:///mock-runner.mjs', console, Date: FakeDate,
-    process: { env: {}, kill: options.kill ?? (() => { throw new Error('process.kill is forbidden in this test'); }) },
+    moduleUrl: 'file:///mock-runner.mjs', process: { env: {} }, console,
     mocks,
     spawnSync() { throw new Error('external processes are forbidden in cleanup tests'); },
   });
-  vm.runInContext(`${moduleBody}\n${Object.keys(mocks).map((key) => `${key} = mocks.${key};`).join('\n')}
-globalThis.journey = journey; globalThis.stopClientServer = stopClientServer; globalThis.E2_EXPECTED = E2_EXPECTED;`, context);
-  return { ...state, state, repo, home, parent, evidence, expected: context.E2_EXPECTED,
-    stop: (child) => context.stopClientServer(evidence, child),
+  vm.runInContext(`${moduleBody}\n${Object.keys(mocks).map((key) => `${key} = mocks.${key};`).join('\n')}\nglobalThis.journey = journey;`, context);
+  return { ...state, state, repo, home, parent, evidence,
     journey: (args = {}) => context.journey({ evidence, runs: 1, workdir: parent, ...args }) };
 }
 
@@ -149,38 +128,6 @@ test('successful teardown removes only the owned child, not its parent or siblin
   assert.ok(stop.includes('--no-backup'));
 });
 
-const E2_TAGS = '@rc7-e2-acceptance|@rc7-e2-paper|@rc7-e2-completion';
-
-test('RC-7 e2: by default one round8 run of the three e2 legs on chromium and webkit-iphone, inside one client-portal start/stop', async (t) => {
-  const h = harness(t);
-  assert.equal(await h.journey(), true);
-  assert.deepEqual(h.legs.map(([side, tag]) => `${side} ${tag}`), [`e2 ${E2_TAGS}`]);
-  const [[, , expected, args, round8]] = h.legs;
-  assert.equal(expected, 14, '7 tests on each of the two projects');
-  assert.equal(h.expected, 14);
-  assert.equal(round8, '1', 'the lane entry registers the journey only with RC7_E2_ROUND8=1');
-  assert.deepEqual([...args], ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
-    '--grep', E2_TAGS, '--project', 'chromium', '--project', 'webkit-iphone', '--workers=1']);
-  assert.deepEqual(h.clientServer, ['start', 'stop']);
-});
-
-test('RC-7 e2: --with-rc2 runs the five RC-2 legs, then the e2 legs inside one client-portal start/stop', async (t) => {
-  const h = harness(t);
-  assert.equal(await h.journey({ withRc2: true }), true);
-  assert.deepEqual(h.legs.map(([side, tag]) => `${side} ${tag}`), [
-    'designer @rc2-send', 'client @rc2-return', 'designer @rc2-resend', 'client @rc2-accept', 'designer @rc2-complete',
-    `e2 ${E2_TAGS}`]);
-  assert.deepEqual(h.legs.slice(5).map(([, , expected]) => expected), [14]);
-  assert.deepEqual(h.clientServer, ['start', 'stop']);
-});
-
-test('RC-7 e2: a failed RC-2 leg never starts the client portal or the e2 legs', async (t) => {
-  const h = harness(t, { legOk: false });
-  assert.equal(await h.journey({ withRc2: true }), false);
-  assert.deepEqual(h.legs.map(([, tag]) => tag), ['@rc2-send']);
-  assert.deepEqual(h.clientServer, []);
-});
-
 test('partial startup failure still attempts teardown and preserves recovery on failed stop', async (t) => {
   const failed = harness(t, { startError: true, stopStatus: 1 });
   await assert.rejects(failed.journey(), /start failed/);
@@ -223,86 +170,3 @@ for (const kind of ['root', 'home', 'repo', 'other checkout', 'symlink to checko
     assert.deepEqual(h.deleted, [], 'refuse without deleting anything');
   });
 }
-
-test('disk guard: exactly 20 GiB free runs; one KiB less refuses before any stack command', async (t) => {
-  const floor = 20 * 1024 * 1024;
-  const at = harness(t, { diskKiB: floor });
-  assert.equal(await at.journey(), true);
-  assert.ok(at.logs.some((line) => line === 'disk: 20.00 GiB free'));
-
-  const below = harness(t, { diskKiB: floor - 1 });
-  await assert.rejects(below.journey(), /free disk 20\.00 GiB is below 20 GiB; stopping/);
-  assert.deepEqual(below.commands, [], 'no stack is started below the floor');
-  assert.deepEqual(below.prepared, []);
-
-  const unreadable = harness(t, { diskKiB: Number.NaN });
-  await assert.rejects(unreadable.journey(), /below 20 GiB/, 'an unreadable df reading refuses too');
-});
-
-test('client-portal residue on stop makes the journey FAIL', async (t) => {
-  const h = harness(t, { clientStopOk: false });
-  assert.equal(await h.journey(), false);
-  assert.deepEqual(h.clientServer, ['start', 'stop']);
-  assert.ok(h.logs.includes('JOURNEY run1 FAILED'));
-});
-
-test('a designer port still listening after the run makes the journey FAIL', async (t) => {
-  const h = harness(t, { busyAfterLegs: ['3110'] });
-  assert.equal(await h.journey(), false);
-  assert.ok(h.logs.some((line) => line.includes('residue: port 3110 is still listening')));
-  assert.ok(h.state.clock >= 30_000, 'it waited the full release window first');
-});
-
-function fakeGroup(state, { ignoreTerm = false, ignoreKill = false } = {}) {
-  const child = { pid: 4242, exitCode: null, signalCode: null };
-  let alive = true;
-  const kill = (pid, signal) => {
-    assert.equal(pid, -4242, 'signals go to the whole process group');
-    if (signal === 0) {
-      if (!alive) throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' });
-      return true;
-    }
-    state.signals.push(signal);
-    if ((signal === 'SIGTERM' && ignoreTerm) || (signal === 'SIGKILL' && ignoreKill)) return true;
-    alive = false;
-    child.signalCode = signal;
-    return true;
-  };
-  return { child, kill };
-}
-
-test('client-portal stop: SIGTERM that ends the group is enough', async (t) => {
-  const state = { signals: [] };
-  const group = fakeGroup(state);
-  const h = harness(t, { realStop: true, kill: group.kill });
-  assert.equal(await h.stop(group.child), true);
-  assert.deepEqual(state.signals, ['SIGTERM']);
-  assert.ok(h.logs.some((line) => line.includes('process group gone; port 3112 free')));
-});
-
-test('client-portal stop: escalates to SIGKILL after the grace period', async (t) => {
-  const state = { signals: [] };
-  const group = fakeGroup(state, { ignoreTerm: true });
-  const h = harness(t, { realStop: true, kill: group.kill });
-  assert.equal(await h.stop(group.child), true);
-  assert.deepEqual(state.signals, ['SIGTERM', 'SIGKILL']);
-  assert.ok(h.state.clock >= 20_000, 'SIGKILL only after the 20 s grace');
-  assert.ok(h.logs.some((line) => line.includes('SIGTERM then SIGKILL') && line.includes('gone')));
-});
-
-test('client-portal stop: a group that survives SIGKILL is residue (false)', async (t) => {
-  const state = { signals: [] };
-  const group = fakeGroup(state, { ignoreTerm: true, ignoreKill: true });
-  const h = harness(t, { realStop: true, kill: group.kill });
-  assert.equal(await h.stop(group.child), false);
-  assert.ok(h.logs.some((line) => line.includes('process group RESIDUE')));
-});
-
-test('client-portal stop: a port still listening after the group is gone is residue (false)', async (t) => {
-  const state = { signals: [] };
-  const group = fakeGroup(state);
-  const h = harness(t, { realStop: true, kill: group.kill, busyAfterLegs: ['3112'] });
-  h.state.legs.push(['marker']);
-  assert.equal(await h.stop(group.child), false);
-  assert.ok(h.logs.some((line) => line.includes('port 3112 STILL LISTENING')));
-});

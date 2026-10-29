@@ -14,8 +14,28 @@
 -- replica mode (the evidence ledgers refuse DELETE by trigger), as the other
 -- round8 cleanups do.
 --
---   psql -X -v ON_ERROR_STOP=1 -v owned_server_addr=... -v owned_system_id=... <owned db url> -f rc7-e2-cleanup.sql
+--   psql -X -v ON_ERROR_STOP=1 -v owned_port=... -v owned_server_addr=... -v owned_system_id=... <owned db url> -f rc7-e2-cleanup.sql
 \set ON_ERROR_STOP on
+-- The connection guard of consumer-journey-fixture.sql: loopback, never the
+-- shared stack's ports, and only the owned port. Read-only until it passes.
+\if :{?owned_port}
+\else
+DO $$ BEGIN RAISE EXCEPTION 'rc7-e2 cleanup refused: owned_port not given'; END $$;
+\quit
+\endif
+SELECT CASE
+  WHEN :'HOST' NOT IN ('127.0.0.1', 'localhost', '::1') THEN 'host ' || :'HOST' || ' is not loopback'
+  WHEN :'PORT' IN ('54321', '54322') THEN 'port ' || :'PORT' || ' is the shared Supabase stack'
+  WHEN :'owned_port' IN ('54321', '54322') THEN 'owned_port ' || :'owned_port' || ' is the shared Supabase stack'
+  WHEN :'PORT' <> :'owned_port' THEN 'port ' || :'PORT' || ' is not the owned port ' || :'owned_port'
+  ELSE '' END AS rc7_cleanup_refusal \gset
+SELECT :'rc7_cleanup_refusal' = '' AS rc7_cleanup_owned \gset
+\if :rc7_cleanup_owned
+\else
+\echo REFUSED: :rc7_cleanup_refusal
+DO $$ BEGIN RAISE EXCEPTION 'rc7-e2 cleanup refused: not the owned local stack'; END $$;
+\quit
+\endif
 
 BEGIN;
 SET LOCAL lock_timeout = '3s';

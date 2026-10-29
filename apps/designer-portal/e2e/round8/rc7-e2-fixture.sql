@@ -30,7 +30,7 @@
 --   evidence_path_1 and a natively minted manifest 'rc7-sa-1'.
 --
 -- Applied only by rc7-e2-consumer-journey.journey.ts, with the owned identity
--- run-consumer-journey.mjs proved from Docker:
+-- rc7-e2-run.mjs proved from Docker:
 --   psql -X -v ON_ERROR_STOP=1 -v owned_port=... -v owned_server_addr=... -v owned_system_id=...
 --     -v evidence_path_1/2=... -v evidence_sha_1/2=... <owned db url> -f rc7-e2-fixture.sql
 -- Nothing here writes a request, response, paper intake, completion or

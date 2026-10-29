@@ -5,29 +5,17 @@
  *
  *   node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --evidence <dir> [--runs 2]
  *       [--workdir <existing scratch parent>] [--pins-from <dir with the .temp version pins>] [--keep-stack]
- *       [--with-rc2]
  *   node apps/designer-portal/e2e/round8/run-consumer-journey.mjs --refusal-check <db url> --evidence <dir>
  *
- * Journey mode starts ONE owned Supabase stack (project patina-rc7-e2, RC-7 lane
- * e2 port block 571: API 57121, DB 57122, shadow 57120, pooler 57129, inspector
- * 57183; designer portal 3110, client portal 3112) from this checkout's supabase/ in a scratch
+ * Journey mode starts ONE owned Supabase stack (project patina-rc2-journey,
+ * ports +3000: API 57321, DB 57322) from this checkout's supabase/ in a scratch
  * workdir that holds only the five .temp version pins, with edge-runtime and a
  * functions env of exactly EMAIL_DEV_MODE=dry_run. It proves the stack from
  * Docker (CLI project label, published ports, container address and cluster
- * system identifier; it reads nothing from the shared stack), switches pg_cron's active jobs off on the owned
- * container, writes a sanitized receipt (no keys), then for each journey:
- * with --with-rc2 only, the five RC-2 legs in order (designer @rc2-send,
- * client @rc2-return, designer @rc2-resend, client @rc2-accept, designer
- * @rc2-complete; each send leg applies the fixture once, a fresh job). Then
- * (RC-7 e2, always) it starts the client portal on 3112 itself and runs the
- * rc7-e2 legs in one playwright.round8.config.ts run of
- * rc7-e2-consumer-journey.spec.ts on the round-8 projects chromium and
- * webkit-iphone, each driving every actor in its own browser context:
- * @rc7-e2-acceptance (applies the base and rc7-e2 fixtures: fresh jobs per
- * project), @rc7-e2-paper, @rc7-e2-completion (A20–A23). The client portal is
- * then stopped (SIGTERM, SIGKILL after a grace period) and its port and the
- * designer port must be free; any residue fails the journey. Below 20 GiB free
- * disk it stops.
+ * system identifier), writes a sanitized receipt (no keys), then runs the legs
+ * in order for each journey: designer @rc2-send, client @rc2-return, designer
+ * @rc2-resend, client @rc2-accept, designer @rc2-complete. Each journey's send
+ * leg applies the fixture once (a fresh job); legs never tear anything down.
  * At the end it stops the owned stack with --no-backup (unless --keep-stack),
  * checks the full teardown census (containers and volumes, including removal of
  * child-only resources), and removes the scratch workdir.
@@ -41,7 +29,7 @@
  * Never point it at Strata; it refuses anything but loopback, and refuses the
  * shared stack (54321/54322).
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -54,31 +42,19 @@ const ROOT = path.resolve(DESIGNER, '../..');
 const CLIENT_APP = path.join(ROOT, 'apps/client-portal');
 const FIXTURE = path.join(HERE, 'consumer-journey-fixture.sql');
 const CONFIG = 'playwright.consumer-journey.config.ts';
-const PROJECT = 'patina-rc7-e2';
-const OFFSET = 2800;
-const INSPECTOR_PORT = '57183';
-const PORTS = { designer: '3110', client: '3112' };
+const PROJECT = 'patina-rc2-journey';
+const OFFSET = 3000;
 const SHARED = { api: '54321', db: '54322' };
 const OWNED = { api: String(54321 + OFFSET), db: String(54322 + OFFSET) };
 const PINS = ['gotrue-version', 'postgres-version', 'rest-version', 'storage-migration', 'storage-version'];
 const EXCLUDED_SERVICES = 'studio,mailpit,logflare,vector,imgproxy,postgres-meta';
 const LEGS = [['designer', '@rc2-send'], ['client', '@rc2-return'], ['designer', '@rc2-resend'],
   ['client', '@rc2-accept'], ['designer', '@rc2-complete']];
-// RC-7 e2 legs: [tag, tests in the leg]. One playwright.round8.config.ts run of
-// the lane entry on both round-8 projects, so round 8's global setup and
-// teardown run once around all three legs (its teardown removes the F01 studio
-// the legs share), with the client portal this runner keeps up on PORTS.client.
-const E2_LEGS = [['@rc7-e2-acceptance', 3], ['@rc7-e2-paper', 1], ['@rc7-e2-completion', 3]];
-const E2_PROJECTS = ['chromium', 'webkit-iphone'];
-const E2_EXPECTED = E2_LEGS.reduce((sum, [, tests]) => sum + tests, 0) * E2_PROJECTS.length;
-const E2_ARGS = ['--config', 'playwright.round8.config.ts', 'e2e/round8/rc7-e2-consumer-journey.spec.ts',
-  '--grep', E2_LEGS.map(([tag]) => tag).join('|'), ...E2_PROJECTS.flatMap((name) => ['--project', name]), '--workers=1'];
-// RC-7 common rule: stop below 20 GiB free.
-const MIN_FREE_KIB = 20 * 1024 * 1024;
+const MIN_FREE_KIB = 9 * 1024 * 1024;
 const PROVIDER_KEY = /RESEND|SMTP|SENDGRID|POSTMARK|MAILGUN|SES_|TWILIO/i;
 
 function parseArgs(argv) {
-  const args = { runs: 2, keepStack: false, withRc2: false };
+  const args = { runs: 2, keepStack: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => {
@@ -93,7 +69,6 @@ function parseArgs(argv) {
     else if (flag === '--pins-from') args.pinsFrom = path.resolve(value());
     else if (flag === '--refusal-check') args.refusalCheck = value();
     else if (flag === '--keep-stack') args.keepStack = true;
-    else if (flag === '--with-rc2') args.withRc2 = true;
     else throw new Error(`unknown argument ${flag}`);
   }
   if (!args.evidence) throw new Error('--evidence <dir> is required');
@@ -127,7 +102,7 @@ function freeKiB() {
 
 function requireDisk(evidence) {
   const free = freeKiB();
-  if (!(free >= MIN_FREE_KIB)) throw new Error(`free disk ${(free / 1048576).toFixed(2)} GiB is below 20 GiB; stopping`);
+  if (free < MIN_FREE_KIB) throw new Error(`free disk ${(free / 1048576).toFixed(2)} GiB is below 9 GiB; stopping`);
   log(evidence, `disk: ${(free / 1048576).toFixed(2)} GiB free`);
 }
 
@@ -172,7 +147,7 @@ function prepareWorkdir(workdir, pinsFrom) {
   const config = fs.readFileSync(configPath, 'utf8')
     .replace(/^project_id = "supabase"$/m, `project_id = "${PROJECT}"`)
     .replace(/^(\s*(?:port|shadow_port) = )(543\d\d)$/gm, (_, key, port) => `${key}${Number(port) + OFFSET}`)
-    .replace(/^(\s*inspector_port = )(\d+)$/m, (_, key) => `${key}${INSPECTOR_PORT}`);
+    .replace(/^(\s*inspector_port = )(\d+)$/m, (_, key, port) => `${key}${Number(port) + OFFSET}`);
   if (!config.includes(`project_id = "${PROJECT}"`) || !config.includes(`port = ${OWNED.db}`)
     || !config.includes(`port = ${OWNED.api}`)) {
     throw new Error('could not rewrite config.toml to the owned project and ports');
@@ -241,26 +216,12 @@ function proveOwned(env) {
   if (urlSystemId !== systemId || urlAddr !== serverAddr) {
     throw new Error('the database URL does not reach the owned container');
   }
-  return { dbPort, apiPort, serverAddr, systemId, dbContainer: dbBox.Id.slice(0, 12) };
-}
-
-/**
- * Orchestrator ruling (RC-7, 2026-10-29): pg_cron jobs starting on the owned
- * stacks crashed Postgres backends on the shared Docker VM. The journey sends
- * through the edge function directly and needs no scheduled job, so active
- * jobs are switched off on the owned container (as its own superuser, inside
- * it) and the setting is read back.
- */
-function quietCron(identity) {
-  const box = `supabase_db_${PROJECT}`;
-  if (clusterId(box) !== identity.systemId) throw new Error(`${box} is not the proven owned cluster`);
-  const sql = (query) => must('docker', ['exec', box, 'sh', '-c',
-    `PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U supabase_admin -d postgres -X -q -t -A -c "${query}"`]);
-  sql('ALTER SYSTEM SET cron.launch_active_jobs = off;');
-  sql('SELECT pg_reload_conf();');
-  const setting = sql('SHOW cron.launch_active_jobs;');
-  if (setting !== 'off') throw new Error(`cron.launch_active_jobs reads ${setting} on the owned stack`);
-  return setting;
+  let sharedSystemId = null;
+  if (containers('com.supabase.cli.project=supabase').includes('supabase_db_supabase')) {
+    sharedSystemId = clusterId('supabase_db_supabase');
+    if (sharedSystemId === systemId) throw new Error('the owned cluster shares the shared stack\'s system identifier');
+  }
+  return { dbPort, apiPort, serverAddr, systemId, sharedSystemId, dbContainer: dbBox.Id.slice(0, 12) };
 }
 
 /** The functions environment as the edge runtime sees it: names only, plus the dry-run mode. */
@@ -275,18 +236,17 @@ function functionsReceipt() {
   return { container: edge, EMAIL_DEV_MODE: mode, providerKeyNames, envNameCount: names.length };
 }
 
-function runLeg(evidence, label, side, tag, legEnv, expected = 1, args = ['--config', CONFIG, '--grep', tag]) {
+function runLeg(evidence, label, side, tag, legEnv) {
   const dir = path.join(evidence, label);
   fs.mkdirSync(dir, { recursive: true });
-  const name = side === 'e2' ? 'e2-rc7' : `${side}-${tag}`;
-  const report = path.join(dir, name);
-  const logPath = path.join(dir, `${name}.log`);
+  const report = path.join(dir, `${side}-${tag}`);
+  const logPath = path.join(dir, `${side}-${tag}.log`);
   const out = fs.openSync(logPath, 'w');
-  const result = spawnSync('pnpm', ['exec', 'playwright', 'test', ...args], {
-    cwd: side === 'client' ? CLIENT_APP : DESIGNER,
+  const result = spawnSync('pnpm', ['exec', 'playwright', 'test', '--config', CONFIG, '--grep', tag], {
+    cwd: side === 'designer' ? DESIGNER : CLIENT_APP,
     env: { ...legEnv, PLAYWRIGHT_OUTPUT_DIR: report, PLAYWRIGHT_EVIDENCE_DIR: report },
     stdio: ['ignore', out, out],
-    timeout: (side === 'e2' ? 75 : 20) * 60 * 1000,
+    timeout: 20 * 60 * 1000,
     killSignal: 'SIGTERM',
   });
   fs.closeSync(out);
@@ -296,87 +256,8 @@ function runLeg(evidence, label, side, tag, legEnv, expected = 1, args = ['--con
   const lines = text.split('\n').filter((line) => !line.includes('[WebServer]') && /✓|✘|^\s*\d+ \w/.test(line));
   const summary = lines.filter((line) => /^\s*\d+ (passed|failed|flaky|skipped|did not run|interrupted)\b/.test(line))
     .map((line) => line.trim().replace(/ \(.*\)$/, ''));
-  return { ok: result.status === 0 && summary.length === 1 && summary[0] === `${expected} passed`,
+  return { ok: result.status === 0 && summary.length === 1 && summary[0] === '1 passed',
     status: result.status ?? result.signal, logPath, lines };
-}
-
-/**
- * RC-7 e2: the client portal on PORTS.client for the e2 legs, against the
- * owned API (the client config's own webServer env). Its own process group,
- * so stopClientServer ends next dev and its workers.
- */
-async function startClientServer(evidence, label, legEnv) {
-  const logPath = path.join(evidence, label, 'client-portal-dev.log');
-  fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  const out = fs.openSync(logPath, 'w');
-  const child = spawn('pnpm', ['exec', 'next', 'dev', '--webpack', '-p', PORTS.client], {
-    cwd: CLIENT_APP, detached: true, stdio: ['ignore', out, out],
-    env: { ...legEnv, SUPABASE_INTERNAL_URL: legEnv.NEXT_PUBLIC_SUPABASE_URL },
-  });
-  fs.closeSync(out);
-  const deadline = Date.now() + 5 * 60 * 1000;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(`http://localhost:${PORTS.client}/auth/signin`);
-      if (response.ok) {
-        log(evidence, `client portal up on ${PORTS.client} (pid ${child.pid}) log=${logPath}`);
-        return child;
-      }
-    } catch { /* not listening yet */ }
-    if (child.exitCode !== null) break;
-    await new Promise((resolve) => { setTimeout(resolve, 2000); });
-  }
-  await stopClientServer(evidence, child);
-  throw new Error(`client portal did not start on ${PORTS.client}; see ${logPath}`);
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => { setTimeout(resolve, ms); });
-}
-
-/** Waits until none of the ports is listening; true when all are free within the time. */
-async function portsReleased(ports, ms) {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const busy = [];
-    for (const port of ports) if (await portInUse(port)) busy.push(port);
-    if (busy.length === 0) return true;
-    if (Date.now() >= deadline) return false;
-    await sleep(500);
-  }
-}
-
-/** Whether any process of the client server's group is alive. */
-function groupAlive(child) {
-  try { process.kill(-child.pid, 0); return true; } catch { return false; }
-}
-
-/**
- * Stops the client portal's process group: SIGTERM, then SIGKILL after the
- * grace period, then waits for its port. False (residue) fails the journey:
- * a live group member or a listening port after the escalation.
- */
-async function stopClientServer(evidence, child, { graceMs = 20_000, settleMs = 15_000 } = {}) {
-  if (!child) return true;
-  const signal = (name) => { try { process.kill(-child.pid, name); } catch { /* group already gone */ } };
-  const exited = () => child.exitCode !== null || child.signalCode !== null;
-  const waitGone = async (ms) => {
-    const deadline = Date.now() + ms;
-    while ((!exited() || groupAlive(child)) && Date.now() < deadline) await sleep(250);
-    return exited() && !groupAlive(child);
-  };
-  signal('SIGTERM');
-  let gone = await waitGone(graceMs);
-  let escalated = false;
-  if (!gone) {
-    escalated = true;
-    signal('SIGKILL');
-    gone = await waitGone(settleMs);
-  }
-  const released = await portsReleased([PORTS.client], settleMs);
-  log(evidence, `client portal stop (pid ${child.pid}): ${escalated ? 'SIGTERM then SIGKILL' : 'SIGTERM'}; `
-    + `process group ${gone ? 'gone' : 'RESIDUE'}; port ${PORTS.client} ${released ? 'free' : 'STILL LISTENING'}`);
-  return gone && released;
 }
 
 function createOwnedWorkdir(parent = os.tmpdir()) {
@@ -417,7 +298,7 @@ async function journey(args) {
   requireDisk(evidence);
   const existing = containers(`com.supabase.cli.project=${PROJECT}`);
   if (existing.length > 0) throw new Error(`containers of ${PROJECT} already exist (${existing.join(', ')}); not owned by this run`);
-  for (const port of [OWNED.api, OWNED.db, PORTS.designer, PORTS.client]) {
+  for (const port of [OWNED.api, OWNED.db, '3200', '3202']) {
     if (await portInUse(port)) throw new Error(`port ${port} is already in use`);
   }
   const workdir = createOwnedWorkdir(args.workdir);
@@ -431,13 +312,12 @@ async function journey(args) {
     must('supabase', ['start', '--workdir', workdir, '-x', EXCLUDED_SERVICES], { timeout: 20 * 60 * 1000 });
     const env = stackEnv(workdir);
     const identity = proveOwned(env);
-    const cronLaunchActiveJobs = quietCron(identity);
     const receipt = {
       at: new Date().toISOString(), project: PROJECT, workdir,
       cli: must('supabase', ['--version']).split('\n')[0], head: must('git', ['-C', ROOT, 'rev-parse', 'HEAD']),
       api: { url: env.API_URL, port: identity.apiPort }, db: { port: identity.dbPort, container: identity.dbContainer,
-        serverAddr: identity.serverAddr, systemId: identity.systemId },
-      functions: functionsReceipt(), cronLaunchActiveJobs,
+        serverAddr: identity.serverAddr, systemId: identity.systemId }, sharedSystemId: identity.sharedSystemId,
+      functions: functionsReceipt(),
       ledgerMax: psql(env.DB_URL, 'SELECT max(version) FROM supabase_migrations.schema_migrations;'),
       scopeEditionsAtStart: psql(env.DB_URL, "SELECT enabled FROM public.server_capabilities WHERE key='scope_editions';"),
     };
@@ -449,37 +329,16 @@ async function journey(args) {
       SUPABASE_URL: env.API_URL, SUPABASE_SERVICE_ROLE_KEY: env.SERVICE_ROLE_KEY, SUPABASE_DB_URL: env.DB_URL,
       RC2_OWNED_DB_PORT: identity.dbPort, RC2_OWNED_API_PORT: identity.apiPort,
       RC2_OWNED_SERVER_ADDR: identity.serverAddr, RC2_OWNED_SYSTEM_ID: identity.systemId,
-      PLAYWRIGHT_DESIGNER_PORT: PORTS.designer, PLAYWRIGHT_CLIENT_PORT: PORTS.client,
-      RC7_CLIENT_URL: `http://localhost:${PORTS.client}`,
     };
     for (let n = 1; n <= args.runs; n += 1) {
       const label = `run${n}`;
       let ok = true;
-      for (const [side, tag] of args.withRc2 ? LEGS : []) {
+      for (const [side, tag] of LEGS) {
         requireDisk(evidence);
         const leg = runLeg(evidence, label, side, tag, legEnv);
         log(evidence, `== ${label} ${side} ${tag} exit=${leg.status} log=${leg.logPath}`);
         for (const line of leg.lines) log(evidence, `   ${line.trim()}`);
         if (!leg.ok) { ok = false; break; }
-      }
-      if (ok) {
-        const client = await startClientServer(evidence, label, legEnv);
-        try {
-          requireDisk(evidence);
-          const tags = E2_LEGS.map(([tag]) => tag).join('|');
-          const leg = runLeg(evidence, label, 'e2', tags, { ...legEnv, RC7_E2_ROUND8: '1',
-            SUPABASE_INTERNAL_URL: legEnv.NEXT_PUBLIC_SUPABASE_URL }, E2_EXPECTED, E2_ARGS);
-          log(evidence, `== ${label} e2 ${tags} on ${E2_PROJECTS.join(' + ')} exit=${leg.status} log=${leg.logPath}`);
-          for (const line of leg.lines) log(evidence, `   ${line.trim()}`);
-          if (!leg.ok) ok = false;
-        } finally {
-          if (!(await stopClientServer(evidence, client))) ok = false;
-        }
-      }
-      // Playwright's own designer server must be gone too.
-      if (!(await portsReleased([PORTS.designer], 30_000))) {
-        log(evidence, `residue: port ${PORTS.designer} is still listening after the run`);
-        ok = false;
       }
       log(evidence, `JOURNEY ${label} ${ok ? 'PASSED' : 'FAILED'}`);
       if (!ok) break;
