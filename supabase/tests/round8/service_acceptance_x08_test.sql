@@ -1,9 +1,9 @@
--- Owned second stack only; every fixture/ACL change is rolled back.
+-- Owned stack only (any local port but the shared 54322); every fixture/ACL change is rolled back.
 \set ON_ERROR_STOP on
-SELECT :'HOST' = '127.0.0.1' AND :'PORT' = '55322' AS owned_stack \gset
+SELECT :'HOST' = '127.0.0.1' AND :'PORT' <> '54322' AS owned_stack \gset
 \if :owned_stack
 \else
-DO $$ BEGIN RAISE EXCEPTION 'X08 refused: requires owned 127.0.0.1:55322'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'X08 refused: requires an owned 127.0.0.1 stack, never the shared 54322'; END $$;
 \quit
 \endif
 BEGIN;
