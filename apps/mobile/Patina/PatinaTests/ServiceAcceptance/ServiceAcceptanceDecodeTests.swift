@@ -95,6 +95,33 @@ enum ServiceAcceptanceFixture {
 @MainActor
 struct ServiceAcceptanceDecodeTests {
 
+    @Test("client evidence decodes issued timestamps, nested selection facts and a decimal dimension")
+    func decodesPopulatedEvidence() throws {
+        let json = """
+        {"requestId":"req-1","requestNumber":2,
+         "scope":{"editionId":"ed-1","contentHash":"sha-scope-1","packages":[]},
+         "evidence":{"manifestId":"manifest-1","manifestHash":"sha-evidence-1","members":[
+           {"kind":"product_configuration","title":"Dining table","issuedAt":"2026-10-28T14:30:00Z",
+            "content":{"productName":"Dining table","dimensions":{"width":81.25,"unit":"in"},
+                       "selections":[{"groupName":"Finish","valueLabel":"Natural oak"}]},
+            "documents":[]}]}}
+        """
+        let read = try JSONDecoder().decode(RemoteServiceAcceptanceEvidence.self, from: Data(json.utf8))
+        let request = try ServiceAcceptanceFixture.request(ServiceAcceptanceFixture.row())
+        #expect(read.matches(request))
+        let member = try #require(read.evidence.members.first)
+        #expect(member.issuedAt == "2026-10-28T14:30:00Z")
+        #expect(member.content == .object([
+            "productName": .string("Dining table"),
+            "dimensions": .object(["width": .double(81.25), "unit": .string("in")]),
+            "selections": .array([.object(["groupName": .string("Finish"), "valueLabel": .string("Natural oak")])])
+        ]))
+        #expect(ServiceAcceptanceCopy.source(member.kind) == "Furniture selection")
+        #expect(ServiceAcceptanceCopy.party("gc") == "your general contractor")
+        #expect(ServiceAcceptanceCopy.party("none") == nil)
+        #expect(ServiceAcceptanceCopy.inclusion("excluded") == "Not included")
+    }
+
     // MARK: - viewerRole fails closed
 
     @Test("an unknown viewerRole decodes as observer and is offered no act")

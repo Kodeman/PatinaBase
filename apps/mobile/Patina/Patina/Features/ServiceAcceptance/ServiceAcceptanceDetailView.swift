@@ -95,7 +95,14 @@ struct ServiceAcceptanceDetailContent: View {
         }
         // Re-read when another request opens or this one's outcome lands.
         .task(id: evidenceKey) {
+            documentError = nil
             if let request = model.presentedRequest { await model.loadEvidence(for: request) }
+        }
+        .onChange(of: model.evidenceFailed) { _, failed in
+            if failed {
+                let canRespond = model.presentedRequest.map(model.canRespond) ?? false
+                AccessibilityNotification.Announcement(ServiceAcceptanceCopy.evidenceError(canRespond: canRespond)).post()
+            }
         }
         .task(id: studioServiceKey) {
             if let request = model.presentedRequest { await model.loadStudioService(for: request) }
@@ -157,20 +164,32 @@ struct ServiceAcceptanceDetailContent: View {
                     MonoLabel(text: "Agreed scope")
                     ForEach(evidence.scope.packages) { package in
                         VStack(alignment: .leading, spacing: 5) {
-                            Text("\(package.label) · \(package.inclusion)")
+                            Text("\(package.label) · \(ServiceAcceptanceCopy.inclusion(package.inclusion))")
                                 .font(PatinaTypography.bodySmallMedium)
                             if let condition = package.conditionText { help(condition) }
-                            help("Responsibilities: design · \(package.responsibilities.design), purchasing · \(package.responsibilities.purchasing), installation · \(package.responsibilities.installation)")
+                            if let design = ServiceAcceptanceCopy.party(package.responsibilities.design) {
+                                help("Design: \(design)")
+                            }
+                            if let purchasing = ServiceAcceptanceCopy.party(package.responsibilities.purchasing) {
+                                help("Purchasing: \(purchasing)")
+                            }
+                            if let installation = ServiceAcceptanceCopy.party(package.responsibilities.installation) {
+                                help("Installation: \(installation)")
+                            }
                             ForEach(Array(package.phases.enumerated()), id: \.offset) { _, phase in
-                                help("\(phase.name) · \(phase.service)")
+                                help("\(phase.name) · \(ServiceAcceptanceCopy.service(phase.service))")
                             }
                         }
+                        .padding(package.inclusion == "excluded" ? 12 : 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(package.inclusion == "excluded" ? PatinaColors.Background.secondary : PatinaColors.Background.primary)
                     }
                     MonoLabel(text: "Issued evidence")
                     ForEach(Array(evidence.evidence.members.enumerated()), id: \.offset) { _, member in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(member.title).font(PatinaTypography.bodySmallMedium)
-                            if let issuedAt = member.issuedAt { help("Issued \(issuedAt)") }
+                            help(ServiceAcceptanceCopy.source(member.kind))
+                            if let issuedAt = member.issuedAt { help("Issued \(DateDisplay.fromTimestamp(issuedAt))") }
                             if let content = member.content { AcceptanceEvidenceValue(value: content) }
                             ForEach(member.documents) { document in
                                 Button(document.title) {
@@ -179,20 +198,27 @@ struct ServiceAcceptanceDetailContent: View {
                                             let url = try await DocumentsAPIClient.shared.signedURL(storagePath: document.path)
                                             documentError = nil
                                             openURL(url)
-                                        } catch { documentError = document.path }
+                                        } catch {
+                                            documentError = document.path
+                                            AccessibilityNotification.Announcement(ServiceAcceptanceCopy.documentError(document.title)).post()
+                                        }
                                     }
                                 }
                                 .font(PatinaTypography.bodySmallMedium)
                                 .foregroundStyle(PatinaColors.Text.interactive)
+                                .accessibilityHint(documentError == document.path
+                                    ? ServiceAcceptanceCopy.documentError(document.title) : "Opens this issued document.")
+                                if documentError == document.path {
+                                    help(ServiceAcceptanceCopy.documentError(document.title))
+                                }
                             }
                         }
                     }
-                    if documentError != nil { help("Couldn’t open this file. Try again.") }
                 }
                 .accessibilityIdentifier("serviceAcceptance.evidence")
             } else if model.evidenceFailed {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Couldn’t load the agreed scope and evidence. Your response is unavailable until you can review them.")
+                    Text(ServiceAcceptanceCopy.evidenceError(canRespond: model.presentedRequest.map(model.canRespond) ?? false))
                         .font(PatinaTypography.bodySmall)
                         .foregroundStyle(PatinaColors.Text.error)
                     Button(ServiceAcceptanceCopy.tryAgain) { Task { await model.retryEvidence() } }
@@ -342,6 +368,7 @@ struct ServiceAcceptanceDetailContent: View {
                         model.choose(choice)
                     }
                     .accessibilityIdentifier("serviceAcceptance.choose.\(choice)")
+                    .accessibilityHint(ServiceAcceptanceCopy.evidenceHint(ready: model.evidenceReady))
                 }
             }
         }

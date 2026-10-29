@@ -8,10 +8,13 @@ export function ServiceAcceptanceDoor({ projectId }: { projectId: string }) {
   const hydrated = useHydrated();
   const query = useMyServiceAcceptanceRequests();
   if (!hydrated) return null;
+  if (query.isPending && !query.data) return <aside aria-label="Service acceptance" className="mx-auto max-w-2xl px-4 py-4">
+    <p role="status">Checking for acceptance requests…</p>
+  </aside>;
   const actionable = query.data?.filter((r) => r.projectId === projectId && r.lifecycle === 'sent'
     && r.viewerRole === 'signer_required' && r.signers.some((s) => s.signerId === r.viewerSignerId && !s.response));
   if (query.isError && !actionable?.length) return <aside aria-label="Service acceptance" className="mx-auto max-w-2xl px-4 py-4">
-    <p role="alert">Couldn’t load acceptance requests.</p>
+    <p role="status">Couldn’t load acceptance requests.</p>
     <button type="button" className="underline" onClick={() => void query.refetch()}>Try again</button>
   </aside>;
   if (!actionable?.length) return null;
