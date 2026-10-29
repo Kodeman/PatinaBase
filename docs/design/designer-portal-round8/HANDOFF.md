@@ -48,7 +48,7 @@ Kody retired Sidequest as this program's engineering control plane on 29 October
    - **The outbound-kinds importers to redeploy:** outbound-draft-send, decision-reminders, expire-decisions, field-daily, invoice-reminders, notification-digest, review-requests and site-request-dispatch.
    - **Rehearse locally:**
      - the renderer flag on, off, and unresolved mid-session, with no remount during an edit;
-     - legacy fallback when the SDK is blocked or DNT is set;
+     - the recorded fallbacks in `evidence/flag-inventory.md` §4: DNT is treated like any other user (flags resolve), and a blocked or hung SDK falls to the tab latch, else legacy;
      - activation then deactivation on an owned stack, showing the paused states.
    - **Walk the WP-00.2 preserved-capability inventory** on both renderers. Mark each capability present, moved (and where) or missing; missing counts as a defect.
    - Write `evidence/rc/rc5-rollout-rehearsal.md`.

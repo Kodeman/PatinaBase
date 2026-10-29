@@ -18,6 +18,10 @@ The current `useFeatureFlag` is client-side and false/loading until resolved. It
 
 `NEXT_PUBLIC_FLAG_OVERRIDES` is build-time (only literal `true` enables a named flag); a production override change in wrangler vars requires rebuild/redeploy. Record how remote/cohort evaluation propagates, refresh/reload requirements and measured kill-switch latency before pilot approval. Do not describe flag-off as instantaneous. Preserve the settled-paper layout contract and prevent renderer swaps from losing drafts or shifting the reader’s place.
 
+**Cohort targeting (RC-6, 2026-10-28).** Release `designer-paper-round8` only to identified persons: a person-property or user-id cohort. Never use an anonymous percentage rollout, so an anonymous evaluation is always false. The latch accepts a fresh `true` answer without re-checking identity; with identified-only targeting, an answer evaluated before sign-in cannot select round 8. A stale anonymous `false` that lands just after sign-in leaves a flagged user on legacy for that load only. Two attempts to close this in code were withdrawn: one regressed late session identity, and the other read PostHog private fields that are minified in the shipped bundle.
+
+**Kill-switch caveat.** A tab already latched to round 8 stays on round 8 across reloads while the PostHog SDK is blocked, until the tab closes. This is the recorded tab-latch fallback.
+
 ## 3. Additive domain evolution
 
 For each C-contract change, document old/new RPC request and response, auth/RLS, consumer compatibility, idempotency, audit, migration/backfill and rollback behavior. Use expand → migrate → adopt; keep old clients/readers safe through the agreed compatibility window. New optional fields must not make older records falsely accepted, funded or authorized.

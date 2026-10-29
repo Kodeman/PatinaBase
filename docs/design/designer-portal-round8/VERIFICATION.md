@@ -55,7 +55,7 @@ All live-data checks must disable the designer's mock fallback where present (`N
 
 ## Bundle and quality policy
 
-The current checked-in bundle budgets in `scripts/bundle-budget.config.json` are 1,346,026 summed gzip bytes for `/desk`, 1,687,684 for `/doc/[id]`, and at most 200 Lucide icon modules. These are existing tripwires, not desirable performance targets or guarantees of actual LCP. Do not increase them to hide a regression. Measure using a local/CI measuring profile, never deploy that profile:
+The current checked-in bundle budgets in `scripts/bundle-budget.config.json` are 1,346,026 summed gzip bytes for `/desk`, 1,690,757 for `/doc/[id]` (raised from 1,687,684 by decision G5-doc, 2026-10-27), and at most 200 Lucide icon modules. These are existing tripwires, not desirable performance targets or guarantees of actual LCP. Do not increase them to hide a regression. Measure using a local/CI measuring profile, never deploy that profile:
 
 ```bash
 pnpm exec turbo run build --filter=@patina/designer-portal^...
