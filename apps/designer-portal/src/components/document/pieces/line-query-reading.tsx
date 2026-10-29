@@ -9,7 +9,7 @@ type LineQueryState = ReturnType<typeof import("./line-query").lineQueryState>;
 export function LineQueryReading({ state }: { state: LineQueryState }) {
   const count = state.total === null
     ? "Schedule total unknown"
-    : "Whole schedule · " + state.total + (state.total === 1 ? " line" : " lines") + " · " + state.pages + (state.pages === 1 ? " page" : " pages");
+    : "Whole schedule · " + state.total + (state.total === 1 ? " line" : " lines");
   const reading = state.error
     ? "The schedule could not be refreshed."
     : state.loading

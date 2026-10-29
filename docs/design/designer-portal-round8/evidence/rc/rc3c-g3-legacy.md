@@ -164,3 +164,129 @@ The 20-load loop has no `test.setTimeout`, so it runs under the config's 60 s de
 ## Teardown
 
 The probe fixtures were removed after each probe (scale cleanup, then the F01 global-teardown): 0 `e6591000-%`/F01 projects and 0 `f0180000-%` users remained. The owned dev servers on 3000, 3410 and 3420 were stopped by port. `supabase stop --workdir <scratch>/stack --no-backup` exited 0 with "Stopped supabase local development setup". After that, 0 `patina-rc3c` containers and 0 volumes remained, and `lsof` found no listeners on 57321, 57322, 3420, 3410 or 3000 (exit 1). The shared stack on 54321/54322 was still listening and was never stopped or reset (`logs/teardown.log`).
+
+## RC-3d FF&E scale
+
+**Branch:** `r8-fix-ffe-scale` off `b149e4ae0`. **Date:** 2026-10-28.
+
+**Stack:**
+- Owned local Supabase project `patina-ffe`: API `57321`, DB `57322`, shadow `57320`, pooler `57329`.
+- Started from a scratch copy of this worktree's `supabase/` with only the five `.temp` version pins.
+- `-x studio,mailpit,logflare,vector,edge-runtime,imgproxy,postgres-meta`.
+- DB system identifier `7701911445680287786`.
+
+**Raw logs:** `/private/tmp/claude-501/-Users-kody-Code-patina-merged/1460bfe7-3b74-49b1-b90e-b7c7dd33fdc9/scratchpad/ffe.UJfIl8/logs/`, cited below as `logs/`. The path is session-scoped.
+
+### Root cause: OFFSET projects the skipped rows (confirmed)
+
+**Method:**
+- PostgREST's generated SQL for `useProjectFFEItems` and its bind parameters were captured from the owned DB's statement log (`logs/pgrst-sql-capture.log`).
+- The statement was replayed with `PREPARE`/`EXPLAIN (ANALYZE, BUFFERS, VERBOSE) EXECUTE`, inside a transaction, as `SET LOCAL ROLE authenticated`.
+- The session carried the F01 actor's captured `request.jwt.claims`, PostgREST's `search_path`, and `plan_cache_mode = force_custom_plan`.
+- The fixture was the 2,000-line scale job.
+
+| Plan (`logs/explain-*.txt`) | `Sort` rows | `Result` rows (computed columns) | `Limit` out | Execution |
+|---|---|---|---|---|
+| `LIMIT 1000 OFFSET 0` | 1000 | 1000 | 1000 | 3,888 ms |
+| `LIMIT 1000 OFFSET 1000` | 2000 | **2000** | 1000 | **8,198 ms** |
+| `LIMIT 1000 OFFSET 0`, generic plan | 1000 | 1000 | 1000 | 4,568 ms |
+| Keyset `LIMIT 500` past row 1,000 | 500 | 500 | 500 | 2,151 ms |
+
+**How the plan spends its time:**
+- Postgres postpones the expensive computed-column functions to a `Result` node above `Sort`. `Limit` sits above that node, so every OFFSET row is projected and then discarded.
+- The scan, every embed and the sort together cost about 140 ms for all 2,000 rows. The computed columns cost about 3.9 ms per projected row, and they cost that with or without an offset.
+- **Per-function breakdown** (`track_functions`, one 1,000-row page; `logs/fnstats-l1000-o0.tsv`), self time:
+
+  | Function | Self time | Calls |
+  |---|---|---|
+  | `ffe_item_suggested_lead_time_weeks` | 1,493 ms | 2,000 (called again inside `effective`) |
+  | `is_design_studio_comember` | 573 ms | |
+  | `is_studio_comember` | 529 ms | |
+  | `can_buy_for_project` | 519 ms | 9,010 |
+  | `ffe_line_authorization_state` | 516 ms | |
+
+- The generic plan has the same shape, so plan caching is not the cause.
+
+**Through PostgREST** (`logs/probe-matrix.log`, 2,000-line job, two rounds):
+
+| Mode | Page times (ms) | Total |
+|---|---|---|
+| OFFSET 1000 (old) | 4,635 / 7,163 / **7,257 for the empty 3rd page** | 19.1 s |
+| | 3,306 / 6,467 / 7,383 | 17.2 s |
+| Keyset 1000 | 3,734 / 3,728 / 38 | 7.5 s |
+| | 5,057 / 3,372 / 22 | 8.5 s |
+| **Keyset 500** | 1,684 / 1,626 / 1,593 / 1,584 / 34 | **6.5 s** |
+| | 1,706 / 1,736 / 1,628 / 1,651 / 22 | 6.7 s |
+| Keyset 250 | 8 × 811–1,060, then 22–23 | 7.0–7.4 s |
+
+During probing, the old OFFSET-0 first page itself returned `57014` at 8.08 s and 8.18 s in two runs. A 1,000-row page has no safe margin under the `authenticated` role's 8 s `statement_timeout`.
+
+### Fix (no migration)
+
+`useProjectFFEItems` (`packages/supabase/src/hooks/use-project-v2.ts`) now reads keyset pages of 500:
+- Each page uses the same filters and the same `sort_order, created_at, id` order.
+- Each page after the first adds `or=(sort_order.gt.S, and(sort_order.eq.S, created_at.gt."C"), and(sort_order.eq.S, created_at.eq."C", id.gt.I))`, keyed on the previous page's last row.
+- All three keys are `NOT NULL`, so the filter needs no null handling.
+- The return value, query key and failure semantics are unchanged: a failed later page still rejects the whole read.
+- **Consistency.** The pages are separate statements, not one snapshot, and offset paging had the same property. A line whose sort key moves during the read can appear twice or be missed. Lines that don't move are read exactly once, and the next refetch corrects either case.
+- **The one consumer change** came from the review rework. `LineQueryReading` no longer prints a transport page count ("· N pages"), because that count was derived from the old 1,000-row size. It now prints the total only.
+
+**Order checks:**
+- The probe's keyset ids matched `ORDER BY sort_order, created_at, id` exactly for the 2,000-line, 500-line and F01 jobs.
+- It also matched with 572 forced `(sort_order, created_at)` tie groups on the 2,000-line job, where the original values were saved and restored.
+
+No index or function change was needed.
+
+### Gates
+
+- **G4** `pnpm exec playwright test e2e/round8/scale-profile.spec.ts --config playwright.round8.config.ts --project=chromium --project=webkit-iphone --workers=1` → **`8 passed (4.9m)`**, exit 0 (`logs/g4-scale-profile.log`, JSON in `../g4-scale/`).
+  - Completeness at 2,000 lines was `db 2000, fetched 2000, rendered 2000` on both projects.
+  - The keyset `project_ffe_items` pages took 1,671–1,954 ms on Chromium and 1,814–2,431 ms on WebKit-iPhone, all HTTP 200.
+  - Cold ready at 2,000 lines was 15.4 s on Chromium and 12.1 s on WebKit.
+  - Scale residue was 0.
+- **`@patina/supabase`:** `pnpm --filter @patina/supabase type-check && pnpm --filter @patina/supabase test` → `Test Files 149 passed (149)`, `Tests 2091 passed | 12 skipped (2103)`, exit 0.
+  - The rewritten `use-project-v2-ffe-pagination.test.ts` fails against the old offset hook, which was checked by swapping the file in.
+- **Designer:**
+  - `pnpm --filter @patina/designer-portal type-check` → exit 0.
+  - `lint` → `✖ 254 problems (0 errors, 254 warnings)`, which is the baseline.
+  - `jest --runTestsByPath src/components/document/accounts/__tests__/invoice-composer-unknown-read.test.tsx` → `22 passed, 22 total`.
+    - On a quiet machine it passed 3 of 3 runs.
+    - One earlier run failed one test at 6.5 s while G3 was running beside it.
+  - `spec-lens-transport.test.tsx` → `2 passed`.
+
+### G3 desk-error-state:102: branch at parity with main, so only the test budget changed
+
+**Method:**
+- The branch's spec ran `:102` with `--timeout=300000` (a CLI override; no config was edited).
+- It ran against a pre-started `next dev --webpack -p 3000`, on the same owned DB, with the legacy G3 flags and the lens seed loaded.
+- Two servers were measured in turn: first `main` (`9a686cecd`, a detached scratch worktree), then this branch. Each got one warm-up run before the timed runs.
+
+| App on :3000 | 20-load test durations |
+|---|---|
+| `main` | 49.0 s, 1.4 m, 1.3 m, 53.2 s |
+| branch | 68.4 s, 44.0 s, 53.8 s, 66.1 s |
+
+**Why the budget is the problem:**
+- Server renders of `GET /desk` took about 50 ms on both servers.
+- The loop's time is client-side, and it varies about ±30% between runs on either build.
+- The branch is not slower. Both builds can exceed the 60 s default.
+
+**Change:** `test.setTimeout(180_000)` inside that test. That allows 20 loads at 9 s each, about 2× the slowest rate seen here. No assertion changed.
+
+**Re-run:** the three legacy specs (`quiet-responsive-shell`, `margin-handoffs`, `desk-error-state`, `--project=chromium --workers=1`) gave **`18 passed`, `1 skipped` (margin-handoffs:195 fixme)** in 4.8 m, exit 0 (`logs/g3-legacy.log`). `:102` took 1.9 m while a Jest run shared the machine.
+
+### Not verified
+
+- No full G4 matrix or full G2 Jest rerun. Only the touched hook and test files were rerun.
+- **Another `project_ffe_items` reader still truncates.** At 2,000 lines it returns exactly 1,000 rows (about 100–200 ms, a cheaper select). It was seen in the G4 network capture and was not traced or changed. It is not `useProjectFFEItems`.
+- **The page size rests on this machine's measurement.** About 3.9 ms a row puts a 500-row page near 2 s. Slower hardware, or the Strata pooler, would scale that up, and nothing here measured either.
+- **The 2,000-line total is now about 7–9 s of sequential pages.** The read no longer fails, but that time is not reduced. The duplicated `ffe_item_suggested_lead_time_weeks` call (2,000 calls per 1,000 rows) is the obvious lever. It would need a migration and was not touched.
+
+### Teardown
+
+- **Fixtures.** The G4 `afterAll` removed the scale fixture, with residue 0. The scale rows reloaded for the keyset EXPLAIN were removed with `patina.scale_cleanup='on'` (count 0).
+- **Servers.** The owned `:3000` and `:3420` servers were stopped.
+- **Stack.** `supabase stop --workdir <scratch>/stack --no-backup` exited 0 with "Stopped supabase local development setup." That left 0 `patina-ffe` containers and 0 volumes.
+- **Ports.** `lsof` found no listeners on 57320–57329, 3000 or 3420. The shared 54321 stack was never touched.
+- **Scratch worktree.** The `main` worktree was removed with `git worktree remove --force`, because next dev had rewritten its `next-env.d.ts`.
+- **This worktree.** `apps/designer-portal/next-env.d.ts` was reverted.

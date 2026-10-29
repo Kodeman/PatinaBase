@@ -20,7 +20,7 @@ test('whole-schedule reading survives room filtering and native Rough-in/Price o
   await openJob(page, `?unfold=pieces&lens=rough&room=${ROOM}`);
   const build = page.getByTestId('build-room');
   await expect(build).toBeVisible({ timeout: 60_000 });
-  await expect(build.locator('[data-line-query]')).toContainText(`Whole schedule · ${total} lines · 1 page`);
+  await expect(build.locator('[data-line-query]')).toContainText(`Whole schedule · ${total} lines.`);
   await expect(build.getByRole('heading', { name: 'Preliminary selections', exact: true })).toBeVisible();
   await build.getByRole('button', { name: `Acts for ${NAME}`, exact: true }).click();
   await build.getByRole('menuitem', { name: 'Move to room…', exact: true }).click();

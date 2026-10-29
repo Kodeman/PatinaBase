@@ -187,11 +187,11 @@ it('closes More and returns Escape to its disclosure without relying on click fo
   await waitFor(() => expect(more).toHaveFocus());
 });
 
-it('prints the complete canonical total and pages, including a truly empty schedule', () => {
+it('prints the complete canonical total, including a truly empty schedule', () => {
   const view = render(<LineQueryReading state={lineQueryState({ data: Array(2000), isPending: false, isFetching: false, isStale: false, error: null })} />);
-  expect(screen.getByRole('status')).toHaveTextContent('Whole schedule · 2000 lines · 2 pages');
+  expect(screen.getByRole('status')).toHaveTextContent('Whole schedule · 2000 lines.');
   view.rerender(<LineQueryReading state={lineQueryState({ data: [], isPending: false, isFetching: false, isStale: false, error: null })} />);
-  expect(screen.getByRole('status')).toHaveTextContent('Whole schedule · 0 lines · 0 pages');
+  expect(screen.getByRole('status')).toHaveTextContent('Whole schedule · 0 lines.');
 });
 
 it('keeps initial loading and refusal unknown rather than printing an empty overview', () => {
@@ -210,14 +210,14 @@ it('distinguishes refresh, stale and refused refresh without losing the last com
   mockQuery.isFetching = true;
   const view = render(<FFESection projectId="project-1" projectName="Cedar" mode="project" />);
   const reading = () => document.querySelector('[data-line-query]');
-  expect(reading()).toHaveTextContent('1001 lines · 2 pages. Refreshing the schedule');
+  expect(reading()).toHaveTextContent('1001 lines. Refreshing the schedule');
   mockQuery.isFetching = false; mockQuery.isStale = true;
   view.rerender(<FFESection projectId="project-1" projectName="Cedar" mode="project" />);
   expect(reading()).toHaveTextContent('Showing the last complete schedule; not yet refreshed');
   mockQuery.error = new Error('refused');
   view.rerender(<FFESection projectId="project-1" projectName="Cedar" mode="project" />);
   expect(reading()).toHaveAttribute('role', 'alert');
-  expect(reading()).toHaveTextContent('1001 lines · 2 pages. The schedule could not be refreshed');
+  expect(reading()).toHaveTextContent('1001 lines. The schedule could not be refreshed');
 });
 
 it('returns Escape to the clicked FF&E change trigger without prefocusing it', async () => {
