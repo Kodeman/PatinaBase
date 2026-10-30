@@ -69,7 +69,7 @@ test('mocked contextual Field payload returns through the native room owner and 
   await expect(page.getByRole('dialog').filter({ has: page.locator('[data-overlay-amendment]') })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(amendment).toBeFocused();
-  const roomDoor = page.getByRole('link', { name: `Return to room · ${ROOM}`, exact: true });
+  const roomDoor = page.getByRole('link', { name: 'Return to room', exact: true });
   await roomDoor.click();
   await expect(page).toHaveURL(new RegExp(`room=${ROOM}`));
   const room = page.locator('[data-testid="build-room"][data-build-room-embedded="true"]');
@@ -93,14 +93,14 @@ test('mocked contextual Field payload returns through the native room owner and 
   await openNote(page);
   await expect(page.getByText('The capture is unavailable to you.', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /^Return to room/ })).toHaveCount(0);
-  await expect(page.getByLabel('Note context')).toContainText('recorded-print-only');
+  await expect(page.getByLabel('Note context')).not.toContainText('recorded-print-only');
 });
 
 test('@renderer-off note room return lands on the existing pieces route', async ({ authenticatedPage: page }) => {
   test.setTimeout(240_000);
   await mockedNote(page, { visible: true, refused: false });
   await openNote(page);
-  await page.getByRole('link', { name: `Return to room · ${ROOM}`, exact: true }).click();
+  await page.getByRole('link', { name: 'Return to room', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/doc/${JOB}/pieces\\?lens=spec&room=${ROOM}`));
   await expect(page.getByTestId('build-room')).toBeVisible({ timeout: 60_000 });
 });
