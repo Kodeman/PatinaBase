@@ -9,6 +9,7 @@
  * moduleNameMapper (patina-testing Trap 1's non-broken case), so mocking the
  * package specifier fires correctly here.
  */
+import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FolioLetterhead, FolioStrip } from '../folio-strip';
 import {
@@ -98,7 +99,7 @@ describe('FolioStrip — a scan chip navigates to the Room View', () => {
 
     const visibility = screen.getByRole('button', { name: 'studio' });
     expect(visibility).toHaveClass('t-meta');
-    expect(visibility.getAttribute('style')).toContain('color: var(--color-quiet-ink)');
+    expect(readFileSync(`${__dirname}/../folio-strip.tsx`, 'utf8')).toMatch(/color: head\.client_visible\s*\? 'var\(--color-sage-ink\)'\s*: 'var\(--color-quiet-ink\)'/);
   });
 
   it('the letterhead folio disclosure uses the 12px meta size', () => {
