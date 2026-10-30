@@ -282,7 +282,7 @@ function failuresBelowAA(
 describe('RC7-E8-2 · quiet ink on the measured paper grounds', () => {
   it.each([
     ['glance month tick', '#FAF7F2'],
-    ['FF&E line labels', '#FCFAF7'],
+    ['commercial headings', '#FCFAF7'],
     ['accounts strip', '#F3F0EB'],
   ])('%s clears 4.5:1', (_label, ground) => {
     expect(contrastRatio(resolveToken('--color-quiet-ink'), ground)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);

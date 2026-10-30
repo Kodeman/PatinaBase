@@ -592,12 +592,26 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
   test("RC7-E8-2: axe color-contrast serious == 0 on every surface", async ({
     page,
   }) => {
+    const incomplete: Record<string, number> = {};
     const contrast = async (surface: string, include?: string) => {
+      const shell = page.locator('[data-paper-renderer="round8"][data-document-shell]');
+      if (await shell.count()) {
+        await expect(page.locator('[data-document-paper] > [data-paper-shown]').first()).toBeAttached({ timeout: 30_000 });
+        await expect(shell).toHaveAttribute('data-lens-resolved', 'true', { timeout: 30_000 });
+      }
       const { violations } = await runAxe(
         page,
         `${surface} [RC7-E8-2]`,
         include,
       );
+      incomplete[surface] = await page.evaluate(async (context) => {
+        const run = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<any> } }).axe.run;
+        const result = await run(context ? { include: [context] } : document, {
+          runOnly: { type: 'rule', values: ['color-contrast'] },
+          resultTypes: ['incomplete'],
+        });
+        return result.incomplete.find((entry: { id: string }) => entry.id === 'color-contrast')?.nodes.length ?? 0;
+      }, include ?? null);
       return violations.filter((v) => v.id === "color-contrast");
     };
     const found: Record<string, unknown> = {};
@@ -647,6 +661,10 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
       LINE_NAME,
       { timeout: 60_000 },
     );
+    await expect(page.getByText('Authorizations & trade scopes', { exact: false }).first()).toBeVisible();
+    await expect(page.locator('p').filter({ hasText: /^Working budget ·/ }).first()).toBeVisible();
+    await expect(page.getByText(/^Start with ·/).first()).toBeVisible();
+    await expect(page.getByText(/^(Studio only|Studio eyes only)$/).first()).toBeVisible();
     found.spec = await contrast("FF&E unfold, Specifications, line open");
 
     const job = psqlScalar(
@@ -665,6 +683,7 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     await expect(
       closeout.locator("[data-service-acceptance-request]").first(),
     ).toBeAttached({ timeout: 30_000 });
+    await expect(page.locator('[data-paper-chapter="schedule"] span').filter({ hasText: /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)$/ }).first()).toBeVisible();
     found.e7 = await contrast("job paper (E7, acceptance active)");
     found.e7Closeout = await contrast(
       "acceptance/care chapter (E7)",
@@ -682,6 +701,7 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
       "resolve-condition form open",
       '[data-paper-chapter="closeout"]',
     );
+    console.log('[rc7-e8 contrast-incomplete]', test.info().project.name, JSON.stringify(incomplete));
     expect(
       Object.values(found).flat(),
       `color-contrast serious ${JSON.stringify(found)}`,

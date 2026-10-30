@@ -59,6 +59,12 @@ const draftBudget = {
 };
 
 describe("DerivedBudgetGrid", () => {
+  it('renders its small heading in text-grade quiet ink', () => {
+    mockWorkingBudget = { isLoading: false, error: null, data: draftBudget };
+    render(<DerivedBudgetGrid projectId="project-1" />);
+    expect(screen.getByText(/Working budget · version 1/)).toHaveClass('text-[var(--color-quiet-ink)]');
+  });
+
   beforeEach(() => {
     mockPurchasing = { data: { state: 'patina_signed' }, isPending: false, isError: false };
     deriveBudget.mockReset();

@@ -235,10 +235,10 @@ Before each run, the wrapper waited for `vm_stat` free memory ≥ 500 MB. Free m
 
 - **Severity:** medium (1.4.3 AA). **Confidence:** high; identical in both engines and all runs.
 - **Remaining pairs:**
-  - `--color-aged-oak` `#8b7355` on `#faf7f2` = **4.19:1**, 1 node on the E7 job paper. This is the 12 px month tick in `schedule/schedule-glance-strip.tsx:68`.
-  - Aged-oak on `#fcfaf7` = 4.3:1 ×3, and on `#f3f0eb` = 3.94:1 ×1. These are 4 nodes on the FF&E Specifications line opened by keyboard: the 12 px tracked labels of the spec pane.
+  - `--color-aged-oak` `#8b7355` on `#faf7f2` = **4.19:1**, 1 node on the E7 job paper. This is the 11 px month tick in `schedule/schedule-glance-strip.tsx:68`.
+  - Aged-oak on `#fcfaf7` = 4.3:1 ×3, and on `#f3f0eb` = 3.94:1 ×1. These are 4 nodes seen with the FF&E Specifications line opened by keyboard: the Working budget heading, Authorizations heading, GuidedEmptyState “Start with” label, and AccountBand “Studio eyes only” loading label. They are not four spec-pane labels.
 - **Coverage gap in the `fixme` itself:** it opens the Specifications line by URL. In chromium 0, that surface reported 0 nodes, while the keyboard-opened line reports 4. When the fixme is flipped, its surface must be opened the way the keyboard path opens it.
-- **Proposed fix:** the darker FIX4 token at those two sites.
+- **Proposed fix at RC-7:** use the darker FIX4 token on the named small labels.
 
 **RC7-E8-3: At 390@200% (195 CSS px), 8–9 controls run past the right edge and are hidden, not reflowed. `test.fixme`.**
 
@@ -296,3 +296,22 @@ Before each run, the wrapper waited for `vm_stat` free memory ≥ 500 MB. Free m
 - `docker ps` and `docker volume ls` show 0 entries for `patina-rc7-e8h`.
 - After each run, the dev server's rewrite of `apps/designer-portal/next-env.d.ts` and the run's overwrite of the `visual-rc7/*.jpg` captures were restored with `git checkout --`. Only `visual-rc7/*-facts.json` is committed from these runs.
 - Ports 54321/54322, Strata, PostHog and production were never touched.
+
+## 11. RC8-FIX13 post-review follow-up (2026-10-30)
+
+This section supersedes the **residual** status of RC7-E8-2 and RC7-E8-4 above; the RC-7 observations and run history remain historical. The two initial FIX13 commits are `7035f0043` (contrast) and `e828ed666` (cold-load reservation). After cross-provider review, the loading reservation was narrowed to the PressBand: `press-band.tsx` renders a decorative band-sized placeholder while the editions query loads, then collapses on an error or missing result. `paper/round8.css` no longer reserves 254 px on every cover plate. Proposal and brief renders have no PressBand or blank plate-wide reservation. Render tests cover the loading/error transition and those two paper stages.
+
+The five RC7-E8-2 residual nodes are the four named FF&E-open labels corrected in §7 and the E7 schedule month tick. Render tests now assert the actual nodes' quiet-ink classes: Working budget, Authorizations, “Start with,” both AccountBand states (“Studio eyes only” while loading and “Studio only” when loaded), and a glance month tick. The token test now says “commercial headings,” not “FF&E line labels.” Two equivalent 11 px mono uppercase eyebrows in `proposal-watch.tsx:109,226` also use quiet ink. `account-band.tsx:216` is instead an ordinary quoted hold note, not that eyebrow; its contrast was not adjudicated here. The quiet-ink swaps apply to **both renderers**, as `globals.css:16–17` already sanctions quiet ink for small copy; no round-8-only contrast override was added.
+
+Before each RC7-E8-2 axe check, the spec waits for a shown paper child and the resolved lens, and checks the affected labels are rendered and visible. It opens the FF&E line by keyboard. Axe color-contrast violations were **0** on all six surfaces in both runs per engine. The numbers below are **incomplete** color-contrast nodes, which axe could not decide, not passing nodes; those require manual review. Columns are studio / F01 job / FF&E Specifications open / E7 job / E7 acceptance-care / resolve form.
+
+| Browser run | Browser matrix | Axe incomplete by surface | First-visit job CLS | First-visit job LCP |
+| --- | --- | --- | ---: | ---: |
+| chromium 1 | 9 passed, 1 skipped, 0 failed | 1 / 5 / 8 / 5 / 0 / 0 | 0.0385 | 1796 ms |
+| chromium 2 | 9 passed, 1 skipped, 0 failed | 1 / 5 / 8 / 5 / 0 / 0 | 0.0385 | 1732 ms |
+| webkit-iphone 1 | 6 passed, 4 skipped, 0 failed | 0 / 4 / 7 / 3 / 0 / 0 | unavailable | 1610 ms |
+| webkit-iphone 2 | 6 passed, 4 skipped, 0 failed | 0 / 4 / 7 / 3 / 0 / 0 | unavailable | 1494 ms |
+
+Each run used `playwright.round8.config.ts`, `rc7-e8-a11y.spec.ts` and `rc7-e8-perf.spec.ts`, `--workers=1`, live mode, the guarded FIX13-owned stack (API 61621, DB 61622) and designer port 3416. Chromium first-visit CLS clears the proposed ≤0.1 target twice; its initial blanket-reservation readings were 0.0491 twice. WebKit does not expose `layout-shift`, so its CLS cases skip and the table does **not** claim zero. LCP is recorded, not a regression conclusion: RC-7 has no comparable **pre-fix first-visit** LCP baseline. RC7-E8-5 returning-reader CLS remains a skipped, separate defect; this lane did not edit its landing flow. Screen-reader and manual review of axe-incomplete nodes remain unverified.
+
+Follow-up gate: designer portal `type-check` exited 0; `lint` exited 0 (0 errors, 250 warnings); focused Jest `--runTestsByPath` passed **10/10 suites, 206/206 tests**. The changed E8 a11y spec also passed a standalone TypeScript check and `eslint --no-ignore` with exit 0. After the four browser runs, `supabase stop --workdir <FIX13 scratch stack> --no-backup` completed; designer 3416 and block-616 listeners were absent, FIX13 containers and volumes were absent, and its browser mutex was released. The generated `next-env.d.ts` rewrite was restored. No shared-stack reset, Strata deployment, or push occurred.
