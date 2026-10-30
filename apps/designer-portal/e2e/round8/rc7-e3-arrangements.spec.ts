@@ -44,13 +44,26 @@ function seed(id: string) {
 
 function cleanup(id: string) {
   ownedStack();
-  psqlRun(`DO $$ BEGIN
+  psqlRun(`BEGIN;
+    DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM public.proposals WHERE id='${id}' AND
       (designer_id IS DISTINCT FROM '${DESIGNER}'::uuid OR studio_id IS DISTINCT FROM '${STUDIO}'::uuid
        OR title IS DISTINCT FROM '${TITLE}')) THEN
       RAISE EXCEPTION 'RC7-E3 arrangement fixture owner mismatch'; END IF;
     END $$;
-    DELETE FROM public.proposals WHERE id='${id}' AND designer_id='${DESIGNER}' AND title='${TITLE}';`);
+    SET LOCAL session_replication_role = replica;
+    DELETE FROM public.proposal_service_arrangement_applications
+      WHERE proposal_id='${id}' AND created_by='${DESIGNER}';
+    DELETE FROM public.proposal_agreement_parts WHERE proposal_id='${id}' AND kind='scope_package';
+    SET LOCAL session_replication_role = origin;
+    DELETE FROM public.proposal_agreement_parts WHERE proposal_id='${id}';
+    DELETE FROM public.proposal_service_rates WHERE proposal_id='${id}';
+    DELETE FROM public.proposal_service_terms WHERE proposal_id='${id}';
+    SET LOCAL session_replication_role = replica;
+    DELETE FROM public.agreement_part_events WHERE proposal_id='${id}';
+    SET LOCAL session_replication_role = origin;
+    DELETE FROM public.proposals WHERE id='${id}' AND designer_id='${DESIGNER}' AND title='${TITLE}';
+    COMMIT;`);
 }
 
 test("A04 C2 refuses unavailable arrangement for designer and denies a non-author", async () => {
@@ -89,40 +102,47 @@ test("A04 C2 refuses unavailable arrangement for designer and denies a non-autho
   }
 });
 
-// DEFECT RC7-E3-1: C2 has no real, versioned arrangement to apply or replay.
-test.fixme("A04 each actual arrangement applies once and replays without duplicate phases", async () => {
-  ownedStack();
-  const keys = psqlRows(
-    "SELECT DISTINCT arrangement_key FROM public.service_arrangements ORDER BY arrangement_key",
-  );
-  expect(keys.length).toBeGreaterThan(0);
-  for (const [index, [key]] of keys.entries()) {
-    const id = proposalId(410 + index);
-    const request = requestId(410 + index);
-    seed(id);
-    try {
-      const first = JSON.parse(
-        psqlAsUserRow(
-          DESIGNER,
-          `SELECT public.apply_service_arrangement('${id}','${key}', '${request}');`,
-        )[0]!,
-      );
-      const replay = JSON.parse(
-        psqlAsUserRow(
-          DESIGNER,
-          `SELECT public.apply_service_arrangement('${id}','${key}', '${request}');`,
-        )[0]!,
-      );
-      expect(first.replayed).toBe(false);
-      expect(replay.replayed).toBe(true);
-      expect(replay.phaseIds).toEqual(first.phaseIds);
-      expect(
-        psqlScalar(
-          `SELECT count(*) FROM public.proposal_service_arrangement_applications WHERE proposal_id='${id}'`,
-        ),
-      ).toBe("1");
-    } finally {
-      cleanup(id);
-    }
+test("A04 actual Patina Six arrangement applies once and replays without duplicate phases", async () => {
+  const id = proposalId(410);
+  const request = requestId(410);
+  seed(id);
+  try {
+    expect(
+      psqlScalar(
+        "SELECT count(*) FROM public.service_arrangements WHERE arrangement_key='patina_six' AND version=1 AND phase_template_slug='patina_six'",
+      ),
+    ).toBe("1");
+    const first = JSON.parse(
+      psqlAsUserRow(
+        DESIGNER,
+        `SELECT public.apply_service_arrangement('${id}','patina_six','${request}');`,
+      )[0]!,
+    );
+    const replay = JSON.parse(
+      psqlAsUserRow(
+        DESIGNER,
+        `SELECT public.apply_service_arrangement('${id}','patina_six','${request}');`,
+      )[0]!,
+    );
+    expect(first).toMatchObject({ arrangementKey: "patina_six", arrangementVersion: 1, replayed: false });
+    expect(replay).toMatchObject({ arrangementKey: "patina_six", arrangementVersion: 1, replayed: true });
+    expect(replay.phaseIds).toEqual(first.phaseIds);
+    expect(replay.partKeys).toEqual(first.partKeys);
+    expect(first.phaseIds).toHaveLength(
+      Number(psqlScalar("SELECT jsonb_array_length(phases) FROM public.phase_templates WHERE slug='patina_six'")),
+    );
+    expect(
+      psqlRows(`SELECT id::text FROM public.proposal_phases WHERE proposal_id='${id}' ORDER BY id`).map(([phaseId]) => phaseId),
+    ).toEqual([...first.phaseIds].sort());
+    expect(
+      psqlScalar(
+        `SELECT count(*) FROM public.proposal_service_arrangement_applications WHERE proposal_id='${id}' AND request_id='${request}' AND arrangement_version=1 AND phase_ids @> ARRAY[${first.phaseIds.map((phaseId: string) => `'${phaseId}'::uuid`).join(",")}]`,
+      ),
+    ).toBe("1");
+    expect(
+      psqlScalar(`SELECT count(*) FROM public.proposal_phase_template_applications WHERE proposal_id='${id}'`),
+    ).toBe("1");
+  } finally {
+    cleanup(id);
   }
 });
