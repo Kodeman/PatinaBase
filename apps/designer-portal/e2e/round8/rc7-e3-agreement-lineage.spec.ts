@@ -59,6 +59,12 @@ function removeProbe() {
     THEN RAISE EXCEPTION 'RC7-E3 agreement probe owner mismatch'; END IF; END $$;
     -- The Contract Room materializes parts on the draft; a cascade from the
     -- proposal delete trips the authored-child guard, so drop parts first.
+    -- The page can still be materializing when this runs (it is left on the
+    -- separate draft's Room), so hold parts writes until both deletes commit;
+    -- otherwise a part lands between them and the cascade trips the guard.
+    -- Lock in the app's order (the proposal row, then its parts): parts alone
+    -- first deadlocks against a materialization holding the proposal row.
+    LOCK TABLE proposals, proposal_agreement_parts IN EXCLUSIVE MODE;
     DELETE FROM proposal_agreement_parts WHERE proposal_id IN
       (SELECT p.id FROM proposals p WHERE p.designer_id='${DESIGNER}' AND p.status='draft'
         AND p.designer_client_id IN (SELECT id FROM designer_clients WHERE designer_id='${DESIGNER}'
