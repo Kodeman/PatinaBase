@@ -460,13 +460,7 @@ test.describe("RC-7 E8 X07 performance", () => {
     });
   }
 
-  // DEFECT RC7-E8-4 (residual after FIX5 74a324b26): a first visit's job cold-load
-  // CLS fell from 1.16–1.17 to 0.04–0.11, so it still crosses 0.1 on some runs.
-  // The round-8 cover is never held, and use-chapter-reveal.ts revealStep gates
-  // the chapters below it only on the cover's loading register, so the cover's
-  // late growth (77–234 px at 1.7–2.3 s) pushes the shown brief and kickoff
-  // band down. Kept out of the gate.
-  test.fixme("RC7-E8-4: job cold-load CLS ≤ 0.1, first visit", async ({
+  test("RC7-E8-4: job cold-load CLS ≤ 0.1, first visit", async ({
     authenticatedPage: page,
   }, info) => {
     const { load } = await coldLoad(page, "job", { warm: false });

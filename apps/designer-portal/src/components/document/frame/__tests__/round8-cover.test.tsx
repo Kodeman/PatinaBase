@@ -106,6 +106,12 @@ describe('the round-8 job cover (RC-4 D3)', () => {
       /\[data-paper-renderer="round8"\] \[data-r8-cover-client\]:not\(:has\(button\)\)\s*\{\s*display: none;/,
     );
   });
+
+  it('reserves the desktop cover plate before the Press band resolves', () => {
+    expect(ROUND8_CSS).toMatch(
+      /@media \(min-width: 600px\) \{\s*\[data-paper-renderer="round8"\] \[data-r8-cover-plate\] \{\s*min-height: 254px;/,
+    );
+  });
 });
 
 describe('the round-8 next-act band (RC-4 D1)', () => {
