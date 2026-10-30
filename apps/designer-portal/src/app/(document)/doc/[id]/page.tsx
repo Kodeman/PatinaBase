@@ -1758,8 +1758,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // opens only what stands near the unscrolled frame) takes its height before
   // the scroll. Otherwise the lens opens it once it crosses the landed frame,
   // and its body grows under the section (a 0.74 shift on its own).
-  // Force and scroll run in a frame after the reveal answers, never inside the
-  // effect: `forceFullThrough` flushes with flushSync, which cannot flush there.
+  // Force and scroll run in a microtask after the reveal answers, never inside
+  // the effect, where `forceFullThrough`'s flushSync cannot flush. A microtask
+  // and not a frame: the answer usually comes from the lens's resolution pass,
+  // and the landing must commit before that frame paints. A frame later, the
+  // page paints the landed scroll over the unforced heights first (0.73 shift).
   const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
   useEffect(() => {
     const token = consumeArriveToken(window.location.pathname, Date.now());
@@ -1785,7 +1788,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     const latch = latchScroll();
     let stopArrival = () => {};
     let stopWaiting: (() => void) | null = null;
-    let frame = 0;
+    let cancelled = false;
     if (frameCommitted) {
       stopArrival = afterArrival((unplayed) => {
         const el = unplayed
@@ -1800,7 +1803,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         stopWaiting = whenRevealedThrough(el, () => {
           // Out of the effect: this can answer synchronously inside it, where the flushSync in
           // `forceFullThrough` cannot flush, and the scroll would read the reserve heights.
-          frame = window.requestAnimationFrame(() => {
+          queueMicrotask(() => {
+            if (cancelled) return;
             landing.done = true;
             const away =
               landing.moved || latch.moved || Math.abs(window.scrollY - landing.scrollY) > 0.5;
@@ -1820,7 +1824,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       latch.stop();
       stopArrival();
       stopWaiting?.();
-      window.cancelAnimationFrame(frame);
+      cancelled = true;
     };
   }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection, lens]);
 
