@@ -18,6 +18,25 @@
 //  `.alreadyWritten`.
 
 import Foundation
+import os
+
+public enum MarginNoteSubject: Equatable, Sendable {
+    case projectRoom(UUID)
+    case fieldCapture(UUID)
+
+    public var kind: String {
+        switch self {
+        case .projectRoom: "project_room"
+        case .fieldCapture: "field_capture"
+        }
+    }
+
+    public var id: UUID {
+        switch self {
+        case .projectRoom(let id), .fieldCapture(let id): id
+        }
+    }
+}
 
 public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
     public let id: UUID
@@ -26,6 +45,8 @@ public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
     public let body: String
     public let anchorKind: String
     public let fieldCaptureID: UUID
+    public let subjectKind: String?
+    public let subjectID: UUID?
 
     public init(
         id: UUID,
@@ -33,7 +54,8 @@ public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
         designerID: UUID,
         body: String,
         anchorKind: String = "letterhead",
-        fieldCaptureID: UUID
+        fieldCaptureID: UUID,
+        subject: MarginNoteSubject? = nil
     ) {
         self.id = id
         self.projectID = projectID
@@ -41,6 +63,14 @@ public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
         self.body = body
         self.anchorKind = anchorKind
         self.fieldCaptureID = fieldCaptureID
+        self.subjectKind = subject?.kind
+        self.subjectID = subject?.id
+    }
+
+    func withoutSubject() -> MarginNoteWriteRequest {
+        MarginNoteWriteRequest(
+            id: id, projectID: projectID, designerID: designerID, body: body,
+            anchorKind: anchorKind, fieldCaptureID: fieldCaptureID)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -50,10 +80,18 @@ public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
         case designerID = "designer_id"
         case anchorKind = "anchor_kind"
         case fieldCaptureID = "field_capture_id"
+        case subjectKind = "subject_kind"
+        case subjectID = "subject_id"
     }
 }
 
 public enum MarginNoteComposer {
+    public static func subject(roomID: UUID?, fieldCaptureID: UUID?) -> MarginNoteSubject? {
+        if let roomID { return .projectRoom(roomID) }
+        if let fieldCaptureID { return .fieldCapture(fieldCaptureID) }
+        return nil
+    }
+
     /// Returns nil when there are no words to file. `margin_notes.body` is
     /// NOT NULL (00196:30) and a blank note in the margin is worse than none.
     /// The body is trimmed and NEVER truncated — the whole point of §9.4 is
@@ -63,7 +101,8 @@ public enum MarginNoteComposer {
         projectID: UUID,
         designerID: UUID,
         fieldCaptureID: UUID,
-        transcript: String?
+        transcript: String?,
+        subject: MarginNoteSubject? = nil
     ) -> MarginNoteWriteRequest? {
         let body = (transcript ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -74,7 +113,8 @@ public enum MarginNoteComposer {
             projectID: projectID,
             designerID: designerID,
             body: body,
-            fieldCaptureID: fieldCaptureID)
+            fieldCaptureID: fieldCaptureID,
+            subject: subject)
     }
 
     /// FC-R8's degrade, composed here so the drain has something real to write
@@ -105,17 +145,34 @@ public protocol MarginNoteGateway: Sendable {
 }
 
 public struct MarginNoteOrchestrator: Sendable {
+    private static let log = Logger(subsystem: "cloud.patina.field", category: "margin-note-write")
     private let gateway: any MarginNoteGateway
 
     public init(gateway: any MarginNoteGateway) {
         self.gateway = gateway
     }
 
-    public func write(_ request: MarginNoteWriteRequest) async throws -> FieldWriteOutcome {
+    public func write(
+        _ request: MarginNoteWriteRequest,
+        errorCode: (Error) -> String? = { _ in nil }
+    ) async throws -> FieldWriteOutcome {
         if try await gateway.existingMarginNote(id: request.id) {
             return .alreadyWritten
         }
-        try await gateway.insertMarginNote(request)
+        do {
+            try await gateway.insertMarginNote(request)
+        } catch {
+            let subjectGuard = [
+                "subject_invalid", "subject_requires_project", "subject_off_project",
+                "margin_notes_subject_pair_check", "margin_notes_subject_kind_check"
+            ]
+            guard let code = errorCode(error), request.subjectKind != nil,
+                  code == "PGRST204" ||
+                    (code == "23514" && subjectGuard.contains(where: { error.localizedDescription.contains($0) }))
+            else { throw error }
+            Self.log.notice("Untyped margin note fallback id \(request.id.uuidString, privacy: .public) code \(code, privacy: .public)")
+            try await gateway.insertMarginNote(request.withoutSubject())
+        }
         return .written
     }
 }

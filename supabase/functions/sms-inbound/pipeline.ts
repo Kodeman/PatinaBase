@@ -2153,7 +2153,7 @@ async function consumePrompt(supabase: SupabaseClient, conv: Conversation, promp
     if (completion.status === "effect-completed") return completedInbound(messageId);
     // Known contract/integrity/transaction-abort errors prove rollback. Other
     // SQLSTATEs (including statement_completion_unknown) remain ambiguous.
-    if (completion.status === "unknown" || !(/^(?:23[0-9A-Z]{3}|42501|P0001|40001|40P01)$/.test(String((error as { code?: string })?.code ?? "")))) {
+    if (completion.status === "unknown" || !(/^(?:23[0-9A-Z]{3}|42501|P0001|PT409|40001|40P01)$/.test(String((error as { code?: string })?.code ?? "")))) {
       return { status: 503, twiml: twimlBody(), disposition: "prompt_commit_unknown", retainSid: true, messageId };
     }
     return await effectFailure(supabase, conv.id, messageId, prompt.party_id, prompt.project_id, error, deps);
@@ -3524,7 +3524,7 @@ async function applyEffect(supabase: SupabaseClient, partyId: string, effect: Re
   } catch (error) { failure = error; }
   const completion = await inboundCompletion(supabase, messageId, sender, recipient, conversationId);
   if (completion.status === "effect-completed" || completion.status === "prompt-completed") return { status: "replayed" };
-  if (completion.status === "unresolved" && /^(?:23[0-9A-Z]{3}|42501|P0001|40001|40P01)$/.test(String((failure as { code?: string })?.code ?? ""))) {
+  if (completion.status === "unresolved" && /^(?:23[0-9A-Z]{3}|42501|P0001|PT409|40001|40P01)$/.test(String((failure as { code?: string })?.code ?? ""))) {
     return { status: "failed", error: failure };
   }
   return { status: "unknown" };

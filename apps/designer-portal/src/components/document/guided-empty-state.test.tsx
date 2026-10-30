@@ -25,7 +25,7 @@ describe('GuidedEmptyState', () => {
       />,
     );
 
-    expect(screen.getByText(/Start with · Room · Piece or allowance · Budget/)).toBeInTheDocument();
+    expect(screen.getByText(/Start with · Room · Piece or allowance · Budget/)).toHaveClass('text-[var(--color-quiet-ink)]');
     const action = screen.getByRole('button', { name: 'Open the spec book' });
     expect(action).toHaveClass('min-h-[44px]');
     fireEvent.click(action);

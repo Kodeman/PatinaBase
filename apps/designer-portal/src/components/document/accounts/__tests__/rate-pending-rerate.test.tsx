@@ -190,9 +190,9 @@ describe('StudioRateRows · re-rate pending hours (K8)', () => {
     expect(alert).not.toHaveTextContent('6f1c2a9e');
   });
 
-  it('says a rate corrected since the save must be saved again, in the server’s words (40001)', () => {
+  it('says a rate corrected since the save must be saved again, in the server’s words (PT409)', () => {
     mockRerateError = {
-      code: '40001',
+      code: 'PT409',
       message:
         'rerate_pending_time_entries: the rate changed since you saved it; save it again to price these hours',
     };
@@ -203,7 +203,7 @@ describe('StudioRateRows · re-rate pending hours (K8)', () => {
       'The rate changed since you saved it; save it again to price these hours.',
     );
     expect(alert).not.toHaveTextContent('rerate_pending_time_entries');
-    expect(alert).not.toHaveTextContent('40001');
+    expect(alert).not.toHaveTextContent('PT409');
   });
 
   it("lands focus on the field when the composer's Set rate sent her here", async () => {

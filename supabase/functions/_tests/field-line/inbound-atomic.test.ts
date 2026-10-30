@@ -110,6 +110,16 @@ Deno.test("conflicting proposal verb cannot replace its payload or consume its r
  assertEquals(effects.length,0);assertEquals(h.fake._data.sms_prompts[0].answered_at,null);
 });
 
+// K12 (00904): PT409 is a deterministic refusal (inventory rows 7-9), so the
+// prompt path reads it as a known rollback, unlike the ambiguous 40003 below.
+Deno.test("SQL PT409 refusal is a known rollback with an owned not-saved receipt", async () => {
+ const {h,prompt}=inboundFixture({code:"PT409",message:"coordination item task-a was resolved with another answer"});prompt();
+ const result=await processInbound(inbound(h,"HERE 17","SMpt409"),deps(h));
+ assertEquals(result.status,200);assertEquals(result.disposition,"effect_failed");
+ assert(result.replies?.[0].message.includes("didn't save"));
+ assertEquals(h.fake._data.sms_prompts[0].answered_at,null);
+});
+
 Deno.test("SQL completion-unknown preserves SID without a false not-saved receipt", async () => {
  const {h,prompt,effects}=inboundFixture();prompt();const rpc=h.fake.rpc;
  h.fake.rpc=async(name,args)=>name==="sms_apply_prompt" ? {data:null,error:{code:"40003",message:"statement completion unknown"}} : rpc(name,args);

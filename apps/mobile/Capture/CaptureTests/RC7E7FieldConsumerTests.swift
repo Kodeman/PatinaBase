@@ -118,14 +118,16 @@ struct RC7E7FieldConsumerTests {
         }
     }
 
-    @Test("a Field margin note carries no typed subject, which 00874/00877 admit unchanged")
+    @Test("a Field margin note carries an optional typed room subject under 00874/00877")
     func marginNoteShape() throws {
+        let roomID = UUID()
         let request = MarginNoteWriteRequest(
             id: UUID(), projectID: UUID(), designerID: UUID(), body: "Confirm island overhang",
-            fieldCaptureID: UUID())
+            fieldCaptureID: UUID(), subject: .projectRoom(roomID))
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] ?? [:]
-        #expect(Set(json.keys) == ["id", "body", "project_id", "designer_id", "anchor_kind", "field_capture_id"])
-        #expect(json["subject_kind"] == nil && json["subject_id"] == nil)
+        #expect(Set(json.keys) == ["id", "body", "project_id", "designer_id", "anchor_kind", "field_capture_id", "subject_kind", "subject_id"])
+        #expect(json["subject_kind"] as? String == "project_room")
+        #expect(json["subject_id"] as? String == roomID.uuidString)
     }
 
     @Test("Field's deep links reach decisions only through the fixture harness, and name no service route")

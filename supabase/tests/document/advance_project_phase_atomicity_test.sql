@@ -1581,8 +1581,8 @@ END $$;
 RESET ROLE;
 DROP TRIGGER reject_injected_project_pointer_trg ON public.projects;
 
--- Sequential retry: first completion wins; stale second attempt gets 40001 and
--- cannot disturb the terminal state.
+-- Sequential retry: first completion wins; stale second attempt gets PT409
+-- (K12, 00904) and cannot disturb the terminal state.
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_phase_actor('a9000000-0000-4000-8000-000000000001');
 SELECT public.advance_project_phase(
@@ -1593,7 +1593,7 @@ SELECT public.advance_project_phase(
 SELECT pg_temp.expect_phase_failure(
   'a9300000-0000-4000-8000-000000000011',
   'aa000000-0000-4000-8000-000000000100',
-  'in_progress', '40001',
+  'in_progress', 'PT409',
   'advance_project_phase: phase status changed (expected in_progress, found completed)'
 );
 DO $$ BEGIN

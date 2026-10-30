@@ -641,7 +641,7 @@ describe('useUpdateDecision', () => {
 
   it('surfaces an atomic update failure without a follow-up read or notice', async () => {
     const updateError = {
-      code: '40001',
+      code: 'PT409',
       message: 'decision changed since it was loaded',
     };
     supabaseClient.rpc.mockResolvedValueOnce({

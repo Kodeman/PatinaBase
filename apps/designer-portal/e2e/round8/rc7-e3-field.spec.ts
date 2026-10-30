@@ -112,8 +112,8 @@ test("A15 real Field RPC and Field note write retain room and author; a capture 
       ),
     ).toBe("1");
     expect(products()).toBe(productsBefore);
-    // LocalCaptureSyncService.writeMarginNoteIfNeeded → MarginNoteWriteRequest
-    // → SupabaseFieldWriteGateway.insertMarginNote: the same field actor.
+    // Exercise the server note insert as the designer; this does not run the
+    // Swift sync service or assert its encoded request.
     psqlAsUser(
       DESIGNER,
       `INSERT INTO public.margin_notes
@@ -199,28 +199,64 @@ function seedDefectObservation() {
   );
 }
 
-// DEFECT RC7-E3-2: the Field writer cannot carry subject, scope or next owner.
-// Schema gap + writer gap: 00874_round8_typed_subjects.sql:9-10 adds only
-// margin_notes.subject_kind/subject_id; margin_notes has NO scope or
-// next-owner column, so `to_jsonb(n)->>'scope'` and `->>'next_owner_id'` below
-// are always null. This fixme also seeds its own note (seedDefectObservation)
-// instead of the Field product path (MarginNoteWrite.swift), so it cannot
-// flip as written: once a schema and writer ruling lands, rewrite it to read
-// the real columns from a note written through the product path.
-test.fixme("A15 Field observation records a typed source, scope and review owner", async () => {
+// RC7-E3-2: when enabled, REST would prove server acceptance of project_room; scope/next-owner columns deferred
+test.fixme("A15 Field observation records its typed room subject", async ({
+  authenticatedPage: page,
+}) => {
   ownedStack();
-  seedDefectObservation();
+  removeObservation();
   try {
-    const note = JSON.parse(
-      psqlScalar(`SELECT jsonb_build_object(
-      'subject',subject_kind,'subjectId',subject_id,
-      'scope',to_jsonb(n)->>'scope','nextOwner',to_jsonb(n)->>'next_owner_id')::text
-      FROM public.margin_notes n WHERE id='${NOTE}'`),
+    psqlAsUser(
+      DESIGNER,
+      `SELECT public.commit_field_capture('${TOKEN}', 'library',
+      '{"schemaVersion":4,"captureKind":"note","title":"RC7 E3 field observation","notes":"${BODY}","photos":[],"confirmations":{},"proposals":{}}'::jsonb,
+      '${JOB}', '${ROOM}', NULL, '${STUDIO}');`,
     );
-    expect(note.subject).toBe("plan_print");
-    expect(note.subjectId).toMatch(/^[a-f0-9-]{36}$/);
-    expect(note.scope).toBe("studio");
-    expect(note.nextOwner).toBe(DESIGNER);
+    const captureId = psqlScalar(
+      `SELECT id FROM field_captures WHERE client_capture_id='${TOKEN}'`,
+    );
+    const api = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const login = await page.request.post(
+      `${api}/auth/v1/token?grant_type=password`,
+      {
+        headers: { apikey: key },
+        data: {
+          email: process.env.DESIGNER_E2E_EMAIL ?? "designer@patina.dev",
+          password: process.env.DESIGNER_E2E_PASSWORD ?? "password123",
+        },
+      },
+    );
+    expect(login.ok()).toBe(true);
+    const { access_token } = (await login.json()) as { access_token: string };
+    const write = await page.request.post(`${api}/rest/v1/margin_notes`, {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${access_token}`,
+        Prefer: "return=representation",
+      },
+      data: {
+        id: NOTE,
+        project_id: JOB,
+        designer_id: DESIGNER,
+        body: BODY,
+        anchor_kind: "letterhead",
+        field_capture_id: captureId,
+        subject_kind: "project_room",
+        subject_id: ROOM,
+      },
+    });
+    expect(write.status()).toBe(201);
+    expect(
+      JSON.parse(
+        psqlScalar(`SELECT jsonb_build_object(
+      'subject_kind',subject_kind,'subject_id',subject_id)::text
+      FROM public.margin_notes WHERE id='${NOTE}'`),
+      ),
+    ).toEqual({
+      subject_kind: "project_room",
+      subject_id: ROOM,
+    });
   } finally {
     removeObservation();
   }

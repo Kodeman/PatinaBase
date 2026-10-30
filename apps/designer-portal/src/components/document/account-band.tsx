@@ -525,7 +525,7 @@ export function AccountBand({
             <SectionLoadingLine variant="inline" label="opening the ledger" />
           </span>
           <span aria-hidden />
-          <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
+          <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
             Studio eyes only
           </span>
           <span aria-hidden />
@@ -576,7 +576,7 @@ export function AccountBand({
         <span className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           {collapsedLine}
         </span>
-        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-aged-oak,#8B7355)]">
+        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
           Studio only
         </span>
         <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">

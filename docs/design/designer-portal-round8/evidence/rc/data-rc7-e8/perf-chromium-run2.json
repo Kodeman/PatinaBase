@@ -1,0 +1,342 @@
+{
+  "chromium studio": {
+    "surface": "studio",
+    "route": "/desk",
+    "browser": "chromium",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "readyMs": 1156,
+    "lcpMs": 1184,
+    "lcpElement": "img.block.bg-[var(--bg-warm)]",
+    "loadClsRaw": 0.12028433128744159,
+    "loadClsBeforeScroll": 0.1203,
+    "loadShiftCount": 3,
+    "loadShiftsLargest": [
+      {
+        "t": 854,
+        "v": 0.0609,
+        "arrival": null,
+        "sources": ["div", "#text", "p"]
+      },
+      {
+        "t": 1118,
+        "v": 0.0587,
+        "arrival": null,
+        "sources": ["div[data-studio-spread]"]
+      },
+      {
+        "t": 991,
+        "v": 0.0006,
+        "arrival": null,
+        "sources": ["div[data-drawer-doors]", "div", "span"]
+      }
+    ],
+    "supported": ["largest-contentful-paint", "layout-shift"],
+    "resourceTimingCount": 72,
+    "resourceTimingByHost": {
+      "localhost:4210": 26,
+      "127.0.0.1:62621": 36,
+      "kv3qrinl.apicdn.sanity.io": 10
+    },
+    "domContentLoadedMs": 134,
+    "transferKB": 2949,
+    "nodes": 573,
+    "requests": {
+      "total": 73,
+      "byOrigin": {
+        "localhost:4210": 27,
+        "supabase-api": 36,
+        "kv3qrinl.apicdn.sanity.io": 10
+      },
+      "apiPaths": {
+        "POST /rest/v1/rpc/mark_arrival": 1,
+        "GET /rest/v1/projects": 3,
+        "GET /rest/v1/people_directory": 1,
+        "GET /rest/v1/proposal_boards": 2,
+        "GET /rest/v1/designer_interruption_rules": 1,
+        "GET /rest/v1/designer_clients": 1,
+        "POST /rest/v1/rpc/desk_read": 1,
+        "POST /rest/v1/rpc/studio_boards_overview": 1,
+        "GET /rest/v1/project_unbilled_time": 1,
+        "GET /rest/v1/profiles": 7,
+        "GET /rest/v1/organization_members": 3,
+        "GET /rest/v1/notification_log": 2,
+        "GET /rest/v1/procurement_notifications": 1,
+        "GET /rest/v1/comms_thread_participants": 1,
+        "HEAD /rest/v1/procurement_notifications": 1,
+        "GET /rest/v1/project_time_entries": 2,
+        "POST /storage/v1/object/sign/proposal-mood-boards": 1,
+        "POST /rest/v1/rpc/studio_need_state_facts": 1,
+        "GET /rest/v1/studio_need_states": 1,
+        "GET /rest/v1/project_team_members": 1,
+        "GET /rest/v1/purchase_orders": 1,
+        "POST /storage/v1/object/sign/project-ffe-working": 1,
+        "GET /storage/v1/object/sign/project-ffe-working/:id/boards/:id/room.png": 1
+      },
+      "failed": 11,
+      "pageLevelApi": 36
+    },
+    "cover": {
+      "signed": true,
+      "board": true,
+      "natural": [1536, 1024],
+      "box": [804, 529],
+      "alt": ""
+    },
+    "profile": "unthrottled localhost; next dev --webpack; Apple M4 Pro; F01 (80 lines, 3 rooms) + rc7-e8 cover board",
+    "scroll": {
+      "mode": "paced",
+      "step": 240,
+      "steps": 8,
+      "startHeight": 1780,
+      "height": 1780,
+      "cls": 0,
+      "clsRounded": 0,
+      "shiftCount": 0,
+      "shifts": []
+    },
+    "fling": {
+      "mode": "fling",
+      "step": 810,
+      "steps": 3,
+      "startHeight": 1780,
+      "height": 1780,
+      "cls": 0,
+      "clsRounded": 0,
+      "shiftCount": 0,
+      "shifts": []
+    }
+  },
+  "chromium job": {
+    "surface": "job",
+    "route": "/doc/f0180000-0000-4000-8000-000000000010",
+    "browser": "chromium",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "readyMs": 2080,
+    "lcpMs": 2068,
+    "lcpElement": "button.cursor-pointer.text-left",
+    "loadClsRaw": 1.3426432748300057,
+    "loadClsBeforeScroll": 1.3426,
+    "loadShiftCount": 12,
+    "loadShiftsLargest": [
+      {
+        "t": 2062,
+        "v": 0.7406,
+        "arrival": null,
+        "sources": [
+          "section#schedule[data-index-region][data-paper-chapter]",
+          "div[data-section-file-drop][data-paper-shown]",
+          "section#financials[data-index-region][data-paper-chapter]"
+        ]
+      },
+      {
+        "t": 1729,
+        "v": 0.3307,
+        "arrival": null,
+        "sources": [
+          "section#closeout[data-index-region][data-paper-chapter]",
+          "section#financials[data-index-region][data-paper-chapter]",
+          "div[data-section-file-drop][data-paper-shown]"
+        ]
+      },
+      {
+        "t": 1648,
+        "v": 0.1214,
+        "arrival": null,
+        "sources": [
+          "section#financials[data-index-region][data-paper-chapter]",
+          "div[data-section-file-drop][data-paper-shown]",
+          "section#closeout[data-index-region][data-paper-chapter]"
+        ]
+      },
+      {
+        "t": 1788,
+        "v": 0.0431,
+        "arrival": null,
+        "sources": [
+          "div[data-section-file-drop][data-paper-shown]",
+          "section#financials[data-index-region][data-paper-chapter]",
+          "section#closeout[data-index-region][data-paper-chapter]"
+        ]
+      },
+      {
+        "t": 880,
+        "v": 0.0336,
+        "arrival": null,
+        "sources": ["nav[data-tour-anchor]", "div[data-drawer-doors]", "div"]
+      },
+      {
+        "t": 1804,
+        "v": 0.0249,
+        "arrival": null,
+        "sources": [
+          "div[data-section-file-drop][data-paper-shown]",
+          "section#financials[data-index-region][data-paper-chapter]",
+          "section#schedule[data-index-region][data-paper-chapter]"
+        ]
+      },
+      {
+        "t": 1590,
+        "v": 0.0231,
+        "arrival": null,
+        "sources": [
+          "div[data-section-file-drop][data-paper-shown]",
+          "section#financials[data-index-region][data-paper-chapter]",
+          "section#closeout[data-index-region][data-paper-chapter]"
+        ]
+      },
+      {
+        "t": 1905,
+        "v": 0.0121,
+        "arrival": null,
+        "sources": [
+          "div[data-section-file-drop][data-paper-shown]",
+          "section#financials[data-index-region][data-paper-chapter]",
+          "section#schedule[data-index-region][data-paper-chapter]"
+        ]
+      }
+    ],
+    "supported": ["largest-contentful-paint", "layout-shift"],
+    "resourceTimingCount": 232,
+    "resourceTimingByHost": {
+      "localhost:4210": 30,
+      "127.0.0.1:62621": 202
+    },
+    "domContentLoadedMs": 79,
+    "transferKB": 25387,
+    "nodes": 1399,
+    "requests": {
+      "total": 233,
+      "byOrigin": {
+        "localhost:4210": 31,
+        "supabase-api": 202
+      },
+      "apiPaths": {
+        "POST /rest/v1/rpc/mark_arrival": 1,
+        "GET /rest/v1/projects": 8,
+        "GET /rest/v1/people_directory": 1,
+        "GET /rest/v1/proposal_boards": 2,
+        "GET /rest/v1/designer_interruption_rules": 1,
+        "GET /rest/v1/designer_clients": 1,
+        "POST /rest/v1/rpc/document_open": 1,
+        "GET /rest/v1/profiles": 7,
+        "GET /rest/v1/organization_members": 3,
+        "GET /rest/v1/notification_log": 3,
+        "GET /rest/v1/procurement_notifications": 1,
+        "GET /rest/v1/comms_thread_participants": 1,
+        "HEAD /rest/v1/procurement_notifications": 1,
+        "GET /rest/v1/project_time_entries": 3,
+        "POST /storage/v1/object/sign/proposal-mood-boards": 1,
+        "GET /rest/v1/project_team_members": 1,
+        "GET /rest/v1/project_phases": 2,
+        "POST /rest/v1/rpc/get_project_decision_reviews": 1,
+        "GET /rest/v1/schedule_milestones": 1,
+        "GET /rest/v1/margin_items": 1,
+        "POST /rest/v1/rpc/desk_read": 1,
+        "POST /rest/v1/rpc/get_project_contextual_handoffs": 1,
+        "GET /rest/v1/project_rooms": 3,
+        "GET /rest/v1/client_decisions": 2,
+        "GET /rest/v1/project_ffe_items": 2,
+        "GET /rest/v1/v_project_roster": 1,
+        "GET /rest/v1/install_windows": 1,
+        "POST /rest/v1/rpc/list_client_editions": 1,
+        "POST /rest/v1/rpc/document_client_link_hold": 1,
+        "GET /rest/v1/plan_sheets": 2,
+        "GET /rest/v1/plan_issues": 1,
+        "GET /rest/v1/project_boards": 1,
+        "GET /rest/v1/invoices": 1,
+        "GET /rest/v1/purchase_orders": 1,
+        "POST /rest/v1/rpc/get_project_authority_summary": 1,
+        "POST /rest/v1/rpc/get_project_working_budget": 1,
+        "POST /rest/v1/rpc/list_furnishings_authorizations": 1,
+        "POST /rest/v1/rpc/list_trade_scopes": 1,
+        "GET /rest/v1/project_documents": 1,
+        "POST /rest/v1/rpc/get_project_external_fulfilments": 1,
+        "POST /rest/v1/rpc/get_project_approval_artifact_candidates": 1,
+        "GET /rest/v1/project_decision_authorities": 1,
+        "GET /rest/v1/proposals": 1,
+        "POST /rest/v1/rpc/get_project_workflow": 1,
+        "GET /rest/v1/project_parties": 1,
+        "GET /rest/v1/project_tasks": 1,
+        "GET /rest/v1/schedule_revisions": 1,
+        "GET /rest/v1/schedule_proposals": 1,
+        "POST /rest/v1/rpc/get_ffe_invoice_coverage": 1,
+        "GET /rest/v1/studio_purchases": 1,
+        "GET /rest/v1/po_cost_lines": 1,
+        "GET /rest/v1/procurement_exceptions": 1,
+        "POST /rest/v1/rpc/get_project_purchasing_agreement": 1,
+        "GET /rest/v1/field_captures": 2,
+        "GET /rest/v1/project_ffe_placements": 2,
+        "GET /rest/v1/project_payment_milestones": 2,
+        "GET /rest/v1/scope_change_requests": 1,
+        "GET /rest/v1/install_punch_items": 1,
+        "GET /rest/v1/studio_contact_rules": 1,
+        "GET /rest/v1/studio_contacts": 2,
+        "GET /rest/v1/procurement_drafts": 1,
+        "GET /rest/v1/room_scans": 1,
+        "POST /rest/v1/rpc/get_project_service_acceptance": 1,
+        "GET /rest/v1/outbound_drafts": 1,
+        "POST /rest/v1/rpc/project_recorded_studio": 1,
+        "POST /rest/v1/rpc/derive_studio_service_obligations": 1,
+        "POST /rest/v1/rpc/get_studio_service_completion": 1,
+        "GET /rest/v1/studio_need_states": 1,
+        "POST /rest/v1/rpc/resolve_studio_identity": 1,
+        "GET /rest/v1/project_unbilled_time": 1,
+        "GET /rest/v1/margin_notes": 1,
+        "GET /rest/v1/project_ffe_item_images": 1,
+        "POST /rest/v1/rpc/get_client_project_editorial": 1,
+        "GET /rest/v1/plan_prints": 1,
+        "GET /rest/v1/plan_print_batches": 1,
+        "GET /rest/v1/plan_issue_prints": 1,
+        "GET /rest/v1/plan_transmittals": 1,
+        "GET /rest/v1/plan_transmittal_tokens": 1,
+        "POST /storage/v1/object/sign/project-ffe-working": 1,
+        "GET /rest/v1/plan_sheet_rooms": 1,
+        "GET /rest/v1/plan_sheet_packages": 1,
+        "GET /rest/v1/project_packages": 1,
+        "GET /rest/v1/room_files": 1,
+        "GET /rest/v1/room_scan_images": 1,
+        "POST /rest/v1/rpc/get_project_scope_editions": 1,
+        "GET /rest/v1/evidence_manifests": 1,
+        "POST /rest/v1/rpc/is_org_admin_or_owner": 1,
+        "GET /rest/v1/organizations": 1,
+        "POST /rest/v1/rpc/get_project_ffe_readiness_batch": 1,
+        "POST /rest/v1/rpc/get_project_ffe_readiness": 80,
+        "GET /rest/v1/project_destination_locations": 1,
+        "GET /rest/v1/project_palettes": 1,
+        "GET /rest/v1/studio_locations": 1
+      },
+      "failed": 1,
+      "pageLevelApi": 202
+    },
+    "cover": null,
+    "profile": "unthrottled localhost; next dev --webpack; Apple M4 Pro; F01 (80 lines, 3 rooms)",
+    "scroll": {
+      "mode": "paced",
+      "step": 240,
+      "steps": 45,
+      "startHeight": 9496,
+      "height": 10756,
+      "cls": 0,
+      "clsRounded": 0,
+      "shiftCount": 0,
+      "shifts": []
+    },
+    "fling": {
+      "mode": "fling",
+      "step": 810,
+      "steps": 14,
+      "startHeight": 10756,
+      "height": 10756,
+      "cls": 0,
+      "clsRounded": 0,
+      "shiftCount": 0,
+      "shifts": []
+    }
+  }
+}

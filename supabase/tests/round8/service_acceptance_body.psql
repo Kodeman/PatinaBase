@@ -601,8 +601,15 @@ SELECT public.withdraw_service_acceptance_request(pg_temp.req('r3'),'Created by 
 SELECT pg_temp.assert_true((SELECT status='discarded' FROM public.outbound_drafts WHERE id=(pg_temp.v('r3')->>'outboundDraftId')::uuid),
   'withdrawing a draft discards its unsent outbound draft');
 
--- Return closes at once even with a required signer pending.
-INSERT INTO sa_results VALUES('r4',pg_temp.create('c-r4'));
+-- Return closes at once even with a required signer pending. r4 binds its own
+-- manifest: 00903 (K11) refuses a later request on a returned request's
+-- evidence, and r5-r7 below reuse manifest 1.
+SET LOCAL session_replication_role=replica;
+INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
+('f8868000-0000-4000-8000-000000000004',pg_temp.project(),NULL,'service_acceptance','[]',repeat('d',64),repeat('4',64),'sa-4',pg_temp.uid(1));
+SET LOCAL session_replication_role=origin;
+SELECT pg_temp.actor(1);
+INSERT INTO sa_results VALUES('r4',pg_temp.create('c-r4','f8868000-0000-4000-8000-000000000004'));
 SELECT pg_temp.deliver(pg_temp.req('r4'));
 SELECT pg_temp.actor(6);
 INSERT INTO sa_results VALUES('r4-return',pg_temp.respond(pg_temp.req('r4'),'return','x-return',reason=>'The kitchen scope is missing'));

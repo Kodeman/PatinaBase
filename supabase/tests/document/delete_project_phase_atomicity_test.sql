@@ -178,6 +178,9 @@ ALTER TABLE public.project_phases
 -- Replaying this idempotent migration inside the test makes legacy repair and
 -- diagnostic behavior observable instead of merely inspecting SQL text.
 \ir ../../migrations/00398_delete_project_phase_atomic_rpc.sql
+-- 00904 (K12) is the live body of update/delete_project_phase: replay it over
+-- 00398 so the refusal codes below are the shipped ones (PT409/XX000).
+\ir ../../migrations/00904_retryable_40001_refusal_codes.sql
 
 DO $$
 BEGIN
@@ -561,7 +564,7 @@ SELECT pg_temp.expect_topology_failure(
 SELECT pg_temp.assume_topology_actor('b9000000-0000-4000-8000-000000000001');
 
 -- Caller-observed updated_at is a real CAS. The first patch advances it; the
--- stale second tab gets serialization_failure and cannot overwrite the row.
+-- stale second tab gets PT409 (K12, 00904) and cannot overwrite the row.
 DO $$
 DECLARE
   v_phase_id uuid;
@@ -599,9 +602,9 @@ BEGIN
       v_message = MESSAGE_TEXT;
   END;
 
-  ASSERT v_state = '40001'
+  ASSERT v_state = 'PT409'
      AND position('phase changed since it was read' IN v_message) > 0,
-    format('stale CAS must fail serialization: %L %L', v_state, v_message);
+    format('stale CAS must refuse with PT409: %L %L', v_state, v_message);
   ASSERT (SELECT anchor_date = DATE '2027-01-15'
           FROM public.project_phases WHERE id = v_phase_id),
     'stale CAS must preserve the winning value';

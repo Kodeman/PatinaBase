@@ -42,7 +42,7 @@
 --         superseded (23514), though the UTC day is still inside it. The
 --         successor prices the hour.
 --   (k8k) SQ-1079 F2: after a second admin's same-day correction (same row id,
---         new rate), the first save's re-rate is refused (40001) and prices
+--         new rate), the first save's re-rate is refused (PT409) and prices
 --         nothing. A re-rate that names the corrected rate prices it.
 --   (k8l) SQ-1079 F3: an owner who forges both GUCs with a superseded row
 --         prices nothing. Her edit itself lands.
@@ -759,7 +759,7 @@ BEGIN
   -- the owner's re-rate, sent with the rate her save returned
   v_out := pg_temp.rerate_as('c7970000-0000-4000-8000-000000000001',
                              'c7970000-0000-4000-8000-0000000000ca', 15000);
-  ASSERT v_out = 'ERR|40001|rerate_pending_time_entries: the rate changed since you saved it; save it again to price these hours',
+  ASSERT v_out = 'ERR|PT409|rerate_pending_time_entries: the rate changed since you saved it; save it again to price these hours',
     'FAIL k8k1 (SQ-1079 F2): a re-rate whose saved rate was corrected since is refused; got ' || COALESCE(v_out, 'NULL');
   ASSERT pg_temp.pending('c7970000-0000-4000-8000-000000000b13')
      AND pg_temp.untouched('c7970000-0000-4000-8000-000000000b13'),

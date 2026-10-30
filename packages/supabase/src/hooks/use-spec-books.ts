@@ -396,8 +396,8 @@ export function useUpdateProjectFfeSpec() {
     },
     // A stale version is a user-visible conflict, not a transient failure.
     retry: false,
-    // Only the line reads refetch on a conflict: the spec-book workbench
-    // reseeds its open form from a refetched row, which would drop the draft.
+    // The spec pane reads this invalidation; the spec-book workbench also
+    // refetches its row on conflict while preserving the open draft.
     onError: (error, { projectId }) => {
       if (!(error instanceof ProjectFfeSpecConflictError)) return;
       void queryClient.invalidateQueries({

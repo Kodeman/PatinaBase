@@ -223,13 +223,16 @@ RESET ROLE;
 SET LOCAL session_replication_role=replica;
 INSERT INTO public.evidence_manifests(id,project_id,package_id,purpose,members,manifest_hash,request_hash,idempotency_key,created_by) VALUES
 (pg_temp.fid('8000',1),pg_temp.project('origin1'),NULL,'service_acceptance','[]',repeat('a',64),repeat('1',64),'e7-m1',pg_temp.uid(1)),
-(pg_temp.fid('8000',2),pg_temp.project('origin2'),NULL,'service_acceptance','[]',repeat('b',64),repeat('2',64),'e7-m2',pg_temp.uid(1));
+(pg_temp.fid('8000',2),pg_temp.project('origin2'),NULL,'service_acceptance','[]',repeat('b',64),repeat('2',64),'e7-m2',pg_temp.uid(1)),
+(pg_temp.fid('8000',4),pg_temp.project('origin1'),NULL,'service_acceptance','[]',repeat('d',64),repeat('4',64),'e7-m4',pg_temp.uid(1));
 SET LOCAL session_replication_role=origin;
 
 -- ── C4 on job 1: request 1 returned; request 2 with a replaced signer ──────
+-- r1 binds its own manifest (4): 00903 (K11) refuses a later request on a
+-- returned request's evidence, and r2 binds manifest 1.
 SELECT pg_temp.actor(1);
 SET LOCAL ROLE authenticated;
-SELECT pg_temp.keep('r1',public.create_service_acceptance_request(pg_temp.project('origin1'),pg_temp.ed('origin1'),pg_temp.fid('8000',1),'e7-r1'));
+SELECT pg_temp.keep('r1',public.create_service_acceptance_request(pg_temp.project('origin1'),pg_temp.ed('origin1'),pg_temp.fid('8000',4),'e7-r1'));
 RESET ROLE;
 SELECT pg_temp.deliver(pg_temp.req('r1'));
 SELECT pg_temp.actor(5);

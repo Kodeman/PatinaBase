@@ -163,7 +163,7 @@ export function AuthorizationsLedger({
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
           Authorizations &amp; trade scopes
           {isLoading && <SectionLoadingLine variant="inline" label="Loading authorizations" />}
         </p>
