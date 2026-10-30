@@ -99,7 +99,11 @@ import {
 } from '@/hooks/use-document-running-index';
 import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
 import { landSection } from '@/lib/document/land-section';
-import { revealPaperThrough, scrollIntoRevealed } from '@/lib/document/paper-reveal';
+import {
+  revealPaperThrough,
+  scrollIntoRevealed,
+  whenRevealedThrough,
+} from '@/lib/document/paper-reveal';
 import { useLensDensity, useLensResolved } from '@/hooks/use-lens-density';
 import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
@@ -301,7 +305,7 @@ import {
 import { sentProposalVoice } from '@/lib/document/sent-proposal-voice';
 import { overdueApprovalTitles, overdueMarginDecisionTitles, waitingOnNamed } from '@/lib/document/nudge-named';
 import { useMarginItems } from '@/hooks/use-margin-items';
-import { afterArrival, useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
+import { afterArrival, latchScroll, useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { consumeArriveToken } from '@/lib/arrival/session';
 import { EVENT_ENDED, type ArrivalEnded, type Landing } from '@/lib/arrival/types';
@@ -1041,6 +1045,21 @@ function sectionChapter(key: SectionKey, focus: HTMLElement | null): HTMLElement
   );
 }
 
+/** RC7-E8-5 — the lens key of the last region root at or above `el` in the
+ *  paper (one that holds it, or one before it): what a landing passes to
+ *  `forceFullThrough` so nothing above where it lands is still at its quiet
+ *  reserve. Null when no root stands at or above it. */
+function regionThrough(el: Element): DocumentIndexKey | null {
+  const paper = el.closest('[data-document-paper]');
+  let key: string | null = null;
+  for (const root of Array.from(paper?.querySelectorAll('[data-index-region]') ?? [])) {
+    if (root.contains(el) || root.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) {
+      key = root.getAttribute('data-index-region') || key;
+    }
+  }
+  return key as DocumentIndexKey | null;
+}
+
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   // F2 — the body is keyed on the document id so picking up a DIFFERENT
   // document is a fresh mount by our own construction, not by trusting the
@@ -1717,12 +1736,39 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // mount, ahead of the jump (a hard entry already spent it at the commit, so
   // a refresh never lands): one landing per entry, and a token that names one
   // owns it, so the jump stands down.
+  //
+  // K15 — the jump also yields to ANY scroll after this entry's arrival, a
+  // script's included (a find, a focus, an automation's scroll-into-view): the
+  // ref keeps where the page sat when the entry first read its engagement, and
+  // a page that has moved off it is not moved again. A scroll latch makes that
+  // stick: any scroll event from the baseline on stands it down, even one that
+  // came back to the baseline; the landing stops the latch before its own
+  // scroll. The progressive reveal (opacity only) and chapters settling their
+  // height under an unscrolled page fire no scroll, so they never stand it down.
+  //
+  // RC7-E8-5 — and the jump waits for the paper's own progressive reveal to
+  // reach the section (whenRevealedThrough, bounded by the reveal failsafe)
+  // instead of force-revealing the chapters above it while their bodies still
+  // load: those grew under the landed section and shoved it (returning-reader
+  // cold-load CLS 1.34–1.42). The K15 check runs again at the scroll, since the
+  // wait is a window for her, or a script, to scroll. `done` is set only once
+  // the landing is decided, so an effect re-run during the wait re-arms it.
+  // Then it lands in D-B18's press order: `forceFullThrough` first, so a root
+  // above the section still at its quiet reserve (the lens's resolution pass
+  // opens only what stands near the unscrolled frame) takes its height before
+  // the scroll. Otherwise the lens opens it once it crosses the landed frame,
+  // and its body grows under the section (a 0.74 shift on its own).
+  // Force and scroll run in a microtask after the reveal answers, never inside
+  // the effect, where `forceFullThrough`'s flushSync cannot flush. A microtask
+  // and not a frame: the answer usually comes from the lens's resolution pass,
+  // and the landing must commit before that frame paints. A frame later, the
+  // page paints the landed scroll over the unforced heights first (0.73 shift).
   const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
   useEffect(() => {
     const token = consumeArriveToken(window.location.pathname, Date.now());
     if (token?.landing && !hasLandInstruction.current) arrivalLandingRef.current = { landing: token.landing, done: false };
   }, []);
-  const landedRef = useRef<{ seen: boolean; done: boolean } | null>(null);
+  const landedRef = useRef<{ seen: boolean; done: boolean; scrollY: number; moved: boolean } | null>(null);
   const landingEngagementId = row?.engagement_id ?? null;
   const landingSection = row?.active_section;
   useEffect(() => {
@@ -1731,20 +1777,56 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       landedRef.current = {
         seen: readRecentDocumentsInHand().some((d) => d.id === landingEngagementId),
         done: false,
+        scrollY: window.scrollY,
+        moved: false,
       };
     }
     const landing = landedRef.current;
-    if (!landing.seen || landing.done || !frameCommitted) return;
-    return afterArrival((unplayed) => {
-      landing.done = true;
-      if (!unplayed) return;
-      const el = mainRef.current?.querySelector('[data-active-section]') ??
-        (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null);
-      if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-        scrollIntoRevealed(el, { block: 'start' });
-      }
-    });
-  }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection]);
+    if (!landing.seen || landing.done) return;
+    // K15 — armed from the baseline on, one listener per run (a re-run's cleanup and setup share
+    // one flush, so no scroll event falls between them); `moved` outlives the run on the ref.
+    const latch = latchScroll();
+    let stopArrival = () => {};
+    let stopWaiting: (() => void) | null = null;
+    let cancelled = false;
+    if (frameCommitted) {
+      stopArrival = afterArrival((unplayed) => {
+        const el = unplayed
+          ? (mainRef.current?.querySelector('[data-active-section]') ??
+            (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null))
+          : null;
+        if (!el) {
+          landing.done = true;
+          latch.stop();
+          return;
+        }
+        stopWaiting = whenRevealedThrough(el, () => {
+          // Out of the effect: this can answer synchronously inside it, where the flushSync in
+          // `forceFullThrough` cannot flush, and the scroll would read the reserve heights.
+          queueMicrotask(() => {
+            if (cancelled) return;
+            landing.done = true;
+            const away =
+              landing.moved || latch.moved || Math.abs(window.scrollY - landing.scrollY) > 0.5;
+            latch.stop();
+            if (away) return;
+            if (el.isConnected && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+              const key = regionThrough(el);
+              if (key) lens.forceFullThrough(key);
+              scrollIntoRevealed(el, { block: 'start' });
+            }
+          });
+        });
+      }, landing.scrollY);
+    }
+    return () => {
+      if (latch.moved) landing.moved = true;
+      latch.stop();
+      stopArrival();
+      stopWaiting?.();
+      cancelled = true;
+    };
+  }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection, lens]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.
   const lineage: SectionLineage | null = useMemo(() => {

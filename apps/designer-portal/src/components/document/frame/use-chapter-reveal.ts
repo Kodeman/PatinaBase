@@ -40,10 +40,14 @@ import { LOADING_SELECTOR } from '@/hooks/use-lens-density';
 import { LENS_RESOLVE_STABLE_FRAMES } from '@/lib/document/lens-constants';
 import { UNFOLD_REGION_EVENT } from '@/lib/document/document-index';
 import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
-import { heldChildren, revealThrough, SHOWN_ATTRIBUTE } from '@/lib/document/paper-reveal';
+import {
+  heldChildren,
+  REVEAL_FAILSAFE_MS,
+  revealThrough,
+  SHOWN_ATTRIBUTE,
+} from '@/lib/document/paper-reveal';
 
-/** round8.css's per-chapter `doc-fade` delay: nothing is held past it. */
-export const REVEAL_FAILSAFE_MS = 3500;
+export { REVEAL_FAILSAFE_MS };
 /** What can still move the paper below it: a body printing its loading
  *  register, or a region the lens still holds `quiet` — at resolution a region
  *  whose own data reads `full` takes its height at once (D-B46). */

@@ -267,6 +267,7 @@ export {
   useDiscovery,
   useUpsertDiscovery,
   useBeginDirection,
+  openDirectionQuery,
 } from "./use-discovery";
 export {
   useCeremonyForRelationship,
@@ -286,6 +287,7 @@ export type {
   AvoidItem,
   DecisionMaker,
   UpsertDiscoveryInput,
+  OpenDirection,
 } from "./use-discovery";
 export {
   useClients,

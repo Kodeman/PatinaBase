@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { createBrowserClient } from '@patina/supabase';
 import type { DesignerClient } from '@/hooks/use-clients';
 
@@ -12,6 +13,8 @@ let mockCurrentDesignerId = 'designer-current';
 // null-clientId row getting picked despite the picker's own disabling (the
 // real ClientPicker below is otherwise rendered untouched for every test).
 let mockForceNullPick = false;
+// K14 — what the household's open-Direction read answers (null: none open).
+const mockOpenDirection = jest.fn();
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/desk',
@@ -23,7 +26,15 @@ jest.mock('@patina/supabase', () => ({
   itemLabelRefusal: () => null,
   useSession: () => ({ session: { user: { id: mockCurrentDesignerId } } }),
   createBrowserClient: jest.fn(),
+  openDirectionQuery: (ids: string[]) => ({
+    queryKey: ['open-direction', ids],
+    queryFn: () => mockOpenDirection(ids),
+  }),
   // ClientPicker (portal/client-picker.tsx) reads the viewer's session.
+}));
+
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -66,8 +77,10 @@ jest.mock('@/components/portal/client-picker', () => {
 });
 
 import {
+  DraftProposalOverlay,
   DraftProposalSheet,
   normalizeDraftHouseholds,
+  openDraftProposalPicker,
 } from './draft-proposal-opener';
 
 const relationship = (
@@ -153,6 +166,7 @@ describe('DraftProposalSheet', () => {
     mockCurrentDesignerId = 'designer-current';
     mockClients = [];
     mockForceNullPick = false;
+    mockOpenDirection.mockResolvedValue(null);
     singleResult = { data: { id: 'proposal-1' }, error: null };
     insert.mockImplementation(() => ({
       select: () => ({
@@ -184,6 +198,44 @@ describe('DraftProposalSheet', () => {
   const pickClient = async () => {
     fireEvent.click(screen.getByTestId('client-picker-trigger'));
     fireEvent.click(await screen.findByTestId('client-picker-option-client-1'));
+  };
+
+  /** The sheet as the layout hosts it: closing really closes it, and it can
+   *  be opened again. */
+  const renderHosted = () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    function Host() {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button type="button" data-testid="reopen" onClick={() => setOpen(true)}>
+            reopen
+          </button>
+          <DraftProposalSheet
+            open={open}
+            onClose={() => {
+              onClose();
+              setOpen(false);
+            }}
+          />
+        </>
+      );
+    }
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <Host />
+      </QueryClientProvider>,
+    );
+  };
+
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
   };
 
   it('dedupes a shared household, prefers the current relationship, and opens the Drafting Room', async () => {
@@ -300,6 +352,234 @@ describe('DraftProposalSheet', () => {
     ).toBeVisible();
   });
 
+  // ── K14 (RC7-E3-5): a household with an open Direction ────────────────
+  describe('a household that already has an open Direction', () => {
+    const openDirection = (commercial_state: 'draft' | 'sent' | 'client_signed') => ({
+      id: 'direction-1',
+      title: 'Client User',
+      commercial_state,
+      designer_client_id: 'relationship-own',
+    });
+
+    it('with none open, reads every relationship of the household and opens the draft as before', async () => {
+      mockClients = [
+        relationship('relationship-foreign', 'designer-collaborator'),
+        relationship('relationship-own', 'designer-current'),
+      ];
+      renderSheet();
+
+      await pickClient();
+
+      await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
+      expect(mockOpenDirection).toHaveBeenCalledWith([
+        'relationship-foreign',
+        'relationship-own',
+      ]);
+      expect(mockPush).toHaveBeenCalledWith('/drafting/proposal-1');
+    });
+
+    it('offers continue-or-separate before any write, without the no-discovery copy', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockResolvedValue(openDirection('draft'));
+      renderSheet();
+      expect(screen.getByText(/no lead, no discovery/)).toBeInTheDocument();
+
+      await pickClient();
+
+      expect(
+        await screen.findByRole('button', { name: 'Continue the existing Direction' }),
+      ).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Start a separate agreement' })).toBeVisible();
+      expect(screen.getByTestId('draft-proposal-open-direction')).toHaveTextContent(
+        'Client User already has an open Direction, “Client User”.',
+      );
+      expect(screen.queryByText(/no lead, no discovery/)).not.toBeInTheDocument();
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('Continue opens the Direction in its Contract Room and writes nothing', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockResolvedValue(openDirection('draft'));
+      renderSheet();
+      await pickClient();
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Continue the existing Direction' }),
+      );
+
+      expect(mockRememberRoomOrigin).toHaveBeenCalledWith('/desk');
+      expect(mockPush).toHaveBeenCalledWith('/drafting/direction-1');
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it.each(['sent', 'client_signed'] as const)(
+      'Continue opens a %s Direction on its own paper (the Room would evict it)',
+      async (state) => {
+        mockClients = [relationship('relationship-own', 'designer-current')];
+        mockOpenDirection.mockResolvedValue(openDirection(state));
+        renderSheet();
+        await pickClient();
+
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Continue the existing Direction' }),
+        );
+
+        expect(mockPush).toHaveBeenCalledWith('/doc/direction-1');
+        expect(insert).not.toHaveBeenCalled();
+      },
+    );
+
+    it('Start a separate agreement writes exactly one new draft, deliberately', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockResolvedValue(openDirection('draft'));
+      renderSheet();
+      await pickClient();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Start a separate agreement' }));
+
+      await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          designer_id: 'designer-current',
+          client_id: 'client-1',
+          designer_client_id: 'relationship-own',
+          document_kind: 'design_services',
+          commercial_state: 'draft',
+        }),
+      );
+      expect(insert.mock.calls[0][0]).not.toHaveProperty('parent_proposal_id');
+      expect(mockPush).toHaveBeenCalledWith('/drafting/proposal-1');
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('a lookup still pending when Esc closes the sheet writes nothing and goes nowhere', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      const slow = deferred<null>();
+      mockOpenDirection.mockReturnValue(slow.promise);
+      renderHosted();
+      await pickClient();
+      expect(mockOpenDirection).toHaveBeenCalledTimes(1);
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('draft-proposal-layer')).not.toBeInTheDocument();
+
+      await act(async () => {
+        slow.resolve(null);
+        await slow.promise;
+      });
+
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockRememberRoomOrigin).not.toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('a Direction that answers after the sheet closed does not come back when it reopens', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      const slow = deferred<ReturnType<typeof openDirection>>();
+      mockOpenDirection.mockReturnValue(slow.promise);
+      renderHosted();
+      await pickClient();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      await act(async () => {
+        slow.resolve(openDirection('draft'));
+        await slow.promise;
+      });
+      fireEvent.click(screen.getByTestId('reopen'));
+
+      expect(screen.getByText(/no lead, no discovery/)).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Continue the existing Direction' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId('client-picker-trigger')).not.toBeDisabled();
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('a lookup still pending when the opener unmounts writes nothing and goes nowhere', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      const slow = deferred<null>();
+      mockOpenDirection.mockReturnValue(slow.promise);
+      const { unmount } = renderSheet();
+      await pickClient();
+      expect(mockOpenDirection).toHaveBeenCalledTimes(1);
+
+      unmount();
+      await act(async () => {
+        slow.resolve(null);
+        await slow.promise;
+      });
+
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockRememberRoomOrigin).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('from ⌘K, Esc returns focus to what held it before the palette opened', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <button type="button" data-testid="before-palette">
+            before
+          </button>
+          <DraftProposalOverlay />
+        </QueryClientProvider>,
+      );
+      const before = screen.getByTestId('before-palette');
+      // The palette row that runs the verb has focus, then unmounts with the palette.
+      const row = document.createElement('button');
+      document.body.appendChild(row);
+      row.focus();
+      act(() => openDraftProposalPicker({ returnFocusTo: before }));
+      row.remove();
+      expect(screen.getByTestId('draft-proposal-layer')).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByTestId('draft-proposal-layer')).not.toBeInTheDocument();
+      await waitFor(() => expect(before).toHaveFocus());
+    });
+
+    it('moves focus to the first choice when the picker gives way to it', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockResolvedValue(openDirection('draft'));
+      renderHosted();
+      await pickClient();
+
+      const proceed = await screen.findByRole('button', { name: 'Continue the existing Direction' });
+      await waitFor(() => expect(proceed).toHaveFocus());
+      // The DocSheet dialog holds it: Tab from the last act cycles inside the panel.
+      const panel = screen.getByRole('dialog', {
+        name: 'Draft a design agreement for an existing household',
+      });
+      const separate = screen.getByRole('button', { name: 'Start a separate agreement' });
+      separate.focus();
+      fireEvent.keyDown(document, { key: 'Tab' });
+      expect(panel).toContainElement(document.activeElement as HTMLElement);
+    });
+
+    it('a failed Direction read writes nothing and says so inline', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockRejectedValue(new Error('network'));
+      renderSheet();
+
+      await pickClient();
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not check this household for an open Direction. Try again.',
+      );
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
   // ── Layering ────────────────────────────────────────────────────────────
   // The sheet was mouse-dead: the picker opened, and every click on a row
   // closed the dialog instead of selecting a household. Two causes — an inline
@@ -316,11 +596,11 @@ describe('DraftProposalSheet', () => {
       mockClients = [relationship('relationship-own', 'designer-current')];
       const { container } = renderSheet();
 
-      const layer = screen.getByTestId('draft-proposal-layer');
+      const host = screen.getByTestId('draft-proposal-layer').closest('[data-doc-sheet-layer]')!;
       expect(container).toBeEmptyDOMElement();
-      expect(layer.parentElement).toBe(document.body);
-      expect(layer.className).toContain('z-50');
-      expect(layer.className).not.toContain('z-[70]');
+      expect(host.parentElement).toBe(document.body);
+      expect(host.className).toContain('z-50');
+      expect(host.className).not.toContain('z-[70]');
     });
 
     it('puts the popover portal AFTER the sheet layer in <body>, which is what wins at equal z', async () => {
@@ -333,29 +613,30 @@ describe('DraftProposalSheet', () => {
       // The layer must be a DIRECT body child for the comparison to mean
       // anything — an inline layer sits inside RTL's container and would
       // trivially "come first" while still being the thing that paints on top.
-      const layer = screen.getByTestId('draft-proposal-layer');
-      expect(layer.parentElement).toBe(document.body);
+      const host = screen.getByTestId('draft-proposal-layer').closest('[data-doc-sheet-layer]')!;
+      expect(host.parentElement).toBe(document.body);
       const popoverHost = option.closest('body > *')!;
-      expect(popoverHost).not.toBe(layer);
+      expect(popoverHost).not.toBe(host);
       const order = Array.from(document.body.children);
-      expect(order.indexOf(popoverHost)).toBeGreaterThan(order.indexOf(layer));
+      expect(order.indexOf(popoverHost)).toBeGreaterThan(order.indexOf(host));
     });
 
     it('dismisses from a dedicated backdrop, never from the layer itself', () => {
       mockClients = [relationship('relationship-own', 'designer-current')];
       renderSheet();
 
-      const layer = screen.getByTestId('draft-proposal-layer');
-      const backdrop = screen.getByTestId('draft-proposal-backdrop');
-      expect(backdrop.parentElement).toBe(layer);
+      const host = screen.getByTestId('draft-proposal-layer').closest('[data-doc-sheet-layer]')!;
+      const backdrop = screen.getByTestId('doc-sheet-backdrop');
+      expect(backdrop.parentElement).toBe(host);
 
-      // A mousedown that reaches the layer but not the backdrop must not close.
+      // A press that reaches the layer but not the backdrop must not close.
       // Before the fix this was the whole bug: `e.target === e.currentTarget`
       // on the layer swallowed anything aimed at the popover.
-      fireEvent.mouseDown(layer);
+      fireEvent.mouseDown(host);
+      fireEvent.click(host);
       expect(onClose).not.toHaveBeenCalled();
 
-      fireEvent.mouseDown(backdrop);
+      fireEvent.click(backdrop);
       expect(onClose).toHaveBeenCalledTimes(1);
     });
   });
