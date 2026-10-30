@@ -98,6 +98,7 @@ describe('FolioStrip — a scan chip navigates to the Room View', () => {
 
     const visibility = screen.getByRole('button', { name: 'studio' });
     expect(visibility).toHaveClass('t-meta');
+    expect(visibility.getAttribute('style')).toContain('color: var(--color-quiet-ink)');
   });
 
   it('the letterhead folio disclosure uses the 12px meta size', () => {
