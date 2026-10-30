@@ -1,16 +1,22 @@
 \set ON_ERROR_STOP on
--- DEFECT RC7-E1-1: a prior-request signer who is NOT on the contributing
--- acceptance request reads that request's completion in the C6 client projection.
--- Excluded from the passing gate (not an e1_*.sql file). Fails on the present
--- schema; passes once the client projection keeps only completions whose
--- contributing request lists the viewer as an active signer (or the viewer is
--- the project client). Promotion: move both assertions into
--- e1_authority_matrix.sql at the RC7-E1-1 marker after the actor 8 block.
-SELECT :'HOST'='127.0.0.1' AND :'PORT'='58122' AND
+-- RC7-E1-1 (K9, fixed by migration 00903): the C6 client projection lists a
+-- completion only to the project client or an active signer of the request
+-- that contributed it. A prior-request signer who is NOT on the contributing
+-- request (profile 8, linked to household card 5 on r1/r2, not on r4) passes
+-- the unchanged entry gate and reads completions = []. A normal passing suite
+-- since 00903 (no longer a DEFECT reproducer kept out of the gate).
+-- Owned stack only (default 127.0.0.1:58122, the E1 stack; pass
+-- -v expected_port=<n> for another owned stack, never the shared 54322),
+-- with scope_editions inactive. Rolled back.
+\if :{?expected_port}
+\else
+\set expected_port 58122
+\endif
+SELECT :'HOST'='127.0.0.1' AND :'PORT'=:'expected_port' AND :'PORT'<>'54322' AND
  (SELECT NOT enabled FROM public.server_capabilities WHERE key='scope_editions') AS owned \gset
 \if :owned
 \else
-DO $$ BEGIN RAISE EXCEPTION 'E1 defect reproducer requires inactive owned 58122'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'E1 C6 audience suite requires an inactive owned 127.0.0.1 stack (not 54322)'; END $$;
 \quit
 \endif
 BEGIN;
@@ -34,6 +40,7 @@ SELECT pg_temp.assert_true((SELECT result->>'audience'='client'
  'RC7-E1-1 control: r4 signer 6 reads exactly the r4 completion in the client projection');
 SELECT pg_temp.assert_true((SELECT result->>'audience'='client' AND result->'completions'='[]'::jsonb
  FROM e1_c6_reads WHERE actor=8),
- 'DEFECT RC7-E1-1: prior-request signer 8, not on r4, reads no completion; observed completions '
+ 'RC7-E1-1: prior-request signer 8, not on r4, reads no completion; observed completions '
  ||(SELECT (result->'completions')::text FROM e1_c6_reads WHERE actor=8));
+DO $$ BEGIN RAISE NOTICE 'E1 C6 audience: PASS 2 assertions'; END $$;
 ROLLBACK;

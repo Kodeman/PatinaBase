@@ -168,16 +168,16 @@ SELECT pg_temp.expect_error(format('SELECT public.get_project_service_acceptance
  '42501','insufficient_privilege','X02 client cannot read studio C4 projection');
 RESET ROLE;
 
--- RC7-E1-1: this older-request signer is NOT on r4; the C6 predicate admits
--- any current sent-request signer on the project. Privacy ruling required.
+-- RC7-E1-1: this older-request signer is NOT on r4. K9 ruled the C6 audience
+-- is the contributing request's signers (00903).
 SELECT pg_temp.actor(8);
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assert_true((SELECT count(*) FROM storage.objects WHERE id::text LIKE 'e1000000-%')=0
  AND (pg_temp.listed(pg_temp.req('r4'))->>'count')::int=0,
  'X02 linked but nonsigner household member has no bytes or acceptance list');
--- DEFECT RC7-E1-1: the cross-request C6 audience assertions live in the excluded
--- defect_e1_c6_audience.sql (8 reads [], r4 signer 6 reads one); promote both here
--- once the client-projection row filter lands, and raise the expected count to 110.
+-- RC7-E1-1 (fixed by 00903): the cross-request C6 audience assertions (8 reads
+-- [], r4 signer 6 reads one) run as their own passing suite,
+-- defect_e1_c6_audience.sql.
 RESET ROLE;
 
 SELECT pg_temp.actor(10);
