@@ -90,7 +90,7 @@ function carriesToken(error: unknown, token: string): boolean {
   );
 }
 
-/** True when a decision lost the version race (US-4 S4, SQLSTATE 40001). */
+/** True when a decision lost the version race (US-4 S4, SQLSTATE PT409). */
 export function isFieldTimeReportStale(error: unknown): boolean {
   return carriesToken(error, "field_time_report_stale");
 }
@@ -98,7 +98,7 @@ export function isFieldTimeReportStale(error: unknown): boolean {
 /**
  * What the database refused, in words the designer can act on.
  *
- *  · field_time_report_stale (40001) — two people decided the same card.
+ *  · field_time_report_stale (PT409) — two people decided the same card.
  *  · 'no hour to book' (23514, DETAIL field_time_report_bad_attribution) — a
  *    nothing-hours report can be accepted or rejected, never booked, because
  *    project_time_entries holds positive durations only (00177:20). Booking is

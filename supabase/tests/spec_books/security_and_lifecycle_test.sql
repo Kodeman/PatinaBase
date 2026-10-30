@@ -348,7 +348,7 @@ BEGIN
     UPDATE public.project_ffe_specs
     SET row_version = v_version + 7
     WHERE ffe_item_id = '5b000000-0000-4000-8000-000000000501';
-  EXCEPTION WHEN serialization_failure THEN
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN
     v_raised := true;
   END;
   ASSERT v_raised, 'arbitrary row_version payload must remain rejected';

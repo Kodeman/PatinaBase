@@ -283,7 +283,7 @@ BEGIN
     PERFORM public.extend_and_reopen_client_decision(
       v_row.id, v_due + interval '1 day', v_before
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'changed Extend retry must conflict';
   ASSERT (SELECT due_date = v_due FROM public.client_decisions
@@ -299,7 +299,7 @@ BEGIN
       'fa0c0000-0000-4000-8000-000000000008',
       now() + interval '8 days', v_stale_before - interval '1 microsecond'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'stale expired Extend CAS must reject';
   ASSERT (SELECT status = 'expired' FROM public.client_decisions
@@ -371,7 +371,7 @@ BEGIN
       ARRAY['fa090000-0000-4000-8000-000000000001'::uuid],
       ARRAY['fa0a0000-0000-4000-8000-000000000001'::uuid]
     );
-  EXCEPTION WHEN serialization_failure THEN
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN
     v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'changed payload retry must conflict';
@@ -384,7 +384,7 @@ BEGIN
       ARRAY['fa090000-0000-4000-8000-000000000001'::uuid],
       ARRAY['fa0a0000-0000-4000-8000-000000000001'::uuid]
     );
-  EXCEPTION WHEN serialization_failure THEN
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN
     v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'changed option retry must conflict';
@@ -395,7 +395,7 @@ BEGIN
       'fa0d0000-0000-4000-8000-000000000001', v_payload, v_options,
       ARRAY[]::uuid[], ARRAY[]::uuid[]
     );
-  EXCEPTION WHEN serialization_failure THEN
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN
     v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'changed dependency retry must conflict';
@@ -485,7 +485,7 @@ BEGIN
       v_row.id, '{"title":"stale"}'::jsonb, NULL,
       ARRAY[]::uuid[], ARRAY[]::uuid[], v_before - interval '1 microsecond'
     );
-  EXCEPTION WHEN serialization_failure THEN
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN
     v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'stale coordination CAS must reject';
@@ -655,7 +655,7 @@ BEGIN
     PERFORM public.resolve_coordination_item(
       'fa0c0000-0000-4000-8000-000000000001', NULL, 'Changed answer'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'conflicting RFI retry must reject';
 
@@ -696,7 +696,7 @@ BEGIN
       'fa0c0000-0000-4000-8000-000000000002', NULL,
       'Changed approval note', v_revision.id, 'vendor'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'changed submittal retry evidence must reject';
 END;
@@ -743,7 +743,7 @@ BEGIN
     PERFORM public.resolve_coordination_item(
       'fa0c0000-0000-4000-8000-000000000003'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'null retry cannot erase signoff answer evidence';
 

@@ -737,7 +737,7 @@ BEGIN
       v_phase.id, v_phase.proposal_id, '{"fee_cents":444}'::jsonb,
       v_expected - interval '1 microsecond'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'stale phase edit CAS must reject';
   ASSERT (SELECT total_amount = 1533 FROM public.proposals
@@ -804,7 +804,7 @@ BEGIN
       'fb040000-0000-4000-8000-000000000006',
       v_expected - interval '1 microsecond'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'stale phase removal CAS must reject';
   ASSERT (SELECT total_amount = 500 FROM public.proposals
@@ -1082,7 +1082,7 @@ BEGIN
       'fb040000-0000-4000-8000-000000000001', 'design_only',
       'fb080000-0000-4000-8000-000000000001'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL,
     'reusing a proposal-scoped request id for a different template must reject';
@@ -1245,7 +1245,7 @@ BEGIN
       'fb040000-0000-4000-8000-000000000002', 'patina_six',
       'fb080000-0000-4000-8000-000000000003'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL,
     'partial recovery retry must detect a changed recorded phase';
@@ -1261,7 +1261,7 @@ BEGIN
       'fb040000-0000-4000-8000-000000000002', 'patina_six',
       'fb080000-0000-4000-8000-000000000003'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL,
     'partial recovery retry must detect a missing recorded prefix/suffix row';
@@ -1279,7 +1279,7 @@ BEGIN
       'fb040000-0000-4000-8000-000000000009', 'patina_six',
       'fb080000-0000-4000-8000-000000000004'
     );
-  EXCEPTION WHEN serialization_failure THEN v_error := SQLERRM;
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL,
     'full recovery retry must detect a missing recorded legacy row';

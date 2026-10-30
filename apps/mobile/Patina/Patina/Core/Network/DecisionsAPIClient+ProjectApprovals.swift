@@ -423,7 +423,7 @@ extension DecisionsAPIClient {
     /// client was reading, signed with the typed legal name.
     ///
     /// `expectedUpdatedAt` is the row's own `updatedAt`, echoed back: the RPC
-    /// answers `serialization_failure` if the approval moved while the screen
+    /// answers `PT409` (HTTP 409) if the approval moved while the screen
     /// was open.
     ///
     /// `P-18` / `R1`. `_respond_project_approval_checked` has carried

@@ -197,7 +197,7 @@ export interface RerateRatePendingHoursInput {
  * The server admits only an owner or admin of the row's studio and prints its
  * own refusal; this hook never pre-judges standing. It also refuses a row any
  * later-dated row has superseded (23514), and a row whose rate is no longer
- * `expectedRateCents` because someone corrected it since (40001: "the rate
+ * `expectedRateCents` because someone corrected it since (PT409: "the rate
  * changed since you saved it; save it again to price these hours").
  */
 export function useRerateRatePendingHours() {

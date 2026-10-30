@@ -140,7 +140,7 @@ test('competing client choices on the same selection decision serialize', { time
     const outcome = await loser;
     assert.equal(winner, 'responded');
     assert.match(outcome.error?.message ?? '',
-      new RegExp(`ERROR:\\s+40001: decision ${decision} was already resolved with another option(?:\\r?\\n|$)`),
+      new RegExp(`ERROR:\\s+PT409: decision ${decision} was already resolved with another option(?:\\r?\\n|$)`),
       'competing choice returns the exact stale-choice SQLSTATE and message');
     assert.equal(await a.query(`SELECT status='responded' AND selected_by='${actor}'
       FROM public.client_decisions WHERE id='${decision}';`), 't');
