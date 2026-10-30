@@ -4,6 +4,7 @@ import path from "node:path";
 import type { BrowserContext, Page, Request } from "@playwright/test";
 import { test, expect } from "../fixtures/auth";
 import { scrollTo, settle } from "../helpers/lens";
+import { applyCover, expectCoverRendered } from "./rc7-e8-cover";
 
 /**
  * RC-7 E8 — X07 performance readings on the F01 fixture (80 lines, 3 rooms;
@@ -21,8 +22,17 @@ import { scrollTo, settle } from "../helpers/lens";
  *   counted on the BrowserContext, not the Page, and matched on host+port
  *   against both 127.0.0.1 and localhost spellings of the API, then
  *   cross-checked against the page's own Resource Timing entries.
- * Numbers only: ACCEPTANCE.md X07 proposes CLS ≤0.1 and LCP ≤2.5 s on an
- * agreed representative profile; this is unthrottled localhost next dev.
+ * - Network settle: no request in flight on the context for 1 s, bounded at
+ *   30 s; the bound fails the test (it is never swallowed).
+ *
+ * Asserted (ACCEPTANCE.md X07; unthrottled localhost next dev, not the WP-00
+ * representative profile): settled-scroll CLS (paced, the contract) == 0 as a
+ * raw sum, skipped with a stated reason where the engine has no layout-shift
+ * entry type (WebKit); LCP ≤ 2,500 ms on chromium; request capture agrees
+ * with Resource Timing; the studio renders the photographic cover (applied by
+ * this spec's beforeAll, not left to spec order). Cold-load CLS is recorded
+ * and its ≤ 0.1 target sits in the RC7-E8-4 fixme. Flung-scroll CLS and
+ * WebKit LCP are recorded, not asserted.
  */
 
 const JOB = "f0180000-0000-4000-8000-000000000010";
@@ -32,6 +42,9 @@ const OUT =
 const api = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!);
 const apiHosts = new Set([`127.0.0.1:${api.port}`, `localhost:${api.port}`]);
 const readings: Record<string, unknown> = {};
+const LCP_BUDGET_MS = 2_500;
+const NO_LAYOUT_SHIFT =
+  "this engine has no layout-shift entry type (PerformanceObserver.supportedEntryTypes), so CLS cannot be read; never reported as 0";
 
 const VITALS = () => {
   const w = window as unknown as {
@@ -99,17 +112,41 @@ const VITALS = () => {
 function captureRequests(context: BrowserContext) {
   const requests: Request[] = [];
   const failed: Request[] = [];
-  const onRequest = (request: Request) => requests.push(request);
-  const onFailed = (request: Request) => failed.push(request);
+  const inFlight = new Set<Request>();
+  let lastChange = Date.now();
+  const onRequest = (request: Request) => {
+    requests.push(request);
+    // Long-lived streams never finish; none is expected on these surfaces.
+    if (request.resourceType() === "eventsource") return;
+    inFlight.add(request);
+    lastChange = Date.now();
+  };
+  const onFinished = (request: Request) => {
+    if (inFlight.delete(request)) lastChange = Date.now();
+  };
+  const onFailed = (request: Request) => {
+    failed.push(request);
+    onFinished(request);
+  };
   context.on("request", onRequest);
+  context.on("requestfinished", onFinished);
   context.on("requestfailed", onFailed);
   return {
-    reset() {
-      requests.length = 0;
-      failed.length = 0;
+    /** Resolves once nothing has been in flight for `windowMs`; throws at `timeoutMs`. */
+    async settle(page: Page, windowMs = 1_000, timeoutMs = 30_000) {
+      const deadline = Date.now() + timeoutMs;
+      while (inFlight.size > 0 || Date.now() - lastChange < windowMs) {
+        if (Date.now() > deadline)
+          throw new Error(
+            `network never settled in ${timeoutMs} ms: ${inFlight.size} in flight ` +
+              JSON.stringify([...inFlight].slice(0, 5).map((r) => r.url())),
+          );
+        await page.waitForTimeout(100);
+      }
     },
     stop() {
       context.off("request", onRequest);
+      context.off("requestfinished", onFinished);
       context.off("requestfailed", onFailed);
     },
     summary() {
@@ -135,13 +172,6 @@ function captureRequests(context: BrowserContext) {
   };
 }
 
-async function quiet(page: Page) {
-  await page
-    .waitForLoadState("networkidle", { timeout: 60_000 })
-    .catch(() => undefined);
-  await page.waitForTimeout(1_000);
-}
-
 const resetShifts = (page: Page) =>
   page.evaluate(() => {
     const w = window as unknown as { __e8: { cls: number; shifts: unknown[] } };
@@ -164,9 +194,10 @@ const readShifts = async (page: Page) => {
   );
   // No layout-shift entry type (WebKit): no reading, never a zero.
   if (!vitals.supported.includes("layout-shift"))
-    return { cls: null, shiftCount: null, shifts: [] };
+    return { cls: null, clsRounded: null, shiftCount: null, shifts: [] };
   return {
-    cls: Math.round(vitals.cls * 10_000) / 10_000,
+    cls: vitals.cls, // raw sum: the assertion never sees a rounded value
+    clsRounded: Math.round(vitals.cls * 10_000) / 10_000,
     shiftCount: vitals.shifts.length,
     shifts: vitals.shifts.slice(0, 10),
   };
@@ -226,30 +257,32 @@ async function scrollCls(
   };
 }
 
-for (const surface of ["studio", "job"] as const) {
-  test(`X07 ${surface}: cold load LCP + requests, then settled-scroll CLS`, async ({
-    authenticatedPage: page,
-  }, info) => {
-    test.setTimeout(240_000);
-    const route = surface === "studio" ? "/desk" : `/doc/${JOB}`;
-    const ready =
-      surface === "studio"
-        ? page.locator('[data-studio="round8"][data-arrival-ready]')
-        : page.locator("[data-document-shell][data-arrival-ready]");
-    // Warm the dev compile so the measured navigation is not a first compile.
-    await page.goto(route, { waitUntil: "domcontentloaded", timeout: 120_000 });
-    await expect(ready).toHaveCount(1, { timeout: 60_000 });
-    await page.goto("about:blank");
-    await page.addInitScript(VITALS);
-    const capture = captureRequests(page.context());
-    // Diagnostic for the R3b capture defect: the old counter listened on the Page.
-    let pageLevelApi = 0;
-    const onPageRequest = (request: Request) => {
-      if (apiHosts.has(new URL(request.url()).host)) pageLevelApi++;
-    };
-    page.on("request", onPageRequest);
-    await page.evaluate(() => performance.clearResourceTimings());
+const ROUTE = { studio: "/desk", job: `/doc/${JOB}` } as const;
 
+/**
+ * Warm compile, then a cold navigation with the init-script observers, wait
+ * for arrival and a settled network. Returns the load readings.
+ */
+async function coldLoad(page: Page, surface: "studio" | "job") {
+  const route = ROUTE[surface];
+  const ready =
+    surface === "studio"
+      ? page.locator('[data-studio="round8"][data-arrival-ready]')
+      : page.locator("[data-document-shell][data-arrival-ready]");
+  // Warm the dev compile so the measured navigation is not a first compile.
+  await page.goto(route, { waitUntil: "domcontentloaded", timeout: 120_000 });
+  await expect(ready).toHaveCount(1, { timeout: 60_000 });
+  await page.goto("about:blank");
+  await page.addInitScript(VITALS);
+  const capture = captureRequests(page.context());
+  // Diagnostic for the R3b capture defect: the old counter listened on the Page.
+  let pageLevelApi = 0;
+  const onPageRequest = (request: Request) => {
+    if (apiHosts.has(new URL(request.url()).host)) pageLevelApi++;
+  };
+  page.on("request", onPageRequest);
+  await page.evaluate(() => performance.clearResourceTimings());
+  try {
     const started = Date.now();
     await page.goto(route, { waitUntil: "domcontentloaded", timeout: 120_000 });
     await expect(ready).toHaveCount(1, { timeout: 60_000 });
@@ -258,7 +291,7 @@ for (const surface of ["studio", "job"] as const) {
       { timeout: 30_000 },
     );
     const readyMs = Date.now() - started;
-    await quiet(page);
+    await capture.settle(page);
     const load = await page.evaluate(() => {
       const w = window as unknown as {
         __e8: {
@@ -275,10 +308,12 @@ for (const surface of ["studio", "job"] as const) {
       const nav = performance.getEntriesByType("navigation")[0] as
         | PerformanceNavigationTiming
         | undefined;
+      const layoutShift = w.__e8.supported.includes("layout-shift");
       return {
         lcpMs: w.__e8.lcp === null ? null : Math.round(w.__e8.lcp),
         lcpElement: w.__e8.lcpElement,
-        loadClsBeforeScroll: w.__e8.supported.includes("layout-shift")
+        loadClsRaw: layoutShift ? w.__e8.cls : null,
+        loadClsBeforeScroll: layoutShift
           ? Math.round(w.__e8.cls * 10_000) / 10_000
           : null,
         loadShiftCount: w.__e8.shifts.length,
@@ -310,57 +345,125 @@ for (const surface of ["studio", "job"] as const) {
         nodes: document.querySelectorAll("*").length,
       };
     });
-    const requests = { ...capture.summary(), pageLevelApi };
+    return {
+      route,
+      readyMs,
+      load,
+      requests: { ...capture.summary(), pageLevelApi },
+    };
+  } finally {
     capture.stop();
     page.off("request", onPageRequest);
-    const scroll = await scrollCls(page, surface, "paced");
-    const fling = await scrollCls(page, surface, "fling");
-    const reading = {
-      surface,
-      route,
-      browser: info.project.name,
-      viewport: page.viewportSize(),
-      readyMs,
-      ...load,
-      requests,
-      scroll,
-      fling,
-      profile: `unthrottled localhost; next dev --webpack; ${os.cpus()[0]?.model}; F01 (80 lines, 3 rooms)${surface === "studio" ? " + rc7-e8 cover board" : ""}`,
-    };
-    readings[`${info.project.name} ${surface}`] = reading;
-    console.log(
-      "[rc7-e8 perf]",
-      JSON.stringify({
-        surface,
-        browser: info.project.name,
-        lcpMs: load.lcpMs,
-        readyMs,
-        requests: requests.total,
-        api: requests.byOrigin["supabase-api"] ?? 0,
-        rt: load.resourceTimingCount,
-        loadCls: load.loadClsBeforeScroll,
-        pacedCls: scroll.cls,
-        pacedShifts: scroll.shiftCount,
-        flingCls: fling.cls,
-        flingShifts: fling.shiftCount,
-        height: scroll.height,
-      }),
-    );
-    // The capture is not empty and agrees with the page's own Resource Timing on API reads.
-    expect(
-      requests.byOrigin["supabase-api"] ?? 0,
-      "API requests captured",
-    ).toBeGreaterThan(0);
-    const rtApi = Object.entries(load.resourceTimingByHost)
-      .filter(([host]) => apiHosts.has(host))
-      .reduce((a, [, n]) => a + n, 0);
-    expect(
-      Math.abs((requests.byOrigin["supabase-api"] ?? 0) - rtApi),
-      "context capture ≈ Resource Timing for the API",
-    ).toBeLessThanOrEqual(Math.max(3, rtApi * 0.1));
-    expect(scroll.steps, "the full document was scrolled").toBeGreaterThan(1);
-  });
+  }
 }
+
+const reading = (key: string, patch: Record<string, unknown>) => {
+  readings[key] = { ...(readings[key] as object | undefined), ...patch };
+};
+
+test.describe("RC-7 E8 X07 performance", () => {
+  test.setTimeout(240_000);
+
+  // Global setup recreates F01 every run: the studio is measured with the cover.
+  test.beforeAll(async () => {
+    await applyCover("rc7-e8 perf");
+  });
+
+  for (const surface of ["studio", "job"] as const) {
+    test(`X07 ${surface}: cold load — LCP and request capture`, async ({
+      authenticatedPage: page,
+      browserName,
+    }, info) => {
+      const { route, readyMs, load, requests } = await coldLoad(page, surface);
+      const cover =
+        surface === "studio" ? await expectCoverRendered(page) : null;
+      reading(`${info.project.name} ${surface}`, {
+        surface,
+        route,
+        browser: info.project.name,
+        viewport: page.viewportSize(),
+        readyMs,
+        ...load,
+        requests,
+        cover,
+        profile: `unthrottled localhost; next dev --webpack; ${os.cpus()[0]?.model}; F01 (80 lines, 3 rooms)${surface === "studio" ? " + rc7-e8 cover board" : ""}`,
+      });
+      console.log(
+        "[rc7-e8 perf load]",
+        JSON.stringify({
+          surface,
+          browser: info.project.name,
+          lcpMs: load.lcpMs,
+          readyMs,
+          requests: requests.total,
+          api: requests.byOrigin["supabase-api"] ?? 0,
+          rt: load.resourceTimingCount,
+          loadCls: load.loadClsBeforeScroll,
+        }),
+      );
+      // The capture is not empty and agrees with the page's own Resource Timing on API reads.
+      expect(
+        requests.byOrigin["supabase-api"] ?? 0,
+        "API requests captured",
+      ).toBeGreaterThan(0);
+      const rtApi = Object.entries(load.resourceTimingByHost)
+        .filter(([host]) => apiHosts.has(host))
+        .reduce((a, [, n]) => a + n, 0);
+      expect(
+        Math.abs((requests.byOrigin["supabase-api"] ?? 0) - rtApi),
+        "context capture ≈ Resource Timing for the API",
+      ).toBeLessThanOrEqual(Math.max(3, rtApi * 0.1));
+      if (browserName === "chromium") {
+        expect(load.lcpMs, "chromium reports LCP").not.toBeNull();
+        expect(load.lcpMs!, `LCP ≤ ${LCP_BUDGET_MS} ms`).toBeLessThanOrEqual(
+          LCP_BUDGET_MS,
+        );
+      }
+    });
+
+    test(`X07 ${surface}: settled-scroll CLS is 0`, async ({
+      authenticatedPage: page,
+    }, info) => {
+      const { load } = await coldLoad(page, surface);
+      test.skip(!load.supported.includes("layout-shift"), NO_LAYOUT_SHIFT);
+      const scroll = await scrollCls(page, surface, "paced");
+      const fling = await scrollCls(page, surface, "fling");
+      reading(`${info.project.name} ${surface}`, { scroll, fling });
+      console.log(
+        "[rc7-e8 perf scroll]",
+        JSON.stringify({
+          surface,
+          browser: info.project.name,
+          pacedCls: scroll.cls,
+          pacedShifts: scroll.shiftCount,
+          flingCls: fling.cls,
+          flingShifts: fling.shiftCount,
+          height: scroll.height,
+        }),
+      );
+      expect(scroll.steps, "the full document was scrolled").toBeGreaterThan(1);
+      // The contract (paced, settled): a raw sum of exactly 0, not a rounded one.
+      expect(
+        scroll.cls,
+        `settled-scroll CLS (raw); shifts ${JSON.stringify(scroll.shifts)}`,
+      ).toBe(0);
+    });
+  }
+
+  // DEFECT RC7-E8-4: job paper cold-load CLS 1.16–1.17 (chromium) against the
+  // proposed X07 ≤ 0.1; chapter bodies resolve into the skeleton unveiled.
+  // FIX5 owns the fix; flip this fixme when it merges.
+  test.fixme("RC7-E8-4: job cold-load CLS ≤ 0.1", async ({
+    authenticatedPage: page,
+  }) => {
+    const { load } = await coldLoad(page, "job");
+    test.skip(!load.supported.includes("layout-shift"), NO_LAYOUT_SHIFT);
+    expect(
+      load.loadClsRaw!,
+      `cold-load CLS (raw); largest ${JSON.stringify(load.loadShiftsLargest)}`,
+    ).toBeLessThanOrEqual(0.1);
+  });
+});
 
 test.afterAll(() => {
   mkdirSync(OUT, { recursive: true });

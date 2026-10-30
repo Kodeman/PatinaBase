@@ -1,10 +1,10 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "../fixtures/auth";
-import { psqlRun, psqlScalar } from "../helpers/psql";
-import { rc7OwnedStackSql } from "./owned-stack";
+import { psqlScalar } from "../helpers/psql";
+import { applyCover, expectCoverRendered } from "./rc7-e8-cover";
 
 /**
  * RC-7 E8 — X04 visual comparison against the frozen Room Proof 08 reference
@@ -16,7 +16,12 @@ import { rc7OwnedStackSql } from "./owned-stack";
  * Preconditions on the owned stack (applied once, before the runs):
  * rc7-e8-activation-fixture.sql (C2/C4/C6 on) and rc7-e7-fixtures/mixed-fixture.sql
  * (E7 household job: C4 returned + accepted-with-conditions, C6 completion, GC
- * cabinetry fulfilment, each produced by its RPC as its real actor).
+ * cabinetry fulfilment, each produced by its RPC as its real actor). The
+ * photographic cover is applied by this spec's own beforeAll (rc7-e8-cover.ts).
+ *
+ * Asserted: page overflow 0 on every portal capture; the cover rendered from a
+ * signed project-ffe-working URL; with C4/C6 active, no C4 or C6 inactive note
+ * on F01 or E7; the E7 rendered request lifecycles equal the DB readback.
  */
 
 const JOB = "f0180000-0000-4000-8000-000000000010";
@@ -26,7 +31,6 @@ const SHOTS = path.join(
   ROOT,
   "docs/design/designer-portal-round8/evidence/rc/visual-rc7",
 );
-const COVER_KEY = `${JOB}/boards/e8e80000-0000-4000-8000-000000000001/room.png`;
 const E7_OWNER = "rc7-e7-1@patina.test";
 
 const facts: Record<string, unknown> = {};
@@ -178,31 +182,7 @@ test.describe("RC-7 E8 X04 visual capture", () => {
       JSON.parse(activation),
       "C4/C6 activated on the owned stack",
     ).toEqual({ scopeEditions: true, c4: true, c6: true });
-    // Upload the reference photograph to the board's private folder, then
-    // point an active project board's cover at it.
-    const api = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    const upload = await fetch(
-      `${api}/storage/v1/object/project-ffe-working/${COVER_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          apikey: key,
-          "Content-Type": "image/png",
-          "x-upsert": "true",
-        },
-        body: readFileSync(path.join(REFERENCE, "assets/room.png")),
-      },
-    );
-    expect(upload.ok, `cover upload ${upload.status}`).toBe(true);
-    psqlRun(
-      rc7OwnedStackSql("rc7-e8 cover fixture") +
-        readFileSync(path.join(__dirname, "rc7-e8-cover-fixture.sql"), "utf8"),
-    );
-    facts.coverBoard = psqlScalar(
-      `SELECT cover_image_url FROM public.proposal_boards WHERE id='e8e80000-0000-4000-8000-000000000001' AND status='active';`,
-    );
+    facts.coverBoard = await applyCover("rc7-e8 visual");
   });
 
   test.afterAll(() => {
@@ -218,43 +198,17 @@ test.describe("RC-7 E8 X04 visual capture", () => {
     authenticatedPage: page,
   }) => {
     await settleStudio(page);
-    const plate = page.locator('[data-studio="round8"] img').first();
-    await expect(
-      plate,
-      "the commission plate renders the board cover",
-    ).toBeVisible({ timeout: 30_000 });
-    await expect
-      .poll(
-        () =>
-          plate.evaluate(
-            (img: HTMLImageElement) => img.complete && img.naturalWidth > 0,
-          ),
-        {
-          timeout: 30_000,
-          message: "the signed cover photograph decoded",
-        },
-      )
-      .toBe(true);
-    facts.studio = {
+    const studio = {
       overflow: await overflow(page),
-      plate: await plate.evaluate((img: HTMLImageElement) => ({
-        signed: /\/storage\/v1\/object\/sign\/project-ffe-working\//.test(
-          img.currentSrc,
-        ),
-        natural: [img.naturalWidth, img.naturalHeight],
-        box: [
-          Math.round(img.getBoundingClientRect().width),
-          Math.round(img.getBoundingClientRect().height),
-        ],
-        alt: img.alt,
-      })),
+      plate: await expectCoverRendered(page),
       caption: await page
         .locator('[data-studio="round8"] figcaption')
         .first()
-        .textContent()
+        .textContent({ timeout: 5_000 })
         .catch(() => null),
     };
-    expect(facts.studio).toMatchObject({ plate: { signed: true } });
+    facts.studio = studio;
+    expect(studio.overflow, "studio: no sideways page overflow").toBe(0);
     await shot(page, "studio-top");
     await walkDown(page);
     await shot(page, "studio-full", undefined, true);
@@ -270,7 +224,7 @@ test.describe("RC-7 E8 X04 visual capture", () => {
     const closeout = page.locator('[data-paper-chapter="closeout"]');
     await closeout.scrollIntoViewIfNeeded();
     await expect(closeout).toBeVisible();
-    facts.f01 = {
+    const f01 = {
       overflow: await overflow(page),
       chapters: await page
         .locator("[data-paper-chapter]")
@@ -285,7 +239,13 @@ test.describe("RC-7 E8 X04 visual capture", () => {
         .count(),
       closeoutText: (await closeout.innerText()).slice(0, 1200),
     };
-    expect(facts.f01).toMatchObject({ studioServiceInactive: 0 });
+    facts.f01 = f01;
+    expect(f01.overflow, "F01 job: no sideways page overflow").toBe(0);
+    // C4/C6 are active on the owned stack: neither chapter shows its inactive note.
+    expect(f01.studioServiceInactive, "F01: C6 inactive note absent").toBe(0);
+    expect(f01.serviceAcceptanceInactive, "F01: C4 inactive note absent").toBe(
+      0,
+    );
     await shot(page, "job-f01-closeout", closeout);
     await shot(page, "job-full", undefined, true);
     await reference(page, "job.html", "job-top");
@@ -303,10 +263,17 @@ test.describe("RC-7 E8 X04 visual capture", () => {
     expect(job, "E7 mixed fixture is loaded on the owned stack").toMatch(
       /^[0-9a-f-]{36}$/,
     );
-    const records = psqlScalar(`SELECT json_build_object(
+    const records = JSON.parse(
+      psqlScalar(`SELECT json_build_object(
       'cabinetry', (SELECT count(*) FROM public.project_external_fulfilments WHERE project_id='${job}' AND kind='gc_cabinetry'),
-      'requests', (SELECT json_agg(lifecycle ORDER BY created_at) FROM public.service_acceptance_requests WHERE project_id='${job}'))`);
-    facts.e7 = { job, records: JSON.parse(records) };
+      'requests', (SELECT json_object_agg(id, lifecycle) FROM public.service_acceptance_requests WHERE project_id='${job}'))`),
+    ) as { cabinetry: number; requests: Record<string, string> | null };
+    expect(records.cabinetry, "E7 GC cabinetry fulfilment in the DB").toBe(1);
+    expect(
+      Object.keys(records.requests ?? {}).length,
+      "E7 C4 requests in the DB",
+    ).toBe(2);
+    facts.e7 = { job, records };
     await signInAs(page, E7_OWNER);
     await settleJob(page, job);
     await walkDown(page);
@@ -323,13 +290,18 @@ test.describe("RC-7 E8 X04 visual capture", () => {
     await expect(
       closeout.locator("[data-service-acceptance-request]").first(),
     ).toBeVisible({ timeout: 30_000 });
-    Object.assign(facts.e7 as object, {
+    const rendered = {
       overflow: await overflow(page),
-      requestsRendered: await closeout
-        .locator("[data-service-acceptance-request]")
-        .evaluateAll((nodes) =>
-          nodes.map((n) => n.getAttribute("data-lifecycle")),
-        ),
+      requestsRendered: Object.fromEntries(
+        await closeout
+          .locator("[data-service-acceptance-request]")
+          .evaluateAll((nodes) =>
+            nodes.map((n) => [
+              n.getAttribute("data-service-acceptance-request"),
+              n.getAttribute("data-lifecycle"),
+            ]),
+          ),
+      ) as Record<string, string>,
       inactive: await page
         .locator(
           "[data-studio-service-inactive], [data-service-acceptance-inactive]",
@@ -337,7 +309,14 @@ test.describe("RC-7 E8 X04 visual capture", () => {
         .count(),
       cabinetryText: (await cabinetry.innerText()).slice(0, 1200),
       closeoutText: (await closeout.innerText()).slice(0, 1600),
-    });
+    };
+    Object.assign(facts.e7 as object, rendered);
+    expect(rendered.overflow, "E7 job: no sideways page overflow").toBe(0);
+    expect(
+      rendered.requestsRendered,
+      "E7: each rendered request shows its DB lifecycle",
+    ).toEqual(records.requests);
+    expect(rendered.inactive, "E7: C4/C6 inactive notes absent").toBe(0);
     await shot(page, "job-e7-cabinetry", cabinetry);
     await shot(page, "job-e7-closeout", closeout);
   });
