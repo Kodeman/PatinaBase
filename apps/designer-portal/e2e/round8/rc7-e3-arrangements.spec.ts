@@ -54,6 +54,11 @@ function cleanup(id: string) {
     SET LOCAL session_replication_role = replica;
     DELETE FROM public.proposal_service_arrangement_applications
       WHERE proposal_id='${id}' AND created_by='${DESIGNER}';
+    SET LOCAL session_replication_role = origin;
+    DELETE FROM public.proposal_agreement_parts WHERE proposal_id='${id}';
+    DELETE FROM public.proposal_service_rates WHERE proposal_id='${id}';
+    DELETE FROM public.proposal_service_terms WHERE proposal_id='${id}';
+    SET LOCAL session_replication_role = replica;
     DELETE FROM public.agreement_part_events WHERE proposal_id='${id}';
     SET LOCAL session_replication_role = origin;
     DELETE FROM public.proposals WHERE id='${id}' AND designer_id='${DESIGNER}' AND title='${TITLE}';
