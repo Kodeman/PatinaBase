@@ -9,6 +9,8 @@
 --   rows 1–37  deterministic refusals          40001 → PT409 (HTTP 409), message unchanged
 --   rows 38–44 post-lock invariants            40001 → XX000 (HTTP 500), message unchanged
 --   rows 45–46 transient races                 keep 40001, one-line comment naming the race
+--   rows 47–49 found by FIX8, not in the RC-7 inventory: 47–48 stale
+--              refusals → PT409, 49 post-lock invariant → XX000
 -- Row 35 (_place_product_in_project_v2_00438_impl) is not redefined here: its
 -- latest body on this branch (00873:242) no longer carries the raise; the
 -- in-progress check moved to place_product_in_project_v2, which raises PT409
@@ -21,6 +23,9 @@
 -- 45–46, one comment line was added). Signatures, SECURITY DEFINER,
 -- SET search_path, owner and grants are unchanged; CREATE OR REPLACE keeps
 -- owner and ACL. No GRANT/REVOKE, so the legacy-grants seed is unaffected.
+-- Rows 47–49 live in renamed impls (00435:432, 00462:2036 ALTER … RENAME):
+-- their bodies are the pre-rename CREATE OR REPLACE of the original name,
+-- re-emitted under the impl name; header and body otherwise verbatim.
 --
 -- Pre-flight: function → source file:line of each raise → inventory row → new code
 --   _respond_project_approval_checked             00810:674                        rows 1              → PT409
@@ -53,6 +58,8 @@
 --   delete_project_phase                          00398:963,974                    rows 39, 40         → XX000
 --   merge_studio_product                          00830:207                        rows 45             → 40001
 --   _spec_book_trade_chapter                      00767:341                        rows 46             → 40001
+--   _save_product_configuration_impl              00415:271,282                    rows 47, 48         → PT409  (found by FIX8, not in the RC-7 inventory)
+--   _continue_board_in_project_v1_impl            00407:265                        rows 49             → XX000  (found by FIX8, not in the RC-7 inventory)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 SET LOCAL lock_timeout = '5s';
@@ -5974,5 +5981,491 @@ BEGIN
   -- 40001 on purpose (K12): three insert/select passes lost to concurrent prunes; the retry starts fresh, and each further failure needs three more concurrent prunes.
   RAISE EXCEPTION 'spec book trade chapter % could not be filed', v_trade
     USING errcode = 'serialization_failure';
+END;
+$$;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- _save_product_configuration_impl — rows 47, 48 (found by FIX8, not in the RC-7 inventory);
+-- grafted from 00415_decision_selection_and_template_privacy.sql:81 (save_product_configuration, renamed to the impl)
+-- ───────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public._save_product_configuration_impl(p_input jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+DECLARE
+  v_product_id uuid;
+  v_old_id uuid;
+  v_old public.product_configurations;
+  v_product public.products;
+  v_project public.projects;
+  v_configuration public.product_configurations;
+  v_evaluation jsonb;
+  v_snapshot jsonb;
+  v_hash text;
+  v_selected_ids uuid[] := '{}'::uuid[];
+  v_group_entry record;
+  v_value_ref text;
+  v_value_id uuid;
+  v_components jsonb;
+  v_component_input jsonb;
+  v_configuration_key uuid;
+  v_version integer;
+  v_project_id uuid;
+  v_ffe_item_id uuid;
+  v_variant_id uuid;
+  v_studio_id uuid;
+  v_latest_id uuid;
+  v_custom_brief jsonb;
+  v_com_details jsonb;
+  v_com_value_id uuid;
+  v_custom_revision public.custom_commission_revisions;
+  v_previous_custom_revision public.custom_commission_revisions;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'authentication required' USING errcode = 'insufficient_privilege';
+  END IF;
+  IF p_input IS NULL OR jsonb_typeof(p_input) <> 'object' THEN
+    RAISE EXCEPTION 'configuration input must be an object' USING errcode = 'check_violation';
+  END IF;
+  v_product_id := NULLIF(p_input->>'productId', '')::uuid;
+  v_project_id := NULLIF(p_input->>'projectId', '')::uuid;
+  v_ffe_item_id := NULLIF(p_input->>'ffeItemId', '')::uuid;
+  v_old_id := NULLIF(p_input->>'configurationId', '')::uuid;
+  v_components := COALESCE(p_input->'components', '[]'::jsonb);
+
+  IF NOT public._can_read_configurable_product(v_product_id) THEN
+    RAISE EXCEPTION 'product not found or not accessible' USING errcode = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO STRICT v_product FROM public.products WHERE id = v_product_id;
+  v_custom_brief := p_input->'customBrief';
+  IF v_product.configuration_mode = 'custom' THEN
+    IF v_custom_brief IS NULL OR jsonb_typeof(v_custom_brief) <> 'object'
+       OR length(btrim(COALESCE(v_custom_brief->>'summary', ''))) = 0 THEN
+      RAISE EXCEPTION 'custom configuration requires a brief summary'
+        USING errcode = 'check_violation';
+    END IF;
+    IF COALESCE(v_custom_brief->>'fabricatorVendorId', '') = '' THEN
+      v_custom_brief := v_custom_brief - 'fabricatorVendorId';
+    END IF;
+  END IF;
+
+  IF jsonb_typeof(COALESCE(p_input->'selections', '{}'::jsonb)) <> 'object' THEN
+    RAISE EXCEPTION 'selections must be an object' USING errcode = 'check_violation';
+  END IF;
+  IF jsonb_typeof(v_components) <> 'array' THEN
+    RAISE EXCEPTION 'components must be an array' USING errcode = 'check_violation';
+  END IF;
+  IF v_product.configuration_mode IN ('standard', 'custom') AND (
+       NULLIF(p_input->>'variantId', '') IS NOT NULL
+       OR EXISTS (SELECT 1 FROM jsonb_each(COALESCE(p_input->'selections', '{}'::jsonb)))
+       OR jsonb_array_length(v_components) > 0
+     ) THEN
+    RAISE EXCEPTION '% mode cannot save variants, option selections, or components',
+      v_product.configuration_mode USING errcode = 'check_violation';
+  END IF;
+  IF v_product.configuration_mode = 'variant' AND jsonb_array_length(v_components) > 0 THEN
+    RAISE EXCEPTION 'variant mode cannot save modular components'
+      USING errcode = 'check_violation';
+  END IF;
+  IF v_product.configuration_mode = 'configured' AND NULLIF(p_input->>'variantId', '') IS NOT NULL THEN
+    RAISE EXCEPTION 'configured mode cannot save an exact variant'
+      USING errcode = 'check_violation';
+  END IF;
+  IF v_product.configuration_mode <> 'custom'
+     AND p_input ? 'customBrief' AND p_input->'customBrief' <> 'null'::jsonb THEN
+    RAISE EXCEPTION 'customBrief is only valid for custom products'
+      USING errcode = 'check_violation';
+  END IF;
+  FOR v_group_entry IN SELECT key, value FROM jsonb_each(COALESCE(p_input->'selections', '{}'::jsonb)) LOOP
+    IF jsonb_typeof(v_group_entry.value) <> 'array' THEN
+      RAISE EXCEPTION 'each selection value must be an array' USING errcode = 'check_violation';
+    END IF;
+    FOR v_value_ref IN SELECT jsonb_array_elements_text(v_group_entry.value) LOOP
+      v_value_id := NULL;
+      BEGIN
+        v_value_id := v_value_ref::uuid;
+      EXCEPTION WHEN invalid_text_representation THEN
+        SELECT ov.id INTO v_value_id
+        FROM public.product_option_values ov
+        JOIN public.product_option_groups og ON og.id = ov.option_group_id
+        WHERE og.product_id = v_product_id
+          AND (og.code = v_group_entry.key OR og.id::text = v_group_entry.key)
+          AND ov.code = v_value_ref;
+      END;
+      IF v_value_id IS NULL THEN
+        RAISE EXCEPTION 'unknown option selection %:%', v_group_entry.key, v_value_ref
+          USING errcode = 'foreign_key_violation';
+      END IF;
+      v_selected_ids := array_append(v_selected_ids, v_value_id);
+    END LOOP;
+  END LOOP;
+
+  -- COM/COL: the client-supplied fabric is part of what was specified, so it
+  -- is validated against the actual selections and hashed with the snapshot.
+  v_com_details := NULLIF(p_input->'comDetails', 'null'::jsonb);
+  IF v_com_details IS NOT NULL THEN
+    IF jsonb_typeof(v_com_details) <> 'object' THEN
+      RAISE EXCEPTION 'comDetails must be a JSON object'
+        USING errcode = 'invalid_parameter_value';
+    END IF;
+    IF v_product.configuration_mode = 'standard' THEN
+      RAISE EXCEPTION 'comDetails is only valid for variant, configured, or custom products'
+        USING errcode = 'invalid_parameter_value';
+    END IF;
+    IF NULLIF(v_com_details->>'optionValueId', '') IS NOT NULL THEN
+      BEGIN
+        v_com_value_id := (v_com_details->>'optionValueId')::uuid;
+      EXCEPTION WHEN invalid_text_representation THEN
+        v_com_value_id := NULL;
+      END;
+      IF v_com_value_id IS NULL OR NOT (v_com_value_id = ANY(v_selected_ids)) THEN
+        RAISE EXCEPTION 'comDetails.optionValueId must name one of the selected option values'
+          USING errcode = 'foreign_key_violation';
+      END IF;
+    END IF;
+  END IF;
+
+  v_evaluation := public.evaluate_product_configuration(
+    v_product_id,
+    NULLIF(p_input->>'variantId', '')::uuid,
+    v_selected_ids,
+    v_components
+  );
+  IF NOT COALESCE((v_evaluation->>'valid')::boolean, false) THEN
+    RAISE EXCEPTION 'invalid configuration: %', v_evaluation->'violations'
+      USING errcode = 'check_violation';
+  END IF;
+  v_snapshot := v_evaluation->'snapshot';
+  IF v_com_details IS NOT NULL THEN
+    v_snapshot := v_snapshot || jsonb_build_object('comDetails', v_com_details);
+    -- The row stores both; they must be the same snapshot. Readers that go
+    -- through the evaluation (quote envelopes, history) would otherwise see a
+    -- COM piece with no fabric and a hash that does not match what they read.
+    v_evaluation := jsonb_set(v_evaluation, '{snapshot}', v_snapshot);
+  END IF;
+  v_hash := public._configuration_snapshot_hash(v_snapshot);
+  v_variant_id := NULLIF(v_evaluation#>>'{matchedVariant,id}', '')::uuid;
+
+  IF v_project_id IS NOT NULL THEN
+    SELECT * INTO v_project FROM public.projects WHERE id = v_project_id FOR SHARE;
+    IF NOT FOUND OR NOT public.is_design_studio_comember(v_project.designer_id) THEN
+      RAISE EXCEPTION 'project not found or not accessible' USING errcode = 'insufficient_privilege';
+    END IF;
+    IF v_ffe_item_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM public.project_ffe_items WHERE id = v_ffe_item_id AND project_id = v_project_id
+    ) THEN
+      RAISE EXCEPTION 'FFE item does not belong to project' USING errcode = 'check_violation';
+    END IF;
+  ELSIF v_ffe_item_id IS NOT NULL THEN
+    RAISE EXCEPTION 'ffeItemId requires projectId' USING errcode = 'check_violation';
+  END IF;
+
+  IF v_old_id IS NOT NULL THEN
+    IF NOT public._can_access_product_configuration(v_old_id) THEN
+      RAISE EXCEPTION 'configuration not found or not accessible' USING errcode = 'insufficient_privilege';
+    END IF;
+    SELECT * INTO STRICT v_old FROM public.product_configurations WHERE id = v_old_id FOR UPDATE;
+    IF v_old.product_id <> v_product_id THEN
+      RAISE EXCEPTION 'configuration belongs to another product' USING errcode = 'check_violation';
+    END IF;
+    IF v_old.project_id IS DISTINCT FROM v_project_id
+       OR v_old.ffe_item_id IS DISTINCT FROM v_ffe_item_id THEN
+      RAISE EXCEPTION 'configuration scope cannot change while versioning; instantiate a reusable template for another project'
+        USING errcode = 'check_violation';
+    END IF;
+    IF p_input ? 'expectedVersion'
+       AND (p_input->>'expectedVersion')::integer <> v_old.version THEN
+      RAISE EXCEPTION 'configuration changed in another session'
+        USING errcode = 'PT409';
+    END IF;
+    v_configuration_key := v_old.configuration_key;
+    PERFORM pg_advisory_xact_lock(hashtextextended(v_configuration_key::text, 0));
+    SELECT c.id, c.version + 1 INTO v_latest_id, v_version
+    FROM public.product_configurations c
+    WHERE c.configuration_key = v_configuration_key
+    ORDER BY c.version DESC LIMIT 1;
+    IF v_latest_id IS DISTINCT FROM v_old.id
+       OR (p_input ? 'expectedVersion' AND (p_input->>'expectedVersion')::integer <> v_version - 1) THEN
+      RAISE EXCEPTION 'configuration is not the latest version; refresh before saving'
+        USING errcode = 'PT409';
+    END IF;
+    IF v_old.status = 'saved' THEN
+      UPDATE public.product_configurations SET status = 'superseded', updated_at = now() WHERE id = v_old.id;
+    END IF;
+  ELSE
+    v_configuration_key := extensions.gen_random_uuid();
+    v_version := 1;
+  END IF;
+
+  v_studio_id := CASE
+    WHEN v_project_id IS NOT NULL THEN
+      COALESCE(v_project.studio_id, public._primary_studio_for(v_project.designer_id))
+    WHEN v_product.layer = 'studio' THEN v_product.studio_id
+    WHEN v_product.layer = 'catalog' THEN public._primary_studio_for(auth.uid())
+    ELSE NULL
+  END;
+  INSERT INTO public.product_configurations (
+    configuration_key, product_id, product_variant_id, previous_configuration_id,
+    project_id, ffe_item_id, owner_user_id, studio_id, version, schema_revision,
+    status, name, notes, custom_brief, com_details, normalized_selection, component_quantities,
+    evaluation, snapshot, snapshot_hash, is_complete, is_valid,
+    retail_price_cents, trade_price_cents, lead_time_weeks, resolved_dimensions
+  ) VALUES (
+    v_configuration_key, v_product_id, v_variant_id, v_old_id,
+    v_project_id, v_ffe_item_id, auth.uid(), v_studio_id, v_version,
+    (v_evaluation->>'schemaRevision')::integer, 'saved',
+    NULLIF(btrim(p_input->>'name'), ''), p_input->>'notes', v_custom_brief, v_com_details,
+    v_evaluation->'normalizedSelection', v_evaluation->'componentQuantities',
+    v_evaluation, v_snapshot, v_hash,
+    (v_evaluation->>'complete')::boolean, (v_evaluation->>'valid')::boolean,
+    NULLIF(v_evaluation->>'retailPriceCents', '')::integer,
+    NULLIF(v_evaluation->>'tradePriceCents', '')::integer,
+    NULLIF(v_evaluation->>'leadTimeWeeks', '')::integer,
+    NULLIF(v_evaluation->'dimensions', 'null'::jsonb)
+  ) RETURNING * INTO v_configuration;
+
+  INSERT INTO public.product_configuration_selections (
+    configuration_id, option_group_id, option_value_id, selection_snapshot
+  )
+  SELECT v_configuration.id, og.id, ov.id, jsonb_build_object(
+    'optionGroupId', og.id, 'optionValueId', ov.id,
+    'groupCode', og.code, 'valueCode', ov.code,
+    'groupName', og.name, 'valueLabel', ov.label,
+    'retailPriceDeltaCents', ov.retail_price_delta_cents,
+    'tradePriceDeltaCents', ov.trade_price_delta_cents,
+    'leadTimeDeltaWeeks', ov.lead_time_delta_weeks
+  )
+  FROM public.product_option_values ov
+  JOIN public.product_option_groups og ON og.id = ov.option_group_id
+  WHERE ov.id = ANY(v_selected_ids) AND og.product_id = v_product_id;
+
+  FOR v_component_input IN SELECT value FROM jsonb_array_elements(v_components) LOOP
+    INSERT INTO public.product_configuration_components (
+      configuration_id, component_id, quantity, handedness, component_snapshot
+    )
+    SELECT v_configuration.id, c.id, (v_component_input->>'quantity')::integer,
+      NULLIF(v_component_input->>'handedness', ''),
+      jsonb_build_object(
+        'componentId', c.id, 'code', c.code, 'name', c.name,
+        'quantity', (v_component_input->>'quantity')::integer,
+        'handedness', NULLIF(v_component_input->>'handedness', ''),
+        'retailPriceCents', c.retail_price_cents,
+        'tradePriceCents', c.trade_price_cents,
+        'leadTimeWeeks', c.lead_time_weeks,
+        'dimensions', c.dimensions
+      )
+    FROM public.product_components c
+    WHERE c.id = (v_component_input->>'componentId')::uuid AND c.product_id = v_product_id;
+  END LOOP;
+
+  IF v_product.configuration_mode = 'custom' THEN
+    SELECT r.* INTO v_previous_custom_revision
+    FROM public.custom_commission_revisions r
+    JOIN public.product_configurations lineage ON lineage.id = r.configuration_id
+    WHERE lineage.configuration_key = v_configuration.configuration_key
+    ORDER BY r.revision_number DESC LIMIT 1 FOR UPDATE OF r;
+    IF FOUND AND v_previous_custom_revision.status IN ('submitted', 'quoted', 'client_review') THEN
+      RAISE EXCEPTION 'resolve the active commission revision before saving another version'
+        USING errcode = 'object_not_in_prerequisite_state';
+    END IF;
+    IF FOUND AND v_previous_custom_revision.status = 'draft' THEN
+      UPDATE public.custom_commission_revisions
+      SET status = 'superseded', updated_at = now()
+      WHERE id = v_previous_custom_revision.id;
+    END IF;
+    INSERT INTO public.custom_commission_revisions (
+      configuration_id, revision_number, previous_revision_id, status,
+      brief, drawings, provenance, created_by
+    ) VALUES (
+      v_configuration.id, COALESCE(v_previous_custom_revision.revision_number, 0) + 1,
+      v_previous_custom_revision.id, 'draft', v_custom_brief,
+      COALESCE(v_custom_brief->'drawings', '[]'::jsonb),
+      jsonb_build_object('source', 'configuration-save'), auth.uid()
+    ) RETURNING * INTO v_custom_revision;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'configuration', public._product_configuration_json(v_configuration.id),
+    'forkedFromConfigurationId', v_old_id,
+    'customRevision', CASE WHEN v_custom_revision.id IS NULL THEN NULL
+      ELSE public._custom_commission_revision_json(v_custom_revision.id) END
+  );
+END;
+$$;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- _continue_board_in_project_v1_impl — rows 49 (found by FIX8, not in the RC-7 inventory);
+-- grafted from 00407_project_board_sections_and_lineage.sql:146 (continue_board_in_project, renamed to the impl)
+-- ───────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public._continue_board_in_project_v1_impl(
+  p_project_board_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_pb public.project_boards%ROWTYPE;
+  v_designer_id uuid;
+  v_sections jsonb;
+  v_new_id uuid;
+BEGIN
+  -- RLS-filtered read: the caller must participate in the project.
+  SELECT * INTO v_pb
+  FROM public.project_boards
+  WHERE id = p_project_board_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'continue_board_in_project: board % not found or access denied',
+      p_project_board_id;
+  END IF;
+
+  -- Exact active design-studio peers share authoring authority (00399/00401).
+  SELECT project.designer_id INTO v_designer_id
+  FROM public.projects AS project
+  WHERE project.id = v_pb.project_id;
+
+  IF NOT public.is_design_studio_comember(v_designer_id) THEN
+    RAISE EXCEPTION
+      'continue_board_in_project: only the project design studio may continue a board'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- Fast idempotent retry path.
+  SELECT board.id INTO v_new_id
+  FROM public.proposal_boards AS board
+  WHERE board.source_project_board_id = p_project_board_id
+  LIMIT 1;
+
+  IF v_new_id IS NOT NULL THEN
+    RETURN v_new_id;
+  END IF;
+
+  -- 00407 snapshots named sections directly. Retain 00273's fallbacks for a
+  -- legacy/source-deleted row that could not be backfilled.
+  v_sections := v_pb.sections;
+
+  IF v_sections IS NULL
+     OR jsonb_typeof(v_sections) <> 'array'
+     OR jsonb_array_length(v_sections) = 0 THEN
+    SELECT board.sections INTO v_sections
+    FROM public.proposal_boards AS board
+    WHERE board.id = v_pb.source_board_id;
+  END IF;
+
+  IF v_sections IS NULL
+     OR jsonb_typeof(v_sections) <> 'array'
+     OR jsonb_array_length(v_sections) = 0 THEN
+    SELECT COALESCE(
+      jsonb_agg(
+        jsonb_build_object('id', section_id, 'name', 'Section')
+        ORDER BY section_id
+      ),
+      '[]'::jsonb
+    )
+    INTO v_sections
+    FROM (
+      SELECT DISTINCT item->'data'->>'section_id' AS section_id
+      FROM jsonb_array_elements(COALESCE(v_pb.items, '[]'::jsonb)) AS item
+      WHERE item->'data'->>'section_id' IS NOT NULL
+        AND btrim(item->'data'->>'section_id') <> ''
+    ) AS recovered;
+  END IF;
+
+  INSERT INTO public.proposal_boards (
+    proposal_id,
+    project_id,
+    source_project_board_id,
+    name,
+    scope_room_id,
+    cover_image_url,
+    canvas_width,
+    canvas_height,
+    background_color,
+    sort_order,
+    sections,
+    status
+  )
+  VALUES (
+    NULL,
+    v_pb.project_id,
+    p_project_board_id,
+    v_pb.name,
+    NULL,
+    v_pb.cover_image_url,
+    v_pb.canvas_width,
+    v_pb.canvas_height,
+    v_pb.background_color,
+    v_pb.sort_order,
+    COALESCE(v_sections, '[]'::jsonb),
+    'active'
+  )
+  ON CONFLICT (source_project_board_id)
+    WHERE source_project_board_id IS NOT NULL
+  DO NOTHING
+  RETURNING id INTO v_new_id;
+
+  -- A concurrent continuation won. Read and return the canonical row without
+  -- duplicating its items.
+  IF v_new_id IS NULL THEN
+    SELECT board.id INTO v_new_id
+    FROM public.proposal_boards AS board
+    WHERE board.source_project_board_id = p_project_board_id;
+
+    IF v_new_id IS NULL THEN
+      RAISE EXCEPTION 'continue_board_in_project: idempotent insert lost lineage'
+        USING ERRCODE = 'XX000';
+    END IF;
+
+    RETURN v_new_id;
+  END IF;
+
+  INSERT INTO public.proposal_board_items (
+    board_id,
+    type,
+    x,
+    y,
+    width,
+    height,
+    z_index,
+    rotation,
+    locked,
+    product_id,
+    capture_id,
+    palette_id,
+    image_url,
+    content,
+    data
+  )
+  SELECT
+    v_new_id,
+    COALESCE(item->>'type', 'image'),
+    COALESCE((item->>'x')::numeric, 0),
+    COALESCE((item->>'y')::numeric, 0),
+    COALESCE((item->>'width')::numeric, 240),
+    CASE
+      WHEN item->>'height' IS NULL THEN NULL
+      ELSE (item->>'height')::numeric
+    END,
+    COALESCE((item->>'z_index')::integer, 0),
+    COALESCE((item->>'rotation')::numeric, 0),
+    false,
+    CASE
+      WHEN item->>'product_id' IS NULL OR btrim(item->>'product_id') = ''
+        THEN NULL
+      ELSE (item->>'product_id')::uuid
+    END,
+    NULL,
+    NULL,
+    item->>'image_url',
+    item->>'content',
+    COALESCE(item->'data', '{}'::jsonb)
+  FROM jsonb_array_elements(COALESCE(v_pb.items, '[]'::jsonb)) AS item;
+
+  RETURN v_new_id;
 END;
 $$;

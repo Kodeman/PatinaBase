@@ -5,6 +5,8 @@
 -- rows 1-37 to PT409 (HTTP 409) and the post-lock invariants, rows 38-44, to
 -- XX000. Rows 45-46 are transient and keep 40001 with a "40001 on purpose"
 -- comment. Row 35's raise left _place_product_in_project_v2_00438_impl in 00873.
+-- Rows 47-49 were found by FIX8 outside the RC-7 inventory, in two renamed
+-- impls: 47-48 (stale configuration saves) move to PT409, 49 to XX000.
 -- Part 1 reads every redefined head definition. Part 2 drives one refusal
 -- through each Tier 1 homeowner-facing function as its real actor. Rolled back.
 \set ON_ERROR_STOP on
@@ -57,7 +59,9 @@ DECLARE
     ["public.spec_book_bump_spec_version()", 1, 0, 0],
     ["public.delete_project_phase(uuid,uuid)", 0, 2, 0],
     ["public.merge_studio_product(uuid,uuid)", 0, 0, 1],
-    ["public._spec_book_trade_chapter(uuid,text)", 0, 0, 1]
+    ["public._spec_book_trade_chapter(uuid,text)", 0, 0, 1],
+    ["public._save_product_configuration_impl(jsonb)", 2, 0, 0],
+    ["public._continue_board_in_project_v1_impl(uuid)", 0, 1, 0]
   ]';
   r jsonb;
   defs text;
@@ -93,11 +97,12 @@ BEGIN
     END IF;
     passed := passed + 1;
   END LOOP;
-  -- Rows 1-37 less row 35 are 36 PT409 raises; rows 38-44 are 7 XX000 raises.
-  IF passed <> 31 OR pt409 <> 36 OR xx000 <> 7 THEN
-    RAISE EXCEPTION 'ASSERTION FAILED: % functions, % PT409, % XX000 (expected 31, 36, 7)', passed, pt409, xx000;
+  -- Rows 1-37 less row 35, plus 47-48, are 38 PT409 raises; rows 38-44 and 49
+  -- are 8 XX000 raises.
+  IF passed <> 33 OR pt409 <> 38 OR xx000 <> 8 THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: % functions, % PT409, % XX000 (expected 33, 38, 8)', passed, pt409, xx000;
   END IF;
-  RAISE NOTICE 'PASS: 31 functions; 36 PT409, 7 XX000, 2 commented 40001';
+  RAISE NOTICE 'PASS: 33 functions; 38 PT409, 8 XX000, 2 commented 40001';
 END
 $catalog$;
 
