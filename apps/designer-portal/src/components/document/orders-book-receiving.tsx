@@ -32,6 +32,7 @@ import {
 } from './line-unfold/inspection-photo-strip';
 import { ClaimClockLine } from './line-unfold/claim-clock';
 import { ReceivingExceptions, TrackClaimAct } from './buying/exception-overlay';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 type AnyRecord = any;
 
@@ -487,7 +488,7 @@ export function ReceivingBookPage({
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         const control = pageRef.current?.querySelector<HTMLElement>(CLAIM_ACT);
-        control?.scrollIntoView?.({ block: 'center' });
+        scrollIntoRevealed(control, { block: 'center' });
         control?.focus({ preventScroll: true });
       }),
     );

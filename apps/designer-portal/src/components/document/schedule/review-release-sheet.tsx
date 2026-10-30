@@ -57,6 +57,7 @@ import { DocSheet } from '../overlays/doc-sheet';
 import { PurchasingAuthorizationPreviewSheet } from '../overlays/purchasing-authorization-preview-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { requestRegionUnfold } from '@/lib/document/document-index';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 const CHIPS = [0, 25, 50, 100] as const;
 const LEAD_TIME_TBC = 'Lead time to be confirmed';
@@ -304,7 +305,7 @@ function ReviewReleaseSheetContent({
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
       const heading = document.getElementById('money-region-heading');
       heading?.focus({ preventScroll: true });
-      heading?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      scrollIntoRevealed(heading, { block: 'start', behavior: 'smooth' });
     }));
   };
 

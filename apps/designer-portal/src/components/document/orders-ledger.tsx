@@ -60,6 +60,7 @@ import {
   studioOverlayScroll,
   type StudioOverlayState,
 } from '@/lib/document/paper/paper-origin';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
 
@@ -332,7 +333,7 @@ export function OrdersLedger({
           [index]?.querySelector<HTMLElement>(
             '[data-action-key="open-purchase-order-preview"]',
           );
-        control?.scrollIntoView?.({ block: 'center' });
+        scrollIntoRevealed(control, { block: 'center' });
         control?.focus({ preventScroll: true });
       }),
     );

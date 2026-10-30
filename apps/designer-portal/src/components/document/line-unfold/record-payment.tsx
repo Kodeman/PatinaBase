@@ -40,6 +40,7 @@ import { LAND_RECORD_PAYMENT_EVENT, recordPaymentPending } from '@/lib/document/
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
 import { FIELD_CLS, LABEL_CLS } from './cell';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 /** One `po_payments` row — the full row, or the thinner line-embed shape. */
 export interface MoneyOutPayment {
@@ -251,7 +252,7 @@ export function RecordPaymentForm({
             ? focused
             : null;
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        act.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+        scrollIntoRevealed(act, { block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
         act.focus({ preventScroll: true });
       });
     });

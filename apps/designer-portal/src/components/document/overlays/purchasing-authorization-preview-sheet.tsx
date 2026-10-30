@@ -8,6 +8,7 @@ import { useFurnishingsAuthorizationPreview, useSendFurnishingsAuthorization, us
 import { requestRegionUnfold } from '@/lib/document/document-index';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from './doc-sheet';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 type Props = {
   projectId: string;
@@ -51,7 +52,7 @@ export function SavedAuthorizationBudgetRecovery({ projectId, onLeave, disabled 
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
       const heading = document.getElementById('money-region-heading');
       heading?.focus({ preventScroll: true });
-      heading?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      scrollIntoRevealed(heading, { block: 'start', behavior: 'smooth' });
     }));
   };
   return <section className="mt-4 type-body-small" aria-label="Working budget recovery">

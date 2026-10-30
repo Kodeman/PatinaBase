@@ -64,6 +64,7 @@ import {
   approvalsQuietStatus,
   quietStateSentence,
 } from '@/lib/document/lens-quiet-status';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 const APPROVALS_BODY_ID = 'project-approvals-body';
 
@@ -196,7 +197,7 @@ function focusApprovalRow(decisionId: string) {
   const reduceMotion =
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  target.scrollIntoView?.({
+  scrollIntoRevealed(target, {
     behavior: reduceMotion ? 'auto' : 'smooth',
     block: 'center',
   });
@@ -278,7 +279,7 @@ export function ProjectApprovalDocument({
     const reduceMotion =
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    target.scrollIntoView?.({
+    scrollIntoRevealed(target, {
       behavior: reduceMotion ? 'auto' : 'smooth',
       block: 'center',
     });

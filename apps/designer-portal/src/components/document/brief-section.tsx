@@ -19,6 +19,7 @@ import { TriageBar } from './triage-bar';
 import { BriefScanStrip } from './brief-scan-strip';
 import { SectionLoadingLine } from './section-loading-line';
 import { DocumentAction, DocumentActionRow } from './document-action';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 /** One fact (US-28 S9): a `dt`/`dd` pair, never a boxed tile. */
 function Stat({ label, value }: { label: string; value: string }) {
@@ -82,7 +83,7 @@ export function BriefSection({
       event.preventDefault();
       setReplying(true);
       requestAnimationFrame(() => {
-        draftRef.current?.scrollIntoView?.({ block: 'center' });
+        scrollIntoRevealed(draftRef.current, { block: 'center' });
         replyRef.current?.focus({ preventScroll: true });
       });
     };

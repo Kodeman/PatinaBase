@@ -116,6 +116,7 @@ import {
 } from '@/lib/mood-board/navigation';
 import { startBoardPending } from '@/lib/document/shelves';
 import { DECK_IMPORT_FLAG, DECK_OPEN_EVENT } from '@/hooks/use-board-deck-import-layout';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 /** One selectable line. `match` is the lowercased filter text (label + aliases
  *  or keywords); registry surfaces additionally carry their icon + wayfinding
@@ -1287,7 +1288,7 @@ export function CommandBar() {
           requestAnimationFrame(() =>
             requestAnimationFrame(() => {
               const heading = document.getElementById(headingId);
-              heading?.scrollIntoView?.({ block: 'start' });
+              scrollIntoRevealed(heading, { block: 'start' });
               heading?.focus({ preventScroll: true });
             }),
           );
