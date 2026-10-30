@@ -31,7 +31,8 @@ import { applyCover, expectCoverRendered } from "./rc7-e8-cover";
  * entry type (WebKit); LCP ≤ 2,500 ms on chromium; request capture agrees
  * with Resource Timing; the studio renders the photographic cover (applied by
  * this spec's beforeAll, not left to spec order). Cold-load CLS is recorded
- * and its ≤ 0.1 target sits in the RC7-E8-4 fixme. Flung-scroll CLS and
+ * and its ≤ 0.1 target is the RC7-E8-4 (first visit, residual) and RC7-E8-5
+ * (returning reader) fixmes. Flung-scroll CLS and
  * WebKit LCP are recorded, not asserted.
  */
 
@@ -263,15 +264,24 @@ const ROUTE = { studio: "/desk", job: `/doc/${JOB}` } as const;
  * Warm compile, then a cold navigation with the init-script observers, wait
  * for arrival and a settled network. Returns the load readings.
  */
-async function coldLoad(page: Page, surface: "studio" | "job") {
+async function coldLoad(
+  page: Page,
+  surface: "studio" | "job",
+  { warm = true }: { warm?: boolean } = {},
+) {
   const route = ROUTE[surface];
   const ready =
     surface === "studio"
       ? page.locator('[data-studio="round8"][data-arrival-ready]')
       : page.locator("[data-document-shell][data-arrival-ready]");
   // Warm the dev compile so the measured navigation is not a first compile.
-  await page.goto(route, { waitUntil: "domcontentloaded", timeout: 120_000 });
-  await expect(ready).toHaveCount(1, { timeout: 60_000 });
+  // The warm visit also makes the measured load a returning reader's (the
+  // job enters the recent-documents list, so page.tsx's landing scroll runs).
+  // `warm: false` measures a first visit in this fresh context instead.
+  if (warm) {
+    await page.goto(route, { waitUntil: "domcontentloaded", timeout: 120_000 });
+    await expect(ready).toHaveCount(1, { timeout: 60_000 });
+  }
   await page.goto("about:blank");
   await page.addInitScript(VITALS);
   const capture = captureRequests(page.context());
@@ -450,17 +460,41 @@ test.describe("RC-7 E8 X07 performance", () => {
     });
   }
 
-  // DEFECT RC7-E8-4: job paper cold-load CLS 1.16–1.17 (chromium) against the
-  // proposed X07 ≤ 0.1; chapter bodies resolve into the skeleton unveiled.
-  // FIX5 owns the fix; flip this fixme when it merges.
-  test.fixme("RC7-E8-4: job cold-load CLS ≤ 0.1", async ({
+  // DEFECT RC7-E8-4 (residual after FIX5 74a324b26): a first visit's job cold-load
+  // CLS fell from 1.16–1.17 to 0.04–0.11, so it still crosses 0.1 on some runs.
+  // The round-8 cover is never held, and use-chapter-reveal.ts revealStep gates
+  // the chapters below it only on the cover's loading register, so the cover's
+  // late growth (77–234 px at 1.7–2.3 s) pushes the shown brief and kickoff
+  // band down. Kept out of the gate.
+  test.fixme("RC7-E8-4: job cold-load CLS ≤ 0.1, first visit", async ({
+    authenticatedPage: page,
+  }, info) => {
+    const { load } = await coldLoad(page, "job", { warm: false });
+    reading(`${info.project.name} job`, {
+      firstVisitLoadCls: load.loadClsBeforeScroll,
+      firstVisitLcpMs: load.lcpMs,
+    });
+    test.skip(!load.supported.includes("layout-shift"), NO_LAYOUT_SHIFT);
+    expect(
+      load.loadClsRaw!,
+      `first-visit cold-load CLS (raw); largest ${JSON.stringify(load.loadShiftsLargest)}`,
+    ).toBeLessThanOrEqual(0.1);
+  });
+
+  // DEFECT RC7-E8-5: a returning reader's cold load of the job paper shifts
+  // 1.40–1.47 (chromium). page.tsx:1744 (the returning-reader landing, run
+  // from afterArrival) calls scrollIntoRevealed on the active section, which
+  // marks every chapter above it data-paper-shown (use-chapter-reveal.ts:59–63)
+  // at ~1.1 s, before their bodies resolve; the bodies then resolve visibly.
+  // Kept out of the gate.
+  test.fixme("RC7-E8-5: job cold-load CLS ≤ 0.1, returning reader", async ({
     authenticatedPage: page,
   }) => {
     const { load } = await coldLoad(page, "job");
     test.skip(!load.supported.includes("layout-shift"), NO_LAYOUT_SHIFT);
     expect(
       load.loadClsRaw!,
-      `cold-load CLS (raw); largest ${JSON.stringify(load.loadShiftsLargest)}`,
+      `returning-reader cold-load CLS (raw); largest ${JSON.stringify(load.loadShiftsLargest)}`,
     ).toBeLessThanOrEqual(0.1);
   });
 });

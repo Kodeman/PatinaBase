@@ -15,7 +15,7 @@ import { psqlScalar } from "../helpers/psql";
  *
  * Asserted on every axe surface: 0 critical violations and 0 serious
  * violations other than color-contrast. The color-contrast serious count
- * (== 0) is the RC7-E8-2 fixme. Every focused control shows a focus indicator
+ * (== 0) is the RC7-E8-2 fixme (one residual site after FIX4). Every focused control shows a focus indicator
  * (an outline or box-shadow while :focus-visible) and is not entirely obscured
  * (WCAG 2.4.11); a partly covered control is recorded as observation O-1
  * (2.4.12, AAA), not asserted.
@@ -97,7 +97,7 @@ async function runAxe(page: Page, surface: string, include?: string) {
   return summary;
 }
 
-/** The gate: 0 critical, and 0 serious other than color-contrast (that one is RC7-E8-2). */
+/** The gate: 0 critical, and 0 serious other than color-contrast (that one is the RC7-E8-2 fixme). */
 async function axe(page: Page, surface: string, include?: string) {
   const { counts, violations } = await runAxe(page, surface, include);
   expect(
@@ -552,16 +552,20 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     test.info().annotations.push({ type: "cancel-focus", description: landed });
   });
 
-  // DEFECT RC7-E8-1: Cancel on the resolve-condition form drops keyboard focus to <body>
-  // (studio-service-section.tsx OpenCondition: onDone unmounts the focused form and
-  // re-mounts "Resolve this condition" without restoring focus). Kept out of the gate.
-  test.fixme('RC7-E8-1: Cancel returns focus to "Resolve this condition"', async ({
+  // RC7-E8-1 (fixed by FIX4 5386a159e): Cancel on the resolve-condition form used to
+  // drop keyboard focus to <body>; it now returns focus to its opener.
+  test('RC7-E8-1: Cancel returns focus to "Resolve this condition"', async ({
     page,
   }) => {
     const job = psqlScalar(
       `SELECT id FROM public.projects WHERE name='E7 household job' AND designer_id='e7e70000-0000-4000-8000-000000000001';`,
     );
     await signInAs(page, E7_OWNER);
+    // As the acceptance test above: the studio settles before the job opens
+    // (on WebKit a navigation cut into the studio's first reads left the job
+    // read failed, "This document could not be loaded" — observation O-4).
+    await arrivedStudio(page);
+    await page.goto("about:blank");
     await page.goto(`/doc/${job}`, {
       waitUntil: "domcontentloaded",
       timeout: 120_000,
@@ -571,21 +575,22 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     const resolveButton = closeout.getByRole("button", {
       name: "Resolve this condition",
     });
-    await tabTo(page, resolveButton, "fixme → Resolve this condition");
+    await tabTo(page, resolveButton, "E8-1 → Resolve this condition");
     await page.keyboard.press("Enter");
     const form = closeout.getByRole("form", { name: /^Resolve: / });
     await tabTo(
       page,
       form.getByRole("button", { name: "Cancel" }),
-      "fixme → Cancel",
+      "E8-1 → Cancel",
     );
     await page.keyboard.press("Enter");
     await expect(form).toHaveCount(0);
     await expect(resolveButton).toBeFocused();
   });
-  // DEFECT RC7-E8-2: text contrast below 4.5:1 on paper surfaces (aged-oak and
-  // sage on paper, terracotta-ink on the care band). FIX4 owns the fix; flip
-  // this fixme when it merges.
+  // DEFECT RC7-E8-2 (residual after FIX4 5386a159e): FIX4 cleared every site but
+  // one. The schedule glance strip's month ticks keep aged-oak #8b7355 on
+  // #faf7f2 = 4.19:1 at 11px (schedule-glance-strip.tsx:68), on the E7 job
+  // paper. Kept out of the gate.
   test.fixme("RC7-E8-2: axe color-contrast serious == 0 on every surface", async ({
     page,
   }) => {
