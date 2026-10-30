@@ -1,5 +1,12 @@
 # US-52 Room Proof 08: handoff off Sidequest (29 October 2026)
 
+## RC-7 status (29 October 2026)
+
+- **Evidence wave (K8) done.** Synthesis, ratings, defects and the questions for Kody: [`evidence/rc/rc7-synthesis.md`](evidence/rc/rc7-synthesis.md).
+- **Verdict unchanged:** ship inactive once Kody asks; C4/C6 activation still blocked.
+- **Code:** RC-7 tip `74a324b26` on `r8-evidence`, not yet merged into `redesign/designer-portal-round8` (still `0088093b7`). Migrations now run to `00902`; none is on Strata (head `00866`).
+- **Pending:** the E8H final run (X04–X07) and the final E2 run. The synthesis marks both `<<PENDING>>`.
+
 Kody retired Sidequest as this program's engineering control plane on 29 October 2026 (decision K1-R in [DECISIONS.md](DECISIONS.md)). This file holds everything that lived only on the Sidequest board, so the program can continue with ordinary subagents, worktrees and orchestrator-run merges.
 
 ## Where the program stands (updated 29 October 2026, after RC-6)
