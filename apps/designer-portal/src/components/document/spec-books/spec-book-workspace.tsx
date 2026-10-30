@@ -16,6 +16,7 @@ import {
 import {
   useCreateSpecBookShare,
   usePrepareSpecBookIssue,
+  ProjectFfeSpecConflictError,
   useProjectFfeReadiness,
   useProjectV2,
   useRenderSpecBookArtifact,
@@ -39,6 +40,7 @@ import { specBookEvents } from "@/lib/analytics/spec-book-events";
 import { resolveClientPortalOrigin } from "@/lib/client-portal-url";
 import { ConfigurationSnapshotCard } from "@/components/document/configuration-snapshot-card";
 import { DimensionFields } from "@/components/document/dimension-fields";
+import { conflictText } from "@/components/document/spec-conflict-text";
 import { extractConfigurationSnapshotEnvelope } from "@/components/document/rooms/piece/custom-commission-model";
 import {
   audienceAllows,
@@ -51,6 +53,29 @@ import {
   type ResolvedSpecValue,
   type SpecField,
 } from "@/lib/spec-books/model";
+
+const SPEC_FIELD_LABELS = {
+  sku: "SKU", finish: "Finish", material: "Material", color_fabric: "Color / fabric",
+  exact_location: "Exact location", client_notes: "Client note", trade_notes: "Vendor note",
+  install_notes: "Install note", care_notes: "Care", warranty_notes: "Warranty",
+} as const;
+
+function peerConflictText(
+  before: ProjectFfeSpec,
+  peer: ProjectFfeSpec,
+  draft: Record<string, string>,
+  dimensionsEdited: boolean,
+): string | null {
+  const base = editableSpecSeed(before);
+  const theirs = editableSpecSeed(peer);
+  const changed: Array<readonly [string, Partial<ProjectFfeSpec>]> = (Object.entries(SPEC_FIELD_LABELS) as Array<[keyof typeof SPEC_FIELD_LABELS, string]>)
+    .filter(([key]) => draft[key] !== base[key] && theirs[key] !== base[key])
+    .map(([key, label]) => [label, { [key]: peer[key] }] as const);
+  if (dimensionsEdited && JSON.stringify(before.selected_dimensions) !== JSON.stringify(peer.selected_dimensions)) {
+    changed.push(["Dimensions", { selected_dimensions: peer.selected_dimensions }]);
+  }
+  return changed.length > 0 ? conflictText(changed, peer) : null;
+}
 
 type ServerIssueWarning = {
   id: string;
@@ -477,6 +502,7 @@ export function SelectionEditor({
   readiness = "checking",
   missingFields = [],
   onSaved,
+  onConflict,
   onRoomAssigned,
   heading,
   focusField,
@@ -487,6 +513,7 @@ export function SelectionEditor({
   readiness?: DerivedReadiness;
   missingFields?: readonly string[];
   onSaved?: () => void;
+  onConflict?: () => Promise<ProjectFfeSpec | null | undefined> | void;
   onRoomAssigned?: () => void;
   /** The fold's eyebrow lead: code · chapter. */
   heading?: string;
@@ -518,29 +545,68 @@ export function SelectionEditor({
   const [naField, setNaField] = useState<SpecField>("finish");
   const [naReason, setNaReason] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [conflictFeedback, setConflictFeedback] = useState(false);
+  const [peerSpec, setPeerSpec] = useState<ProjectFfeSpec | null>(null);
+  const baseRef = useRef<{ itemId: string; spec: ProjectFfeSpec | null }>({ itemId: item.id, spec: item.spec });
+  const initialized = useRef(false);
+  const awaitingPeer = useRef<{ field: SpecField | "save" } | null>(null);
+  const spec = peerSpec && peerSpec.id === item.spec?.id && peerSpec.row_version >= (item.spec?.row_version ?? 0)
+    ? peerSpec : item.spec;
 
   useEffect(() => {
-    setDraft(item.spec ? editableSpecSeed(item.spec) : {});
-    const raw: unknown = item.spec?.selected_dimensions ?? null;
-    if (raw == null) {
-      setDimensionsValue(null);
-      setRawDimensionsMode(false);
-      setRawDimensionsText("");
-    } else if (isDimensionsObject(raw)) {
-      setDimensionsValue(raw);
-      setRawDimensionsMode(false);
-      setRawDimensionsText(JSON.stringify(raw, null, 2));
-    } else {
-      // Legacy non-object value on file — tolerate it via the raw JSON
-      // escape hatch rather than coercing it into a shape it never had.
-      setDimensionsValue(null);
-      setRawDimensionsMode(true);
-      setRawDimensionsText(JSON.stringify(raw, null, 2));
+    const prior = baseRef.current;
+    if (!initialized.current || prior.itemId !== item.id || prior.spec?.id !== spec?.id) {
+      initialized.current = true;
+      baseRef.current = { itemId: item.id, spec: item.spec };
+      awaitingPeer.current = null;
+      setPeerSpec(null);
+      setDraft(item.spec ? editableSpecSeed(item.spec) : {});
+      const raw: unknown = item.spec?.selected_dimensions ?? null;
+      setDimensionsValue(isDimensionsObject(raw) ? raw : null);
+      setRawDimensionsMode(raw != null && !isDimensionsObject(raw));
+      setRawDimensionsText(raw == null ? "" : JSON.stringify(raw, null, 2));
+      setFeedback(null);
+      setConflictFeedback(false);
+      return;
     }
-    setFeedback(null);
-    // Keyed on the line and its spec, not the row: a room change refetches
-    // the row and must not wipe a draft the designer has not saved.
-  }, [item.id, item.spec]);
+    const previous = prior.spec;
+    if (!previous || !spec || spec.row_version <= previous.row_version) return;
+    const oldSeed = editableSpecSeed(previous);
+    const nextSeed = editableSpecSeed(spec);
+    const dimensionsEdited = rawDimensionsMode
+      ? rawDimensionsText !== (previous.selected_dimensions == null ? "" : JSON.stringify(previous.selected_dimensions, null, 2))
+      : JSON.stringify(dimensionsValue) !== JSON.stringify(previous.selected_dimensions);
+    setDraft((current) => {
+      const merged = { ...current };
+      for (const field of Object.keys(nextSeed)) {
+        if ((current[field] ?? "") === (oldSeed[field] ?? "")) merged[field] = nextSeed[field];
+      }
+      return merged;
+    });
+    if (!dimensionsEdited) {
+      const raw: unknown = spec.selected_dimensions;
+      setDimensionsValue(isDimensionsObject(raw) ? raw : null);
+      setRawDimensionsMode(raw != null && !isDimensionsObject(raw));
+      setRawDimensionsText(raw == null ? "" : JSON.stringify(raw, null, 2));
+    }
+    const newConflict = peerConflictText(previous, spec, draft, dimensionsEdited);
+    if (awaitingPeer.current) {
+      const { field } = awaitingPeer.current;
+      awaitingPeer.current = null;
+      const changed = field !== "save" && JSON.stringify(previous[field]) !== JSON.stringify(spec[field]);
+      setFeedback(field === "save"
+        ? newConflict ?? "This selection changed in another session. Save again to keep your changes."
+        : changed
+          ? conflictText([[field === "selected_dimensions" ? "Dimensions" : SPEC_FIELD_LABELS[field as keyof typeof SPEC_FIELD_LABELS] ?? field,
+            { [field]: spec[field] }]], spec)
+          : "This selection changed in another session. Save again to keep your changes.");
+      setConflictFeedback(true);
+    } else if (newConflict) {
+      setFeedback(newConflict);
+      setConflictFeedback(true);
+    }
+    baseRef.current = { itemId: item.id, spec };
+  }, [item.id, item.spec, peerSpec, spec, draft, dimensionsValue, rawDimensionsMode, rawDimensionsText]);
 
   const set = (field: string, value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
@@ -580,9 +646,26 @@ export function SelectionEditor({
     setFeedback(null);
   };
 
+  const refetchUnreadablePeer = (waiting: { field: SpecField | "save" }, specId: string) => {
+    const refetch = onConflict?.();
+    if (!refetch) return;
+    const finish = (fresh?: ProjectFfeSpec | null) => {
+      if (awaitingPeer.current !== waiting || baseRef.current.itemId !== item.id) return;
+      if (fresh?.id === specId && fresh.row_version > (baseRef.current.spec?.row_version ?? 0)) {
+        setPeerSpec(fresh);
+      } else {
+        awaitingPeer.current = null;
+        setFeedback(null);
+        setConflictFeedback(false);
+      }
+    };
+    void refetch.then(finish, () => finish());
+  };
+
   const save = async () => {
-    if (!item.spec) return;
+    if (!spec) return;
     setFeedback(null);
+    setConflictFeedback(false);
     let dimensions: Record<string, unknown> | null = null;
     if (rawDimensionsMode) {
       if (rawDimensionsText.trim()) {
@@ -599,10 +682,10 @@ export function SelectionEditor({
       dimensions = dimensionsValue;
     }
     try {
-      await updateSpec.mutateAsync({
+      const saved = await updateSpec.mutateAsync({
         projectId: item.project_id,
-        specId: item.spec.id,
-        expectedRowVersion: item.spec.row_version,
+        specId: spec.id,
+        expectedRowVersion: spec.row_version,
         changes: {
           sku: draft.sku?.trim() || null,
           finish: draft.finish?.trim() || null,
@@ -617,42 +700,77 @@ export function SelectionEditor({
           warranty_notes: draft.warranty_notes?.trim() || null,
         },
       });
+      baseRef.current = { itemId: item.id, spec: saved };
+      setPeerSpec(saved);
+      setDraft(editableSpecSeed(saved));
       setFeedback("Line saved.");
       onSaved?.();
     } catch (error) {
-      setFeedback(
-        error instanceof Error
-          ? error.message
-          : "Line could not be saved.",
-      );
+      if (error instanceof ProjectFfeSpecConflictError) {
+        const peer = error.current?.id === spec.id && error.current.row_version > spec.row_version
+          ? error.current : null;
+        setConflictFeedback(true);
+        if (!peer) {
+          const waiting = { field: "save" as const };
+          awaitingPeer.current = waiting;
+          setFeedback("This selection changed in another session. Waiting for its current value before saving again.");
+          refetchUnreadablePeer(waiting, spec.id);
+          return;
+        }
+        onConflict?.();
+        const dimensionsEdited = JSON.stringify(dimensions) !== JSON.stringify(spec.selected_dimensions);
+        setPeerSpec(peer);
+        setFeedback(peerConflictText(spec, peer, draft, dimensionsEdited)
+          ?? "This selection changed in another session. Save again to keep your changes.");
+      } else {
+        setFeedback(error instanceof Error ? error.message : "Line could not be saved.");
+      }
     }
   };
 
   const declareNa = async () => {
-    if (!item.spec || !naReason.trim()) {
+    if (!spec || !naReason.trim()) {
       setFeedback("An N/A declaration requires a reason.");
       return;
     }
+    setConflictFeedback(false);
     try {
-      await updateSpec.mutateAsync({
+      const saved = await updateSpec.mutateAsync({
         projectId: item.project_id,
-        specId: item.spec.id,
-        expectedRowVersion: item.spec.row_version,
+        specId: spec.id,
+        expectedRowVersion: spec.row_version,
         changes: {
           na_declarations: {
-            ...item.spec.na_declarations,
+            ...spec.na_declarations,
             ...buildNaDeclarationUpdate(naField, naReason),
           },
         },
       });
+      baseRef.current = { itemId: item.id, spec: saved };
+      setPeerSpec(saved);
       setNaReason("");
       setFeedback(`${naField.replaceAll("_", " ")} marked N/A.`);
     } catch (error) {
-      setFeedback(
-        error instanceof Error
-          ? error.message
-          : "Declaration could not be saved.",
-      );
+      if (error instanceof ProjectFfeSpecConflictError) {
+        const peer = error.current?.id === spec.id && error.current.row_version > spec.row_version
+          ? error.current : null;
+        setConflictFeedback(true);
+        if (!peer) {
+          const waiting = { field: naField };
+          awaitingPeer.current = waiting;
+          setFeedback("This selection changed in another session. Waiting for its current value before saving again.");
+          refetchUnreadablePeer(waiting, spec.id);
+          return;
+        }
+        onConflict?.();
+        setPeerSpec(peer);
+        setFeedback(JSON.stringify(spec[naField]) !== JSON.stringify(peer[naField])
+          ? conflictText([[naField === "selected_dimensions" ? "Dimensions" : SPEC_FIELD_LABELS[naField as keyof typeof SPEC_FIELD_LABELS] ?? naField,
+            { [naField]: peer[naField] }]], peer)
+          : "This selection changed in another session. Save again to keep your changes.");
+      } else {
+        setFeedback(error instanceof Error ? error.message : "Declaration could not be saved.");
+      }
     }
   };
 
@@ -666,7 +784,7 @@ export function SelectionEditor({
     </DocumentAction>
   ) : null;
 
-  if (!item.spec) {
+  if (!spec) {
     return (
       <div className="sb-editor">
         <p className="sb-warn">
@@ -686,7 +804,7 @@ export function SelectionEditor({
     ["color_fabric", "Color / fabric"],
     ["exact_location", "Exact location"],
   ] as const;
-  const configuration = extractConfigurationSnapshotEnvelope(item.spec);
+  const configuration = extractConfigurationSnapshotEnvelope(spec);
   const configurationSnapshot =
     configuration?.snapshot && typeof configuration.snapshot === "object"
       ? (configuration.snapshot as Record<string, unknown>)
@@ -714,7 +832,7 @@ export function SelectionEditor({
     >
       <p className="eb sb-spec-head">
         {heading && <span>{heading}</span>}
-        <span>Project line · v{item.spec.row_version}</span>
+        <span>Project line · v{spec.row_version}</span>
         <ReadinessWord
           status={readiness}
           missingFields={missingFields}
@@ -915,7 +1033,7 @@ export function SelectionEditor({
       </section>
 
       {feedback && (
-        <p className="t-body-sm sb-help" role="status" aria-live="polite">
+        <p className="t-body-sm sb-help" role={conflictFeedback ? "alert" : "status"} aria-live={conflictFeedback ? "assertive" : "polite"}>
           {feedback}
         </p>
       )}
@@ -924,6 +1042,7 @@ export function SelectionEditor({
           actionKey="spec-book-save"
           variant="terminal"
           loading={updateSpec.isPending}
+          held
           onClick={() => void save()}
         >
           {/* The one filled act names the change (SPEC §S7b p3). */}
@@ -1714,6 +1833,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                                             readiness={itemReadiness}
                                             missingFields={itemMissing}
                                             onRoomAssigned={workbench.refetch}
+                                            onConflict={() => workbench.refetch().then(({ data }) => data?.items.find((next) => next.id === item.id)?.spec)}
                                             heading={[item.document_code, group.title]
                                               .filter(Boolean)
                                               .join(" · ")}
