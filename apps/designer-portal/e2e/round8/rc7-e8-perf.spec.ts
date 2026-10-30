@@ -499,13 +499,7 @@ test.describe("RC-7 E8 X07 performance", () => {
     ).toBeLessThanOrEqual(0.1);
   });
 
-  // DEFECT RC7-E8-5: a returning reader's cold load of the job paper shifts
-  // 1.40–1.47 (chromium). page.tsx:1744 (the returning-reader landing, run
-  // from afterArrival) calls scrollIntoRevealed on the active section, which
-  // marks every chapter above it data-paper-shown (use-chapter-reveal.ts:59–63)
-  // at ~1.1 s, before their bodies resolve; the bodies then resolve visibly.
-  // Kept out of the gate.
-  test.fixme("RC7-E8-5: job cold-load CLS ≤ 0.1, returning reader", async ({
+  test("RC7-E8-5: job cold-load CLS ≤ 0.1, returning reader", async ({
     authenticatedPage: page,
   }) => {
     const { load } = await coldLoad(page, "job");

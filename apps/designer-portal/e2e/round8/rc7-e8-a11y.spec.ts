@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "../fixtures/auth";
-import { psqlRun, psqlScalar } from "../helpers/psql";
+import { adminDb } from "../helpers/supabase-admin";
+import { psqlAsUserRow, psqlRun, psqlScalar } from "../helpers/psql";
 import { e8OwnedStackSql } from "./rc7-e8-guard";
 
 /**
@@ -36,6 +38,7 @@ const LIVING = "f0180000-0000-4000-8000-000000000011";
 const LINE_NAME = "F01 Living Room selection 07";
 const E7_OWNER = "rc7-e7-1@patina.test";
 const F01_DESIGNER = process.env.DESIGNER_E2E_EMAIL ?? "designer@patina.dev";
+const F01_DESIGNER_ID = "f0180000-0000-4000-8000-000000000002";
 const OUT =
   process.env.PLAYWRIGHT_OUTPUT_DIR ??
   path.join(__dirname, "../../test-results/round8");
@@ -589,8 +592,26 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
 
   // The keyboard save writes through the portal: never the shared stack, and
   // only when rc7_owned.stack names RC7_OWNED_STACK.
-  test.beforeAll(() => {
-    psqlRun(e8OwnedStackSql("rc7-e8 a11y keyboard save"));
+  test.beforeAll(async ({}, info) => {
+    psqlRun(e8OwnedStackSql("rc7-e8 a11y keyboard save and private print"));
+    const stamp = Date.now();
+    const prefix = `${JOB}/plans/rc7-e8-a11y-${info.project.name}-${stamp}`;
+    const bytes = readFileSync(path.resolve(__dirname, "../fixtures/whitlock-set.pdf"));
+    const { error } = await adminDb.storage
+      .from("project-documents")
+      .upload(`${prefix}.pdf`, bytes, { contentType: "application/pdf" });
+    if (error) throw error;
+    psqlAsUserRow(F01_DESIGNER_ID, `SELECT to_jsonb(public.file_plan_prints('${JOB}', '${prefix}-file', '${JSON.stringify([
+      {
+        kind: "new_sheet",
+        sheet: { number: `E8A-${info.project.name[0]}-${stamp}`, title: "E8 a11y private folio file" },
+        print: {
+          storage_path: `${prefix}.pdf`,
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+          size_bytes: bytes.length,
+        },
+      },
+    ])}'::jsonb))::text;`);
   });
 
   test.afterAll(() => {
@@ -961,6 +982,10 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
       timeout: 120_000,
     });
     await arrivedJob(page);
+    const folio = page.getByRole("button", { name: /The folio · \d+ files? ↓/ });
+    await tabTo(page, folio, "contrast job → private folio disclosure");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "studio", exact: true }).first()).toBeVisible();
     found.f01 = await contrast("job paper (F01)");
     const room = page.locator(
       `[data-paper-chapter="ffe"] [data-pieces-room="${LIVING}"]`,

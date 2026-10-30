@@ -40,7 +40,7 @@ async function mockedNote(page: Page, state: { visible: boolean; refused: boolea
   }] }));
   await page.route(`${api.origin}/rest/v1/margin_notes*`, route => state.refused
     ? route.fulfill({ status: 503, json: { message: 'Fictional metadata refusal' } })
-    : route.fulfill({ json: [{ id: NOTE, project_id: JOB, subject_kind: 'plan_print', subject_id: 'recorded-print-only' }] }));
+    : route.fulfill({ json: [{ id: NOTE, project_id: JOB, subject_kind: 'plan_print', subject_id: 'recorded-print-only', subject_print_label: 'Living Room plan — issued 02' }] }));
 }
 
 test('metadata refusal keeps the mounted note and announces unavailable context, not an empty margin', async ({ authenticatedPage: page }) => {
@@ -58,7 +58,9 @@ test('mocked contextual Field payload returns through the native room owner and 
   await mockedNote(page, state);
   await openNote(page);
   const context = page.getByLabel('Note context');
-  await expect(context).toContainText('plan print · recorded-print-only');
+  await expect(context.locator('dt').filter({ hasText: /^Subject$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('Print · Living Room plan — issued 02');
+  await expect(context.locator('dt').filter({ hasText: /^Print$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('Living Room plan — issued 02');
+  await expect(context).not.toContainText('recorded-print-only');
   await expect(context.locator('dt').filter({ hasText: /^Issue$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('Not recorded');
   const shell = await page.locator('[data-document-shell]').elementHandle();
   const amendment = page.getByRole('button', { name: '→ Amendment', exact: true });

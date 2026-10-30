@@ -10,7 +10,7 @@
  * package specifier fires correctly here.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
-import { FolioStrip } from '../folio-strip';
+import { FolioLetterhead, FolioStrip } from '../folio-strip';
 import {
   useFolioFiles,
   useUploadFolioFile,
@@ -88,6 +88,23 @@ describe('FolioStrip — a scan chip navigates to the Room View', () => {
     const file = screen.getByRole('button', { name: '+ File' });
     expect(file).toHaveClass('da-secondary');
     expect(file).not.toHaveClass('da-primary');
+  });
+
+  it('a studio-only file uses the 12px meta size', () => {
+    mockUseFolioFiles.mockReturnValue({
+      data: [scanFile({ id: 'file-pdf-1', title: 'Floor plan.pdf', doc_type: 'pdf' })],
+    });
+    render(<FolioStrip projectId="project-1" anchor={{ kind: 'letterhead' }} />);
+
+    const visibility = screen.getByRole('button', { name: 'studio' });
+    expect(visibility).toHaveClass('t-meta');
+  });
+
+  it('the letterhead folio disclosure uses the 12px meta size', () => {
+    mockUseFolioFiles.mockReturnValue({ data: [scanFile()] });
+    render(<FolioLetterhead projectId="project-1" />);
+
+    expect(screen.getByRole('button', { name: /The folio · 1 file/ })).toHaveClass('t-meta');
   });
 
   it('a real (non-scan) file never navigates to the Room View', () => {
