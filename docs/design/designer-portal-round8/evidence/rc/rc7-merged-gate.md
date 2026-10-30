@@ -54,7 +54,7 @@ Already flipped before this gate: E6-1..3, E4-1, e7-1. No fixmes remain in the e
 | `apps/designer-portal/e2e/round8/rc7-e3-agreement-lineage.spec.ts:435` | RC7-E3-5 | ⌘K cold-start fork; Kody's ruling owed; unfixed |
 | `apps/designer-portal/e2e/round8/rc7-e3-field.spec.ts:210` | RC7-E3-2 | Schema/writer gap (no scope or next-owner columns); needs a ruling |
 | `apps/designer-portal/e2e/round8/rc7-e3-arrangements.spec.ts:93` | RC7-E3-1 | C2 has no real versioned arrangement; unfixed |
-| `supabase/tests/round8_rc7/defect_e1_c6_audience.sql` | RC7-E1-1 | Awaiting Kody's audience ruling. Exits 3 as recorded: the control passes and the assertion fails at `:38` |
+| `supabase/tests/round8_rc7/defect_e1_c6_audience.sql` | RC7-E1-1 | Awaiting Kody's audience ruling. Exits 3 as recorded: the control passes and the assertion fails at `:38`. RC8-FIX7 (00903): renamed `e1_c6_audience.sql`, in the gate, exits 0 |
 | `apps/designer-portal/e2e/document/action-visibility.spec.ts:344` | (not RC7) | Pre-existing 390px overflow; out of scope |
 
 ## SQL gate (Phase A step 2)
