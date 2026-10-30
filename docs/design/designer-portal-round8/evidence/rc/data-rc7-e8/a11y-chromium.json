@@ -1,0 +1,117 @@
+{
+  "axeResults": [
+    {
+      "surface": "studio",
+      "counts": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "violations": []
+    },
+    {
+      "surface": "job paper (F01)",
+      "counts": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "violations": []
+    },
+    {
+      "surface": "FF&E unfold, Specifications, line open",
+      "counts": {
+        "critical": 0,
+        "serious": 4,
+        "moderate": 0,
+        "minor": 0
+      },
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 4,
+          "targets": [
+            ".items-start.justify-between.gap-3 > div:nth-child(1) > .text-\\[var\\(--color-aged-oak\\)\\].tracking-\\[0\\.1em\\].font-semibold #8b7355 on #fcfaf7 = 4.3:1 (9.0pt (12px), need 4.5:1)",
+            ".justify-between.gap-3.flex-wrap > .text-\\[var\\(--color-aged-oak\\)\\].tracking-\\[0\\.1em\\].font-semibold #8b7355 on #fcfaf7 = 4.3:1 (9.0pt (12px), need 4.5:1)",
+            ".text-\\[var\\(--color-aged-oak\\)\\].mt-2.tracking-\\[0\\.06em\\] #8b7355 on #fcfaf7 = 4.3:1 (9.0pt (12px), need 4.5:1)",
+            ".text-\\[var\\(--color-aged-oak\\,\\#8B7355\\)\\] #8b7355 on #f3f0eb = 3.94:1 (9.0pt (12px), need 4.5:1)"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "job paper (E7, acceptance active)",
+      "counts": {
+        "critical": 0,
+        "serious": 1,
+        "moderate": 0,
+        "minor": 0
+      },
+      "violations": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 1,
+          "targets": [
+            ".tracking-\\[0\\.07em\\] #8b7355 on #faf7f2 = 4.19:1 (9.0pt (12px), need 4.5:1)"
+          ]
+        }
+      ]
+    },
+    {
+      "surface": "acceptance/care chapter (E7)",
+      "counts": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "violations": []
+    },
+    {
+      "surface": "resolve-condition form open",
+      "counts": {
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0
+      },
+      "violations": []
+    }
+  ],
+  "tabCounts": {
+    "studio → Open the job paper": 14,
+    "job → Living Room disclosure": 7,
+    "Living Room → Edit room selections": 38,
+    "unfold → Specifications lens (Shift+Tab: the lens bar precedes the focused room heading)": 5,
+    "Specifications → line": 14,
+    "line → Finish field": 36,
+    "Finish → back to the line (Shift+Tab)": 36,
+    "door → job head Studio link": 81,
+    "job → Resolve this condition": 78,
+    "form → How it was resolved": 1,
+    "form → Record the resolution": 1,
+    "form → Cancel": 1,
+    "E8-1 → Resolve this condition": 78,
+    "E8-1 → Cancel": 3
+  },
+  "focusIndicators": {
+    "studio → Open the job paper": "outline 2px rgb(124, 94, 48)",
+    "job → Living Room disclosure": "outline 2px rgb(124, 94, 48)",
+    "Living Room → Edit room selections": "outline 2px rgb(124, 94, 48)",
+    "unfold → Specifications lens (Shift+Tab: the lens bar precedes the focused room heading)": "outline 2px rgb(124, 94, 48)",
+    "Specifications → line": "outline 2px rgb(124, 94, 48)",
+    "line → Finish field": "outline 2px rgb(124, 94, 48)",
+    "Finish → back to the line (Shift+Tab)": "outline 2px rgb(124, 94, 48); covered 3/5 by header[data-job-head]",
+    "door → job head Studio link": "outline 2px rgb(124, 94, 48)",
+    "job → Resolve this condition": "outline 2px rgb(124, 94, 48)",
+    "form → How it was resolved": "box-shadow rgb(255, 255, 255) 0px 0px 0px 0px, rgb(196, 165, 123) 0px 0",
+    "form → Record the resolution": "outline 2px rgb(124, 94, 48)",
+    "form → Cancel": "outline 2px rgb(124, 94, 48)",
+    "E8-1 → Resolve this condition": "outline 2px rgb(124, 94, 48)",
+    "E8-1 → Cancel": "outline 2px rgb(124, 94, 48)"
+  }
+}

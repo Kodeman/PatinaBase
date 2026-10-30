@@ -1,0 +1,132 @@
+RC-7 E8 run summaries — worktree patina-r8-rc7-e8h, owned stack patina-rc7-e8h (API 62621 / DB 62622), dev 4210, --workers=1.
+Each block: the vm_stat/df gate, then every test line (✓ pass, - skipped fixme/capability skip) and the totals.
+Runs 1/2 per project ran all four specs at spec tip c0f94e8cf minus the E8-1 setup change for chromium-1/2;
+chromium-a11y-1/2 re-ran the a11y spec after that change (the final a11y state). No run had a failure.
+
+== chromium-1
+vm_stat free 14442 MB 19:59:24
+/dev/disk3s5   926Gi   602Gi   260Gi    70%     13M  2.7G    0%   /System/Volumes/Data
+  ✓   1 [chromium] rc7-e8-a11y.spec.ts:349:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (1.0m)
+  ✓   2 [chromium] rc7-e8-a11y.spec.ts:482:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (19.2s)
+  ✓   3 [chromium] rc7-e8-a11y.spec.ts:557:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (18.4s)
+  -   4 [chromium] rc7-e8-a11y.spec.ts:589:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface
+  ✓   5 [chromium] rc7-e8-perf.spec.ts:383:9 › RC-7 E8 X07 performance › X07 studio: cold load — LCP and request capture (8.9s)
+  ✓   6 [chromium] rc7-e8-perf.spec.ts:434:9 › RC-7 E8 X07 performance › X07 studio: settled-scroll CLS is 0 (12.4s)
+  ✓   7 [chromium] rc7-e8-perf.spec.ts:383:9 › RC-7 E8 X07 performance › X07 job: cold load — LCP and request capture (8.6s)
+  ✓   8 [chromium] rc7-e8-perf.spec.ts:434:9 › RC-7 E8 X07 performance › X07 job: settled-scroll CLS is 0 (18.9s)
+  -   9 [chromium] rc7-e8-perf.spec.ts:469:8 › RC-7 E8 X07 performance › RC7-E8-4: job cold-load CLS ≤ 0.1, first visit
+  -  10 [chromium] rc7-e8-perf.spec.ts:490:8 › RC-7 E8 X07 performance › RC7-E8-5: job cold-load CLS ≤ 0.1, returning reader
+  ✓  11 [chromium] rc7-e8-visual.spec.ts:197:7 › RC-7 E8 X04 visual capture › studio: portal against studio.html, with the photographic cover (5.1s)
+  ✓  12 [chromium] rc7-e8-visual.spec.ts:218:7 › RC-7 E8 X04 visual capture › F01 job paper: full paper and the activated acceptance/care chapter (11.4s)
+  ✓  13 [chromium] rc7-e8-visual.spec.ts:257:7 › RC-7 E8 X04 visual capture › E7 household job: cabinetry chapter and populated acceptance/care (8.1s)
+  ✓  14 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: long content — the whole job paper (19.0s)
+  ✓  15 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: FF&E table (Specifications, a line open) (49.0s)
+  ✓  16 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: drawing/evidence viewer (7.9s)
+  ✓  17 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: long content — the whole job paper (25.8s)
+  ✓  18 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: FF&E table (Specifications, a line open) (47.9s)
+  ✓  19 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: drawing/evidence viewer (8.2s)
+  -  20 [chromium] rc7-e8-zoom.spec.ts:595:14 › RC-7 E8 X06 200% zoom › 390@200 › RC7-E8-3: 390@200 has 0 clipped controls on every surface
+  4 skipped
+  16 passed (6.1m)
+exit 0 elapsed 365s
+
+== chromium-2
+vm_stat free 9346 MB 20:05:29
+/dev/disk3s5   926Gi   602Gi   270Gi    69%     13M  2.8G    0%   /System/Volumes/Data
+  ✓   1 [chromium] rc7-e8-a11y.spec.ts:349:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (54.9s)
+  ✓   2 [chromium] rc7-e8-a11y.spec.ts:482:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (19.2s)
+  ✓   3 [chromium] rc7-e8-a11y.spec.ts:557:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (19.2s)
+  -   4 [chromium] rc7-e8-a11y.spec.ts:589:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface
+  ✓   5 [chromium] rc7-e8-perf.spec.ts:383:9 › RC-7 E8 X07 performance › X07 studio: cold load — LCP and request capture (8.8s)
+  ✓   6 [chromium] rc7-e8-perf.spec.ts:434:9 › RC-7 E8 X07 performance › X07 studio: settled-scroll CLS is 0 (12.7s)
+  ✓   7 [chromium] rc7-e8-perf.spec.ts:383:9 › RC-7 E8 X07 performance › X07 job: cold load — LCP and request capture (10.9s)
+  ✓   8 [chromium] rc7-e8-perf.spec.ts:434:9 › RC-7 E8 X07 performance › X07 job: settled-scroll CLS is 0 (21.2s)
+  -   9 [chromium] rc7-e8-perf.spec.ts:469:8 › RC-7 E8 X07 performance › RC7-E8-4: job cold-load CLS ≤ 0.1, first visit
+  -  10 [chromium] rc7-e8-perf.spec.ts:490:8 › RC-7 E8 X07 performance › RC7-E8-5: job cold-load CLS ≤ 0.1, returning reader
+  ✓  11 [chromium] rc7-e8-visual.spec.ts:197:7 › RC-7 E8 X04 visual capture › studio: portal against studio.html, with the photographic cover (5.1s)
+  ✓  12 [chromium] rc7-e8-visual.spec.ts:218:7 › RC-7 E8 X04 visual capture › F01 job paper: full paper and the activated acceptance/care chapter (13.4s)
+  ✓  13 [chromium] rc7-e8-visual.spec.ts:257:7 › RC-7 E8 X04 visual capture › E7 household job: cabinetry chapter and populated acceptance/care (8.5s)
+  ✓  14 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: long content — the whole job paper (21.1s)
+  ✓  15 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: FF&E table (Specifications, a line open) (47.6s)
+  ✓  16 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: drawing/evidence viewer (13.4s)
+  ✓  17 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: long content — the whole job paper (30.7s)
+  ✓  18 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: FF&E table (Specifications, a line open) (49.3s)
+  ✓  19 [chromium] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: drawing/evidence viewer (8.4s)
+  -  20 [chromium] rc7-e8-zoom.spec.ts:595:14 › RC-7 E8 X06 200% zoom › 390@200 › RC7-E8-3: 390@200 has 0 clipped controls on every surface
+  4 skipped
+  16 passed (6.3m)
+exit 0 elapsed 381s
+
+== chromium-a11y-1
+vm_stat free 8623 MB 20:42:34
+  ✓  1 [chromium] rc7-e8-a11y.spec.ts:349:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (56.1s)
+  ✓  2 [chromium] rc7-e8-a11y.spec.ts:482:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (19.2s)
+  ✓  3 [chromium] rc7-e8-a11y.spec.ts:557:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (19.8s)
+  -  4 [chromium] rc7-e8-a11y.spec.ts:594:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface
+  1 skipped
+  3 passed (2.2m)
+exit 0
+
+== chromium-a11y-2
+vm_stat free 8942 MB 20:44:48
+  ✓  1 [chromium] rc7-e8-a11y.spec.ts:349:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (56.8s)
+  ✓  2 [chromium] rc7-e8-a11y.spec.ts:482:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (19.3s)
+  ✓  3 [chromium] rc7-e8-a11y.spec.ts:557:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (18.9s)
+  -  4 [chromium] rc7-e8-a11y.spec.ts:594:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface
+  1 skipped
+  3 passed (2.2m)
+exit 0
+
+== webkit-iphone-1
+vm_stat free 4137 MB 20:27:46
+/dev/disk3s5   926Gi   612Gi   262Gi    71%     13M  2.7G    0%   /System/Volumes/Data
+  ✓   1 [webkit-iphone] rc7-e8-a11y.spec.ts:349:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (1.3m)
+  ✓   2 [webkit-iphone] rc7-e8-a11y.spec.ts:482:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (21.4s)
+  ✓   3 [webkit-iphone] rc7-e8-a11y.spec.ts:557:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (31.4s)
+  -   4 [webkit-iphone] rc7-e8-a11y.spec.ts:594:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface
+  ✓   5 [webkit-iphone] rc7-e8-perf.spec.ts:383:9 › RC-7 E8 X07 performance › X07 studio: cold load — LCP and request capture (23.1s)
+  -   6 [webkit-iphone] rc7-e8-perf.spec.ts:434:9 › RC-7 E8 X07 performance › X07 studio: settled-scroll CLS is 0
+  ✓   7 [webkit-iphone] rc7-e8-perf.spec.ts:383:9 › RC-7 E8 X07 performance › X07 job: cold load — LCP and request capture (11.1s)
+  -   8 [webkit-iphone] rc7-e8-perf.spec.ts:434:9 › RC-7 E8 X07 performance › X07 job: settled-scroll CLS is 0
+  -   9 [webkit-iphone] rc7-e8-perf.spec.ts:469:8 › RC-7 E8 X07 performance › RC7-E8-4: job cold-load CLS ≤ 0.1, first visit
+  -  10 [webkit-iphone] rc7-e8-perf.spec.ts:490:8 › RC-7 E8 X07 performance › RC7-E8-5: job cold-load CLS ≤ 0.1, returning reader
+  ✓  11 [webkit-iphone] rc7-e8-visual.spec.ts:197:7 › RC-7 E8 X04 visual capture › studio: portal against studio.html, with the photographic cover (6.6s)
+  ✓  12 [webkit-iphone] rc7-e8-visual.spec.ts:218:7 › RC-7 E8 X04 visual capture › F01 job paper: full paper and the activated acceptance/care chapter (17.1s)
+  ✓  13 [webkit-iphone] rc7-e8-visual.spec.ts:257:7 › RC-7 E8 X04 visual capture › E7 household job: cabinetry chapter and populated acceptance/care (12.5s)
+  ✓  14 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: long content — the whole job paper (22.7s)
+  ✓  15 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: FF&E table (Specifications, a line open) (58.1s)
+  ✓  16 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: drawing/evidence viewer (10.5s)
+  ✓  17 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: long content — the whole job paper (29.5s)
+  ✓  18 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: FF&E table (Specifications, a line open) (55.4s)
+  ✓  19 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: drawing/evidence viewer (21.2s)
+  -  20 [webkit-iphone] rc7-e8-zoom.spec.ts:595:14 › RC-7 E8 X06 200% zoom › 390@200 › RC7-E8-3: 390@200 has 0 clipped controls on every surface
+  6 skipped
+  14 passed (7.8m)
+exit 0 elapsed 468s
+
+== webkit-iphone-2
+vm_stat free 8449 MB 20:35:34
+/dev/disk3s5   926Gi   612Gi   262Gi    71%     14M  2.8G    1%   /System/Volumes/Data
+  ✓   1 [webkit-iphone] rc7-e8-a11y.spec.ts:349:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (1.2m)
+  ✓   2 [webkit-iphone] rc7-e8-a11y.spec.ts:482:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (23.6s)
+  ✓   3 [webkit-iphone] rc7-e8-a11y.spec.ts:557:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (21.8s)
+  -   4 [webkit-iphone] rc7-e8-a11y.spec.ts:594:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface
+  ✓   5 [webkit-iphone] rc7-e8-perf.spec.ts:383:9 › RC-7 E8 X07 performance › X07 studio: cold load — LCP and request capture (10.4s)
+  -   6 [webkit-iphone] rc7-e8-perf.spec.ts:434:9 › RC-7 E8 X07 performance › X07 studio: settled-scroll CLS is 0
+  ✓   7 [webkit-iphone] rc7-e8-perf.spec.ts:383:9 › RC-7 E8 X07 performance › X07 job: cold load — LCP and request capture (12.6s)
+  -   8 [webkit-iphone] rc7-e8-perf.spec.ts:434:9 › RC-7 E8 X07 performance › X07 job: settled-scroll CLS is 0
+  -   9 [webkit-iphone] rc7-e8-perf.spec.ts:469:8 › RC-7 E8 X07 performance › RC7-E8-4: job cold-load CLS ≤ 0.1, first visit
+  -  10 [webkit-iphone] rc7-e8-perf.spec.ts:490:8 › RC-7 E8 X07 performance › RC7-E8-5: job cold-load CLS ≤ 0.1, returning reader
+  ✓  11 [webkit-iphone] rc7-e8-visual.spec.ts:197:7 › RC-7 E8 X04 visual capture › studio: portal against studio.html, with the photographic cover (7.5s)
+  ✓  12 [webkit-iphone] rc7-e8-visual.spec.ts:218:7 › RC-7 E8 X04 visual capture › F01 job paper: full paper and the activated acceptance/care chapter (14.5s)
+  ✓  13 [webkit-iphone] rc7-e8-visual.spec.ts:257:7 › RC-7 E8 X04 visual capture › E7 household job: cabinetry chapter and populated acceptance/care (10.7s)
+  ✓  14 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: long content — the whole job paper (21.4s)
+  ✓  15 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: FF&E table (Specifications, a line open) (53.2s)
+  ✓  16 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: drawing/evidence viewer (12.1s)
+  ✓  17 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: long content — the whole job paper (28.7s)
+  ✓  18 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: FF&E table (Specifications, a line open) (55.2s)
+  ✓  19 [webkit-iphone] rc7-e8-zoom.spec.ts:576:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: drawing/evidence viewer (10.2s)
+  -  20 [webkit-iphone] rc7-e8-zoom.spec.ts:595:14 › RC-7 E8 X06 200% zoom › 390@200 › RC7-E8-3: 390@200 has 0 clipped controls on every surface
+  6 skipped
+  14 passed (7.0m)
+exit 0 elapsed 420s

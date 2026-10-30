@@ -11,14 +11,21 @@ import { psqlScalar } from "../helpers/psql";
  * back is driven through native tab order (Alt+Tab on WebKit, whose plain Tab
  * skips links) and Enter/Escape only: no click(), focus() or scroll rescue.
  * axe-core 4.11.1 is the copy already installed for admin-portal's
- * axe-playwright; it is evaluated in the page (no new dependency). Violations
- * are recorded by impact in the evidence JSON, not asserted to zero here.
+ * axe-playwright; it is evaluated in the page (no new dependency).
+ *
+ * Asserted on every axe surface: 0 critical violations and 0 serious
+ * violations other than color-contrast. The color-contrast serious count
+ * (== 0) is the RC7-E8-2 fixme (one residual site after FIX4). Every focused control shows a focus indicator
+ * (an outline or box-shadow while :focus-visible) and is not entirely obscured
+ * (WCAG 2.4.11); a partly covered control is recorded as observation O-1
+ * (2.4.12, AAA), not asserted.
  */
 
 const JOB = "f0180000-0000-4000-8000-000000000010";
 const LIVING = "f0180000-0000-4000-8000-000000000011";
 const LINE_NAME = "F01 Living Room selection 07";
 const E7_OWNER = "rc7-e7-1@patina.test";
+const F01_DESIGNER = process.env.DESIGNER_E2E_EMAIL ?? "designer@patina.dev";
 const OUT =
   process.env.PLAYWRIGHT_OUTPUT_DIR ??
   path.join(__dirname, "../../test-results/round8");
@@ -46,7 +53,7 @@ const axeResults: AxeSummary[] = [];
 const tabCounts: Record<string, number> = {};
 const focusIndicators: Record<string, string> = {};
 
-async function axe(page: Page, surface: string, include?: string) {
+async function runAxe(page: Page, surface: string, include?: string) {
   await page.evaluate(AXE);
   const result = await page.evaluate(async (context) => {
     const run = (
@@ -84,8 +91,25 @@ async function axe(page: Page, surface: string, include?: string) {
       }),
     };
   });
-  axeResults.push({ surface, counts, violations });
+  const summary = { surface, counts, violations };
+  axeResults.push(summary);
   expect(result.testEngine?.version, "axe ran").toBe("4.11.1");
+  return summary;
+}
+
+/** The gate: 0 critical, and 0 serious other than color-contrast (that one is the RC7-E8-2 fixme). */
+async function axe(page: Page, surface: string, include?: string) {
+  const { counts, violations } = await runAxe(page, surface, include);
+  expect(
+    counts.critical,
+    `${surface}: axe critical ${JSON.stringify(violations.filter((v) => v.impact === "critical"))}`,
+  ).toBe(0);
+  expect(
+    violations.filter(
+      (v) => v.impact === "serious" && v.id !== "color-contrast",
+    ),
+    `${surface}: axe serious other than color-contrast`,
+  ).toEqual([]);
 }
 
 const tabKey = (page: Page) =>
@@ -146,6 +170,7 @@ async function tabTo(
   ).toBeFocused();
   const seen = await control.evaluate((element) => {
     const rect = element.getBoundingClientRect();
+    const focusVisible = element.matches(":focus-visible");
     const style = getComputedStyle(element);
     return {
       inViewport:
@@ -172,18 +197,22 @@ async function tabTo(
           .filter(
             (top) => top && !element.contains(top) && !top.contains(element),
           ) as Element[];
-        if (!covers.length) return null;
+        if (!covers.length) return { covered: 0, by: null };
         const top =
           covers[0].closest('[data-job-head], header, nav, [role="dialog"]') ??
           covers[0];
-        return `${covers.length}/5 by ${top.tagName.toLowerCase()}${[
-          ...top.attributes,
-        ]
-          .filter((a) => a.name.startsWith("data-"))
-          .slice(0, 2)
-          .map((a) => `[${a.name}]`)
-          .join("")}`;
+        return {
+          covered: covers.length,
+          by: `${covers.length}/5 by ${top.tagName.toLowerCase()}${[
+            ...top.attributes,
+          ]
+            .filter((a) => a.name.startsWith("data-"))
+            .slice(0, 2)
+            .map((a) => `[${a.name}]`)
+            .join("")}`,
+        };
       })(),
+      focusVisible,
       // A transparent outline (Tailwind outline-none) is not an indicator; fall through to the ring.
       indicator:
         style.outlineStyle !== "none" &&
@@ -197,10 +226,26 @@ async function tabTo(
               : "none detected",
     };
   });
-  focusIndicators[label] = seen.obscuredBy
-    ? `${seen.indicator}; covered ${seen.obscuredBy}`
+  focusIndicators[label] = seen.obscuredBy.by
+    ? `${seen.indicator}; covered ${seen.obscuredBy.by}`
     : seen.indicator;
   expect(seen.inViewport, `${label}: focused control is on screen`).toBe(true);
+  // WCAG 2.4.7: keyboard focus shows a painted indicator (an always-on underline is not one).
+  expect(seen.focusVisible, `${label}: :focus-visible matches`).toBe(true);
+  expect(
+    seen.indicator,
+    `${label}: visible focus indicator (outline or box-shadow)`,
+  ).toMatch(/^(outline|box-shadow) /);
+  // WCAG 2.4.11 (AA): not entirely hidden. Partly covered stays an observation (O-1, 2.4.12 AAA).
+  expect(
+    seen.obscuredBy.covered,
+    `${label}: focused control not entirely obscured (${seen.obscuredBy.by})`,
+  ).toBeLessThan(5);
+  if (seen.obscuredBy.covered > 0)
+    test.info().annotations.push({
+      type: "O-1 partly obscured focus (2.4.12 AAA)",
+      description: `${label}: ${seen.obscuredBy.by}`,
+    });
 }
 
 async function arrivedStudio(page: Page) {
@@ -507,16 +552,20 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     test.info().annotations.push({ type: "cancel-focus", description: landed });
   });
 
-  // DEFECT RC7-E8-1: Cancel on the resolve-condition form drops keyboard focus to <body>
-  // (studio-service-section.tsx OpenCondition: onDone unmounts the focused form and
-  // re-mounts "Resolve this condition" without restoring focus). Kept out of the gate.
-  test.fixme('RC7-E8-1: Cancel returns focus to "Resolve this condition"', async ({
+  // RC7-E8-1 (fixed by FIX4 5386a159e): Cancel on the resolve-condition form used to
+  // drop keyboard focus to <body>; it now returns focus to its opener.
+  test('RC7-E8-1: Cancel returns focus to "Resolve this condition"', async ({
     page,
   }) => {
     const job = psqlScalar(
       `SELECT id FROM public.projects WHERE name='E7 household job' AND designer_id='e7e70000-0000-4000-8000-000000000001';`,
     );
     await signInAs(page, E7_OWNER);
+    // As the acceptance test above: the studio settles before the job opens
+    // (on WebKit a navigation cut into the studio's first reads left the job
+    // read failed, "This document could not be loaded" — observation O-4).
+    await arrivedStudio(page);
+    await page.goto("about:blank");
     await page.goto(`/doc/${job}`, {
       waitUntil: "domcontentloaded",
       timeout: 120_000,
@@ -526,16 +575,88 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     const resolveButton = closeout.getByRole("button", {
       name: "Resolve this condition",
     });
-    await tabTo(page, resolveButton, "fixme → Resolve this condition");
+    await tabTo(page, resolveButton, "E8-1 → Resolve this condition");
     await page.keyboard.press("Enter");
     const form = closeout.getByRole("form", { name: /^Resolve: / });
     await tabTo(
       page,
       form.getByRole("button", { name: "Cancel" }),
-      "fixme → Cancel",
+      "E8-1 → Cancel",
     );
     await page.keyboard.press("Enter");
     await expect(form).toHaveCount(0);
     await expect(resolveButton).toBeFocused();
+  });
+  // DEFECT RC7-E8-2 (residual after FIX4 5386a159e): FIX4 cleared every site but
+  // one. The schedule glance strip's month ticks keep aged-oak #8b7355 on
+  // #faf7f2 = 4.19:1 at 11px (schedule-glance-strip.tsx:68), on the E7 job
+  // paper. Kept out of the gate.
+  test.fixme("RC7-E8-2: axe color-contrast serious == 0 on every surface", async ({
+    page,
+  }) => {
+    const contrast = async (surface: string, include?: string) => {
+      const { violations } = await runAxe(
+        page,
+        `${surface} [RC7-E8-2]`,
+        include,
+      );
+      return violations.filter((v) => v.id === "color-contrast");
+    };
+    const found: Record<string, unknown> = {};
+    const line = psqlScalar(
+      `SELECT id FROM public.project_ffe_items WHERE project_id='${JOB}' AND project_room_id='${LIVING}' AND name='${LINE_NAME}';`,
+    );
+    await signInAs(page, F01_DESIGNER);
+    await arrivedStudio(page);
+    found.studio = await contrast("studio");
+    await page.goto(`/doc/${JOB}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 120_000,
+    });
+    await arrivedJob(page);
+    found.f01 = await contrast("job paper (F01)");
+    await page.goto(
+      `/doc/${JOB}?unfold=pieces&lens=spec&room=${LIVING}&line=${line}`,
+      { waitUntil: "domcontentloaded", timeout: 120_000 },
+    );
+    await arrivedJob(page);
+    await expect(
+      instrument(page).getByTestId("spec-fields-pane"),
+    ).toContainText(LINE_NAME, { timeout: 60_000 });
+    found.spec = await contrast("FF&E unfold, Specifications, line open");
+
+    const job = psqlScalar(
+      `SELECT id FROM public.projects WHERE name='E7 household job' AND designer_id='e7e70000-0000-4000-8000-000000000001';`,
+    );
+    await page.context().clearCookies();
+    await signInAs(page, E7_OWNER);
+    await page.goto(`/doc/${job}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 120_000,
+    });
+    await arrivedJob(page);
+    const closeout = page.locator('[data-paper-chapter="closeout"]');
+    await expect(
+      closeout.locator("[data-service-acceptance-request]").first(),
+    ).toBeAttached({ timeout: 30_000 });
+    found.e7 = await contrast("job paper (E7, acceptance active)");
+    found.e7Closeout = await contrast(
+      "acceptance/care chapter (E7)",
+      '[data-paper-chapter="closeout"]',
+    );
+    await closeout
+      .getByRole("button", { name: "Resolve this condition" })
+      .click();
+    await expect(
+      closeout.getByRole("form", { name: /^Resolve: / }),
+    ).toBeVisible();
+    found.resolveForm = await contrast(
+      "resolve-condition form open",
+      '[data-paper-chapter="closeout"]',
+    );
+    expect(
+      Object.values(found).flat(),
+      `color-contrast serious ${JSON.stringify(found)}`,
+    ).toEqual([]);
   });
 });
