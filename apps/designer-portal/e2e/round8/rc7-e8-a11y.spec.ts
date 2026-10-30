@@ -3,7 +3,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "../fixtures/auth";
-import { psqlScalar } from "../helpers/psql";
+import { psqlRun, psqlScalar } from "../helpers/psql";
+import { e8OwnedStackSql } from "./rc7-e8-guard";
 
 /**
  * RC-7 E8 — X05 keyboard-only processes and axe, on chromium (1440) and
@@ -15,11 +16,19 @@ import { psqlScalar } from "../helpers/psql";
  *
  * Asserted on every axe surface: 0 critical violations and 0 serious
  * violations other than color-contrast. RC7-E8-2 separately asserts zero
- * color-contrast violations across every recorded surface. Every focused
- * control shows a focus indicator (an outline or box-shadow while
- * :focus-visible) and is not entirely obscured
- * (WCAG 2.4.11); a partly covered control is recorded as observation O-1
- * (2.4.12, AAA), not asserted.
+ * color-contrast violations across every recorded surface.
+ *
+ * Focus indicator (WCAG 2.4.7), asserted at EVERY Tab stop of every walk, not
+ * only at the destinations: the focused element matches :focus-visible and
+ * paints an indicator that differs from its own unfocused paint, snapshotted
+ * for every focusable element just before each key press. An indicator is a
+ * painted outline or box-shadow on the element or its ::before/::after, or a
+ * painted border change (installFocusProbe has the exact rules). Stops named
+ * in KNOWN_NO_INDICATOR (RC7-E8-6) are recorded and asserted by their fixme.
+ * Border-only indicators record their contrast against the ground
+ * (observation O-5, not asserted). At each destination the control is also on screen
+ * and not entirely obscured (2.4.11); a partly covered control is recorded as
+ * observation O-1 (2.4.12, AAA), not asserted.
  */
 
 const JOB = "f0180000-0000-4000-8000-000000000010";
@@ -49,12 +58,286 @@ type AxeSummary = {
     nodes: number;
     targets: string[];
   }>;
+  infiniteAnimations: string[];
 };
 const axeResults: AxeSummary[] = [];
 const tabCounts: Record<string, number> = {};
 const focusIndicators: Record<string, string> = {};
+const stopsChecked: Record<string, number> = {};
+/** Stops whose only indicator is a border change: the lowest border-vs-ground contrast seen (recorded, O-5). */
+const borderIndicators: Record<string, number> = {};
+/** Stops kept out of the gate by KNOWN_NO_INDICATOR, with their defect. */
+const knownNoIndicator: Record<string, string> = {};
+
+type StopCheck = {
+  stop: string;
+  indicator: string;
+  failure: string | null;
+  known: string | null;
+  borderContrast: number | null;
+};
+
+/**
+ * Stops whose missing indicator is a recorded defect: annotated, kept out of
+ * the gate, and asserted by the RC7-E8-6 fixme.
+ */
+const KNOWN_NO_INDICATOR: ReadonlyArray<{ defect: string; selector: string }> =
+  [
+    {
+      // DEFECT RC7-E8-6: the schedule's ghost "Name a phase" input sets
+      // focus:outline-none and paints nothing in its place
+      // (schedule/ghost-add-line.tsx:226).
+      defect: "RC7-E8-6",
+      selector: 'input[aria-label="Name a phase"]',
+    },
+  ];
+
+/**
+ * Installs window.__e8fp once per document: `snapshot()` records every
+ * focusable element's unfocused paint (the active element keeps its earlier
+ * entry); `check(known)` judges the focused element against that baseline.
+ *
+ * An indicator is any of: an outline, or a box-shadow, on the element or its
+ * ::before/::after, that is painted (style not none, width ≥ 1px, colour alpha
+ * > 0, box opacity > 0; for a shadow, a layer with alpha > 0 and a blur,
+ * spread or offset) and differs from the same box unfocused; or a border side
+ * that is painted and differs from unfocused (its contrast against the ground
+ * is recorded, not asserted).
+ */
+function installFocusProbe() {
+  const w = window as unknown as { __e8fp?: unknown };
+  if (w.__e8fp) return;
+  const alpha = (color: string) => {
+    if (/transparent/.test(color)) return 0;
+    const slash = color.match(/\/\s*([\d.]+%?)\s*\)/);
+    if (slash)
+      return slash[1].endsWith("%")
+        ? parseFloat(slash[1]) / 100
+        : parseFloat(slash[1]);
+    const rgba = color.match(/rgba?\(([^)]*)\)/);
+    if (rgba) {
+      const parts = rgba[1].split(/[\s,]+/).filter(Boolean);
+      return parts.length >= 4 ? parseFloat(parts[3]) : 1;
+    }
+    return 1;
+  };
+  type Box = {
+    box: string;
+    outline: string;
+    outlineOn: boolean;
+    shadow: string;
+    shadowOn: boolean;
+  };
+  const SIDES = ["Top", "Right", "Bottom", "Left"] as const;
+  // Painted: the box and its host are displayed, visible and not transparent.
+  const displayed = (cs: CSSStyleDeclaration) =>
+    cs.display !== "none" &&
+    cs.visibility === "visible" &&
+    parseFloat(cs.opacity) > 0;
+  const paint = (el: Element) => {
+    const boxes: Box[] = [];
+    const hostShown = displayed(getComputedStyle(el));
+    for (const pseudo of [null, "::before", "::after"]) {
+      const cs = getComputedStyle(el, pseudo);
+      if (pseudo && (cs.content === "none" || cs.content === "normal"))
+        continue;
+      const shown = hostShown && displayed(cs);
+      boxes.push({
+        box: pseudo ?? "",
+        outline: `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor}`,
+        outlineOn:
+          shown &&
+          cs.outlineStyle !== "none" &&
+          parseFloat(cs.outlineWidth) >= 1 &&
+          alpha(cs.outlineColor) > 0,
+        shadow: cs.boxShadow,
+        shadowOn:
+          shown &&
+          cs.boxShadow !== "none" &&
+          cs.boxShadow.split(/,(?![^(]*\))/).some((layer) => {
+            const color =
+              layer.match(
+                /(?:rgba?|hsla?|oklch|oklab|lab|lch|color)\([^)]*\)|#[0-9a-f]+|transparent/i,
+              )?.[0] ?? "currentcolor";
+            const [x = 0, y = 0, blur = 0, spread = 0] =
+              layer
+                .replace(color, "")
+                .match(/-?[\d.]+px/g)
+                ?.map(parseFloat) ?? [];
+            return (
+              alpha(color) > 0 && (blur > 0 || spread > 0 || x !== 0 || y !== 0)
+            );
+          }),
+      });
+    }
+    const cs = getComputedStyle(el);
+    const border = SIDES.map((side) => {
+      const width = cs.getPropertyValue(`border-${side.toLowerCase()}-width`);
+      const style = cs.getPropertyValue(`border-${side.toLowerCase()}-style`);
+      const color = cs.getPropertyValue(`border-${side.toLowerCase()}-color`);
+      const on =
+        hostShown &&
+        parseFloat(width) >= 1 &&
+        !/none|hidden/.test(style) &&
+        alpha(color) > 0;
+      return { side, text: `${width} ${style} ${color}`, color, on };
+    });
+    return { boxes, border };
+  };
+  const rgb = (color: string) =>
+    (color.match(/[\d.]+/g) ?? ["255", "255", "255"]).slice(0, 3).map(Number);
+  const luminance = (color: string) => {
+    const [r, g, b] = rgb(color).map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ground = (el: Element) => {
+    for (let a: Element | null = el; a; a = a.parentElement) {
+      const bg = getComputedStyle(a).backgroundColor;
+      if (alpha(bg) >= 1) return bg;
+    }
+    return "rgb(255, 255, 255)";
+  };
+  const map = new WeakMap<Element, ReturnType<typeof paint>>();
+  w.__e8fp = {
+    snapshot() {
+      const active = document.activeElement;
+      for (const el of document.querySelectorAll(
+        "a[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable]",
+      ))
+        if (el !== active) map.set(el, paint(el));
+    },
+    check(known: ReadonlyArray<{ defect: string; selector: string }>) {
+      let el: Element | null = document.activeElement;
+      while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+      const ffe =
+        document
+          .querySelector('[data-paper-chapter="ffe"] [data-density]')
+          ?.getAttribute("data-density") ?? "-";
+      if (!el || el === document.body) return { trail: "body", check: null };
+      const stop = `${el.tagName.toLowerCase()}:${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 30)}`;
+      const trail = `${stop} y${Math.round(scrollY)} ffe=${ffe}`;
+      if ((el.getRootNode() as ShadowRoot).host?.tagName === "NEXTJS-PORTAL")
+        return {
+          trail,
+          check: {
+            stop,
+            indicator: "next dev overlay (not product)",
+            failure: null,
+            known: null,
+            borderContrast: null,
+          },
+        };
+      const now = paint(el);
+      const base = map.get(el);
+      const was = (box: string) => base?.boxes.find((b) => b.box === box);
+      const outline = now.boxes.find(
+        (b) =>
+          b.outlineOn &&
+          !(was(b.box)?.outlineOn && was(b.box)?.outline === b.outline),
+      );
+      const shadow = now.boxes.find(
+        (b) =>
+          b.shadowOn &&
+          !(was(b.box)?.shadowOn && was(b.box)?.shadow === b.shadow),
+      );
+      const border = now.border.find(
+        (side, i) => side.on && base?.border[i].text !== side.text,
+      );
+      const borderContrast = border
+        ? Math.round(
+            ((Math.max(luminance(border.color), luminance(ground(el))) + 0.05) /
+              (Math.min(luminance(border.color), luminance(ground(el))) +
+                0.05)) *
+              100,
+          ) / 100
+        : null;
+      const indicator = outline
+        ? `outline${outline.box ? ` ${outline.box}` : ""} ${outline.outline.replace(/^\S+ /, "")}`
+        : shadow
+          ? `box-shadow${shadow.box ? ` ${shadow.box}` : ""} ${shadow.shadow.slice(0, 60)}`
+          : border
+            ? `border-${border.side.toLowerCase()} ${border.text} (${borderContrast}:1 on ground)`
+            : `none (${now.boxes.map((b) => `${b.box || "element"} outline ${b.outline}; shadow ${b.shadow.slice(0, 40)}`).join(" | ")}; border ${now.border.map((s) => s.text).join(" / ")})`;
+      const failure = !el.matches(":focus-visible")
+        ? ":focus-visible does not match"
+        : !base
+          ? "no unfocused baseline was recorded"
+          : outline || shadow || border
+            ? null
+            : `no painted indicator that differs from unfocused <${el.tagName.toLowerCase()} class="${String(el.getAttribute("class") ?? "").slice(0, 100)}">`;
+      const knownDefect = failure
+        ? (known.find((k) => el.matches(k.selector))?.defect ?? null)
+        : null;
+      return {
+        trail,
+        check: { stop, indicator, failure, known: knownDefect, borderContrast },
+      };
+    },
+  };
+}
+
+type FocusProbe = {
+  snapshot: () => void;
+  check: (known: ReadonlyArray<{ defect: string; selector: string }>) => {
+    trail: string;
+    check: StopCheck | null;
+  };
+};
+const probeSnapshot = () =>
+  (window as unknown as { __e8fp: FocusProbe }).__e8fp.snapshot();
+const probeCheck = (
+  known: ReadonlyArray<{ defect: string; selector: string }>,
+) => (window as unknown as { __e8fp: FocusProbe }).__e8fp.check(known);
+
+/**
+ * Before any axe call: no finite CSS transition, CSS animation or WAAPI
+ * animation may be running or pending. axe composites opacity, so a mid-fade
+ * frame reads as a lower-contrast colour (the lens line-2 turn read as
+ * #a96a59 = terracotta-ink at α≈0.86). Two consecutive quiet polls are
+ * required; on timeout the test fails with what was still animating.
+ * Infinite animations never settle; they are recorded with the axe summary.
+ */
+async function settleAnimations(page: Page, surface: string) {
+  const live = () =>
+    page.evaluate(() =>
+      document
+        .getAnimations()
+        .filter((a) => a.playState === "running" || a.pending)
+        .map((a) => {
+          const target = (a.effect as KeyframeEffect | null)?.target;
+          const name =
+            (a as CSSAnimation).animationName ??
+            (a as CSSTransition).transitionProperty ??
+            a.id ??
+            "animation";
+          return {
+            what: `${a.constructor.name} ${name} on ${target ? `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : ""}.${String(target.getAttribute("class") ?? "").split(" ").slice(0, 3).join(".")}` : "?"}`,
+            infinite: a.effect?.getTiming().iterations === Infinity,
+          };
+        }),
+    );
+  let quiet = 0;
+  let last: Array<{ what: string; infinite: boolean }> = [];
+  const deadline = Date.now() + 10_000;
+  while (quiet < 2) {
+    last = await live();
+    if (last.every((a) => a.infinite)) quiet++;
+    else quiet = 0;
+    if (quiet >= 2) break;
+    if (Date.now() > deadline)
+      throw new Error(
+        `${surface}: animations still running before axe after 10 s: ${JSON.stringify(last.filter((a) => !a.infinite))}`,
+      );
+    await page.waitForTimeout(100);
+  }
+  return last.map((a) => a.what);
+}
 
 async function runAxe(page: Page, surface: string, include?: string) {
+  const infiniteAnimations = await settleAnimations(page, surface);
   await page.evaluate(AXE);
   const result = await page.evaluate(async (context) => {
     const run = (
@@ -92,7 +375,7 @@ async function runAxe(page: Page, surface: string, include?: string) {
       }),
     };
   });
-  const summary = { surface, counts, violations };
+  const summary = { surface, counts, violations, infiniteAnimations };
   axeResults.push(summary);
   expect(result.testEngine?.version, "axe ran").toBe("4.11.1");
   return summary;
@@ -126,9 +409,12 @@ async function tabTo(
   label: string,
   backwards = false,
   limit = 250,
+  // strict: a KNOWN_NO_INDICATOR stop fails too (the RC7-E8-6 fixme).
+  strict = false,
 ) {
   const key = backwards ? `Shift+${tabKey(page)}` : tabKey(page);
   const trail: string[] = [];
+  const checks: StopCheck[] = [];
   let steps = 0;
   const deadline = Date.now() + 150_000;
   while (
@@ -140,25 +426,21 @@ async function tabTo(
       })
       .catch(() => false))
   ) {
+    await page.evaluate(installFocusProbe);
+    await page.evaluate(probeSnapshot);
     await page.keyboard.press(key);
     // Human pace: the paper's lens opens a quiet stop only once the
     // focus-driven scroll settles (use-lens-density.ts, L-9); a stop's
     // controls do not exist until then.
     await page.waitForTimeout(150);
     steps++;
-    trail.push(
-      await page.evaluate(() => {
-        const el = document.activeElement;
-        if (!el || el === document.body) return "body";
-        const ffe =
-          document
-            .querySelector('[data-paper-chapter="ffe"] [data-density]')
-            ?.getAttribute("data-density") ?? "-";
-        return `${el.tagName.toLowerCase()}:${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 30)} y${Math.round(scrollY)} ffe=${ffe}`;
-      }),
-    );
+    await page.evaluate(installFocusProbe);
+    const stop = await page.evaluate(probeCheck, KNOWN_NO_INDICATOR);
+    trail.push(stop.trail);
+    if (stop.check) checks.push(stop.check);
   }
   tabCounts[label] = steps;
+  stopsChecked[label] = checks.length;
   if (steps >= limit || Date.now() >= deadline)
     console.log(
       "[rc7-e8 focus trail]",
@@ -172,8 +454,6 @@ async function tabTo(
   ).toBeFocused();
   const seen = await control.evaluate((element) => {
     const rect = element.getBoundingClientRect();
-    const focusVisible = element.matches(":focus-visible");
-    const style = getComputedStyle(element);
     return {
       inViewport:
         rect.bottom > 0 &&
@@ -214,30 +494,39 @@ async function tabTo(
             .join("")}`,
         };
       })(),
-      focusVisible,
-      // A transparent outline (Tailwind outline-none) is not an indicator; fall through to the ring.
-      indicator:
-        style.outlineStyle !== "none" &&
-        style.outlineWidth !== "0px" &&
-        !/rgba\([^)]*,\s*0\)|transparent/.test(style.outlineColor)
-          ? `outline ${style.outlineWidth} ${style.outlineColor}`
-          : style.boxShadow !== "none"
-            ? `box-shadow ${style.boxShadow.slice(0, 60)}`
-            : style.textDecorationLine !== "none"
-              ? "underline"
-              : "none detected",
     };
   });
+  // The destination is the walk's last stop (re-judged if no key was pressed).
+  if (!checks.length) await page.evaluate(installFocusProbe);
+  const destination =
+    checks.at(-1) ??
+    (await page.evaluate(probeCheck, KNOWN_NO_INDICATOR)).check;
   focusIndicators[label] = seen.obscuredBy.by
-    ? `${seen.indicator}; covered ${seen.obscuredBy.by}`
-    : seen.indicator;
+    ? `${destination?.indicator}; covered ${seen.obscuredBy.by}`
+    : `${destination?.indicator}`;
   expect(seen.inViewport, `${label}: focused control is on screen`).toBe(true);
-  // WCAG 2.4.7: keyboard focus shows a painted indicator (an always-on underline is not one).
-  expect(seen.focusVisible, `${label}: :focus-visible matches`).toBe(true);
+  // WCAG 2.4.7 at every stop of the walk, destination included: a painted
+  // indicator the unfocused control does not have (installFocusProbe).
+  expect(destination, `${label}: destination judged`).not.toBeNull();
+  const judged = [
+    ...checks,
+    ...(steps === 0 && destination ? [destination] : []),
+  ];
+  for (const c of judged) {
+    if (c.borderContrast !== null)
+      borderIndicators[c.stop] = Math.min(
+        borderIndicators[c.stop] ?? Infinity,
+        c.borderContrast,
+      );
+    if (c.failure && c.known)
+      knownNoIndicator[c.stop] = `${c.known}: ${c.failure}`;
+  }
   expect(
-    seen.indicator,
-    `${label}: visible focus indicator (outline or box-shadow)`,
-  ).toMatch(/^(outline|box-shadow) /);
+    judged
+      .filter((c) => c.failure && (strict || !c.known))
+      .map((c) => `${c.stop}: ${c.failure} [${c.indicator}]`),
+    `${label}: every Tab stop shows a visible focus indicator`,
+  ).toEqual([]);
   // WCAG 2.4.11 (AA): not entirely hidden. Partly covered stays an observation (O-1, 2.4.12 AAA).
   expect(
     seen.obscuredBy.covered,
@@ -298,6 +587,12 @@ const instrument = (page: Page) =>
 test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
   test.setTimeout(300_000);
 
+  // The keyboard save writes through the portal: never the shared stack, and
+  // only when rc7_owned.stack names RC7_OWNED_STACK.
+  test.beforeAll(() => {
+    psqlRun(e8OwnedStackSql("rc7-e8 a11y keyboard save"));
+  });
+
   test.afterAll(() => {
     const project = test.info().project.name;
     mkdirSync(OUT, { recursive: true });
@@ -319,6 +614,21 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
             ...axeResults,
           ],
           tabCounts: { ...prior.tabCounts, ...tabCounts },
+          stopsChecked: {
+            ...(prior as { stopsChecked?: Record<string, number> })
+              .stopsChecked,
+            ...stopsChecked,
+          },
+          borderIndicators: {
+            ...(prior as { borderIndicators?: Record<string, number> })
+              .borderIndicators,
+            ...borderIndicators,
+          },
+          knownNoIndicator: {
+            ...(prior as { knownNoIndicator?: Record<string, string> })
+              .knownNoIndicator,
+            ...knownNoIndicator,
+          },
           focusIndicators: {
             ...(prior as { focusIndicators?: Record<string, string> })
               .focusIndicators,
@@ -537,7 +847,7 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
       openConditions(),
       "refused submit records no resolution (condition stays open)",
     ).toBe(before);
-    // Cancel closes the form; record where focus lands.
+    // Cancel after the refusal closes the form and returns focus to its opener.
     await tabTo(
       page,
       form.getByRole("button", { name: "Cancel" }),
@@ -545,13 +855,10 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     );
     await page.keyboard.press("Enter");
     await expect(form).toHaveCount(0);
-    const landed = await page.evaluate(() => {
-      const el = document.activeElement;
-      if (!el || el === document.body) return "body";
-      return `${el.tagName.toLowerCase()}:${(el.textContent ?? "").trim().slice(0, 40)}`;
-    });
-    console.log("[rc7-e8 cancel focus]", test.info().project.name, landed);
-    test.info().annotations.push({ type: "cancel-focus", description: landed });
+    await expect(
+      resolveButton,
+      "Cancel after a refused submit returns focus to the opener",
+    ).toBeFocused();
   });
 
   // RC7-E8-1 (fixed by FIX4 5386a159e): Cancel on the resolve-condition form used to
@@ -589,6 +896,33 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     await expect(form).toHaveCount(0);
     await expect(resolveButton).toBeFocused();
   });
+  // DEFECT RC7-E8-6: the schedule's ghost "Name a phase" input
+  // (schedule/ghost-add-line.tsx:226) sets focus:outline-none and paints no
+  // replacement, so a keyboard reader passing it sees no focus (2.4.7 AA).
+  // Kept out of the gate through KNOWN_NO_INDICATOR.
+  test.fixme('RC7-E8-6: "Name a phase" shows a focus indicator', async ({
+    page,
+  }) => {
+    const job = psqlScalar(
+      `SELECT id FROM public.projects WHERE name='E7 household job' AND designer_id='e7e70000-0000-4000-8000-000000000001';`,
+    );
+    await signInAs(page, E7_OWNER);
+    await arrivedStudio(page);
+    await page.goto("about:blank");
+    await page.goto(`/doc/${job}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 120_000,
+    });
+    await arrivedJob(page);
+    await tabTo(
+      page,
+      page.getByRole("textbox", { name: "Name a phase" }).first(),
+      "E8-6 → Name a phase",
+      false,
+      250,
+      true,
+    );
+  });
   test("RC7-E8-2: axe color-contrast serious == 0 on every surface", async ({
     page,
   }) => {
@@ -604,6 +938,7 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
         `${surface} [RC7-E8-2]`,
         include,
       );
+      await settleAnimations(page, `${surface} [RC7-E8-2 incomplete]`);
       incomplete[surface] = await page.evaluate(async (context) => {
         const run = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<any> } }).axe.run;
         const result = await run(context ? { include: [context] } : document, {
