@@ -19,6 +19,7 @@
 
 import { useState } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { BoardOwnerRef } from "@patina/types";
 import {
   flushBoardOwnerAutosaves,
@@ -533,7 +534,7 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     });
     await answer(0);
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Dimensions changed in another session. Save again to replace it.",
+      "Dimensions changed in another session to “width 90 · unit in”. Save again to replace it.",
     );
     expect(width()).toHaveValue("72");
     await act(async () => {
@@ -699,10 +700,29 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
       selected_media: [{ url: "https://example.com/peer.jpg" }] as never };
     await answer(0);
     expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute("src", "https://example.com/mine.jpg");
-    fireEvent.click(screen.getByRole("button", { name: "Discard my change" }));
+    await act(async () => { await userEvent.setup().click(screen.getByRole("button", { name: "Discard my image change" })); });
     expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute("src", "https://example.com/peer.jpg");
-    expect(screen.queryByRole("button", { name: "Discard my change" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Discard my image change" })).toBeNull();
+    expect(link).toHaveFocus();
     expect(mockSpecCalls).toHaveLength(1);
+  });
+
+  it("does not discard a conflicting image while its retry is in flight", async () => {
+    render(<Harness />);
+    const link = screen.getByRole("textbox", { name: "Paste an image link" });
+    fireEvent.change(link, { target: { value: "https://example.com/mine.jpg" } });
+    await act(async () => fireEvent.keyDown(link, { key: "Enter" }));
+    server = { ...server, row_version: server.row_version + 1,
+      selected_media: [{ url: "https://example.com/peer.jpg" }] as never };
+    await answer(0);
+    const discard = screen.getByRole("button", { name: "Discard my image change" });
+    await act(async () => fireEvent.keyDown(link, { key: "Enter" }));
+    expect(mockSpecCalls).toHaveLength(2);
+    expect(discard).toBeDisabled();
+    await act(async () => { await userEvent.setup().click(discard); });
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute("src", "https://example.com/mine.jpg");
+    await answer(1);
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute("src", "https://example.com/mine.jpg");
   });
 
   it("A, then image B sent, then C chosen before B lands: C sends on B's row with no alert", async () => {
