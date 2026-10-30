@@ -248,3 +248,89 @@ vm_stat free 8216 MB 05:43:44
   7 skipped
   15 passed (10.1m)
 exit 0 elapsed 607s
+
+== E8H re-check fixes (2026-10-30): identity-scoped replacement + self-test, mobile-bar act assert, pseudo display/visibility, axe animation settle; zoom + a11y specs only, fresh owned stack head 00904. An earlier chromium attempt (r4-1, before the settle helper and the self-test once:true fix) failed RC7-E8-2 on a mid-fade frame (H-1) and the self-test fixture; it was stopped and is not counted.
+
+== e8h-recheck-chromium-1
+vm_stat free 7543 MB 06:21:21
+/dev/disk3s5   926Gi   623Gi   251Gi    72%     15M  2.6G    1%   /System/Volumes/Data
+  ✓   1 [chromium] › rc7-e8-a11y.spec.ts:661:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (56.5s)
+  ✓   2 [chromium] › rc7-e8-a11y.spec.ts:794:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (20.1s)
+  ✓   3 [chromium] › rc7-e8-a11y.spec.ts:866:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (19.2s)
+  -   4 [chromium] › rc7-e8-a11y.spec.ts:903:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-6: "Name a phase" shows a focus indicator
+  ✓   5 [chromium] › rc7-e8-a11y.spec.ts:926:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface (1.0m)
+  ✓   6 [chromium] › rc7-e8-zoom.spec.ts:779:7 › RC-7 E8 X06 zoom probe self-test › an unmounted unreached control is not erased by a same-named decoy (1.9s)
+  ✓   7 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: long content — the whole job paper (30.5s)
+  ✓   8 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: FF&E table (Specifications, a line open) (1.5m)
+  ✓   9 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: drawing/evidence viewer (17.6s)
+  -  10 [chromium] › rc7-e8-zoom.spec.ts:894:14 › RC-7 E8 X06 200% zoom › 1280@200 › RC7-E8-7: 1280@200 Tab reaches the lens band's to-top control
+  ✓  11 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: long content — the whole job paper (37.8s)
+  ✓  12 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: FF&E table (Specifications, a line open) (1.5m)
+  ✓  13 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: drawing/evidence viewer (18.2s)
+  -  14 [chromium] › rc7-e8-zoom.spec.ts:908:14 › RC-7 E8 X06 200% zoom › 390@200 › RC7-E8-3: 390@200 has 0 clipped controls on every surface
+  3 skipped
+  11 passed (7.9m)
+exit 0 elapsed 475s
+
+== e8h-recheck-chromium-2
+vm_stat free 8292 MB 06:29:16
+/dev/disk3s5   926Gi   623Gi   251Gi    72%     15M  2.6G    1%   /System/Volumes/Data
+  ✓   1 [chromium] › rc7-e8-a11y.spec.ts:661:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (57.0s)
+  ✓   2 [chromium] › rc7-e8-a11y.spec.ts:794:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (20.8s)
+  ✓   3 [chromium] › rc7-e8-a11y.spec.ts:866:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (19.3s)
+  -   4 [chromium] › rc7-e8-a11y.spec.ts:903:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-6: "Name a phase" shows a focus indicator
+  ✓   5 [chromium] › rc7-e8-a11y.spec.ts:926:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface (1.0m)
+  ✓   6 [chromium] › rc7-e8-zoom.spec.ts:779:7 › RC-7 E8 X06 zoom probe self-test › an unmounted unreached control is not erased by a same-named decoy (1.9s)
+  ✓   7 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: long content — the whole job paper (30.5s)
+  ✓   8 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: FF&E table (Specifications, a line open) (1.5m)
+  ✓   9 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: drawing/evidence viewer (17.4s)
+  -  10 [chromium] › rc7-e8-zoom.spec.ts:894:14 › RC-7 E8 X06 200% zoom › 1280@200 › RC7-E8-7: 1280@200 Tab reaches the lens band's to-top control
+  ✓  11 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: long content — the whole job paper (37.2s)
+  ✓  12 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: FF&E table (Specifications, a line open) (1.5m)
+  ✓  13 [chromium] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: drawing/evidence viewer (18.2s)
+  -  14 [chromium] › rc7-e8-zoom.spec.ts:908:14 › RC-7 E8 X06 200% zoom › 390@200 › RC7-E8-3: 390@200 has 0 clipped controls on every surface
+  3 skipped
+  11 passed (7.9m)
+exit 0 elapsed 475s
+
+== e8h-recheck-webkit-iphone-1
+vm_stat free 7783 MB 06:37:11
+/dev/disk3s5   926Gi   623Gi   251Gi    72%     15M  2.6G    1%   /System/Volumes/Data
+  ✓   1 [webkit-iphone] › rc7-e8-a11y.spec.ts:661:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (1.2m)
+  ✓   2 [webkit-iphone] › rc7-e8-a11y.spec.ts:794:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (21.5s)
+  ✓   3 [webkit-iphone] › rc7-e8-a11y.spec.ts:866:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (21.2s)
+  -   4 [webkit-iphone] › rc7-e8-a11y.spec.ts:903:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-6: "Name a phase" shows a focus indicator
+  ✓   5 [webkit-iphone] › rc7-e8-a11y.spec.ts:926:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface (1.1m)
+  ✓   6 [webkit-iphone] › rc7-e8-zoom.spec.ts:779:7 › RC-7 E8 X06 zoom probe self-test › an unmounted unreached control is not erased by a same-named decoy (2.1s)
+  ✓   7 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: long content — the whole job paper (32.2s)
+  ✓   8 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: FF&E table (Specifications, a line open) (1.6m)
+  ✓   9 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: drawing/evidence viewer (19.3s)
+  -  10 [webkit-iphone] › rc7-e8-zoom.spec.ts:894:14 › RC-7 E8 X06 200% zoom › 1280@200 › RC7-E8-7: 1280@200 Tab reaches the lens band's to-top control
+  ✓  11 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: long content — the whole job paper (38.1s)
+  ✓  12 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: FF&E table (Specifications, a line open) (1.7m)
+  ✓  13 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: drawing/evidence viewer (20.6s)
+  -  14 [webkit-iphone] › rc7-e8-zoom.spec.ts:908:14 › RC-7 E8 X06 200% zoom › 390@200 › RC7-E8-3: 390@200 has 0 clipped controls on every surface
+  3 skipped
+  11 passed (8.8m)
+exit 0 elapsed 529s
+
+== e8h-recheck-webkit-iphone-2
+vm_stat free 8258 MB 06:46:00
+/dev/disk3s5   926Gi   623Gi   251Gi    72%     15M  2.6G    1%   /System/Volumes/Data
+  ✓   1 [webkit-iphone] › rc7-e8-a11y.spec.ts:661:7 › RC-7 E8 X05 keyboard-only processes and axe › studio → job → FF&E unfold → save → close → studio, keyboard only (1.2m)
+  ✓   2 [webkit-iphone] › rc7-e8-a11y.spec.ts:794:7 › RC-7 E8 X05 keyboard-only processes and axe › acceptance chapter (C4/C6 active): keyboard resolve-condition form, refused submit, cancel (21.3s)
+  ✓   3 [webkit-iphone] › rc7-e8-a11y.spec.ts:866:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-1: Cancel returns focus to "Resolve this condition" (20.9s)
+  -   4 [webkit-iphone] › rc7-e8-a11y.spec.ts:903:8 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-6: "Name a phase" shows a focus indicator
+  ✓   5 [webkit-iphone] › rc7-e8-a11y.spec.ts:926:7 › RC-7 E8 X05 keyboard-only processes and axe › RC7-E8-2: axe color-contrast serious == 0 on every surface (1.1m)
+  ✓   6 [webkit-iphone] › rc7-e8-zoom.spec.ts:779:7 › RC-7 E8 X06 zoom probe self-test › an unmounted unreached control is not erased by a same-named decoy (2.1s)
+  ✓   7 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: long content — the whole job paper (32.6s)
+  ✓   8 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: FF&E table (Specifications, a line open) (1.6m)
+  ✓   9 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 1280@200 › 1280@200: drawing/evidence viewer (18.8s)
+  -  10 [webkit-iphone] › rc7-e8-zoom.spec.ts:894:14 › RC-7 E8 X06 200% zoom › 1280@200 › RC7-E8-7: 1280@200 Tab reaches the lens band's to-top control
+  ✓  11 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: long content — the whole job paper (37.8s)
+  ✓  12 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: FF&E table (Specifications, a line open) (1.7m)
+  ✓  13 [webkit-iphone] › rc7-e8-zoom.spec.ts:876:13 › RC-7 E8 X06 200% zoom › 390@200 › 390@200: drawing/evidence viewer (19.9s)
+  -  14 [webkit-iphone] › rc7-e8-zoom.spec.ts:908:14 › RC-7 E8 X06 200% zoom › 390@200 › RC7-E8-3: 390@200 has 0 clipped controls on every surface
+  3 skipped
+  11 passed (8.8m)
+exit 0 elapsed 526s

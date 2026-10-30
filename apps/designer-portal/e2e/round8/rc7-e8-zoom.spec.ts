@@ -74,7 +74,7 @@ const INTENTIONALLY_HIDDEN: ReadonlyArray<{
 const KNOWN_UNREACHED: ReadonlyArray<{ defect: string; selector: string }> = [
   {
     // DEFECT RC7-E8-7: the lens band's to-top control renders only while the
-    // band is closed (lens-band.tsx:64, :78). Tab from "Project directory"
+    // band is closed (lens-band.tsx:443, :455). Tab from "Project directory"
     // scrolls the paper, the band opens, and the control unmounts as Tab
     // reaches it, so focus lands on the next control instead.
     defect: "RC7-E8-7",
@@ -234,6 +234,33 @@ function install(args: {
       const r = el.getBoundingClientRect();
       return rendered(el) && r.width > 1 && r.height > 1;
     });
+  // A control's identity: its stable attributes (tag, id, aria-label,
+  // data-action-key, data-testid, the data-* attribute names) and accessible
+  // name, scoped to its region (nearest id, landmark, section, dialog, chapter
+  // or lens band). A start control that unmounts can only be replaced by a new
+  // node with the same identity; a same-named control elsewhere cannot.
+  const keyOf = (el: Element) =>
+    [
+      el.tagName.toLowerCase(),
+      el.id,
+      el.getAttribute("aria-label") ?? "",
+      el.getAttribute("data-action-key") ?? "",
+      el.getAttribute("data-testid") ?? "",
+      [...el.attributes]
+        .map((a) => a.name)
+        .filter((n) => n.startsWith("data-"))
+        .sort()
+        .join(","),
+    ].join("|");
+  const REGION =
+    '[id], section, nav, header, aside, dialog, [role="region"], [role="dialog"], [data-paper-chapter], [data-lens-band]';
+  const identity = (el: Element) => {
+    const region = el.parentElement?.closest(REGION);
+    const regionKey = region
+      ? `${keyOf(region)}|${region.getAttribute("data-paper-chapter") ?? ""}`
+      : "-";
+    return `${regionKey}\u0000${keyOf(el)}\u0000${name(el)}`;
+  };
   const controls = census();
   const allow = (el: Element) =>
     args.allowlist.find((entry) => el.matches(entry.selector))?.name ?? null;
@@ -246,6 +273,9 @@ function install(args: {
     census,
     statics: controls.map((el) => judge(el, false)),
     reached: new Map<Element, string | null>(),
+    // Identities taken while each node is mounted: at the start, and on reach.
+    ids: new Map<Element, string>(controls.map((el) => [el, identity(el)])),
+    identity,
     judge,
     describe,
     name,
@@ -261,6 +291,8 @@ type E8z = {
   census: () => Element[];
   statics: Array<string | null>;
   reached: Map<Element, string | null>;
+  ids: Map<Element, string>;
+  identity: (el: Element) => string;
   judge: (el: Element, focused: boolean) => string | null;
   describe: (el: Element) => string;
   name: (el: Element) => string;
@@ -312,6 +344,7 @@ async function probe(page: Page, rootSelector: string): Promise<Probe> {
         const verdict = z.judge(el, true);
         if (verdict !== null && !final) return "retry";
         z.reached.set(el, verdict);
+        if (!z.ids.has(el)) z.ids.set(el, z.identity(el));
         return "ok";
       }, attempt === 3);
       if (state !== "retry") break;
@@ -342,6 +375,7 @@ async function probe(page: Page, rootSelector: string): Promise<Probe> {
         const verdict = z.judge(el, true);
         if (verdict !== null && !final) return "retry";
         z.reached.set(el, verdict);
+        if (!z.ids.has(el)) z.ids.set(el, z.identity(el));
         return "new";
       }, attempt === 3);
       if (state !== "retry") break;
@@ -388,14 +422,25 @@ async function probe(page: Page, rootSelector: string): Promise<Probe> {
           known: z.knownUnreached(el),
         });
       }
-      // A start control that unmounted before Tab reached it, and that no
-      // mounted or reached node with the same selector and name replaced, was
-      // lost to the walk: it stays in the census, unreached.
-      const sig = (el: Element) => `${z.describe(el)}\u0000${z.name(el)}`;
-      const present = new Set([...census, ...z.reached.keys()].map(sig));
-      const lost = z.controls.filter(
-        (el) => !el.isConnected && !z.reached.has(el) && !present.has(sig(el)),
-      );
+      // A start control that unmounted before Tab reached it stays in the
+      // census, unreached, unless a NEW node with the same identity (see
+      // install) replaced it. Counted per identity: k unmounted-unreached start
+      // controls are covered by at most k new same-identity nodes.
+      const idOf = (el: Element) => {
+        if (!z.ids.has(el)) z.ids.set(el, z.identity(el));
+        return z.ids.get(el)!;
+      };
+      const start = new Set(z.controls);
+      const fresh = new Map<string, number>();
+      for (const el of new Set([...census, ...z.reached.keys()]))
+        if (!start.has(el)) fresh.set(idOf(el), (fresh.get(idOf(el)) ?? 0) + 1);
+      const lost = z.controls.filter((el) => {
+        if (el.isConnected || z.reached.has(el)) return false;
+        const left = fresh.get(idOf(el)) ?? 0;
+        if (left === 0) return true;
+        fresh.set(idOf(el), left - 1);
+        return false;
+      });
       for (const el of lost) {
         if (z.allow(el)) continue;
         unreached.push({
@@ -600,7 +645,37 @@ const SURFACES: Record<string, Surface> = {
       window.scrollTo(0, 0);
     });
     const key = `${label} job paper`;
-    return [[key, await record(page, key, "[data-document-shell]")]];
+    const result = await record(page, key, "[data-document-shell]");
+    // The 390@200% census floor (71) rests on the lens band's next act being
+    // hidden in the band and offered in the fixed mobile bar instead, outside
+    // the probe root. Prove that duplicate is there and focusable.
+    if (label.startsWith("390@200")) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const bandAct = page.locator(
+        '[data-lens-band] [data-action-key="lens-band-next"]',
+      );
+      await expect(bandAct, "390@200: the band renders a next act").toHaveCount(1);
+      await expect(bandAct, "390@200: the band's next act is hidden").toBeHidden();
+      const actName = ((await bandAct.textContent()) ?? "").trim();
+      expect(actName, "390@200: the band carries a next act").not.toBe("");
+      const barAct = page
+        .locator('nav[data-testid="mobile-bar"] [data-action-key^="next:"]')
+        .filter({ hasText: actName });
+      await expect(barAct, "390@200: the mobile bar offers the same act").toHaveCount(1);
+      await expect(barAct).toBeVisible();
+      await expect(barAct).toBeEnabled();
+      expect(
+        await barAct.evaluate(
+          (el) =>
+            !el.closest("[data-document-shell]") &&
+            (el as HTMLElement).tabIndex >= 0,
+        ),
+        "390@200: the bar act sits outside the probe root, in tab order",
+      ).toBe(true);
+      await barAct.focus();
+      await expect(barAct, "390@200: the bar act takes focus").toBeFocused();
+    }
+    return [[key, result]];
   },
 
   "FF&E table (Specifications, a line open)": async (page, label) => {
@@ -695,6 +770,50 @@ const SURFACES: Record<string, Surface> = {
     ];
   },
 };
+
+// The probe's replacement rule, on a fixed page: a control that unmounts
+// before Tab reaches it must stay unreached even when a same-named, same-
+// attribute decoy is reachable elsewhere; a same-identity remount that Tab
+// does reach covers its predecessor.
+test.describe("RC-7 E8 X06 zoom probe self-test", () => {
+  test("an unmounted unreached control is not erased by a same-named decoy", async ({
+    page,
+  }) => {
+    await page.setContent(`
+      <main id="e8-root">
+        <section aria-label="Lost">
+          <button type="button" data-e8-opener>Opener</button>
+          <span data-e8-slot><button type="button" data-x>Save</button></span>
+          <button type="button">After</button>
+        </section>
+        <section aria-label="Decoy">
+          <button type="button" data-x>Save</button>
+        </section>
+        <section aria-label="Remount">
+          <button type="button" data-e8-pre>Pre</button>
+          <span data-e8-slot2><button type="button" data-y>Swap</button></span>
+        </section>
+      </main>
+      <script>
+        document.querySelector("[data-e8-opener]").addEventListener("focus", () =>
+          document.querySelector("[data-e8-slot]").replaceChildren(), { once: true });
+        document.querySelector("[data-e8-pre]").addEventListener("focus", () => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.setAttribute("data-y", "");
+          b.textContent = "Swap";
+          document.querySelector("[data-e8-slot2]").replaceChildren(b);
+        }, { once: true });
+      </script>`);
+    const result = await probe(page, "#e8-root");
+    expect(result.controls).toBe(6);
+    expect(result.census, "the lost Save stays in the census").toBe(6);
+    expect(
+      result.unreached.map((c) => [c.name, c.reason]),
+      "only the lost Save is unreached; the decoy does not erase it and the remounted Swap covers its predecessor",
+    ).toEqual([["Save", "unmounted before Tab reached it"]]);
+  });
+});
 
 test.describe("RC-7 E8 X06 200% zoom", () => {
   test.setTimeout(300_000);

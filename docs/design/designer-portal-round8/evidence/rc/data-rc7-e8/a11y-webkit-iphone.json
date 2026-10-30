@@ -8,7 +8,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "job paper (F01)",
@@ -18,7 +19,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "FF&E unfold, Specifications, line open",
@@ -28,7 +30,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "job paper (E7, acceptance active)",
@@ -38,7 +41,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "acceptance/care chapter (E7)",
@@ -48,7 +52,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "resolve-condition form open",
@@ -58,7 +63,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "studio [RC7-E8-2]",
@@ -68,7 +74,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "job paper (F01) [RC7-E8-2]",
@@ -78,7 +85,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "FF&E unfold, Specifications, line open [RC7-E8-2]",
@@ -88,7 +96,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "job paper (E7, acceptance active) [RC7-E8-2]",
@@ -98,7 +107,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "acceptance/care chapter (E7) [RC7-E8-2]",
@@ -108,7 +118,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     },
     {
       "surface": "resolve-condition form open [RC7-E8-2]",
@@ -118,7 +129,8 @@
         "moderate": 0,
         "minor": 0
       },
-      "violations": []
+      "violations": [],
+      "infiniteAnimations": []
     }
   ],
   "tabCounts": {
@@ -164,14 +176,14 @@
     "contrast job → Resolve this condition": 76
   },
   "borderIndicators": {
-    "input:Item label": 2.33,
-    "input:Paste an image link": 17.17,
-    "input:Finish": 15.08,
+    "input:Item label": 2.31,
+    "input:Paste an image link": 17.53,
+    "input:Finish": 17.53,
     "button:Start": 2.18,
     "button:Target": 2.18,
-    "input:": 2.1,
+    "input:": 2.12,
     "textarea:": 2.12,
-    "select:Evidence set of Oct 30, 2026 (": 2.23
+    "select:Evidence set of Oct 30, 2026 (": 2.21
   },
   "knownNoIndicator": {
     "input:Name a phase": "RC7-E8-6: no painted indicator that differs from unfocused <input class=\"min-w-[280px] max-w-full border-b border-dashed border-[var(--color-clay)] bg-transparent pb-[2px] f\">"

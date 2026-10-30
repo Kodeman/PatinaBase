@@ -58,6 +58,7 @@ type AxeSummary = {
     nodes: number;
     targets: string[];
   }>;
+  infiniteAnimations: string[];
 };
 const axeResults: AxeSummary[] = [];
 const tabCounts: Record<string, number> = {};
@@ -128,13 +129,19 @@ function installFocusProbe() {
     shadowOn: boolean;
   };
   const SIDES = ["Top", "Right", "Bottom", "Left"] as const;
+  // Painted: the box and its host are displayed, visible and not transparent.
+  const displayed = (cs: CSSStyleDeclaration) =>
+    cs.display !== "none" &&
+    cs.visibility === "visible" &&
+    parseFloat(cs.opacity) > 0;
   const paint = (el: Element) => {
     const boxes: Box[] = [];
+    const hostShown = displayed(getComputedStyle(el));
     for (const pseudo of [null, "::before", "::after"]) {
       const cs = getComputedStyle(el, pseudo);
       if (pseudo && (cs.content === "none" || cs.content === "normal"))
         continue;
-      const shown = parseFloat(cs.opacity) > 0;
+      const shown = hostShown && displayed(cs);
       boxes.push({
         box: pseudo ?? "",
         outline: `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor}`,
@@ -169,6 +176,7 @@ function installFocusProbe() {
       const style = cs.getPropertyValue(`border-${side.toLowerCase()}-style`);
       const color = cs.getPropertyValue(`border-${side.toLowerCase()}-color`);
       const on =
+        hostShown &&
         parseFloat(width) >= 1 &&
         !/none|hidden/.test(style) &&
         alpha(color) > 0;
@@ -284,7 +292,52 @@ const probeCheck = (
   known: ReadonlyArray<{ defect: string; selector: string }>,
 ) => (window as unknown as { __e8fp: FocusProbe }).__e8fp.check(known);
 
+/**
+ * Before any axe call: no finite CSS transition, CSS animation or WAAPI
+ * animation may be running or pending. axe composites opacity, so a mid-fade
+ * frame reads as a lower-contrast colour (the lens line-2 turn read as
+ * #a96a59 = terracotta-ink at α≈0.86). Two consecutive quiet polls are
+ * required; on timeout the test fails with what was still animating.
+ * Infinite animations never settle; they are recorded with the axe summary.
+ */
+async function settleAnimations(page: Page, surface: string) {
+  const live = () =>
+    page.evaluate(() =>
+      document
+        .getAnimations()
+        .filter((a) => a.playState === "running" || a.pending)
+        .map((a) => {
+          const target = (a.effect as KeyframeEffect | null)?.target;
+          const name =
+            (a as CSSAnimation).animationName ??
+            (a as CSSTransition).transitionProperty ??
+            a.id ??
+            "animation";
+          return {
+            what: `${a.constructor.name} ${name} on ${target ? `${target.tagName.toLowerCase()}${target.id ? `#${target.id}` : ""}.${String(target.getAttribute("class") ?? "").split(" ").slice(0, 3).join(".")}` : "?"}`,
+            infinite: a.effect?.getTiming().iterations === Infinity,
+          };
+        }),
+    );
+  let quiet = 0;
+  let last: Array<{ what: string; infinite: boolean }> = [];
+  const deadline = Date.now() + 10_000;
+  while (quiet < 2) {
+    last = await live();
+    if (last.every((a) => a.infinite)) quiet++;
+    else quiet = 0;
+    if (quiet >= 2) break;
+    if (Date.now() > deadline)
+      throw new Error(
+        `${surface}: animations still running before axe after 10 s: ${JSON.stringify(last.filter((a) => !a.infinite))}`,
+      );
+    await page.waitForTimeout(100);
+  }
+  return last.map((a) => a.what);
+}
+
 async function runAxe(page: Page, surface: string, include?: string) {
+  const infiniteAnimations = await settleAnimations(page, surface);
   await page.evaluate(AXE);
   const result = await page.evaluate(async (context) => {
     const run = (
@@ -322,7 +375,7 @@ async function runAxe(page: Page, surface: string, include?: string) {
       }),
     };
   });
-  const summary = { surface, counts, violations };
+  const summary = { surface, counts, violations, infiniteAnimations };
   axeResults.push(summary);
   expect(result.testEngine?.version, "axe ran").toBe("4.11.1");
   return summary;
@@ -885,6 +938,7 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
         `${surface} [RC7-E8-2]`,
         include,
       );
+      await settleAnimations(page, `${surface} [RC7-E8-2 incomplete]`);
       incomplete[surface] = await page.evaluate(async (context) => {
         const run = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<any> } }).axe.run;
         const result = await run(context ? { include: [context] } : document, {

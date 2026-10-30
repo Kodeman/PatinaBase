@@ -358,7 +358,7 @@ This section supersedes the earlier sections on the assertions it names. The fix
 **RC7-E8-7 (new): forward Tab never reaches the lens band's to-top button. `test.fixme`.**
 
 - **Severity:** low (2.1.1 A). The same scroll-to-top is reachable by other means, and a reader can scroll with the keyboard. **Confidence:** high; both engines, all runs.
-- **Root cause:** `src/components/document/lens-band.tsx:64`/`:78` render `button[data-lens-to-top]` only while the band is closed. Tab from "Project directory · 0" scrolls the paper, the band opens, and the button unmounts just as Tab would reach it. Focus moves to the next control.
+- **Root cause:** `src/components/document/lens-band.tsx:443`/`:455` (the `!open && onToTop` and `open ? null` branches) render `button[data-lens-to-top]` only while the band is closed. Tab from "Project directory · 0" scrolls the paper, the band opens, and the button unmounts just as Tab would reach it. Focus moves to the next control.
 - **Detail:** on chromium at 1280@200%, the Shift+Tab pass reached a remounted to-top instance once the band closed again (`backReached` 1). WebKit at 390@200% never remounted it.
 - **Gate:** allowlisted through `KNOWN_UNREACHED`. The strict `fixme` re-walks the job paper with no allowlist.
 - **Proposed fix:** keep the control mounted, `inert` or hidden while the band is open, or render it outside the band's open/closed branch.
@@ -371,6 +371,28 @@ This section supersedes the earlier sections on the assertions it names. The fix
 - the evidence-set `select`: 2.31
 
 "Paste an image link" and Finish reach 17.5–17.7. The rule asserts that an indicator exists and differs from the unfocused paint; it does not assert 3:1. Below 3:1 is a likely 1.4.11 non-text-contrast failure for those focus states. It is recorded here for a ruling and is not in the gate.
+
+**Re-check fixes (Codex re-check, fix-then-accept):**
+
+- **Replacement by identity, not signature.** An unmounted, unreached start control is covered only by a *new* node with the same identity. Identity is: tag, id, `aria-label`, `data-action-key`, `data-testid`, the `data-*` attribute names, and the accessible name, scoped to the nearest region (id, landmark, `section`, dialog, `[data-paper-chapter]` or the lens band). Matches are counted one-for-one per identity. Identities are taken at the start and on reach, while the node is mounted.
+- **Self-test** (`RC-7 E8 X06 zoom probe self-test`), on a fixed page:
+  - a "Save" control unmounts before Tab reaches it, while a same-named, same-attribute decoy "Save" in another section stays reachable;
+  - a "Swap" control is remounted once, before Tab reaches it.
+  - **Asserted:** the census keeps 6, and `unreached` is exactly `[["Save", "unmounted before Tab reached it"]]`. The old signature rule would have let the decoy erase "Save".
+- **The 390@200% floor is now proved in the test.** In the job-paper surface at 390@200%, the spec asserts that:
+  - the band's `lens-band-next` act exists and is hidden;
+  - `nav[data-testid=mobile-bar]` holds exactly one `next:` act with the same text;
+  - that act is visible, enabled, outside `[data-document-shell]`, has `tabIndex ≥ 0`, and takes focus.
+- **Painted means displayed.** The per-stop indicator now also requires `display ≠ none` and `visibility: visible` on the pseudo-element and on its host, besides opacity. A border change counts only when the host is displayed.
+- **Runs** (zoom + a11y specs only, fresh owned stack, `--workers=1`): chromium 11 passed, 3 skipped (`fixme` RC7-E8-3, -6, -7) ×2; webkit-iphone 11 passed, 3 skipped ×2; 0 failed. The job-paper census was 72 / 71 (1280 / 390) in every run. No axe surface recorded an infinite animation. `data-rc7-e8/a11y-*.json` and `zoom-*.json` are from run 2. Every test line is in `runs.txt`, under `e8h-recheck-*`.
+
+**Harness finding H-1: axe can read a mid-fade frame as low contrast.**
+
+- **What happened:** in the first re-check run (chromium, before the fix), RC7-E8-2 failed on one F01 node: the lens band's line-2 sentence span (`src/components/document/lens-band.tsx:545`, `transition-opacity`, 90/150 ms). axe reported `#a96a59` on `#fcfaf6` = 4.11:1.
+- **Why it is not a product contrast defect:** `#a96a59` is `--color-terracotta-ink` `#9C5340` composited at α ≈ 0.86 over `#fcfaf6`. Solving each channel gives R (169 − 252)/(156 − 252) = 0.865, G (106 − 250)/(83 − 250) = 0.862, B (89 − 246)/(64 − 246) = 0.863. At rest the token is 5.28:1 or better. axe composites opacity, so it caught a lens "turn" mid-fade. The same test passed in all 4 runs on the merged tree.
+- **Fix (harness only; no contrast assertion changed):** `settleAnimations()` now runs before every axe call in `rc7-e8-a11y.spec.ts`. That includes RC7-E8-2's violations and incomplete passes. It waits until no finite CSS transition, CSS animation or WAAPI animation is running or pending, over two consecutive polls. After 10 s it fails with the animations still running. Infinite animations never settle; they are recorded in each axe summary as `infiniteAnimations`.
+
+**Recorded debt: the shared harness writes before the E8 guard.** `e2e/round8/global-setup.ts:25` loads `f01-fixture.sql` before any E8 spec, and so before `e8OwnedStackSql()` runs. Its own guard is `round8Stack()` (`:10`), which allows the shared stack (54321/54322) when `ROUND8_ALLOW_SHARED_DB=1`. With that override set, the F01 fixture lands on the shared stack before the E8 guard refuses the lane's own writes. That override is an explicit opt-in to shared-stack F01 writes, and `global-setup.ts` is shared by every round-8 spec, so this lane does not change it. The E8 guard covers only the E8 lane's own storage and DB writes.
 
 **RC7-E8-2 and RC7-E8-4** are now normal tests (FIX13) and passed in every run above. RC7-E8-4 is chromium only; WebKit skips it for capability.
 
