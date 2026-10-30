@@ -279,6 +279,16 @@ function failuresBelowAA(
     .filter(([, ratio]) => ratio < AA_NORMAL_TEXT);
 }
 
+describe('RC7-E8-2 · quiet ink on the measured paper grounds', () => {
+  it.each([
+    ['glance month tick', '#FAF7F2'],
+    ['FF&E line labels', '#FCFAF7'],
+    ['accounts strip', '#F3F0EB'],
+  ])('%s clears 4.5:1', (_label, ground) => {
+    expect(contrastRatio(resolveToken('--color-quiet-ink'), ground)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+});
+
 describe('R126 · the three muted steps are three, and all three are legible', () => {
   it('declares muted, subtle and faint as three DIFFERENT values', () => {
     // The defect this replaces: all three aliased --color-quiet-ink, so the

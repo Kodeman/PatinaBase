@@ -223,7 +223,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
             Working budget{" "}
             {version ? `· version ${version.version}` : "· not started"}
           </p>
