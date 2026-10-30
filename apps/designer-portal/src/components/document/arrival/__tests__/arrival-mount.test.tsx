@@ -22,6 +22,7 @@ import {
 import type { RosterLine } from '@/lib/document/desk-roster-derivation';
 import {
   afterArrival,
+  latchScroll,
   ArrivalMount,
   beginEntry,
   noteRunStarted,
@@ -668,6 +669,26 @@ describe('afterArrival', () => {
       const onEnd = jest.fn();
       afterArrival(onEnd);
       expect(onEnd).toHaveBeenCalledWith(true);
+    });
+
+    it('the latch holds a scroll away and back to the baseline (review K15)', () => {
+      const latch = latchScroll();
+      expect(latch.moved).toBe(false);
+      scrollTo(640);
+      window.dispatchEvent(new Event('scroll'));
+      scrollTo(0);
+      window.dispatchEvent(new Event('scroll'));
+      expect(window.scrollY).toBe(0);
+      expect(latch.moved).toBe(true);
+      latch.stop();
+    });
+
+    it('the landing stops the latch before its own scroll, so that scroll is not counted', () => {
+      const latch = latchScroll();
+      latch.stop();
+      scrollTo(1183);
+      window.dispatchEvent(new Event('scroll'));
+      expect(latch.moved).toBe(false);
     });
   });
 

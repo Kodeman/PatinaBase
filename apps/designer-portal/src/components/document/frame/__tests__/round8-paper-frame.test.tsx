@@ -810,7 +810,9 @@ describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
     const page = readFileSync(join(src, 'app/(document)/doc/[id]/page.tsx'), 'utf8');
     expect(page).toMatch(/scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
     // RC7-E8-5 — the returning reader's landing waits for the reveal to reach it, not force it.
-    expect(page).toMatch(/whenRevealedThrough\(el, \(\) => \{[\s\S]{0,400}scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
+    expect(page).toMatch(/whenRevealedThrough\(el, \(\) => \{[\s\S]{0,900}scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
+    // …in a frame of its own, never inside the effect, where forceFullThrough's flushSync cannot flush.
+    expect(page).toMatch(/whenRevealedThrough\(el, \(\) => \{(?:(?!lens\.forceFullThrough)[\s\S]){0,400}window\.requestAnimationFrame\(\(\) => \{[\s\S]{0,600}lens\.forceFullThrough\(key\)/);
     // …and lands in D-B18's press order: the roots above it take their height before the scroll.
     expect(page).toMatch(/const key = regionThrough\(el\);\s*if \(key\) lens\.forceFullThrough\(key\);\s*scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
     expect(page).toMatch(/revealPaperThrough\(section\);\s*landSection\(/);

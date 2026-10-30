@@ -305,7 +305,7 @@ import {
 import { sentProposalVoice } from '@/lib/document/sent-proposal-voice';
 import { overdueApprovalTitles, overdueMarginDecisionTitles, waitingOnNamed } from '@/lib/document/nudge-named';
 import { useMarginItems } from '@/hooks/use-margin-items';
-import { afterArrival, useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
+import { afterArrival, latchScroll, useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { consumeArriveToken } from '@/lib/arrival/session';
 import { EVENT_ENDED, type ArrivalEnded, type Landing } from '@/lib/arrival/types';
@@ -1740,9 +1740,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // K15 — the jump also yields to ANY scroll after this entry's arrival, a
   // script's included (a find, a focus, an automation's scroll-into-view): the
   // ref keeps where the page sat when the entry first read its engagement, and
-  // a page that has moved off it is not moved again. The progressive reveal
-  // (opacity only) and chapters settling their height under an unscrolled page
-  // leave scrollY where it was, so they never stand the jump down.
+  // a page that has moved off it is not moved again. A scroll latch makes that
+  // stick: any scroll event from the baseline on stands it down, even one that
+  // came back to the baseline; the landing stops the latch before its own
+  // scroll. The progressive reveal (opacity only) and chapters settling their
+  // height under an unscrolled page fire no scroll, so they never stand it down.
   //
   // RC7-E8-5 — and the jump waits for the paper's own progressive reveal to
   // reach the section (whenRevealedThrough, bounded by the reveal failsafe)
@@ -1756,12 +1758,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // opens only what stands near the unscrolled frame) takes its height before
   // the scroll. Otherwise the lens opens it once it crosses the landed frame,
   // and its body grows under the section (a 0.74 shift on its own).
+  // Force and scroll run in a frame after the reveal answers, never inside the
+  // effect: `forceFullThrough` flushes with flushSync, which cannot flush there.
   const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
   useEffect(() => {
     const token = consumeArriveToken(window.location.pathname, Date.now());
     if (token?.landing && !hasLandInstruction.current) arrivalLandingRef.current = { landing: token.landing, done: false };
   }, []);
-  const landedRef = useRef<{ seen: boolean; done: boolean; scrollY: number } | null>(null);
+  const landedRef = useRef<{ seen: boolean; done: boolean; scrollY: number; moved: boolean } | null>(null);
   const landingEngagementId = row?.engagement_id ?? null;
   const landingSection = row?.active_section;
   useEffect(() => {
@@ -1771,33 +1775,52 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         seen: readRecentDocumentsInHand().some((d) => d.id === landingEngagementId),
         done: false,
         scrollY: window.scrollY,
+        moved: false,
       };
     }
     const landing = landedRef.current;
-    if (!landing.seen || landing.done || !frameCommitted) return;
+    if (!landing.seen || landing.done) return;
+    // K15 — armed from the baseline on, one listener per run (a re-run's cleanup and setup share
+    // one flush, so no scroll event falls between them); `moved` outlives the run on the ref.
+    const latch = latchScroll();
+    let stopArrival = () => {};
     let stopWaiting: (() => void) | null = null;
-    const stopArrival = afterArrival((unplayed) => {
-      const el = unplayed
-        ? (mainRef.current?.querySelector('[data-active-section]') ??
-          (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null))
-        : null;
-      if (!el) {
-        landing.done = true;
-        return;
-      }
-      stopWaiting = whenRevealedThrough(el, () => {
-        landing.done = true;
-        if (Math.abs(window.scrollY - landing.scrollY) > 0.5) return;
-        if (el.isConnected && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-          const key = regionThrough(el);
-          if (key) lens.forceFullThrough(key);
-          scrollIntoRevealed(el, { block: 'start' });
+    let frame = 0;
+    if (frameCommitted) {
+      stopArrival = afterArrival((unplayed) => {
+        const el = unplayed
+          ? (mainRef.current?.querySelector('[data-active-section]') ??
+            (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null))
+          : null;
+        if (!el) {
+          landing.done = true;
+          latch.stop();
+          return;
         }
-      });
-    }, landing.scrollY);
+        stopWaiting = whenRevealedThrough(el, () => {
+          // Out of the effect: this can answer synchronously inside it, where the flushSync in
+          // `forceFullThrough` cannot flush, and the scroll would read the reserve heights.
+          frame = window.requestAnimationFrame(() => {
+            landing.done = true;
+            const away =
+              landing.moved || latch.moved || Math.abs(window.scrollY - landing.scrollY) > 0.5;
+            latch.stop();
+            if (away) return;
+            if (el.isConnected && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+              const key = regionThrough(el);
+              if (key) lens.forceFullThrough(key);
+              scrollIntoRevealed(el, { block: 'start' });
+            }
+          });
+        });
+      }, landing.scrollY);
+    }
     return () => {
+      if (latch.moved) landing.moved = true;
+      latch.stop();
       stopArrival();
       stopWaiting?.();
+      window.cancelAnimationFrame(frame);
     };
   }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection, lens]);
 

@@ -211,6 +211,28 @@ export function afterArrival(
   };
 }
 
+/**
+ * K15 — a latch over the window's scroll events: `moved` turns true at the first one after it is
+ * armed and never turns back, so a page scrolled away and back to where it sat has still been
+ * scrolled. A landing reads it, then calls `stop()` before its own scroll, so that scroll's event is
+ * never counted against it.
+ */
+export function latchScroll(): { readonly moved: boolean; stop: () => void } {
+  let moved = false;
+  const stop = () => window.removeEventListener('scroll', onScroll);
+  const onScroll = () => {
+    moved = true;
+    stop();
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  return {
+    get moved() {
+      return moved;
+    },
+    stop,
+  };
+}
+
 function mark(): void {
   touchVisit(Date.now());
 }
