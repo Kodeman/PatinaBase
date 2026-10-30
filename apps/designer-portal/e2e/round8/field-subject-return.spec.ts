@@ -36,11 +36,12 @@ async function mockedNote(page: Page, state: { visible: boolean; refused: boolea
     title: 'N02 fictional observation', detail: '', ts: '2026-10-26T00:00:00Z',
     payload: { body: 'Fictional private Field observation', author_name: 'Fictional observer',
       field_capture_id: 'f2066000-0000-4000-8000-000000000002', capture_visible: state.visible,
-      project_room_id: ROOM, has_audio: false, photo_paths: [] },
+      project_room_id: ROOM, has_audio: false, photo_paths: [],
+      subject_print_label: 'Living Room plan — issued 02' },
   }] }));
   await page.route(`${api.origin}/rest/v1/margin_notes*`, route => state.refused
     ? route.fulfill({ status: 503, json: { message: 'Fictional metadata refusal' } })
-    : route.fulfill({ json: [{ id: NOTE, project_id: JOB, subject_kind: 'plan_print', subject_id: 'recorded-print-only', subject_print_label: 'Living Room plan — issued 02' }] }));
+    : route.fulfill({ json: [{ id: NOTE, project_id: JOB, subject_kind: 'plan_print', subject_id: 'recorded-print-only' }] }));
 }
 
 test('metadata refusal keeps the mounted note and announces unavailable context, not an empty margin', async ({ authenticatedPage: page }) => {
