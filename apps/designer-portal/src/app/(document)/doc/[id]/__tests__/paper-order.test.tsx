@@ -528,6 +528,10 @@ describe('the legacy renderer', () => {
 });
 
 describe('the round-8 paper order', () => {
+  const originalRequestAnimationFrame = window.requestAnimationFrame;
+  const originalCancelAnimationFrame = window.cancelAnimationFrame;
+  const pendingFrames = new Set<number>();
+
   beforeEach(() => {
     mockPaperRenderer = { renderer: 'round8', source: 'override' };
     window.matchMedia = jest.fn().mockImplementation((query: string) => ({
@@ -536,13 +540,25 @@ describe('the round-8 paper order', () => {
       addEventListener: jest.fn(),
       removeEventListener: jest.fn(),
     })) as unknown as typeof window.matchMedia;
-    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    }) as typeof window.requestAnimationFrame;
+    window.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      const id = window.setTimeout(() => {
+        pendingFrames.delete(id);
+        callback(performance.now());
+      }, 0);
+      pendingFrames.add(id);
+      return id;
+    };
+    window.cancelAnimationFrame = (id: number) => {
+      window.clearTimeout(id);
+      pendingFrames.delete(id);
+    };
     HTMLElement.prototype.scrollIntoView = jest.fn();
   });
   afterEach(() => {
+    for (const id of pendingFrames) window.clearTimeout(id);
+    pendingFrames.clear();
+    window.requestAnimationFrame = originalRequestAnimationFrame;
+    window.cancelAnimationFrame = originalCancelAnimationFrame;
     mockPaperRenderer = { renderer: 'legacy', source: 'override' };
   });
 
@@ -692,7 +708,7 @@ describe('the round-8 paper order', () => {
         getByRole('button', { name: 'Continue the introduction' }).click();
       });
 
-      expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
+      await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' }));
       expect(document.activeElement).toBe(container.querySelector('#ffe-chapter-heading'));
     });
 
@@ -706,7 +722,7 @@ describe('the round-8 paper order', () => {
         window.dispatchEvent(new CustomEvent('document:open-section', { detail: 'care' }));
       });
 
-      expect(scroll).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
       expect(document.activeElement).toBe(container.querySelector('#closeout-chapter-heading'));
     });
   });
@@ -803,7 +819,7 @@ describe('a seen-before tokenless resume', () => {
     const target = view.container.querySelector(selector);
     expect(target).not.toBeNull();
     const scroll = HTMLElement.prototype.scrollIntoView as jest.Mock;
-    expect(scroll).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
     expect(scroll.mock.contexts[0]).toBe(target);
     expect(scroll).toHaveBeenCalledWith({ block: 'start' });
   });
@@ -823,7 +839,7 @@ describe('a seen-before tokenless resume', () => {
     const target = view.container.querySelector('[data-paper-chapter="ffe"]');
     expect(target).not.toBeNull();
     const scroll = HTMLElement.prototype.scrollIntoView as jest.Mock;
-    expect(scroll).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
     expect(scroll.mock.contexts[0]).toBe(target);
     expect(scroll).toHaveBeenCalledWith({ block: 'start' });
   });
