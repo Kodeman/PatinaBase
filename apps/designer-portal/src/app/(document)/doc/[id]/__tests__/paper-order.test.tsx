@@ -405,6 +405,7 @@ const params = {
 } as unknown as Promise<{ id: string }>;
 
 describe('the canonical paper order', () => {
+  const originalRequestAnimationFrame = window.requestAnimationFrame;
   beforeEach(() => {
     window.matchMedia = jest.fn().mockImplementation((query: string) => ({
       matches: /min-width:\s*(\d+)px/.test(query),
@@ -417,6 +418,9 @@ describe('the canonical paper order', () => {
       return 1;
     }) as typeof window.requestAnimationFrame;
     HTMLElement.prototype.scrollIntoView = jest.fn();
+  });
+  afterEach(() => {
+    window.requestAnimationFrame = originalRequestAnimationFrame;
   });
 
   it('mounts the Project regions in exactly the order PROJECT_PAPER_ORDER declares', () => {
@@ -723,6 +727,8 @@ describe('the round-8 paper order', () => {
       });
 
       await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+      await act(async () => {});
+      expect(scroll).toHaveBeenCalledTimes(1);
       expect(document.activeElement).toBe(container.querySelector('#closeout-chapter-heading'));
     });
   });
@@ -820,6 +826,8 @@ describe('a seen-before tokenless resume', () => {
     expect(target).not.toBeNull();
     const scroll = HTMLElement.prototype.scrollIntoView as jest.Mock;
     await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(scroll).toHaveBeenCalledTimes(1);
     expect(scroll.mock.contexts[0]).toBe(target);
     expect(scroll).toHaveBeenCalledWith({ block: 'start' });
   });
@@ -840,6 +848,8 @@ describe('a seen-before tokenless resume', () => {
     expect(target).not.toBeNull();
     const scroll = HTMLElement.prototype.scrollIntoView as jest.Mock;
     await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(scroll).toHaveBeenCalledTimes(1);
     expect(scroll.mock.contexts[0]).toBe(target);
     expect(scroll).toHaveBeenCalledWith({ block: 'start' });
   });

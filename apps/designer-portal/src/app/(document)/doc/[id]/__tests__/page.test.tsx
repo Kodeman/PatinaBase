@@ -4602,6 +4602,8 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
       mockDocumentQuery = { ...mockDocumentQuery, data: { kind: 'engagement', row: rowFor('lead-1', 'discovery') } };
       mockDiscoveryQuery = { data: undefined, isLoading: true, isError: false };
       html.classList.add('arr-pre');
+      const originalRequestAnimationFrame = window.requestAnimationFrame;
+      window.requestAnimationFrame = jest.fn(() => 1);
       act(() => setArrivalWaiting(jest.fn(), '/doc/missing-document'));
 
       try {
@@ -4620,12 +4622,15 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
               detail: { surface: 'document', how: 'declined', cause: 'late' },
             }),
           );
-          // The end reaches the jump before React re-renders the paper shown.
-          expect(document.querySelector('[data-arrival-held="document"]')).not.toBeNull();
+          await Promise.resolve();
+          await Promise.resolve();
+          // The landing microtask follows React's synchronous held-paper swap;
+          // it scrolls the same layout before the next frame.
+          expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
         });
-        expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
         expect(document.querySelector('[data-arrival-held]')).toBeNull();
       } finally {
+        window.requestAnimationFrame = originalRequestAnimationFrame;
         act(() => setArrivalWaiting(null));
       }
     });
