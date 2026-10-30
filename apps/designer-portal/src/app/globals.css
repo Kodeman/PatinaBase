@@ -1438,7 +1438,7 @@ button.da-press[aria-busy='true'] {
 .da-glyph-btn {
   background: none;
   border: 0;
-  color: var(--color-aged-oak);
+  color: var(--folio-ink, var(--color-aged-oak));
   cursor: pointer;
   transition: color 150ms linear;
 }

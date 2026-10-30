@@ -105,7 +105,7 @@ describe('FolioStrip — a scan chip navigates to the Room View', () => {
     render(<FolioLetterhead projectId="project-1" />);
 
     const disclosure = screen.getByRole('button', { name: /The folio · 1 file/ });
-    expect(disclosure).toHaveClass('t-meta', 'text-[var(--color-quiet-ink)]');
+    expect(disclosure).toHaveClass('t-meta', '[--folio-ink:var(--color-quiet-ink)]');
     expect(disclosure).not.toHaveAttribute('style');
   });
 
