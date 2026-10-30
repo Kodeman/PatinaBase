@@ -139,6 +139,51 @@ export function useDiscovery(designerClientId: string | null) {
   });
 }
 
+/** K14 — the Discovery-seeded Direction a household still has open: seeded on
+ *  any of its relationship rows and not yet executed, declined or superseded. */
+export interface OpenDirection {
+  id: string;
+  title: string | null;
+  commercial_state: 'draft' | 'sent' | 'client_signed';
+  designer_client_id: string | null;
+}
+
+const OPEN_DIRECTION_STATES = ['draft', 'sent', 'client_signed'];
+
+/** Query options for a household's open Direction (newest if several), or
+ *  null. Options rather than a hook so a picker can read it fresh at the
+ *  moment of choice (`queryClient.fetchQuery`) before it writes anything. */
+export function openDirectionQuery(designerClientIds: string[]) {
+  const ids = [...new Set(designerClientIds)].sort();
+  return {
+    queryKey: ['open-direction', ids] as const,
+    queryFn: async (): Promise<OpenDirection | null> => {
+      if (ids.length === 0) return null;
+      const supabase = getSupabase();
+      const { data: seeds, error } = await supabase
+        .from('client_discovery')
+        .select('seeded_proposal_id')
+        .in('designer_client_id', ids)
+        .not('seeded_proposal_id', 'is', null);
+      if (error) throw error;
+      const seeded = ((seeds ?? []) as { seeded_proposal_id: string }[]).map(
+        (row) => row.seeded_proposal_id
+      );
+      if (seeded.length === 0) return null;
+      const { data, error: proposalError } = await supabase
+        .from('proposals')
+        .select('id, title, commercial_state, designer_client_id')
+        .in('id', seeded)
+        .in('commercial_state', OPEN_DIRECTION_STATES)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (proposalError) throw proposalError;
+      return (data as OpenDirection | null) ?? null;
+    },
+  };
+}
+
 export interface UpsertDiscoveryInput {
   designerClientId: string;
   designerId: string;

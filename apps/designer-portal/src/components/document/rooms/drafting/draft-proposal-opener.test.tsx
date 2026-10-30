@@ -12,6 +12,8 @@ let mockCurrentDesignerId = 'designer-current';
 // null-clientId row getting picked despite the picker's own disabling (the
 // real ClientPicker below is otherwise rendered untouched for every test).
 let mockForceNullPick = false;
+// K14 — what the household's open-Direction read answers (null: none open).
+const mockOpenDirection = jest.fn();
 
 jest.mock('next/navigation', () => ({
   usePathname: () => '/desk',
@@ -23,7 +25,15 @@ jest.mock('@patina/supabase', () => ({
   itemLabelRefusal: () => null,
   useSession: () => ({ session: { user: { id: mockCurrentDesignerId } } }),
   createBrowserClient: jest.fn(),
+  openDirectionQuery: (ids: string[]) => ({
+    queryKey: ['open-direction', ids],
+    queryFn: () => mockOpenDirection(ids),
+  }),
   // ClientPicker (portal/client-picker.tsx) reads the viewer's session.
+}));
+
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -153,6 +163,7 @@ describe('DraftProposalSheet', () => {
     mockCurrentDesignerId = 'designer-current';
     mockClients = [];
     mockForceNullPick = false;
+    mockOpenDirection.mockResolvedValue(null);
     singleResult = { data: { id: 'proposal-1' }, error: null };
     insert.mockImplementation(() => ({
       select: () => ({
@@ -298,6 +309,125 @@ describe('DraftProposalSheet', () => {
         name: 'Draft a design agreement for an existing household',
       }),
     ).toBeVisible();
+  });
+
+  // ── K14 (RC7-E3-5): a household with an open Direction ────────────────
+  describe('a household that already has an open Direction', () => {
+    const openDirection = (commercial_state: 'draft' | 'sent' | 'client_signed') => ({
+      id: 'direction-1',
+      title: 'Client User',
+      commercial_state,
+      designer_client_id: 'relationship-own',
+    });
+
+    it('with none open, reads every relationship of the household and opens the draft as before', async () => {
+      mockClients = [
+        relationship('relationship-foreign', 'designer-collaborator'),
+        relationship('relationship-own', 'designer-current'),
+      ];
+      renderSheet();
+
+      await pickClient();
+
+      await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
+      expect(mockOpenDirection).toHaveBeenCalledWith([
+        'relationship-foreign',
+        'relationship-own',
+      ]);
+      expect(mockPush).toHaveBeenCalledWith('/drafting/proposal-1');
+    });
+
+    it('offers continue-or-separate before any write, without the no-discovery copy', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockResolvedValue(openDirection('draft'));
+      renderSheet();
+      expect(screen.getByText(/no lead, no discovery/)).toBeInTheDocument();
+
+      await pickClient();
+
+      expect(
+        await screen.findByRole('button', { name: 'Continue the existing Direction' }),
+      ).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Start a separate agreement' })).toBeVisible();
+      expect(screen.getByTestId('draft-proposal-open-direction')).toHaveTextContent(
+        'Client User already has an open Direction, “Client User”.',
+      );
+      expect(screen.queryByText(/no lead, no discovery/)).not.toBeInTheDocument();
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('Continue opens the Direction in its Contract Room and writes nothing', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockResolvedValue(openDirection('draft'));
+      renderSheet();
+      await pickClient();
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Continue the existing Direction' }),
+      );
+
+      expect(mockRememberRoomOrigin).toHaveBeenCalledWith('/desk');
+      expect(mockPush).toHaveBeenCalledWith('/drafting/direction-1');
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it.each(['sent', 'client_signed'] as const)(
+      'Continue opens a %s Direction on its own paper (the Room would evict it)',
+      async (state) => {
+        mockClients = [relationship('relationship-own', 'designer-current')];
+        mockOpenDirection.mockResolvedValue(openDirection(state));
+        renderSheet();
+        await pickClient();
+
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Continue the existing Direction' }),
+        );
+
+        expect(mockPush).toHaveBeenCalledWith('/doc/direction-1');
+        expect(insert).not.toHaveBeenCalled();
+      },
+    );
+
+    it('Start a separate agreement writes exactly one new draft, deliberately', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockResolvedValue(openDirection('draft'));
+      renderSheet();
+      await pickClient();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Start a separate agreement' }));
+
+      await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          designer_id: 'designer-current',
+          client_id: 'client-1',
+          designer_client_id: 'relationship-own',
+          document_kind: 'design_services',
+          commercial_state: 'draft',
+        }),
+      );
+      expect(insert.mock.calls[0][0]).not.toHaveProperty('parent_proposal_id');
+      expect(mockPush).toHaveBeenCalledWith('/drafting/proposal-1');
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('a failed Direction read writes nothing and says so inline', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      mockOpenDirection.mockRejectedValue(new Error('network'));
+      renderSheet();
+
+      await pickClient();
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not check this household for an open Direction. Try again.',
+      );
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
   });
 
   // ── Layering ────────────────────────────────────────────────────────────

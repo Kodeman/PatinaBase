@@ -20,6 +20,13 @@
  *     the picker disables those rows here (`requireClientLogin`) with an
  *     inline hint rather than letting the dialog silently no-op.
  *
+ * K14 (RC7-E3-5) — a household that already has an open Discovery-seeded
+ * Direction is not quietly forked. Before any write the sheet reads the
+ * household's open Direction fresh (`openDirectionQuery`); when there is one,
+ * it asks: "Continue the existing Direction" opens it and writes nothing;
+ * "Start a separate agreement" writes the empty draft as before, deliberately.
+ * With no open Direction the pick opens the draft exactly as it always has.
+ *
  * Zero shadows (D4); Esc closes; failures render inline (R83 — no toast).
  *
  * LAYERING. The sheet was mouse-dead: the picker opened, and every click on it
@@ -44,11 +51,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient, openDirectionQuery, type OpenDirection } from '@patina/supabase';
 import { useClients, type DesignerClient } from '@/hooks/use-clients';
 import { useAuth } from '@/hooks/use-auth';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
+import { DocumentAction, DocumentActionGroup } from '@/components/document/document-action';
 
 export interface OpenDraftProposalArgs {
   /** The household's profiles.id (designer_clients.client_id) — a linked client. */
@@ -143,7 +151,22 @@ export function useOpenDraftProposal() {
     [createAgreement, router, pathname],
   );
 
-  return { openDraftProposal, isCreating: createAgreement.isPending };
+  /** K14 — open the household's existing Direction; writes nothing. A draft
+   *  opens in its Contract Room; an issued one on its own paper (the Room
+   *  would only evict it there). */
+  const continueDirection = useCallback(
+    (direction: Pick<OpenDirection, 'id' | 'commercial_state'>) => {
+      rememberRoomOrigin(pathname);
+      router.push(
+        direction.commercial_state === 'draft'
+          ? `/drafting/${direction.id}`
+          : `/doc/${direction.id}`,
+      );
+    },
+    [router, pathname],
+  );
+
+  return { openDraftProposal, continueDirection, isCreating: createAgreement.isPending };
 }
 
 /** Studio RLS can expose one relationship per teammate for the same household.
@@ -192,14 +215,27 @@ export function DraftProposalSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { openDraftProposal, isCreating } = useOpenDraftProposal();
+  const { openDraftProposal, continueDirection, isCreating } = useOpenDraftProposal();
+  const queryClient = useQueryClient();
   const { data: clients } = useClients();
   const { user } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  // K14 — the picked household's open Direction, awaiting the designer's choice.
+  const [choice, setChoice] = useState<{
+    household: DesignerClient;
+    direction: OpenDirection;
+  } | null>(null);
   const households = useMemo(
     () => normalizeDraftHouseholds(clients ?? [], user?.id),
     [clients, user?.id],
   );
+
+  useEffect(() => {
+    if (open) return;
+    setChoice(null);
+    setError(null);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -229,11 +265,37 @@ export function DraftProposalSheet({
       setError('That household relationship is no longer available. Refresh and try again.');
       return;
     }
+    // K14 — read the household's open Direction fresh, across every
+    // relationship row it has here, before anything is written.
+    let direction: OpenDirection | null;
+    setChecking(true);
+    try {
+      direction = await queryClient.fetchQuery({
+        ...openDirectionQuery(
+          (clients ?? []).filter((dc) => dc.client_id === clientId).map((dc) => dc.id),
+        ),
+        staleTime: 0,
+      });
+    } catch {
+      setError('Could not check this household for an open Direction. Try again.');
+      return;
+    } finally {
+      setChecking(false);
+    }
+    if (direction) {
+      setChoice({ household, direction });
+      return;
+    }
+    await startAgreement(household);
+  };
+
+  const startAgreement = async (household: DesignerClient) => {
+    setError(null);
     const clientName =
-      household?.client?.full_name ?? household?.client_name ?? household?.client_email ?? null;
+      household.client?.full_name ?? household.client_name ?? household.client_email ?? null;
     try {
       await openDraftProposal({
-        clientId,
+        clientId: household.client_id as string,
         designerClientId: household.id,
         designerId: household.designer_id,
         clientName,
@@ -243,6 +305,13 @@ export function DraftProposalSheet({
       setError(e instanceof Error ? e.message : 'Could not start the draft. Try again.');
     }
   };
+
+  const choiceName = choice
+    ? (choice.household.client?.full_name ??
+      choice.household.client_name ??
+      choice.household.client_email ??
+      'This household')
+    : null;
 
   const layer = (
     <div
@@ -268,18 +337,66 @@ export function DraftProposalSheet({
         <p className="font-heading text-[1.15rem] text-[var(--color-charcoal)]">
           Draft a design agreement
         </p>
-        <p className="mb-4 mt-1 text-[0.78rem] text-[var(--color-aged-oak)]">
-          For an existing household — no lead, no discovery. Pick the client and the Contract Room
-          opens in its services posture.
-        </p>
-        <ClientPicker
-          value={null}
-          onChange={handlePick}
-          placeholder={isCreating ? 'Opening the draft…' : 'Search or add a household…'}
-          disabled={isCreating}
-          clientOptions={households}
-          requireClientLogin
-        />
+        {choice ? (
+          <>
+            <p
+              className="mb-2 mt-1 text-[0.78rem] text-[var(--color-aged-oak)]"
+              data-testid="draft-proposal-open-direction"
+            >
+              {choiceName} already has an open Direction
+              {choice.direction.title ? <>, “{choice.direction.title}”</> : null}. Continue it, or
+              start a separate agreement beside it; the Direction stays as it is.
+            </p>
+            <DocumentActionGroup
+              surfaceKey="drafting"
+              regionKey="draft-proposal-open-direction"
+              aria-label="Open Direction choice"
+            >
+              <DocumentAction
+                actionKey="continue-open-direction"
+                variant="primary"
+                disabled={isCreating}
+                onClick={() => {
+                  continueDirection(choice.direction);
+                  onClose();
+                }}
+              >
+                Continue the existing Direction
+              </DocumentAction>
+              <DocumentAction
+                actionKey="start-separate-agreement"
+                variant="secondary"
+                disabled={isCreating}
+                loading={isCreating}
+                loadingLabel="Opening the draft…"
+                onClick={() => startAgreement(choice.household)}
+              >
+                Start a separate agreement
+              </DocumentAction>
+            </DocumentActionGroup>
+          </>
+        ) : (
+          <>
+            <p className="mb-4 mt-1 text-[0.78rem] text-[var(--color-aged-oak)]">
+              For an existing household — no lead, no discovery. Pick the client and the Contract
+              Room opens in its services posture.
+            </p>
+            <ClientPicker
+              value={null}
+              onChange={handlePick}
+              placeholder={
+                checking
+                  ? 'Checking for an open Direction…'
+                  : isCreating
+                    ? 'Opening the draft…'
+                    : 'Search or add a household…'
+              }
+              disabled={checking || isCreating}
+              clientOptions={households}
+              requireClientLogin
+            />
+          </>
+        )}
         {error && (
           <div
             role="alert"

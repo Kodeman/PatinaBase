@@ -425,14 +425,47 @@ test("A03 inquiry-born Direction carries its lineage through the signed agreemen
   }
 });
 
-// DEFECT RC7-E3-5: the ⌘K "Draft a services agreement" cold start, picked for a
-// household that already has an open Discovery-seeded Direction, writes a
-// second design_services draft with no link to the Direction
-// (draft-proposal-opener.tsx:95-106). If that second agreement executes, the
-// Direction stays an open draft and the inquiry lineage forks. Expected: an
-// explicit choice — continue the existing Direction, or start a separate
-// commission — before any second row is written. Ruling owed by Kody.
-test.fixme("A03 cold-start agreement for a household with an open Direction offers continue-or-separate", async ({
+// RC7-E3-5, fixed by K14: the ⌘K "Draft a services agreement" cold start,
+// picked for a household that already has an open Discovery-seeded Direction,
+// used to write a second design_services draft with no link to the Direction
+// (draft-proposal-opener.tsx), forking the inquiry lineage. Now the sheet asks
+// first: "Continue the existing Direction" opens it and writes nothing; "Start a
+// separate agreement" writes exactly one new draft, deliberately.
+async function pickHouseholdFromCommandBar(page: Page) {
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog", { name: "Studio search" });
+  await expect(palette).toBeVisible();
+  await palette
+    .getByRole("combobox", { name: "Studio search" })
+    .fill("services agreement");
+  await palette
+    .getByRole("option", { name: /^Draft a services agreement/ })
+    .first()
+    .click();
+  const sheet = page.getByTestId("draft-proposal-layer");
+  await expect(sheet).toBeVisible();
+  await sheet.getByTestId("client-picker-trigger").click();
+  await page.getByTestId(`client-picker-option-${CLIENT}`).click();
+}
+
+function householdProposals(relationship: string) {
+  return psqlRows(`SELECT id, document_kind, commercial_state, status,
+      coalesce(parent_proposal_id::text, ''), coalesce(designer_client_id::text, ''),
+      (id = (SELECT seeded_proposal_id FROM client_discovery WHERE designer_client_id='${relationship}'))::text
+    FROM proposals WHERE designer_client_id='${relationship}' ORDER BY created_at`).map(
+    ([id, kind, state, status, parent, rel, isSeed]) => ({
+      id,
+      kind,
+      state,
+      status,
+      parentProposalId: parent || null,
+      designerClientId: rel,
+      isDiscoverySeed: isSeed === "true",
+    }),
+  );
+}
+
+test("A03 cold-start agreement for a household with an open Direction offers continue-or-separate", async ({
   authenticatedPage: page,
 }) => {
   test.setTimeout(300_000);
@@ -440,46 +473,19 @@ test.fixme("A03 cold-start agreement for a household with an open Direction offe
   try {
     const { relationship, direction } = await seedDirection(page);
     await openDoc(page, direction);
-    await page.keyboard.press("ControlOrMeta+k");
-    const palette = page.getByRole("dialog", { name: "Studio search" });
-    await expect(palette).toBeVisible();
-    await palette
-      .getByRole("combobox", { name: "Studio search" })
-      .fill("services agreement");
-    await palette
-      .getByRole("option", { name: /^Draft a services agreement/ })
-      .first()
-      .click();
-    const sheet = page.getByTestId("draft-proposal-layer");
-    await expect(sheet).toBeVisible();
-    await sheet.getByTestId("client-picker-trigger").click();
-    await page.getByTestId(`client-picker-option-${CLIENT}`).click();
+    await pickHouseholdFromCommandBar(page);
 
-    // Settle on whichever comes first: the expected choice, or (today) the
-    // opener's navigation into a Contract Room.
+    // Settle on whichever comes first: the choice, or (the defect) the
+    // opener's navigation into a new Contract Room.
     await Promise.race([
       page
         .getByRole("button", { name: /Continue the existing Direction/ })
         .waitFor({ timeout: 60_000 }),
       page.waitForURL(/\/drafting\/[a-f0-9-]{36}/, { timeout: 60_000 }),
     ]);
-    // DB readback BEFORE any assertion, so a forced run records what was
-    // written: every proposal on the household, its links, and the seed.
-    const household =
-      psqlRows(`SELECT id, document_kind, commercial_state, status,
-        coalesce(parent_proposal_id::text, ''), coalesce(designer_client_id::text, ''),
-        (id = (SELECT seeded_proposal_id FROM client_discovery WHERE designer_client_id='${relationship}'))::text
-      FROM proposals WHERE designer_client_id='${relationship}' ORDER BY created_at`).map(
-        ([id, kind, state, status, parent, rel, isSeed]) => ({
-          id,
-          kind,
-          state,
-          status,
-          parentProposalId: parent || null,
-          designerClientId: rel,
-          isDiscoverySeed: isSeed === "true",
-        }),
-      );
+    // DB readback BEFORE any assertion: every proposal on the household, its
+    // links, and the seed.
+    const household = householdProposals(relationship);
     const evidence = {
       url: page.url(),
       direction,
@@ -498,19 +504,18 @@ test.fixme("A03 cold-start agreement for a household with an open Direction offe
       "no second agreement row before the designer chooses",
     ).toHaveLength(1);
 
-    // Expected: a choice, and no second row until the designer makes it.
+    // A choice, without the cold start's "no lead, no discovery" copy.
+    const sheet = page.getByTestId("draft-proposal-layer");
     await expect(
-      page.getByRole("button", { name: /Continue the existing Direction/ }),
+      sheet.getByRole("button", { name: /Continue the existing Direction/ }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Start a separate commission/ }),
+      sheet.getByRole("button", { name: /Start a separate agreement/ }),
     ).toBeVisible();
-    expect(
-      psqlScalar(
-        `SELECT count(*) FROM proposals WHERE designer_client_id='${relationship}'`,
-      ),
-    ).toBe("1");
-    await page
+    await expect(sheet.getByText(/no lead, no discovery/)).toHaveCount(0);
+
+    // Continue: opens the Direction, writes nothing.
+    await sheet
       .getByRole("button", { name: /Continue the existing Direction/ })
       .click();
     await expect(page).toHaveURL(new RegExp(`/drafting/${direction}`), {
@@ -521,6 +526,41 @@ test.fixme("A03 cold-start agreement for a household with an open Direction offe
         `SELECT count(*) FROM proposals WHERE designer_client_id='${relationship}'`,
       ),
     ).toBe("1");
+
+    // Start a separate agreement: exactly one new draft, not the Direction.
+    await pickHouseholdFromCommandBar(page);
+    await page
+      .getByTestId("draft-proposal-layer")
+      .getByRole("button", { name: /Start a separate agreement/ })
+      .click();
+    await page.waitForURL(
+      (url) =>
+        /\/drafting\/[a-f0-9-]{36}/.test(url.pathname) &&
+        !url.pathname.includes(direction),
+      { timeout: 60_000 },
+    );
+    const after = householdProposals(relationship);
+    const separate = after.filter((p) => p.id !== direction);
+    console.log(`[RC7-E3-5 separate readback] ${JSON.stringify(after)}`);
+    test.info().annotations.push({
+      type: "RC7-E3-5 separate readback",
+      description: JSON.stringify(after),
+    });
+    expect(after).toHaveLength(2);
+    expect(separate).toHaveLength(1);
+    expect(page.url()).toContain(`/drafting/${separate[0].id}`);
+    expect(separate[0]).toMatchObject({
+      kind: "design_services",
+      state: "draft",
+      parentProposalId: null,
+      designerClientId: relationship,
+      isDiscoverySeed: false,
+    });
+    // The Direction is untouched: still the seed, still an open draft.
+    expect(after.find((p) => p.id === direction)).toMatchObject({
+      state: "draft",
+      isDiscoverySeed: true,
+    });
   } finally {
     removeProbe();
   }
