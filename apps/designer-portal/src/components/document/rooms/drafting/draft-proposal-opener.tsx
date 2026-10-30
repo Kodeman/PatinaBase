@@ -37,18 +37,19 @@
  *       the row the designer could plainly see.
  *   (b) The layer was ALSO the backdrop and carried the dismiss handler, so the
  *       mousedown that landed on it read as "clicked outside" and closed.
- * The fix is the shape DocSheet already uses (doc-sheet.tsx), which is why the
+ * The fix was the shape DocSheet already uses (doc-sheet.tsx), which is why the
  * other three ClientPicker hosts — household-sheet, open-project-sheet,
  * send-sheet — never had this problem: portal the layer to <body>, keep it in
  * the `z-50` overlay band, and make the scrim a separate absolutely-positioned
  * child. Ordering is then by DOM position, and the popover's portal is always
  * appended after the sheet's. There is deliberately no z-index bump on the
  * popover: nothing in the repo overrides that `z-50`, and a picker that has to
- * out-number its host is a picker that breaks in the next host.
+ * out-number its host is a picker that breaks in the next host. The sheet now
+ * IS a DocSheet (RC-8 review), so it also has that dialog's focus trap and
+ * focus restoration, which the hand-built layer never had.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient, openDirectionQuery, type OpenDirection } from '@patina/supabase';
@@ -57,6 +58,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { DocumentAction, DocumentActionGroup } from '@/components/document/document-action';
+import { DocSheet } from '@/components/document/overlays/doc-sheet';
 
 export interface OpenDraftProposalArgs {
   /** The household's profiles.id (designer_clients.client_id) — a linked client. */
@@ -230,26 +232,25 @@ export function DraftProposalSheet({
     () => normalizeDraftHouseholds(clients ?? [], user?.id),
     [clients, user?.id],
   );
+  // The pick a pending Direction read answers for. A close, or a newer pick,
+  // moves it on, so a read that resolves after either is dropped unread: it
+  // neither writes a draft nor brings back a choice nobody is looking at.
+  const lookupRef = useRef(0);
+  const continueRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (open) return;
+    lookupRef.current += 1;
     setChoice(null);
     setError(null);
+    setChecking(false);
   }, [open]);
 
+  // The picker gives way to the choice, so focus goes to its first act rather
+  // than falling to <body> with the picker that held it.
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, onClose]);
-
-  if (!open) return null;
+    if (choice) continueRef.current?.focus();
+  }, [choice]);
 
   const handlePick = async (clientId: string | null) => {
     // Defensive: the picker disables no-login rows (client_id null) for this
@@ -267,6 +268,7 @@ export function DraftProposalSheet({
     }
     // K14 — read the household's open Direction fresh, across every
     // relationship row it has here, before anything is written.
+    const lookup = ++lookupRef.current;
     let direction: OpenDirection | null;
     setChecking(true);
     try {
@@ -277,11 +279,13 @@ export function DraftProposalSheet({
         staleTime: 0,
       });
     } catch {
+      if (lookup !== lookupRef.current) return;
+      setChecking(false);
       setError('Could not check this household for an open Direction. Try again.');
       return;
-    } finally {
-      setChecking(false);
     }
+    if (lookup !== lookupRef.current) return;
+    setChecking(false);
     if (direction) {
       setChoice({ household, direction });
       return;
@@ -313,27 +317,18 @@ export function DraftProposalSheet({
       'This household')
     : null;
 
-  const layer = (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[18vh]"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Draft a design agreement for an existing household"
-      data-testid="draft-proposal-layer"
+  // DocSheet — the Document's dialog (as household-sheet, open-project-sheet
+  // and send-sheet, the other ClientPicker hosts): portalled to <body> in the
+  // z-50 band with its scrim as a separate child, a focus trap, Esc, scroll
+  // lock and focus restored to the control that opened it.
+  return (
+    <DocSheet
+      open={open}
+      onClose={onClose}
+      title="Draft a design agreement for an existing household"
+      kind="draft-proposal"
     >
-      {/* The scrim is its OWN element, not the layer. When the layer carried
-          both the veil and the dismiss handler, every mousedown that landed on
-          it — including one aimed at the picker's popover — satisfied
-          `e.target === e.currentTarget` and closed the sheet. */}
-      <button
-        type="button"
-        aria-label="Close draft agreement backdrop"
-        data-testid="draft-proposal-backdrop"
-        tabIndex={-1}
-        onMouseDown={onClose}
-        className="absolute inset-0 h-full w-full cursor-default bg-[rgba(28,25,23,0.28)]"
-      />
-      <div className="relative w-full max-w-[420px] rounded-[8px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-5 py-5">
+      <div data-testid="draft-proposal-layer" className="mx-auto w-full max-w-[420px]">
         <p className="font-heading text-[1.15rem] text-[var(--color-charcoal)]">
           Draft a design agreement
         </p>
@@ -353,6 +348,7 @@ export function DraftProposalSheet({
               aria-label="Open Direction choice"
             >
               <DocumentAction
+                ref={continueRef}
                 actionKey="continue-open-direction"
                 variant="primary"
                 disabled={isCreating}
@@ -406,16 +402,8 @@ export function DraftProposalSheet({
           </div>
         )}
       </div>
-    </div>
+    </DocSheet>
   );
-
-  // Portalled to <body>, exactly as DocSheet is. The stack orders by DOM
-  // position: ClientPicker's Radix popover portals to <body> too, and it is
-  // appended AFTER this layer (it cannot exist before the sheet is open), so at
-  // equal z-index the popover paints on top. That is the whole mechanism, and
-  // it is why the three DocSheet-hosted ClientPickers work and this one did
-  // not. Rendered inline the layer never joins that ordering at all.
-  return typeof document === 'undefined' ? layer : createPortal(layer, document.body);
 }
 
 /** Open the household-picker cold start from anywhere (⌘K). The overlay is
