@@ -440,4 +440,20 @@
   }
 }
 
+/* RC7-E8-4 — the paper body reveals chapter by chapter, top down. Every
+   chapter mounts at once and its body resolves on its own read, so on a cold
+   load the chapters inside the first screen were pushed down once per body
+   above them (cold-load CLS 1.16 on the F01 job). Each child of the paper
+   below the cover keeps its layout but does not paint until
+   `use-chapter-reveal.ts` marks it `data-paper-shown` (everything above it has
+   settled, by the lens's own signals) or the lens has resolved the whole paper
+   (`data-lens-resolved` on the shell). An opacity hold, as the arrival veil's
+   (arrival.css), so focus and landings still reach it. The cover is never
+   held. `doc-fade` filled backwards is the hold; its 3,500ms delay is each
+   child's failsafe past the lens's own 3,000ms deadline. */
+[data-paper-renderer="round8"][data-document-shell]:not([data-lens-resolved]) [data-document-paper] > :not([data-paper-cover]):not([data-paper-shown]) {
+  opacity: 0;
+  animation: doc-fade 1ms linear 3500ms both;
+}
+
 /* end Round 8 paper renderer */

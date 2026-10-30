@@ -23,6 +23,7 @@ import '@/components/document/paper/round8.css';
 import {
   Fragment,
   useEffect,
+  useRef,
   useState,
   type ComponentProps,
   type ComponentType,
@@ -58,6 +59,7 @@ import {
   subscribePaperOrigin,
 } from '@/lib/document/paper/paper-origin';
 import type { DocumentFrameSlots } from './frame-slots';
+import { useChapterReveal } from './use-chapter-reveal';
 import type { LegacyDocumentFrame } from './legacy-document-frame';
 
 type LegacyFrameProps = ComponentProps<typeof LegacyDocumentFrame>;
@@ -228,6 +230,9 @@ export default function Round8PaperFrame({
     onCommitted(true);
   }, [onCommitted]);
   useAnnouncePageRound8Scope();
+  // RC7-E8-4: the paper body paints chapter by chapter as the paper above settles.
+  const gridRef = useRef<HTMLDivElement>(null);
+  useChapterReveal(gridRef);
   // Shared legacy-path code (the margin) unfolds this paper through the bridge.
   useEffect(() => registerUnfoldOpener(docId, openUnfold), [docId]);
   const workRoom: WorkRoom = (room, lens = 'spec', opener = document.activeElement) => {
@@ -338,7 +343,7 @@ export default function Round8PaperFrame({
             </button>
           </p>
         ) : null}
-        <div data-paper-grid="" className="mx-auto grid w-full max-w-[var(--r8-paper-measure)] grid-cols-1 gap-[var(--r8-paper-gap)] px-[18px] pt-[24px] min-[600px]:px-[4%] min-[1180px]:grid-cols-[minmax(0,1fr)_var(--r8-contents)] ">
+        <div ref={gridRef} data-paper-grid="" className="mx-auto grid w-full max-w-[var(--r8-paper-measure)] grid-cols-1 gap-[var(--r8-paper-gap)] px-[18px] pt-[24px] min-[600px]:px-[4%] min-[1180px]:grid-cols-[minmax(0,1fr)_var(--r8-contents)] ">
           {/* No stacking context: fixed procurement panels must escape the paper. */}
           <main
             {...paperProps}

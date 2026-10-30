@@ -22,7 +22,9 @@ async function openLine(page: Page, line: string) {
   }
   const room = page.locator(`[data-pieces-room="${ROOM}"]`);
   await room.scrollIntoViewIfNeeded();
-  const toggle = room.getByRole('button', { name: /Living Room/ });
+  // The room's own name button (in its h3): the open room is remembered per job
+  // in localStorage, so after a reload its "LR-nn F01 Living Room" lines also match.
+  const toggle = room.getByRole('heading', { level: 3 }).getByRole('button', { name: /Living Room/ });
   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
   await room.getByRole('link', { name: /Edit room selections/ }).click();
   const instrument = page.locator('[data-unfold-instrument="pieces"]');
@@ -87,7 +89,11 @@ test('A06 stale FF&E save refetches the peer, retains the typed draft and retrie
   await expect(finish).toBeFocused();
   expect(finishOf(line)).toBe('E6 peer finish');
 
+  // psqlScalar blocks the event loop (execFileSync), so the request listener can lag the
+  // database; await the retry's own response before the write count is snapshotted.
+  const retried = page.waitForResponse(r => r.request().method() === 'PATCH' && new URL(r.url()).pathname.endsWith('/rest/v1/project_ffe_specs'));
   await finish.press('Enter');
+  expect((await retried).status(), 'the retry write lands').toBe(200);
   await expect.poll(() => finishOf(line)).toBe('E6 stale attempt');
   const finalVersion = Number(psqlScalar(`SELECT row_version FROM project_ffe_specs WHERE id='${specId}';`));
   expect(finalVersion).toBeGreaterThan(peerSavedVersion);

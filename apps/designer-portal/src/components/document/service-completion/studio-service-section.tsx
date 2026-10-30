@@ -9,7 +9,7 @@
  * is not switched on every act is denied; that reads as one calm note.
  */
 
-import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import type { ScopeEdition } from '@patina/types';
 import {
   citedReferences,
@@ -71,7 +71,7 @@ export function StudioServiceSection({ projectId }: { projectId: string }) {
   return (
     <section aria-labelledby={`${studioServiceAnchorId(projectId)}-heading`} id={studioServiceAnchorId(projectId)}
       data-studio-service className="mt-8">
-      <h3 id={`${studioServiceAnchorId(projectId)}-heading`} className="t-body font-semibold">Studio service</h3>
+      <h3 id={`${studioServiceAnchorId(projectId)}-heading`} tabIndex={-1} className="t-body font-semibold">Studio service</h3>
       <p className="t-meta mt-1">Whether the studio has delivered the services it agreed. Project closure is separate.</p>
       {inactive && <p role="status" data-studio-service-inactive className="t-body-sm mt-3">{INACTIVE_NOTE}</p>}
       {failed && (
@@ -304,11 +304,19 @@ function RevokeCompletion({ projectId, completion, report, label = 'Revoke this 
   const [opened, setOpened] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  useEffect(() => {
+    if (opened || !returnFocus.current) return;
+    returnFocus.current = false;
+    openerRef.current?.focus();
+  }, [opened]);
+  const close = () => { returnFocus.current = true; setOpened(false); };
   if (!principal) return null;
   if (!opened) {
     return (
       <DocumentActionRow surfaceKey="studio-service" regionKey="revoke">
-        <DocumentAction actionKey="revoke-studio-service" variant="tertiary" onClick={() => setOpened(true)}>
+        <DocumentAction ref={openerRef} actionKey="revoke-studio-service" variant="tertiary" onClick={() => setOpened(true)}>
           {label}
         </DocumentAction>
       </DocumentActionRow>
@@ -321,6 +329,7 @@ function RevokeCompletion({ projectId, completion, report, label = 'Revoke this 
     setError(null);
     try {
       await revoke.mutateAsync({ completionId: completion.completionId, reason: reason.trim() });
+      document.getElementById(`${studioServiceAnchorId(projectId)}-heading`)?.focus();
       setOpened(false);
     } catch (failure) {
       setError(report(failure));
@@ -340,7 +349,7 @@ function RevokeCompletion({ projectId, completion, report, label = 'Revoke this 
           disabled={revoke.isPending} loading={revoke.isPending} aria-describedby={`${id}-consequence`}>
           Revoke
         </DocumentAction>
-        <DocumentAction actionKey="cancel-revoke-studio-service" variant="tertiary" onClick={() => setOpened(false)}>
+        <DocumentAction actionKey="cancel-revoke-studio-service" variant="tertiary" onClick={close}>
           Cancel
         </DocumentAction>
       </DocumentActionRow>
@@ -439,15 +448,26 @@ function OpenCondition({ projectId, requestId, conditionId, text, report }: {
   projectId: string; requestId: string; conditionId: string; text: string; report: Report;
 }) {
   const [opened, setOpened] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  useEffect(() => {
+    if (opened || !returnFocus.current) return;
+    returnFocus.current = false;
+    openerRef.current?.focus();
+  }, [opened]);
+  const close = () => { returnFocus.current = true; setOpened(false); };
   return (
     <li data-open-condition={conditionId} className="t-body-sm">
       <p>{text} · Open</p>
       {opened ? (
         <ResolveCondition projectId={projectId} requestId={requestId} conditionId={conditionId} text={text}
-          report={report} onDone={() => setOpened(false)} />
+          report={report} onDone={() => {
+            document.getElementById(`${studioServiceAnchorId(projectId)}-heading`)?.focus();
+            setOpened(false);
+          }} onCancel={close} />
       ) : (
         <DocumentActionRow surfaceKey="studio-service" regionKey="condition">
-          <DocumentAction actionKey="resolve-service-condition" variant="tertiary" onClick={() => setOpened(true)}>
+          <DocumentAction ref={openerRef} actionKey="resolve-service-condition" variant="tertiary" onClick={() => setOpened(true)}>
             Resolve this condition
           </DocumentAction>
         </DocumentActionRow>
@@ -456,8 +476,9 @@ function OpenCondition({ projectId, requestId, conditionId, text, report }: {
   );
 }
 
-function ResolveCondition({ projectId, requestId, conditionId, text, report, onDone }: {
-  projectId: string; requestId: string; conditionId: string; text: string; report: Report; onDone: () => void;
+function ResolveCondition({ projectId, requestId, conditionId, text, report, onDone, onCancel }: {
+  projectId: string; requestId: string; conditionId: string; text: string; report: Report;
+  onDone: () => void; onCancel: () => void;
 }) {
   const id = useId();
   const resolve = useResolveServiceAcceptanceCondition(projectId);
@@ -497,7 +518,7 @@ function ResolveCondition({ projectId, requestId, conditionId, text, report, onD
           disabled={resolve.isPending} loading={resolve.isPending}>
           Record the resolution
         </DocumentAction>
-        <DocumentAction actionKey="cancel-condition-resolution" variant="tertiary" onClick={onDone}>
+        <DocumentAction actionKey="cancel-condition-resolution" variant="tertiary" onClick={onCancel}>
           Cancel
         </DocumentAction>
       </DocumentActionRow>

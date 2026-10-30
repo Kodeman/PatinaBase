@@ -398,6 +398,16 @@ async function client(browser: Browser, email: string, landing: string) {
 
 async function openCloseout(page: Page, project: string) {
   await page.goto(`/doc/${project}`, { timeout: 180_000, waitUntil: 'domcontentloaded' });
+  // RC7-E2-OBS-1: after arrival the paper lands (scrolls) a recently seen job; a tap during that
+  // scroll can split pointerdown and pointerup across elements, a silent no-op click on WebKit.
+  // Wait for the arrival, then for scrollY to hold still across two frames, before any tap.
+  await expect(page.locator('[data-document-shell][data-arrival-ready]')).toHaveCount(1, { timeout: 180_000 });
+  await page.waitForFunction(() => new Promise<boolean>((resolve) => {
+    const html = document.documentElement;
+    if (html.classList.contains('arr-pre') || html.classList.contains('arr-on')) { resolve(false); return; }
+    const y = window.scrollY;
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.scrollY === y)));
+  }), undefined, { timeout: 60_000 });
   const section = page.locator('[data-service-acceptance]');
   await expect(section).toBeAttached({ timeout: 180_000 });
   await section.scrollIntoViewIfNeeded();
