@@ -39,6 +39,28 @@ struct MarginNoteWriteTests {
         #expect(json.count == 6)
     }
 
+    @Test func typedSubjectEncodesAsMarginNotesColumns() throws {
+        let request = try #require(MarginNoteComposer.request(
+            noteID: noteID, projectID: projectID, designerID: designerID,
+            fieldCaptureID: captureID, transcript: "Check the room",
+            subject: .projectRoom(projectID)))
+        let data = try JSONEncoder().encode(request)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["subject_kind"] as? String == "project_room")
+        #expect(json["subject_id"] as? String == projectID.uuidString)
+        #expect(json.count == 8)
+    }
+
+    @Test func noteSubjectMapsRoomThenCaptureAndLeavesUnboundNotesUntyped() {
+        let room = MarginNoteComposer.subject(roomID: projectID, fieldCaptureID: captureID)
+        #expect(room == .projectRoom(projectID))
+        #expect(room?.kind == "project_room")
+        #expect(room?.id == projectID)
+        #expect(MarginNoteComposer.subject(roomID: nil, fieldCaptureID: captureID) == .fieldCapture(captureID))
+        #expect(MarginNoteComposer.subject(roomID: nil, fieldCaptureID: nil) == nil)
+        #expect(MarginNoteSubject.fieldCapture(noteID).kind == "field_capture")
+    }
+
     @Test func anchorKindIsAlwaysLetterheadBecauseTheCheckAdmitsNothingElse() throws {
         let request = try #require(MarginNoteComposer.request(
             noteID: noteID, projectID: projectID, designerID: designerID,
@@ -127,6 +149,99 @@ struct MarginNoteWriteTests {
     }
 
     // MARK: - Lookup before write
+
+    @Test func bothSyncNoteLanesSendTheirSubjectInTheActualRequest() throws {
+        let source = try SourcePin.readCode("Capture/Services/Sync/LocalCaptureSyncService.swift")
+        let margin = try #require(source.components(separatedBy: "private func writeMarginNoteIfNeeded(").last?
+            .components(separatedBy: "private func writeDegradeNoteIfNeeded(").first)
+        let degrade = try #require(source.components(separatedBy: "private func writeDegradeNoteIfNeeded(").last?
+            .components(separatedBy: "private func writePunchTaskIfNeeded(").first)
+        for lane in [margin, degrade] {
+            let request = try #require(lane.components(separatedBy: "MarginNoteComposer.request(").dropFirst().first?
+                .components(separatedBy: "piece.mark").first)
+            #expect(request.contains("subject: MarginNoteComposer.subject("))
+            #expect(request.contains("roomID: piece.venue?.projectRoomId.flatMap(UUID.init(uuidString:))"))
+            #expect(request.contains("fieldCaptureID: captureID))"))
+            let write = try #require(lane.components(separatedBy: "MarginNoteOrchestrator(gateway: writes).write(")
+                .dropFirst().first?.components(separatedBy: ")").first)
+            #expect(write.contains("request, errorCode: SupabaseFieldWriteGateway.postgrestCode"))
+        }
+    }
+
+    @Test func unknownSubjectColumnRetriesOnceWithoutSubject() async throws {
+        let gateway = SpyMarginNoteGateway(exists: false, failures: [
+            MarginNoteTestError(code: "PGRST204", message: "Could not find the 'subject_kind' column")
+        ])
+        let request = try #require(MarginNoteComposer.request(
+            noteID: noteID, projectID: projectID, designerID: designerID,
+            fieldCaptureID: captureID, transcript: "Spoken", subject: .projectRoom(projectID)))
+        let outcome = try await MarginNoteOrchestrator(gateway: gateway).write(
+            request, errorCode: { ($0 as? MarginNoteTestError)?.code })
+        #expect(outcome == .written)
+        #expect(gateway.requests.map(\.subjectKind) == ["project_room", nil])
+        #expect(gateway.requests.map(\.subjectID) == [projectID, nil])
+        #expect(gateway.requests.map(\.id) == [noteID, noteID])
+        let second = try #require(gateway.requests.last)
+        let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(second)) as? [String: String])
+        #expect(json == [
+            "id": noteID.uuidString,
+            "project_id": projectID.uuidString,
+            "designer_id": designerID.uuidString,
+            "body": "Spoken",
+            "anchor_kind": "letterhead",
+            "field_capture_id": captureID.uuidString
+        ])
+    }
+
+    @Test func subjectGuardRefusalRetriesOnceWithoutSubject() async throws {
+        let gateway = SpyMarginNoteGateway(exists: false, failures: [
+            MarginNoteTestError(code: "23514", message: "subject_off_project")
+        ])
+        let request = try #require(MarginNoteComposer.request(
+            noteID: noteID, projectID: projectID, designerID: designerID,
+            fieldCaptureID: captureID, transcript: "Spoken", subject: .fieldCapture(captureID)))
+        let outcome = try await MarginNoteOrchestrator(gateway: gateway).write(
+            request, errorCode: { ($0 as? MarginNoteTestError)?.code })
+        #expect(outcome == .written)
+        #expect(gateway.requests.map(\.subjectKind) == ["field_capture", nil])
+    }
+
+    @Test func unrelatedCheckRefusalDoesNotRetryWithoutSubject() async throws {
+        let gateway = SpyMarginNoteGateway(exists: false, failures: [
+            MarginNoteTestError(code: "23514", message: "margin_notes_body_check")
+        ])
+        let request = try #require(MarginNoteComposer.request(
+            noteID: noteID, projectID: projectID, designerID: designerID,
+            fieldCaptureID: captureID, transcript: "Spoken", subject: .projectRoom(projectID)))
+        do {
+            _ = try await MarginNoteOrchestrator(gateway: gateway).write(
+                request, errorCode: { ($0 as? MarginNoteTestError)?.code })
+            Issue.record("unrelated 23514 must be classified by the caller")
+        } catch let error as MarginNoteTestError {
+            #expect(error.code == "23514")
+            #expect(FieldWriteClassifier.outcome(code: error.code, message: error.localizedDescription)
+                    == .unsatisfiable(error.localizedDescription))
+        }
+        #expect(gateway.requests.map(\.subjectKind) == ["project_room"])
+    }
+
+    @Test func fallbackFailureDoesNotTriggerAnotherRetry() async throws {
+        let gateway = SpyMarginNoteGateway(exists: false, failures: [
+            MarginNoteTestError(code: "PGRST204", message: "subject_id missing"),
+            MarginNoteTestError(code: "23514", message: "subject_off_project")
+        ])
+        let request = try #require(MarginNoteComposer.request(
+            noteID: noteID, projectID: projectID, designerID: designerID,
+            fieldCaptureID: captureID, transcript: "Spoken", subject: .projectRoom(projectID)))
+        do {
+            _ = try await MarginNoteOrchestrator(gateway: gateway).write(
+                request, errorCode: { ($0 as? MarginNoteTestError)?.code })
+            Issue.record("failed fallback must be classified by the caller")
+        } catch let error as MarginNoteTestError {
+            #expect(error.code == "23514")
+        }
+        #expect(gateway.requests.map(\.subjectKind) == ["project_room", nil])
+    }
 
     @Test func aReplayFindsTheExistingNoteBeforeWritingAgain() async throws {
         let gateway = SpyMarginNoteGateway(exists: true)
@@ -368,12 +483,27 @@ struct MarginNoteWriteTests {
     }
 }
 
+private struct MarginNoteTestError: LocalizedError {
+    let code: String
+    let message: String
+    var errorDescription: String? { message }
+}
+
 private final class SpyMarginNoteGateway: MarginNoteGateway, @unchecked Sendable {
     private let exists: Bool
+    private var failures: [MarginNoteTestError]
     private(set) var insertCount = 0
+    private(set) var requests: [MarginNoteWriteRequest] = []
 
-    init(exists: Bool) { self.exists = exists }
+    init(exists: Bool, failures: [MarginNoteTestError] = []) {
+        self.exists = exists
+        self.failures = failures
+    }
 
     func existingMarginNote(id: UUID) async throws -> Bool { exists }
-    func insertMarginNote(_ request: MarginNoteWriteRequest) async throws { insertCount += 1 }
+    func insertMarginNote(_ request: MarginNoteWriteRequest) async throws {
+        insertCount += 1
+        requests.append(request)
+        if !failures.isEmpty { throw failures.removeFirst() }
+    }
 }
