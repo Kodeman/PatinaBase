@@ -501,8 +501,9 @@ test.describe("RC-7 E8 X07 performance", () => {
 
   test("RC7-E8-5: job cold-load CLS ≤ 0.1, returning reader", async ({
     authenticatedPage: page,
-  }) => {
+  }, info) => {
     const { load } = await coldLoad(page, "job");
+    reading(`${info.project.name} job`, { returningReaderLoadCls: load.loadClsBeforeScroll });
     test.skip(!load.supported.includes("layout-shift"), NO_LAYOUT_SHIFT);
     expect(
       load.loadClsRaw!,
