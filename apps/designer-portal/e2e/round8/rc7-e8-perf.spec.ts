@@ -490,6 +490,7 @@ test.describe("RC-7 E8 X07 performance", () => {
     const { load } = await coldLoad(page, "job", { warm: false });
     reading(`${info.project.name} job`, {
       firstVisitLoadCls: load.loadClsBeforeScroll,
+      firstVisitLoadClsRaw: load.loadClsRaw,
       firstVisitLcpMs: load.lcpMs,
     });
     test.skip(!load.supported.includes("layout-shift"), NO_LAYOUT_SHIFT);
@@ -503,7 +504,10 @@ test.describe("RC-7 E8 X07 performance", () => {
     authenticatedPage: page,
   }, info) => {
     const { load } = await coldLoad(page, "job");
-    reading(`${info.project.name} job`, { returningReaderLoadCls: load.loadClsBeforeScroll });
+    reading(`${info.project.name} job`, {
+      returningReaderLoadCls: load.loadClsBeforeScroll,
+      returningReaderLoadClsRaw: load.loadClsRaw,
+    });
     test.skip(!load.supported.includes("layout-shift"), NO_LAYOUT_SHIFT);
     expect(
       load.loadClsRaw!,
