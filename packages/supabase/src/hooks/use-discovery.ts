@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { getSessionUserId } from '../auth/session-user';
 
 // Lazy client getter to avoid module-level initialization during SSR
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -152,7 +153,15 @@ const OPEN_DIRECTION_STATES = ['draft', 'sent', 'client_signed'];
 
 /** Query options for a household's open Direction (newest if several), or
  *  null. Options rather than a hook so a picker can read it fresh at the
- *  moment of choice (`queryClient.fetchQuery`) before it writes anything. */
+ *  moment of choice (`queryClient.fetchQuery`) before it writes anything.
+ *
+ *  Scoped to the reader's own studios, explicitly: a Direction counts only
+ *  when its recorded studio (`proposals.studio_id`, stamped by the database)
+ *  is a design studio she holds an active, non-guest seat in, or when it has
+ *  no studio and is her own. RLS alone is not enough here: the studio
+ *  co-member policies authorize by person (SQ-1852), so a colleague who
+ *  shares only studio A with a designer who is also in studio B can read
+ *  that designer's studio-B relationships and seeds. */
 export function openDirectionQuery(designerClientIds: string[]) {
   const ids = [...new Set(designerClientIds)].sort();
   return {
@@ -160,21 +169,41 @@ export function openDirectionQuery(designerClientIds: string[]) {
     queryFn: async (): Promise<OpenDirection | null> => {
       if (ids.length === 0) return null;
       const supabase = getSupabase();
-      const { data: seeds, error } = await supabase
+      const userId = await getSessionUserId();
+      if (!userId) throw new Error('Sign in before opening an agreement.');
+      const { data: seats, error: seatError } = await supabase
+        .from('organization_members')
+        .select('organization_id, organizations!inner(type, status)')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .neq('role', 'guest')
+        .eq('organizations.type', 'design_studio')
+        .eq('organizations.status', 'active');
+      if (seatError) throw seatError;
+      const studioIds = [
+        ...new Set(((seats ?? []) as { organization_id: string }[]).map((s) => s.organization_id)),
+      ];
+      const { data: seedRows, error } = await supabase
         .from('client_discovery')
         .select('seeded_proposal_id')
         .in('designer_client_id', ids)
         .not('seeded_proposal_id', 'is', null);
       if (error) throw error;
-      const seeded = ((seeds ?? []) as { seeded_proposal_id: string }[]).map(
+      const seeded = ((seedRows ?? []) as { seeded_proposal_id: string }[]).map(
         (row) => row.seeded_proposal_id
       );
       if (seeded.length === 0) return null;
+      const ownUnstamped = `and(studio_id.is.null,designer_id.eq.${userId})`;
       const { data, error: proposalError } = await supabase
         .from('proposals')
         .select('id, title, commercial_state, designer_client_id')
         .in('id', seeded)
         .in('commercial_state', OPEN_DIRECTION_STATES)
+        .or(
+          studioIds.length > 0
+            ? `studio_id.in.(${studioIds.join(',')}),${ownUnstamped}`
+            : ownUnstamped
+        )
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
