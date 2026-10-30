@@ -524,6 +524,18 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     expect(server).toMatchObject({ finish: "Peer oak", material: "Ash", row_version: 4 });
   });
 
+  it("names a legacy array dimension value instead of announcing it as cleared", async () => {
+    render(<Harness />);
+    const width = screen.getByRole("textbox", { name: "width" });
+    fireEvent.change(width, { target: { value: "72" } });
+    peerSaves({ selected_dimensions: ["90", "45", "30"] as never });
+    await act(async () => { fireEvent.blur(width); });
+    await answer(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Dimensions changed in another session to “90 × 45 × 30”. Save again to replace it.",
+    );
+  });
+
   it("an edited Dimensions draft stays over the adopted row and names the change", async () => {
     render(<Harness />);
     const width = () => screen.getByRole("textbox", { name: "width" });
@@ -534,7 +546,7 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     });
     await answer(0);
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Dimensions changed in another session to “width 90 · unit in”. Save again to replace it.",
+      "Dimensions changed in another session to “90 in”. Save again to replace it.",
     );
     expect(width()).toHaveValue("72");
     await act(async () => {

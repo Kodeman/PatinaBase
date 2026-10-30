@@ -345,6 +345,53 @@ describe("SelectionEditor — structured dimensions", () => {
 });
 
 describe("SelectionEditor — peer conflict", () => {
+  it("alerts to a newer peer value in a locally edited field on refetch", () => {
+    const initial = buildItem();
+    const peer = buildSpec({ row_version: 4, finish: "Peer walnut" });
+    const { rerender } = render(<SelectionEditor item={initial} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Finish" }), { target: { value: "Mine" } });
+    rerender(<SelectionEditor item={{ ...initial, spec: peer }} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Finish changed in another session to “Peer walnut”.");
+    expect(screen.getByRole("textbox", { name: "Finish" })).toHaveValue("Mine");
+  });
+
+  it("re-alerts to a newer peer Finish during retry rather than leaving an old peer value", async () => {
+    const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
+      ProjectFfeSpecConflictError: new (current: unknown) => Error;
+    };
+    const initial = buildItem();
+    const firstPeer = buildSpec({ row_version: 4, finish: "Peer oak" });
+    const laterPeer = buildSpec({ row_version: 5, finish: "Peer walnut" });
+    mutateAsync.mockRejectedValueOnce(new ProjectFfeSpecConflictError(firstPeer))
+      .mockResolvedValueOnce({ ...laterPeer, finish: "Mine" });
+    const { rerender } = render(<SelectionEditor item={initial} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Finish" }), { target: { value: "Mine" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Peer oak");
+    rerender(<SelectionEditor item={{ ...initial, spec: laterPeer }} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Finish changed in another session to “Peer walnut”.");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("Peer oak");
+    expect(screen.getByRole("textbox", { name: "Finish" })).toHaveValue("Mine");
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
+    expect(await screen.findByText("Line saved.")).toBeInTheDocument();
+    expect(mutateAsync.mock.calls[1][0].expectedRowVersion).toBe(5);
+  });
+
+  it("stops waiting when a null-peer refetch settles at the same version", async () => {
+    const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
+      ProjectFfeSpecConflictError: new (current: unknown) => Error;
+    };
+    const initial = buildItem();
+    const onConflict = jest.fn().mockResolvedValue(initial.spec);
+    mutateAsync.mockRejectedValueOnce(new ProjectFfeSpecConflictError(null));
+    render(<SelectionEditor item={initial} onConflict={onConflict} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Finish" }), { target: { value: "Mine" } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save the specification" })); });
+    expect(onConflict).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByText(/Waiting for its current value/)).not.toBeInTheDocument());
+    expect(screen.getByRole("textbox", { name: "Finish" })).toHaveValue("Mine");
+  });
+
   it("merges a second refetch into untouched fields before the next whole-row save", async () => {
     const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
       ProjectFfeSpecConflictError: new (current: unknown) => Error;
@@ -384,7 +431,7 @@ describe("SelectionEditor — peer conflict", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "width" }), { target: { value: "80" } });
     fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Dimensions changed in another session to “width 90");
+    expect(alert).toHaveTextContent("Dimensions changed in another session to “90 × 38 × 30 in");
     expect(alert).not.toHaveTextContent("Finish changed");
     expect(alert).not.toHaveTextContent("Material changed");
     expect(screen.getByRole("textbox", { name: "width" })).toHaveValue("80");
@@ -1053,7 +1100,7 @@ describe("SQ-857 — the spec book walk fixes", () => {
 
   it("refetches the open workbench row on a stale save without losing the draft", async () => {
     withLines(buildItem());
-    const refetch = jest.fn();
+    const refetch = jest.fn().mockResolvedValue({ data: (mockWorkbenchHookResult as { data: unknown }).data });
     (mockWorkbenchHookResult as { refetch: typeof refetch }).refetch = refetch;
     const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
       ProjectFfeSpecConflictError: new (current: unknown) => Error;
