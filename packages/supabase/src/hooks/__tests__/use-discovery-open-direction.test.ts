@@ -20,8 +20,12 @@ function matchesOr(row: Row, expr: string): boolean {
   return inStudio || ownUnstamped;
 }
 
+/** PostgREST embeds: `organizations!inner(...)` joins `organizations` on
+ *  `organization_id`. A filter on an embedded column drops the parent row only
+ *  for an `!inner` embed; a plain embed keeps the row and nulls the embed. */
 function builder(table: string) {
   const filters: Array<(row: Row) => boolean> = [];
+  const embeds = new Map<string, { inner: boolean }>();
   const log = (calls[table] ??= []);
   const chain: Record<string, unknown> = {};
   const add = (name: string, fn?: (...args: unknown[]) => (row: Row) => boolean) =>
@@ -30,8 +34,19 @@ function builder(table: string) {
       if (fn) filters.push(fn(...args));
       return chain;
     }));
-  add('select');
-  add('eq', (col, val) => (row) => (col as string).includes('.') || row[col as string] === val);
+  const embedded = (row: Row, embed: string): Row | undefined =>
+    (tables[embed] ?? []).find((r) => r.id === row[`${embed.replace(/s$/, '')}_id`]);
+  add('select', (columns) => {
+    for (const m of (columns as string).matchAll(/(\w+)(!inner)?\(/g)) embeds.set(m[1], { inner: !!m[2] });
+    return () => true;
+  });
+  add('eq', (col, val) => (row) => {
+    const [embed, column] = (col as string).split('.');
+    if (!column) return row[embed] === val;
+    const join = embeds.get(embed);
+    if (!join) throw new Error(`filter on ${col as string} without embedding ${embed}`);
+    return !join.inner || embedded(row, embed)?.[column] === val;
+  });
   add('neq', (col, val) => (row) => row[col as string] !== val);
   add('in', (col, vals) => (row) => (vals as unknown[]).includes(row[col as string]));
   add('not', (col) => (row) => row[col as string] != null);
@@ -64,6 +79,12 @@ beforeEach(() => {
       { user_id: 'yara', organization_id: 'studio-a', status: 'active', role: 'member' },
       { user_id: 'xan', organization_id: 'studio-a', status: 'active', role: 'member' },
       { user_id: 'xan', organization_id: 'studio-b', status: 'active', role: 'owner' },
+    ],
+    organizations: [
+      { id: 'studio-a', type: 'design_studio', status: 'active' },
+      { id: 'studio-b', type: 'design_studio', status: 'active' },
+      { id: 'studio-old', type: 'design_studio', status: 'archived' },
+      { id: 'maker-co', type: 'manufacturer', status: 'active' },
     ],
     client_discovery: [{ designer_client_id: 'rel-b', seeded_proposal_id: 'direction-b' }],
     proposals: [{ ...DIRECTION, id: 'direction-b', studio_id: 'studio-b', designer_client_id: 'rel-b' }],
@@ -103,6 +124,25 @@ describe('openDirectionQuery — studio isolation', () => {
     await expect(openDirectionQuery(['rel-b']).queryFn()).resolves.toBeNull();
     viewer = 'xan';
     await expect(openDirectionQuery(['rel-b']).queryFn()).resolves.toMatchObject({ id: 'direction-b' });
+  });
+
+  it('a seat in an archived studio or a non-studio organization opens nothing', async () => {
+    tables.organization_members.push(
+      { user_id: 'yara', organization_id: 'studio-old', status: 'active', role: 'member' },
+      { user_id: 'yara', organization_id: 'maker-co', status: 'active', role: 'member' },
+    );
+    for (const studio of ['studio-old', 'maker-co']) {
+      tables.proposals = [{ ...DIRECTION, id: 'direction-b', studio_id: studio, designer_client_id: 'rel-b' }];
+      await expect(openDirectionQuery(['rel-b']).queryFn()).resolves.toBeNull();
+    }
+    expect(calls.proposals).toContainEqual([
+      'or',
+      'studio_id.in.(studio-a),and(studio_id.is.null,designer_id.eq.yara)',
+    ]);
+    expect(calls.organization_members).toContainEqual([
+      'select',
+      'organization_id, organizations!inner(type, status)',
+    ]);
   });
 
   it('a reader with no studio seat sends only her own unstamped arm', async () => {

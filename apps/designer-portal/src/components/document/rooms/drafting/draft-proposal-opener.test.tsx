@@ -77,8 +77,10 @@ jest.mock('@/components/portal/client-picker', () => {
 });
 
 import {
+  DraftProposalOverlay,
   DraftProposalSheet,
   normalizeDraftHouseholds,
+  openDraftProposalPicker,
 } from './draft-proposal-opener';
 
 const relationship = (
@@ -496,6 +498,52 @@ describe('DraftProposalSheet', () => {
       ).not.toBeInTheDocument();
       expect(screen.getByTestId('client-picker-trigger')).not.toBeDisabled();
       expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('a lookup still pending when the opener unmounts writes nothing and goes nowhere', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      const slow = deferred<null>();
+      mockOpenDirection.mockReturnValue(slow.promise);
+      const { unmount } = renderSheet();
+      await pickClient();
+      expect(mockOpenDirection).toHaveBeenCalledTimes(1);
+
+      unmount();
+      await act(async () => {
+        slow.resolve(null);
+        await slow.promise;
+      });
+
+      expect(insert).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockRememberRoomOrigin).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('from ⌘K, Esc returns focus to what held it before the palette opened', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <button type="button" data-testid="before-palette">
+            before
+          </button>
+          <DraftProposalOverlay />
+        </QueryClientProvider>,
+      );
+      const before = screen.getByTestId('before-palette');
+      // The palette row that runs the verb has focus, then unmounts with the palette.
+      const row = document.createElement('button');
+      document.body.appendChild(row);
+      row.focus();
+      act(() => openDraftProposalPicker({ returnFocusTo: before }));
+      row.remove();
+      expect(screen.getByTestId('draft-proposal-layer')).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByTestId('draft-proposal-layer')).not.toBeInTheDocument();
+      await waitFor(() => expect(before).toHaveFocus());
     });
 
     it('moves focus to the first choice when the picker gives way to it', async () => {

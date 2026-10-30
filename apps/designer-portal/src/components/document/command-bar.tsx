@@ -692,7 +692,10 @@ export function CommandBar() {
             openOpenProject();
           };
         case 'draft-proposal':
-          return () => openDraftProposalPicker();
+          // The row unmounts with the palette before the sheet can capture it,
+          // and the palette yields its own restore to the open sheet: hand the
+          // sheet the palette's F21 target so Esc returns focus there.
+          return () => openDraftProposalPicker({ returnFocusTo: restoreFocusRef.current });
         case 'draw-invoice':
           return () => openInvoiceComposer();
         // W3 — the one verb that is NOT gated on a document in hand. The

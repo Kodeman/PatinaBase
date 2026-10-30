@@ -213,9 +213,13 @@ export function normalizeDraftHouseholds(
 export function DraftProposalSheet({
   open,
   onClose,
+  returnFocusTo,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Where focus goes on close when the control that opened the sheet is gone
+   *  (a ⌘K row unmounts with the palette before the sheet can capture it). */
+  returnFocusTo?: HTMLElement | null;
 }) {
   const { openDraftProposal, continueDirection, isCreating } = useOpenDraftProposal();
   const queryClient = useQueryClient();
@@ -245,6 +249,13 @@ export function DraftProposalSheet({
     setError(null);
     setChecking(false);
   }, [open]);
+  // An unmount mid-read drops it too: nothing is left to draft for.
+  useEffect(
+    () => () => {
+      lookupRef.current += 1;
+    },
+    [],
+  );
 
   // The picker gives way to the choice, so focus goes to its first act rather
   // than falling to <body> with the picker that held it.
@@ -327,6 +338,7 @@ export function DraftProposalSheet({
       onClose={onClose}
       title="Draft a design agreement for an existing household"
       kind="draft-proposal"
+      returnFocusTo={returnFocusTo}
     >
       <div data-testid="draft-proposal-layer" className="mx-auto w-full max-w-[420px]">
         <p className="font-heading text-[1.15rem] text-[var(--color-charcoal)]">
@@ -408,18 +420,31 @@ export function DraftProposalSheet({
 
 /** Open the household-picker cold start from anywhere (⌘K). The overlay is
  *  layout-mounted, so this is the always-mounted-listener pattern
- *  (openInvoiceComposer), not the Desk pending-flag one. */
-export function openDraftProposalPicker() {
-  window.dispatchEvent(new CustomEvent('document:open-draft-proposal'));
+ *  (openInvoiceComposer), not the Desk pending-flag one. `returnFocusTo` is
+ *  for an opener that unmounts as it opens the sheet: ⌘K passes the element
+ *  that held focus before the palette opened (its F21 restore target). */
+export function openDraftProposalPicker(options?: { returnFocusTo?: HTMLElement | null }) {
+  window.dispatchEvent(
+    new CustomEvent('document:open-draft-proposal', {
+      detail: { returnFocusTo: options?.returnFocusTo ?? null },
+    }),
+  );
 }
 
 /** The layout host for the ⌘K "draft a design agreement" cold start. */
 export function DraftProposalOverlay() {
   const [open, setOpen] = useState(false);
+  const [returnFocusTo, setReturnFocusTo] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ returnFocusTo?: HTMLElement | null } | null>).detail;
+      setReturnFocusTo(detail?.returnFocusTo ?? null);
+      setOpen(true);
+    };
     window.addEventListener('document:open-draft-proposal', onOpen);
     return () => window.removeEventListener('document:open-draft-proposal', onOpen);
   }, []);
-  return <DraftProposalSheet open={open} onClose={() => setOpen(false)} />;
+  return (
+    <DraftProposalSheet open={open} onClose={() => setOpen(false)} returnFocusTo={returnFocusTo} />
+  );
 }

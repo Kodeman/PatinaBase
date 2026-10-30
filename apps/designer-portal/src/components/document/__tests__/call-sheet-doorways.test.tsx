@@ -395,6 +395,35 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
 // 4. The letterhead instrument
 // ============================================================================
 
+describe('command-bar — the draft-proposal verb', () => {
+  it('hands the picker the element that held focus before ⌘K opened, its focus-return target', async () => {
+    mockPathname.mockReturnValue('/desk');
+    mockDeskData.mockReturnValue({ folders: [], chips: [] });
+    const before = document.createElement('button');
+    document.body.appendChild(before);
+    before.focus();
+    try {
+      render(<CommandBar />);
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('document:open-command-bar'));
+      });
+      const input = screen.getByPlaceholderText(/Search project files, contacts and tools/);
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'services agreement' } });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Draft a services agreement').closest('button')!);
+      });
+      const { openDraftProposalPicker } = jest.requireMock('../rooms/drafting/draft-proposal-opener') as {
+        openDraftProposalPicker: jest.Mock;
+      };
+      expect(openDraftProposalPicker).toHaveBeenCalledWith({ returnFocusTo: before });
+    } finally {
+      before.remove();
+    }
+  });
+});
+
 describe('letterhead-instruments — the Call Sheet instrument', () => {
   function renderInstruments() {
     const qc = new QueryClient();
