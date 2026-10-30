@@ -999,7 +999,7 @@ BEGIN
       '{"title":"Stale overwrite"}'::jsonb, NULL, v_before
         - interval '1 microsecond'
     );
-  EXCEPTION WHEN serialization_failure THEN
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN
     v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'stale expected_updated_at must reject';
@@ -1644,7 +1644,7 @@ BEGIN
       'f8200000-0000-4000-8000-000000000002',
       'click_through', NULL, NULL, NULL
     );
-  EXCEPTION WHEN serialization_failure THEN
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN
     v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'different-winner retry must be a stale conflict';

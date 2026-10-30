@@ -403,7 +403,7 @@ describe('useUpdateProjectPhaseStatus', () => {
   });
 
   it('propagates the Supabase RPC error unchanged', async () => {
-    const rpcError = { code: '40001', message: 'phase status changed' };
+    const rpcError = { code: 'PT409', message: 'phase status changed' };
     supabaseClient.rpc.mockResolvedValue({ data: null, error: rpcError });
 
     const config = useUpdateProjectPhaseStatus() as unknown as PhaseTransitionMutationConfig;

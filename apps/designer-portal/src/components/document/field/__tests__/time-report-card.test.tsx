@@ -252,7 +252,7 @@ it("asks for another look when the report moved underneath the card", async () =
   mockRpc.mockResolvedValue({
     data: null,
     error: {
-      code: "40001",
+      code: "PT409",
       message: "field_time_report_stale",
       details: null,
     },

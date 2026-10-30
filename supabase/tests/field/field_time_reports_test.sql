@@ -526,7 +526,7 @@ BEGIN
   -- The designer decides. A stale version is refused.
   PERFORM pg_temp.assume('20000000-0000-4000-8000-000000000001');
   PERFORM pg_temp.refuses(pg_temp.decide_sql(r_reject,'accepted',99),
-    '40001','field_time_report_stale','%expected version 99, found 1%','SQ20 stale version');
+    'PT409','field_time_report_stale','%expected version 99, found 1%','SQ20 stale version');
   PERFORM pg_temp.refuses(pg_temp.decide_sql(r_reject,'maybe',1),
     '23514',NULL,'%accepted%rejected%','SQ20 a decision is accept or reject');
 
