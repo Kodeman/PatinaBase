@@ -36,7 +36,8 @@ async function mockedNote(page: Page, state: { visible: boolean; refused: boolea
     title: 'N02 fictional observation', detail: '', ts: '2026-10-26T00:00:00Z',
     payload: { body: 'Fictional private Field observation', author_name: 'Fictional observer',
       field_capture_id: 'f2066000-0000-4000-8000-000000000002', capture_visible: state.visible,
-      project_room_id: ROOM, has_audio: false, photo_paths: [] },
+      project_room_id: ROOM, has_audio: false, photo_paths: [],
+      subject_print_label: 'Living Room plan — issued 02' },
   }] }));
   await page.route(`${api.origin}/rest/v1/margin_notes*`, route => state.refused
     ? route.fulfill({ status: 503, json: { message: 'Fictional metadata refusal' } })
@@ -58,7 +59,9 @@ test('mocked contextual Field payload returns through the native room owner and 
   await mockedNote(page, state);
   await openNote(page);
   const context = page.getByLabel('Note context');
-  await expect(context).toContainText('plan print · recorded-print-only');
+  await expect(context.locator('dt').filter({ hasText: /^Subject$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('Print · Living Room plan — issued 02');
+  await expect(context.locator('dt').filter({ hasText: /^Print$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('Living Room plan — issued 02');
+  await expect(context).not.toContainText('recorded-print-only');
   await expect(context.locator('dt').filter({ hasText: /^Issue$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText('Not recorded');
   const shell = await page.locator('[data-document-shell]').elementHandle();
   const amendment = page.getByRole('button', { name: '→ Amendment', exact: true });
@@ -66,7 +69,7 @@ test('mocked contextual Field payload returns through the native room owner and 
   await expect(page.getByRole('dialog').filter({ has: page.locator('[data-overlay-amendment]') })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(amendment).toBeFocused();
-  const roomDoor = page.getByRole('link', { name: `Return to room · ${ROOM}`, exact: true });
+  const roomDoor = page.getByRole('link', { name: 'Return to room', exact: true });
   await roomDoor.click();
   await expect(page).toHaveURL(new RegExp(`room=${ROOM}`));
   const room = page.locator('[data-testid="build-room"][data-build-room-embedded="true"]');
@@ -90,14 +93,14 @@ test('mocked contextual Field payload returns through the native room owner and 
   await openNote(page);
   await expect(page.getByText('The capture is unavailable to you.', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /^Return to room/ })).toHaveCount(0);
-  await expect(page.getByLabel('Note context')).toContainText('recorded-print-only');
+  await expect(page.getByLabel('Note context')).not.toContainText('recorded-print-only');
 });
 
 test('@renderer-off note room return lands on the existing pieces route', async ({ authenticatedPage: page }) => {
   test.setTimeout(240_000);
   await mockedNote(page, { visible: true, refused: false });
   await openNote(page);
-  await page.getByRole('link', { name: `Return to room · ${ROOM}`, exact: true }).click();
+  await page.getByRole('link', { name: 'Return to room', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/doc/${JOB}/pieces\\?lens=spec&room=${ROOM}`));
   await expect(page.getByTestId('build-room')).toBeVisible({ timeout: 60_000 });
 });

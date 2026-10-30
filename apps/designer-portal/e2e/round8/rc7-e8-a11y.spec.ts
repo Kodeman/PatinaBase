@@ -3,7 +3,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "../fixtures/auth";
-import { psqlRun, psqlScalar } from "../helpers/psql";
+import { adminDb } from "../helpers/supabase-admin";
+import { psqlAsUserRow, psqlRun, psqlScalar } from "../helpers/psql";
 import { e8OwnedStackSql } from "./rc7-e8-guard";
 
 /**
@@ -36,6 +37,7 @@ const LIVING = "f0180000-0000-4000-8000-000000000011";
 const LINE_NAME = "F01 Living Room selection 07";
 const E7_OWNER = "rc7-e7-1@patina.test";
 const F01_DESIGNER = process.env.DESIGNER_E2E_EMAIL ?? "designer@patina.dev";
+const F01_DESIGNER_ID = "f0180000-0000-4000-8000-000000000002";
 const OUT =
   process.env.PLAYWRIGHT_OUTPUT_DIR ??
   path.join(__dirname, "../../test-results/round8");
@@ -586,14 +588,35 @@ const instrument = (page: Page) =>
 
 test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
   test.setTimeout(300_000);
+  let folioId = "";
+  let folioStoragePath = "";
 
   // The keyboard save writes through the portal: never the shared stack, and
   // only when rc7_owned.stack names RC7_OWNED_STACK.
-  test.beforeAll(() => {
-    psqlRun(e8OwnedStackSql("rc7-e8 a11y keyboard save"));
+  test.beforeAll(async ({}, info) => {
+    psqlRun(e8OwnedStackSql("rc7-e8 a11y keyboard save and private folio"));
+    const stamp = Date.now();
+    folioStoragePath = `${JOB}/plans/rc7-e8-a11y-${info.project.name}-${stamp}.pdf`;
+    const bytes = readFileSync(path.resolve(__dirname, "../fixtures/whitlock-set.pdf"));
+    const { error } = await adminDb.storage
+      .from("project-documents")
+      .upload(folioStoragePath, bytes, { contentType: "application/pdf" });
+    if (error) throw error;
+    const [id] = psqlAsUserRow(F01_DESIGNER_ID, `INSERT INTO public.project_documents
+      (project_id, title, doc_type, storage_path, size_bytes, uploaded_by, anchor_kind, client_visible)
+      VALUES ('${JOB}', 'E8 a11y private folio file', 'pdf', '${folioStoragePath}', ${bytes.length},
+              '${F01_DESIGNER_ID}', 'letterhead', false)
+      RETURNING id::text;`);
+    if (!id) throw new Error("F01 studio-only folio insert returned no id");
+    folioId = id;
   });
 
-  test.afterAll(() => {
+  test.afterAll(async () => {
+    if (folioId) psqlRun(`DELETE FROM public.project_documents WHERE id = '${folioId}';`);
+    if (folioStoragePath) {
+      const { error } = await adminDb.storage.from("project-documents").remove([folioStoragePath]);
+      if (error) throw error;
+    }
     const project = test.info().project.name;
     mkdirSync(OUT, { recursive: true });
     const file = path.join(OUT, `rc7-e8-a11y-${project}.json`);
@@ -961,6 +984,10 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
       timeout: 120_000,
     });
     await arrivedJob(page);
+    const folio = page.getByRole("button", { name: /The folio · \d+ files? ↓/ });
+    await tabTo(page, folio, "contrast job → private folio disclosure");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "studio", exact: true }).first()).toBeVisible();
     found.f01 = await contrast("job paper (F01)");
     const room = page.locator(
       `[data-paper-chapter="ffe"] [data-pieces-room="${LIVING}"]`,

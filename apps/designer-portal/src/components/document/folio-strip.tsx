@@ -82,7 +82,7 @@ function FileChip({
           type="button"
           onClick={() => setSlidOut((v) => !v)}
           aria-expanded={slidOut}
-          className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.05em]"
+          className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] [--folio-ink:var(--color-quiet-ink)] uppercase tracking-[0.05em]"
           title={slidOut ? 'Slide versions back' : 'Slide older versions out'}
         >
           <span
@@ -95,11 +95,11 @@ function FileChip({
       <button
         type="button"
         onClick={() => onToggleVisibility(head)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+        className="t-meta inline-flex min-h-11 min-w-11 items-center justify-center uppercase tracking-[0.05em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         style={{
           color: head.client_visible
             ? 'var(--color-sage-ink)'
-            : 'var(--color-aged-oak, #8B7355)',
+            : 'var(--color-quiet-ink)',
         }}
         title={
           head.client_visible
@@ -120,7 +120,7 @@ function FileChip({
             key={v.id}
             type="button"
             onClick={() => onOpen(v)}
-            className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center text-[11px]"
+            className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center text-[11px] [--folio-ink:var(--color-quiet-ink)]"
             title={`Superseded ${fmtDay(v.created_at)}`}
           >
             <span className="da-score-hover block">{fmtDay(v.created_at)}</span>
@@ -389,7 +389,7 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.08em]"
+        className="da-glyph-btn t-meta inline-flex min-h-11 min-w-11 items-center justify-center [--folio-ink:var(--color-quiet-ink)] uppercase tracking-[0.08em]"
       >
         <span className={`da-score-hover block${open ? ' da-score-on' : ''}`}>
           The folio · {chains.length} {chains.length === 1 ? 'file' : 'files'}{' '}
