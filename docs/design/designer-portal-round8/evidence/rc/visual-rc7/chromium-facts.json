@@ -5,8 +5,14 @@
     "plate": {
       "signed": true,
       "board": true,
-      "natural": [1536, 1024],
-      "box": [804, 529],
+      "natural": [
+        1536,
+        1024
+      ],
+      "box": [
+        804,
+        529
+      ],
       "alt": ""
     },
     "caption": "F01 Fictional Full-Service House · board cover"
@@ -28,21 +34,21 @@
     "closeoutText": "09\nCloseout\n\nCare · project closeout\n\nProject closeout\n\nNo recorded activity · the checklist settles this project\n\nClose out project\n\nCloseout tasks outstanding\n\n· 5 project phases not completed\n· 80 FF&E items not installed\nFinal walkthrough completed with client\nAll punch list items resolved\n✓\nNo balance due · verified from billing\nProfessional photography scheduled\nFinal project photos on file (for portfolio)\nProject case study written for portfolio\n\nThe portfolio snapshot\n\nHeadline\nFor the portfolio card\nProject value\n$\nDuration\nRooms\nCollapse closeout\nService acceptance\n\nThe client accepts the agreed services. Nothing reaches them until you send it or hand it to them on paper.\n\nNo agreed scope edition is active for this job, so there is nothing to ask the client to accept yet.\n\nStudio service\n\nWhether the studio has delivered the services it agreed. Project closure is separate.\n\nHolds the studio's service\n\nAcross the job\n\nThe client hasn't accepted the studio's services yet\nPieces the studio buys are not in an agreed package (80)\nNo agreed scope is in force for this job\n\nYou can complete the studio service once nothing above holds it.\n\nComplete studio service"
   },
   "e7": {
-    "job": "7b820780-8277-4687-9a79-fae225c1243b",
+    "job": "96156409-1f4c-4066-a144-e668ad379f90",
     "records": {
       "cabinetry": 1,
       "requests": {
-        "7ec3ec80-e003-42b6-a0ec-53be7e5a90a4": "closed",
-        "720c4731-0ae8-46b6-8072-c3044dca8d40": "closed"
+        "be4b47b8-2541-46de-9ab2-c3bbf25bdd8a": "closed",
+        "4f55d9bd-960b-4996-ad93-68e16077dfb2": "closed"
       }
     },
     "overflow": 0,
     "requestsRendered": {
-      "720c4731-0ae8-46b6-8072-c3044dca8d40": "closed",
-      "7ec3ec80-e003-42b6-a0ec-53be7e5a90a4": "closed"
+      "4f55d9bd-960b-4996-ad93-68e16077dfb2": "closed",
+      "be4b47b8-2541-46de-9ab2-c3bbf25bdd8a": "closed"
     },
     "inactive": 0,
-    "cabinetryText": "03\nCabinetry\nPackage pkg.cabinets\n\n2 units · planned · bought by GC, paid by GC, contracted by GC\n\nOutside the studio furnishing subtotal. No studio purchase order, purchase or invoice exists for this package.\n\nRoute\n\nDesigner intent → maker drawing. The studio's issued set carries the intent; the maker develops shop drawings through a bound submittal.\n\nPackage\nNo package record for this key\nSite\nNo package record for this key\nCommercial scope\nEdition 05bafd79 · pkg.cabinets\nMaker evidence\nNo submittal bound yet\nExact issue\n\nNo package issue is recorded. Maker evidence cannot be bound until the package is issued.\n\nUnits\nk-1 · Not instructed\nNo maker evidence bound\nk-2 · Not instructed\nNo maker evidence bound\nInstruction and receipt\n\nNo fabrication instruction is recorded.\n\nHistory\nShow the GC's reported amounts\n\nThese acts are not active yet. Nothing here records an instruction, hold, receipt or verification.\n\nRecord instruction\nPlace a hold\nRecord receipt\nVerify an event",
-    "closeoutText": "09\nCloseout\n\nCare · project closeout\n\nProject closeout\n\nNo recorded activity · the checklist settles this project\n\nClose out project\n\nCloseout tasks outstanding\n\n· 5 coordination items unresolved\n· 2 FF&E items not installed\n· 1 FF&E item not fully paid\nFinal walkthrough completed with client\nAll punch list items resolved\nFinal payment collected · waiting on billing\nProfessional photography scheduled\nFinal project photos on file (for portfolio)\nProject case study written for portfolio\n\nThe portfolio snapshot\n\nHeadline\nFor the portfolio card\nProject value\n$\nDuration\nRooms\nCollapse closeout\nService acceptance\n\nThe client accepts the agreed services. Nothing reaches them until you send it or hand it to them on paper.\n\nEvidence the client reviews\nEvidence set of Oct 29, 2026 (aaaaaaaa)\n\nAgainst scope edition 1.\n\nDraft the request\n\nRequest 2 · Closed · Accepted with conditions\n\nFollows request 1.\n\nSent Oct 29, 2026.\n\nThe client account (Client) · Required · Accepted with conditions online\nKeep the oak floor\nE7 Co-client (Co client) · Required · Accepted online\nE7 Guest (Guest) · Optional · Waiting\nE7 Replacement partner (Partner) · Required · Accepted online\nE7 Partner (Partner) was replaced Oct 29, 2026: Partner moved out; the studio names the new partner.\n\nRequest 1 · Closed · Returned\n\nSent Oct 29, 2026.\n\nThe client account (Client) · Required · Returned online\n\nReason given: The kitchen scope is missing the island\n\nE7 Co-client (Co client) · Required · Waiting\nE7 Guest (Guest) · Optional · Waiting\nE7 Partner (Partner) · Required · Waiting\nStudio service\n\nWhether the studio h"
+    "cabinetryText": "03\nCabinetry\nPackage pkg.cabinets\n\n2 units · planned · bought by GC, paid by GC, contracted by GC\n\nOutside the studio furnishing subtotal. No studio purchase order, purchase or invoice exists for this package.\n\nRoute\n\nDesigner intent → maker drawing. The studio's issued set carries the intent; the maker develops shop drawings through a bound submittal.\n\nPackage\nNo package record for this key\nSite\nNo package record for this key\nCommercial scope\nEdition 509b3221 · pkg.cabinets\nMaker evidence\nNo submittal bound yet\nExact issue\n\nNo package issue is recorded. Maker evidence cannot be bound until the package is issued.\n\nUnits\nk-1 · Not instructed\nNo maker evidence bound\nk-2 · Not instructed\nNo maker evidence bound\nInstruction and receipt\n\nNo fabrication instruction is recorded.\n\nHistory\nShow the GC's reported amounts\n\nThese acts are not active yet. Nothing here records an instruction, hold, receipt or verification.\n\nRecord instruction\nPlace a hold\nRecord receipt\nVerify an event",
+    "closeoutText": "09\nCloseout\n\nCare · project closeout\n\nProject closeout\n\nNo recorded activity · the checklist settles this project\n\nClose out project\n\nCloseout tasks outstanding\n\n· 5 coordination items unresolved\n· 2 FF&E items not installed\n· 1 FF&E item not fully paid\nFinal walkthrough completed with client\nAll punch list items resolved\nFinal payment collected · waiting on billing\nProfessional photography scheduled\nFinal project photos on file (for portfolio)\nProject case study written for portfolio\n\nThe portfolio snapshot\n\nHeadline\nFor the portfolio card\nProject value\n$\nDuration\nRooms\nCollapse closeout\nService acceptance\n\nThe client accepts the agreed services. Nothing reaches them until you send it or hand it to them on paper.\n\nEvidence the client reviews\nEvidence set of Oct 30, 2026 (aaaaaaaa)\nEvidence set of Oct 30, 2026 (dddddddd)\n\nAgainst scope edition 1.\n\nDraft the request\n\nRequest 2 · Closed · Accepted with conditions\n\nFollows request 1.\n\nSent Oct 30, 2026.\n\nThe client account (Client) · Required · Accepted with conditions online\nKeep the oak floor\nE7 Co-client (Co client) · Required · Accepted online\nE7 Guest (Guest) · Optional · Waiting\nE7 Replacement partner (Partner) · Required · Accepted online\nE7 Partner (Partner) was replaced Oct 30, 2026: Partner moved out; the studio names the new partner.\n\nRequest 1 · Closed · Returned\n\nSent Oct 30, 2026.\n\nThe client account (Client) · Required · Returned online\n\nReason given: The kitchen scope is missing the island\n\nE7 Co-client (Co client) · Required · Waiting\nE7 Guest (Guest) · Optional · Waiting\nE7 Partner (Partner) · Required · Wait"
   }
 }
