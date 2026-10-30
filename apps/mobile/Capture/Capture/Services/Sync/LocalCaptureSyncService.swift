@@ -777,7 +777,8 @@ final class LocalCaptureSyncService: CaptureSyncService {
 
         piece.markMarginNoteStarted()
         do {
-            let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
+            let outcome = try await MarginNoteOrchestrator(gateway: writes).write(
+                request, errorCode: SupabaseFieldWriteGateway.postgrestCode)
             // The same owner re-check `commit`, `route` and `drainOwned` make
             // after every network await. An account switch mid-await means this
             // verdict was reached under a different JWT, and `.refused` is
@@ -832,7 +833,8 @@ final class LocalCaptureSyncService: CaptureSyncService {
 
         piece.markDegradeNoteStarted()
         do {
-            let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
+            let outcome = try await MarginNoteOrchestrator(gateway: writes).write(
+                request, errorCode: SupabaseFieldWriteGateway.postgrestCode)
             guard activeOwner == owner else {
                 piece.markDegradeNotePending()
                 return

@@ -112,8 +112,8 @@ test("A15 real Field RPC and Field note write retain room and author; a capture 
       ),
     ).toBe("1");
     expect(products()).toBe(productsBefore);
-    // LocalCaptureSyncService.writeMarginNoteIfNeeded → MarginNoteWriteRequest
-    // → SupabaseFieldWriteGateway.insertMarginNote: the same field actor.
+    // Exercise the server note insert as the designer; this does not run the
+    // Swift sync service or assert its encoded request.
     psqlAsUser(
       DESIGNER,
       `INSERT INTO public.margin_notes
@@ -199,7 +199,7 @@ function seedDefectObservation() {
   );
 }
 
-// RC7-E3-2: writer fixed in Capture (K13); scope/next-owner columns deferred
+// RC7-E3-2: REST proves server acceptance of project_room; scope/next-owner columns deferred
 test.fixme("A15 Field observation records its typed room subject", async ({
   authenticatedPage: page,
 }) => {

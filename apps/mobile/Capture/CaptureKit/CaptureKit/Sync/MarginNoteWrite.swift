@@ -20,15 +20,11 @@
 import Foundation
 
 public enum MarginNoteSubject: Equatable, Sendable {
-    case planPrint(UUID)
-    case planIssue(UUID)
     case projectRoom(UUID)
     case fieldCapture(UUID)
 
     public var kind: String {
         switch self {
-        case .planPrint: "plan_print"
-        case .planIssue: "plan_issue"
         case .projectRoom: "project_room"
         case .fieldCapture: "field_capture"
         }
@@ -36,12 +32,12 @@ public enum MarginNoteSubject: Equatable, Sendable {
 
     public var id: UUID {
         switch self {
-        case .planPrint(let id), .planIssue(let id), .projectRoom(let id), .fieldCapture(let id): id
+        case .projectRoom(let id), .fieldCapture(let id): id
         }
     }
 }
 
-public struct MarginNoteWriteRequest: Codable, Equatable, Sendable {
+public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
     public let id: UUID
     public let projectID: UUID
     public let designerID: UUID
@@ -68,6 +64,12 @@ public struct MarginNoteWriteRequest: Codable, Equatable, Sendable {
         self.fieldCaptureID = fieldCaptureID
         self.subjectKind = subject?.kind
         self.subjectID = subject?.id
+    }
+
+    func withoutSubject() -> MarginNoteWriteRequest {
+        MarginNoteWriteRequest(
+            id: id, projectID: projectID, designerID: designerID, body: body,
+            anchorKind: anchorKind, fieldCaptureID: fieldCaptureID)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -148,11 +150,27 @@ public struct MarginNoteOrchestrator: Sendable {
         self.gateway = gateway
     }
 
-    public func write(_ request: MarginNoteWriteRequest) async throws -> FieldWriteOutcome {
+    public func write(
+        _ request: MarginNoteWriteRequest,
+        errorCode: (Error) -> String? = { _ in nil }
+    ) async throws -> FieldWriteOutcome {
         if try await gateway.existingMarginNote(id: request.id) {
             return .alreadyWritten
         }
-        try await gateway.insertMarginNote(request)
+        do {
+            try await gateway.insertMarginNote(request)
+        } catch {
+            let code = errorCode(error)
+            let subjectGuard = [
+                "subject_invalid", "subject_requires_project", "subject_off_project",
+                "margin_notes_subject_pair_check", "margin_notes_subject_kind_check"
+            ]
+            guard request.subjectKind != nil,
+                  code == "PGRST204" ||
+                    (code == "23514" && subjectGuard.contains(where: { error.localizedDescription.contains($0) }))
+            else { throw error }
+            try await gateway.insertMarginNote(request.withoutSubject())
+        }
         return .written
     }
 }
