@@ -1923,7 +1923,10 @@ VALUES
     'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '4cb2a23d819be51eaf2de2c67a393c53c64230b39f4107b5b6ac82d7e818da58'
+    -- 00835 replaced the inline executed-origin EXISTS with
+    -- public.project_has_design_agreement_eligibility() (00578's hash was
+    -- 4cb2a23d819be51eaf2de2c67a393c53c64230b39f4107b5b6ac82d7e818da58).
+    '14ee7e7f334d9b408a357187a023e1e382607da52420f8a331d23bf7273c21ca'
   ),
   (
     'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
@@ -1999,7 +2002,9 @@ VALUES
     'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
     'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '71e3700f9a100f863a968cba9afab3a66e701d1dc369a491f5e9c31d1eacd4a3'
+    -- 00835's eligibility helper, as above (00578's hash was
+    -- 71e3700f9a100f863a968cba9afab3a66e701d1dc369a491f5e9c31d1eacd4a3).
+    '83b2c3686f99aee99b2e314a43d045965ab59c903323992a3a3c686a0dee320e'
   ),
   (
     'public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)',
