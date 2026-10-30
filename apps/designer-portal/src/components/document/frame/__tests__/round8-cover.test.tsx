@@ -10,7 +10,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
+import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { Round8MarginContext } from '@/components/document/paper/margin-layout';
 
 const mockProject: Record<string, unknown> = {
@@ -24,9 +26,36 @@ const mockProject: Record<string, unknown> = {
 };
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => ({ data: mockProject }),
+  useSessionUserId: () => null,
+  useDocumentClientLinkHold: () => ({ data: null }),
+  useProjectRoster: () => ({ data: [] }),
+  resolveCoverPhoto: () => null,
+  publicUrlToPath: () => null,
+  createBrowserClient: () => ({
+    from: () => ({
+      select: () => ({
+        eq: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
+      }),
+    }),
+    storage: { from: () => ({ createSignedUrls: () => Promise.resolve({ data: [], error: null }) }) },
+  }),
 }));
 jest.mock('@/hooks/use-project-lifecycle', () => ({
-  useSaveProjectVitals: () => ({ mutateAsync: jest.fn() }),
+  useSaveProjectVitals: () => ({ mutateAsync: jest.fn(), mutate: jest.fn(), isPending: false }),
+}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('@/hooks/use-margin-items', () => ({ invalidateMarginSurfaces: jest.fn() }));
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => ({ value: true, isLoading: false }),
+}));
+jest.mock('@/components/document/mobile/mobile-shell', () => ({
+  useMobilePrimaryAction: jest.fn(),
+  useMobileSecondaryAction: jest.fn(),
+}));
+jest.mock('@/components/document/client-mirror', () => ({ ClientMirror: () => null }));
+jest.mock('@/components/document/proposal-preview', () => ({ ProposalPreview: () => null }));
+jest.mock('@/components/document/press-band', () => ({
+  PressBand: () => <section data-press-band="">Loading the edition</section>,
 }));
 
 const ROUND8_CSS = readFileSync(
@@ -107,12 +136,20 @@ describe('the round-8 job cover (RC-4 D3)', () => {
     );
   });
 
-  it('does not reserve a Press-band box on proposal or brief papers', () => {
-    for (const stage of ['proposal', 'brief'] as const) {
-      const { container, unmount } = renderCover({ stage, projectId: undefined, instruments: <section>Other instruments</section> });
-      expect(container.querySelector('[data-r8-cover-plate] [data-press-band]')).toBeNull();
-      unmount();
-    }
+  it.each(['proposal', 'brief'] as const)('does not reserve a Press-band box on %s papers', (stage) => {
+    const instruments = (
+      <QueryClientProvider client={new QueryClient()}>
+        <LetterheadInstruments
+          projectId={stage === 'brief' ? 'p1' : null}
+          proposalId={stage === 'proposal' ? 'proposal-1' : null}
+          brief={stage === 'brief'}
+          clientProfileId={null}
+          clientName="The Hartwells"
+        />
+      </QueryClientProvider>
+    );
+    const { container } = renderCover({ stage, instruments });
+    expect(container.querySelector('[data-r8-cover-plate] [data-press-band]')).toBeNull();
     expect(ROUND8_CSS).not.toMatch(/\[data-r8-cover-plate\]\s*\{\s*min-height:/);
     expect(ROUND8_CSS).toMatch(/\[data-r8-cover-plate\] \[data-press-band\]\s*\{\s*min-height: 220px;/);
   });

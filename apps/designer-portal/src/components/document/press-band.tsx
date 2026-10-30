@@ -16,7 +16,7 @@
  * its photographs. A closed project's frozen edition offers no act at all.
  */
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,6 +60,7 @@ import {
   imageCaption,
 } from './press-band-preview';
 import { PressBandFocal, type FocalEdit } from './press-band-focal';
+import { Round8MarginContext } from './paper/margin-layout';
 import { DEAD_PICTURE_COPY } from './line-unfold/item-pictures';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
 
@@ -144,7 +145,8 @@ export function PressBand({
   const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !data.refreshRequired && !pending && !current);
 
   const headingId = useId();
-  if (!data) return isLoading ? (
+  const round8 = useContext(Round8MarginContext);
+  if (!data) return isLoading && round8 ? (
     <section
       aria-hidden="true"
       data-press-band

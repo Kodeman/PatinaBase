@@ -83,6 +83,13 @@ beforeEach(() => {
 });
 
 describe('ProposalWatch — the proposal becoming its project (US-14)', () => {
+  it('renders both watch eyebrows in quiet ink', () => {
+    render(<ProposalWatch proposalId="proposal-1" clientName="Ana Reyes" />);
+    for (const label of ['Sent', 'Opened', 'Reading', 'Most read', 'The client’s copy · as sent']) {
+      expect(screen.getByText(label)).toHaveClass('text-[var(--color-quiet-ink)]');
+    }
+  });
+
   it('Mark signed walks into the new project, announced', () => {
     render(<ProposalWatch proposalId="proposal-1" clientName="Ana Reyes" />);
     fireEvent.click(screen.getByRole('button', { name: 'Mark signed' }));

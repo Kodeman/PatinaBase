@@ -8,6 +8,7 @@
 import { act as reactAct, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ClientEdition, ClientEditions, ClientEditorialAsset } from '@patina/supabase';
 import { PressBand, publishedLine } from '../press-band';
+import { Round8MarginContext } from '../paper/margin-layout';
 import { editionDelta, PressBandPreview } from '../press-band-preview';
 import {
   CURRENT_ROW,
@@ -148,11 +149,21 @@ beforeEach(() => {
 describe('PressBand — the states', () => {
   it('reserves the band while its edition read loads, then collapses on error', () => {
     mockIsLoading = true;
-    const { container, rerender } = render(<PressBand projectId="p-1" clientFirstName="June" />);
+    const { container, rerender } = render(
+      <Round8MarginContext.Provider value><PressBand projectId="p-1" clientFirstName="June" /></Round8MarginContext.Provider>,
+    );
     expect(container.querySelector('[data-press-band][aria-hidden="true"]')).toBeInTheDocument();
     mockIsLoading = false;
     mockIsError = true;
-    rerender(<PressBand projectId="p-1" clientFirstName="June" />);
+    rerender(
+      <Round8MarginContext.Provider value><PressBand projectId="p-1" clientFirstName="June" /></Round8MarginContext.Provider>,
+    );
+    expect(container.querySelector('[data-press-band]')).toBeNull();
+  });
+
+  it('renders no loading placeholder under the legacy renderer', () => {
+    mockIsLoading = true;
+    const { container } = render(<PressBand projectId="p-1" clientFirstName="June" />);
     expect(container.querySelector('[data-press-band]')).toBeNull();
   });
 
