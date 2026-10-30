@@ -1717,12 +1717,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // mount, ahead of the jump (a hard entry already spent it at the commit, so
   // a refresh never lands): one landing per entry, and a token that names one
   // owns it, so the jump stands down.
+  //
+  // K15 — the jump also yields to ANY scroll after this entry's arrival, a
+  // script's included (a find, a focus, an automation's scroll-into-view): the
+  // ref keeps where the page sat when the entry first read its engagement, and
+  // a page that has moved off it is not moved again. The progressive reveal
+  // (opacity only) and chapters settling their height under an unscrolled page
+  // leave scrollY where it was, so they never stand the jump down.
   const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
   useEffect(() => {
     const token = consumeArriveToken(window.location.pathname, Date.now());
     if (token?.landing && !hasLandInstruction.current) arrivalLandingRef.current = { landing: token.landing, done: false };
   }, []);
-  const landedRef = useRef<{ seen: boolean; done: boolean } | null>(null);
+  const landedRef = useRef<{ seen: boolean; done: boolean; scrollY: number } | null>(null);
   const landingEngagementId = row?.engagement_id ?? null;
   const landingSection = row?.active_section;
   useEffect(() => {
@@ -1731,6 +1738,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       landedRef.current = {
         seen: readRecentDocumentsInHand().some((d) => d.id === landingEngagementId),
         done: false,
+        scrollY: window.scrollY,
       };
     }
     const landing = landedRef.current;
@@ -1743,7 +1751,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
         scrollIntoRevealed(el, { block: 'start' });
       }
-    });
+    }, landing.scrollY);
   }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.

@@ -166,14 +166,23 @@ function arrivalHolds(html: HTMLElement): boolean {
  * dispatches, so an event that arrives while one is still set is an earlier route's end, not this
  * entry's. When a touch or pen press ended the wait and is still down, the call waits for that
  * press to lift (a tap) or move (her swipe). Returns the unsubscribe.
+ *
+ * K15 — `scrollYAtArrival`, when given, is where the page sat at the entry's arrival: a page that
+ * has moved off it by the answer was scrolled by someone since, hers or a script's (a find, a focus,
+ * an automation), and that scroll owns the viewport too, so the answer is `false`.
  */
-export function afterArrival(onEnd: (unplayed: boolean) => void): () => void {
+export function afterArrival(
+  onEnd: (unplayed: boolean) => void,
+  scrollYAtArrival?: number,
+): () => void {
   const html = document.documentElement;
   let pending: (() => void) | null = null;
   const settle = (declined: boolean) => {
     const decide = () => {
       pending = null;
-      onEnd((declined || !runStarted) && !waitScrolled);
+      const moved =
+        scrollYAtArrival !== undefined && Math.abs(window.scrollY - scrollYAtArrival) > 0.5;
+      onEnd((declined || !runStarted) && !waitScrolled && !moved);
     };
     if (waitGesture === null) {
       decide();

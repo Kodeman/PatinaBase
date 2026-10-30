@@ -630,6 +630,47 @@ describe('afterArrival', () => {
     expect(onEnd).toHaveBeenCalledWith(unplayed);
   });
 
+  // K15 — the Document's resume landing yields to any scroll after its arrival, a script's included.
+  describe('given the scrollY at arrival (K15)', () => {
+    const scrollTo = (y: number) =>
+      Object.defineProperty(window, 'scrollY', { value: y, configurable: true, writable: true });
+    afterEach(() => scrollTo(0));
+
+    it('a programmatic scroll during the wait stands the landing down, with no wheel, swipe or key', () => {
+      html.classList.add('arr-pre');
+      const onEnd = jest.fn();
+      afterArrival(onEnd, 0);
+      scrollTo(1183); // e.g. an automation's scroll-into-view: no input event at all
+      html.classList.remove('arr-pre');
+      end({ surface: 'document', how: 'declined', cause: 'late' });
+      expect(onEnd).toHaveBeenCalledWith(false);
+    });
+
+    it('a scroll before an un-held answer stands it down too', () => {
+      scrollTo(240);
+      const onEnd = jest.fn();
+      afterArrival(onEnd, 0);
+      expect(onEnd).toHaveBeenCalledWith(false);
+    });
+
+    it('an unmoved page still lands, and sub-pixel drift is not a scroll', () => {
+      html.classList.add('arr-pre');
+      const onEnd = jest.fn();
+      afterArrival(onEnd, 300);
+      scrollTo(300.4);
+      html.classList.remove('arr-pre');
+      end({ surface: 'document', how: 'declined', cause: 'late' });
+      expect(onEnd).toHaveBeenCalledWith(true);
+    });
+
+    it('a caller that gives none keeps the input-only rule (the Desk’s put-down row)', () => {
+      scrollTo(240);
+      const onEnd = jest.fn();
+      afterArrival(onEnd);
+      expect(onEnd).toHaveBeenCalledWith(true);
+    });
+  });
+
   it('a mouse press answers at once; an unsubscribe before a touch press ends drops the answer', () => {
     render(<ArrivalMount />);
     setArrivalWaiting(jest.fn());
