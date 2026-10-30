@@ -99,7 +99,11 @@ import {
 } from '@/hooks/use-document-running-index';
 import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
 import { landSection } from '@/lib/document/land-section';
-import { revealPaperThrough, scrollIntoRevealed } from '@/lib/document/paper-reveal';
+import {
+  revealPaperThrough,
+  scrollIntoRevealed,
+  whenRevealedThrough,
+} from '@/lib/document/paper-reveal';
 import { useLensDensity, useLensResolved } from '@/hooks/use-lens-density';
 import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
@@ -1041,6 +1045,21 @@ function sectionChapter(key: SectionKey, focus: HTMLElement | null): HTMLElement
   );
 }
 
+/** RC7-E8-5 — the lens key of the last region root at or above `el` in the
+ *  paper (one that holds it, or one before it): what a landing passes to
+ *  `forceFullThrough` so nothing above where it lands is still at its quiet
+ *  reserve. Null when no root stands at or above it. */
+function regionThrough(el: Element): DocumentIndexKey | null {
+  const paper = el.closest('[data-document-paper]');
+  let key: string | null = null;
+  for (const root of Array.from(paper?.querySelectorAll('[data-index-region]') ?? [])) {
+    if (root.contains(el) || root.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) {
+      key = root.getAttribute('data-index-region') || key;
+    }
+  }
+  return key as DocumentIndexKey | null;
+}
+
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   // F2 — the body is keyed on the document id so picking up a DIFFERENT
   // document is a fresh mount by our own construction, not by trusting the
@@ -1724,6 +1743,19 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // a page that has moved off it is not moved again. The progressive reveal
   // (opacity only) and chapters settling their height under an unscrolled page
   // leave scrollY where it was, so they never stand the jump down.
+  //
+  // RC7-E8-5 — and the jump waits for the paper's own progressive reveal to
+  // reach the section (whenRevealedThrough, bounded by the reveal failsafe)
+  // instead of force-revealing the chapters above it while their bodies still
+  // load: those grew under the landed section and shoved it (returning-reader
+  // cold-load CLS 1.34–1.42). The K15 check runs again at the scroll, since the
+  // wait is a window for her, or a script, to scroll. `done` is set only once
+  // the landing is decided, so an effect re-run during the wait re-arms it.
+  // Then it lands in D-B18's press order: `forceFullThrough` first, so a root
+  // above the section still at its quiet reserve (the lens's resolution pass
+  // opens only what stands near the unscrolled frame) takes its height before
+  // the scroll. Otherwise the lens opens it once it crosses the landed frame,
+  // and its body grows under the section (a 0.74 shift on its own).
   const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
   useEffect(() => {
     const token = consumeArriveToken(window.location.pathname, Date.now());
@@ -1743,16 +1775,31 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     }
     const landing = landedRef.current;
     if (!landing.seen || landing.done || !frameCommitted) return;
-    return afterArrival((unplayed) => {
-      landing.done = true;
-      if (!unplayed) return;
-      const el = mainRef.current?.querySelector('[data-active-section]') ??
-        (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null);
-      if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-        scrollIntoRevealed(el, { block: 'start' });
+    let stopWaiting: (() => void) | null = null;
+    const stopArrival = afterArrival((unplayed) => {
+      const el = unplayed
+        ? (mainRef.current?.querySelector('[data-active-section]') ??
+          (paperRenderer.renderer === 'round8' && landingSection ? sectionChapter(landingSection, null) : null))
+        : null;
+      if (!el) {
+        landing.done = true;
+        return;
       }
+      stopWaiting = whenRevealedThrough(el, () => {
+        landing.done = true;
+        if (Math.abs(window.scrollY - landing.scrollY) > 0.5) return;
+        if (el.isConnected && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+          const key = regionThrough(el);
+          if (key) lens.forceFullThrough(key);
+          scrollIntoRevealed(el, { block: 'start' });
+        }
+      });
     }, landing.scrollY);
-  }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection]);
+    return () => {
+      stopArrival();
+      stopWaiting?.();
+    };
+  }, [landingEngagementId, frameCommitted, paperRenderer.renderer, landingSection, lens]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.
   const lineage: SectionLineage | null = useMemo(() => {

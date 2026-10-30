@@ -6,6 +6,8 @@
  */
 
 export const SHOWN_ATTRIBUTE = 'data-paper-shown';
+/** round8.css's per-chapter `doc-fade` delay: nothing is held past it. */
+export const REVEAL_FAILSAFE_MS = 3500;
 
 /** The paper's held children, in paper order: everything below the cover. */
 export function heldChildren(paper: Element): HTMLElement[] {
@@ -37,4 +39,44 @@ export function scrollIntoRevealed(el: Element | null | undefined, options?: Scr
   if (!el) return;
   revealPaperThrough(el);
   el.scrollIntoView?.(options);
+}
+
+/**
+ * RC7-E8-5 — call `onReady` once the round-8 paper's own progressive reveal has
+ * reached `target`: the child holding it carries the shown mark (so everything
+ * above it has settled), or the lens has resolved the whole paper, or
+ * `REVEAL_FAILSAFE_MS` has passed (by then the CSS failsafe shows every child).
+ * It never reveals anything itself. A landing that is not the reader's own act
+ * waits here instead of force-revealing chapters whose bodies are still
+ * loading, which then grow and shove the target. Outside a round-8 paper, or
+ * for the cover (never held), it is ready at once. Returns the cancel.
+ */
+export function whenRevealedThrough(target: Element, onReady: () => void): () => void {
+  const paper = target.closest('[data-paper-renderer="round8"] [data-document-paper]');
+  const shell = paper?.closest('[data-document-shell]') ?? null;
+  const holder = paper ? heldChildren(paper).find((child) => child.contains(target)) : undefined;
+  const ready = () =>
+    !holder || holder.hasAttribute(SHOWN_ATTRIBUTE) || !!shell?.hasAttribute('data-lens-resolved');
+  if (ready()) {
+    onReady();
+    return () => {};
+  }
+  let settled = false;
+  const stop = () => {
+    settled = true;
+    observer.disconnect();
+    window.clearTimeout(timer);
+  };
+  const finish = () => {
+    if (settled) return;
+    stop();
+    onReady();
+  };
+  const observer = new MutationObserver(() => {
+    if (ready()) finish();
+  });
+  observer.observe(holder!, { attributes: true, attributeFilter: [SHOWN_ATTRIBUTE] });
+  if (shell) observer.observe(shell, { attributes: true, attributeFilter: ['data-lens-resolved'] });
+  const timer = window.setTimeout(finish, REVEAL_FAILSAFE_MS);
+  return stop;
 }

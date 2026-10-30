@@ -10,7 +10,7 @@ import { rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-
 import { LENS_RESOLVE_MAX_MS, LENS_RESOLVE_STABLE_FRAMES } from '@/lib/document/lens-constants';
 import { UNFOLD_REGION_EVENT } from '@/lib/document/document-index';
 import { REVEAL_FAILSAFE_MS, revealStep, useChapterReveal, type RevealState } from '../use-chapter-reveal';
-import { scrollIntoRevealed, SHOWN_ATTRIBUTE } from '@/lib/document/paper-reveal';
+import { scrollIntoRevealed, SHOWN_ATTRIBUTE, whenRevealedThrough } from '@/lib/document/paper-reveal';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -660,6 +660,73 @@ describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
     expect(shownAtScroll).toEqual(['brief', 'design', 'schedule', 'ffe']);
   });
 
+  // RC7-E8-5 — a landing that is not the reader's act waits for the reveal to reach its target.
+  describe('whenRevealedThrough (RC7-E8-5)', () => {
+    const mutations = () => act(async () => {
+      await Promise.resolve();
+    });
+
+    it('waits while the target is held, reveals nothing itself, and answers once the sampler reaches it', async () => {
+      const { at, shown, flush } = mounted(LAYOUT);
+      const onReady = jest.fn(() => shownAtReady.push(...shown()));
+      const shownAtReady: (string | null)[] = [];
+      const cancel = whenRevealedThrough(at('ffe'), onReady);
+      await mutations();
+      expect(onReady).not.toHaveBeenCalled();
+      expect(shown()).toEqual([]);
+      for (let i = 0; i <= LENS_RESOLVE_STABLE_FRAMES; i++) flush();
+      await mutations();
+      expect(onReady).toHaveBeenCalledTimes(1);
+      // The target and everything above it settled through the sampler before the answer.
+      expect(shownAtReady).toEqual(expect.arrayContaining(['brief', 'design', 'schedule', 'ffe']));
+      cancel();
+    });
+
+    it('answers at lens resolution', async () => {
+      const { shell, at } = mounted(LAYOUT);
+      const onReady = jest.fn();
+      whenRevealedThrough(at('record'), onReady);
+      shell.setAttribute('data-lens-resolved', 'true');
+      await mutations();
+      expect(onReady).toHaveBeenCalledTimes(1);
+    });
+
+    it('answers at the reveal failsafe, still revealing nothing itself', () => {
+      jest.useFakeTimers();
+      try {
+        const { at, shown } = mounted(LAYOUT);
+        const onReady = jest.fn();
+        whenRevealedThrough(at('ffe'), onReady);
+        jest.advanceTimersByTime(REVEAL_FAILSAFE_MS - 1);
+        expect(onReady).not.toHaveBeenCalled();
+        jest.advanceTimersByTime(1);
+        expect(onReady).toHaveBeenCalledTimes(1);
+        expect(shown()).toEqual([]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('a cancel before the answer drops it', async () => {
+      const { shell, at } = mounted(LAYOUT);
+      const onReady = jest.fn();
+      whenRevealedThrough(at('ffe'), onReady)();
+      shell.setAttribute('data-lens-resolved', 'true');
+      await mutations();
+      expect(onReady).not.toHaveBeenCalled();
+    });
+
+    it('answers at once for a revealed target, the cover, or an element outside a round-8 paper', () => {
+      const { paper, at } = mounted(LAYOUT);
+      at('brief').setAttribute(SHOWN_ATTRIBUTE, '');
+      const onReady = jest.fn();
+      whenRevealedThrough(at('brief'), onReady);
+      whenRevealedThrough(paper.querySelector('[data-paper-cover]')!, onReady);
+      whenRevealedThrough(document.createElement('section'), onReady);
+      expect(onReady).toHaveBeenCalledTimes(3);
+    });
+  });
+
   it('reveals the target even when its scroll is a no-op (already in place, or no scrollIntoView)', () => {
     const { at, shown } = mounted(LAYOUT);
     // design already sits in the first screen: the scroll moves nothing.
@@ -742,6 +809,10 @@ describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
     // The returning reader's landing and the section landing reveal first.
     const page = readFileSync(join(src, 'app/(document)/doc/[id]/page.tsx'), 'utf8');
     expect(page).toMatch(/scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
+    // RC7-E8-5 — the returning reader's landing waits for the reveal to reach it, not force it.
+    expect(page).toMatch(/whenRevealedThrough\(el, \(\) => \{[\s\S]{0,400}scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
+    // …and lands in D-B18's press order: the roots above it take their height before the scroll.
+    expect(page).toMatch(/const key = regionThrough\(el\);\s*if \(key\) lens\.forceFullThrough\(key\);\s*scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
     expect(page).toMatch(/revealPaperThrough\(section\);\s*landSection\(/);
   });
 });
