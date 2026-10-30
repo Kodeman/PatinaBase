@@ -31,6 +31,7 @@ const baseProject: Project = {
   designer_id: 'lead-1',
   designer: { full_name: 'Leah Park', display_name: null },
 };
+let mockAccountLoading = false;
 let mockProject: Project = baseProject;
 let mockViewer: string | null = 'lead-1';
 let mockLinkHold: 'not_permitted' | 'lead_not_in_studio' | null = null;
@@ -96,7 +97,7 @@ jest.mock('@/hooks/use-account-page', () => ({
         },
       ],
     },
-    isLoading: false,
+    isLoading: mockAccountLoading,
     isError: false,
     refetch: jest.fn(),
   }),
@@ -144,11 +145,23 @@ const generateAct = () => screen.getByRole('button', { name: 'Generate invoice' 
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAccountLoading = false;
   mockProject = baseProject;
   mockViewer = 'lead-1';
   mockLinkHold = null;
   mockProjectListeners.clear();
   mockProjectsRead = null;
+});
+
+it('keeps the folded studio-only label in text-grade ink', () => {
+  render(<AccountBand projectId="project-1" />, { wrapper: Paper });
+  expect(screen.getByText('Studio only')).toHaveClass('text-[var(--color-quiet-ink)]');
+});
+
+it('keeps the loading studio-eyes-only label in text-grade ink', () => {
+  mockAccountLoading = true;
+  render(<AccountBand projectId="project-1" />, { wrapper: Paper });
+  expect(screen.getByText('Studio eyes only')).toHaveClass('text-[var(--color-quiet-ink)]');
 });
 
 it.each([

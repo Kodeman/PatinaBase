@@ -216,6 +216,7 @@ import {
   piecesQuietStatus,
   quietStateSentence,
 } from '@/lib/document/lens-quiet-status';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -1393,7 +1394,7 @@ function landOnControl(find: () => HTMLElement | null | undefined): void {
       return;
     }
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    control.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    scrollIntoRevealed(control, { block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
     control.focus({ preventScroll: true });
   };
   requestAnimationFrame(() => requestAnimationFrame(land));
@@ -1905,7 +1906,7 @@ function FFESectionBody({
         return;
       }
       const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      row.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+      scrollIntoRevealed(row, { block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
     };
     requestAnimationFrame(() => requestAnimationFrame(land));
   }, [ffeItemsSettled, ffeSetFolded, items, mode]);
@@ -1929,11 +1930,11 @@ function FFESectionBody({
       const land = () => {
         const row = document.getElementById(piecesRoomAnchorId(roomId));
         if (!row) {
-          if (waited === 0) document.getElementById('project-ffe')?.scrollIntoView?.({ block: 'start' });
+          if (waited === 0) scrollIntoRevealed(document.getElementById('project-ffe'), { block: 'start' });
           if (waited++ < 60) requestAnimationFrame(land);
           return;
         }
-        row.scrollIntoView?.({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+        scrollIntoRevealed(row, { block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
       };
       requestAnimationFrame(() => requestAnimationFrame(land));
     };
@@ -2019,7 +2020,7 @@ function FFESectionBody({
       const prompt = choosePieceRef.current;
       const firstLine =
         ffeBodyRef.current?.querySelector<HTMLElement>('[id^="ffe-selection-"]') ?? prompt;
-      firstLine?.scrollIntoView?.({ block: 'center' });
+      scrollIntoRevealed(firstLine, { block: 'center' });
       prompt?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
@@ -2090,7 +2091,7 @@ function FFESectionBody({
         if (!target) return;
         if (!target.hasAttribute('tabindex') && !control) target.setAttribute('tabindex', '-1');
         const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        (cell ?? target).scrollIntoView?.({
+        scrollIntoRevealed(cell ?? target, {
           block: 'center',
           behavior: reduceMotion ? 'auto' : 'smooth',
         });

@@ -232,7 +232,7 @@ BEGIN
       'f9000000-0000-4000-8000-000000000003',
       'f9000000-0000-4000-8000-000000000002'
     );
-  EXCEPTION WHEN serialization_failure THEN
+  EXCEPTION WHEN SQLSTATE 'PT409' THEN
     v_error := SQLERRM;
   END;
   ASSERT v_error IS NOT NULL, 'stale expected lead must reject';

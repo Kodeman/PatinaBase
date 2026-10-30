@@ -29,6 +29,7 @@ import { RegionRule } from './region/region-rule';
 import { useRoomLens } from './room-lens-context';
 import { liftByRoom } from '@/lib/document/room-state';
 import { NEW_BOARD_EVENT, requestShelfClose } from '@/lib/document/shelves';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 const HEADING_ID = 'project-mood-boards';
 const BODY_ID = 'project-mood-boards-body';
@@ -137,9 +138,7 @@ export function ProjectMoodBoards({
     ).matches;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        document
-          .getElementById(`ffe-selection-${selectionId}`)
-          ?.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+        scrollIntoRevealed(document.getElementById(`ffe-selection-${selectionId}`), { block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
       });
     });
   }, []);

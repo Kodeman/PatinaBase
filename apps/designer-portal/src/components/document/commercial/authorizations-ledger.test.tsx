@@ -97,6 +97,10 @@ const tradeScope = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("AuthorizationsLedger", () => {
+  it('renders its small heading in text-grade quiet ink', () => {
+    render(<AuthorizationsLedger projectId="project-1" />);
+    expect(screen.getByText('Authorizations & trade scopes', { exact: false })).toHaveClass('text-[var(--color-quiet-ink)]');
+  });
   beforeEach(() => {
     mockInstruments = { isLoading: false, error: null, data: [] };
     mockTradeScopes = { isLoading: false, error: null, data: [] };

@@ -86,6 +86,7 @@ import { DraftingStrip } from './drafting-strip';
 import { RulePhaseBar, barOwnsSession, type BarEditState } from './rule-phase-bar';
 import { useArmedBarFocus } from './use-armed-bar-focus';
 import { RuleGhostLayer } from './rule-ghost-layer';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 export interface ScheduleRuleProps {
   projectId: string;
@@ -334,7 +335,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     (phaseId: string) => {
       setArmedPhaseId(phaseId);
       armBarFocus(phaseId);
-      stripRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      scrollIntoRevealed(stripRef.current, { block: 'center', behavior: 'smooth' });
     },
     [armBarFocus],
   );

@@ -15,8 +15,8 @@ import { e8OwnedStackSql } from "./rc7-e8-guard";
  * axe-playwright; it is evaluated in the page (no new dependency).
  *
  * Asserted on every axe surface: 0 critical violations and 0 serious
- * violations other than color-contrast. The color-contrast serious count
- * (== 0) is the RC7-E8-2 fixme (residual sites after FIX4).
+ * violations other than color-contrast. RC7-E8-2 separately asserts zero
+ * color-contrast violations across every recorded surface.
  *
  * Focus indicator (WCAG 2.4.7), asserted at EVERY Tab stop of every walk, not
  * only at the destinations: the focused element matches :focus-visible and
@@ -328,7 +328,8 @@ async function runAxe(page: Page, surface: string, include?: string) {
   return summary;
 }
 
-/** The gate: 0 critical, and 0 serious other than color-contrast (that one is the RC7-E8-2 fixme). */
+/** Critical and non-contrast serious violations fail immediately.
+ * RC7-E8-2 checks contrast across all recorded surfaces. */
 async function axe(page: Page, surface: string, include?: string) {
   const { counts, violations } = await runAxe(page, surface, include);
   expect(
@@ -869,19 +870,29 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
       true,
     );
   });
-  // DEFECT RC7-E8-2 (residual after FIX4 5386a159e): FIX4 cleared every site but
-  // one. The schedule glance strip's month ticks keep aged-oak #8b7355 on
-  // #faf7f2 = 4.19:1 at 11px (schedule-glance-strip.tsx:68), on the E7 job
-  // paper. Kept out of the gate.
-  test.fixme("RC7-E8-2: axe color-contrast serious == 0 on every surface", async ({
+  test("RC7-E8-2: axe color-contrast serious == 0 on every surface", async ({
     page,
   }) => {
+    const incomplete: Record<string, number> = {};
     const contrast = async (surface: string, include?: string) => {
+      const shell = page.locator('[data-paper-renderer="round8"][data-document-shell]');
+      if (await shell.count()) {
+        await expect(page.locator('[data-document-paper] > [data-paper-shown]').first()).toBeAttached({ timeout: 30_000 });
+        await expect(shell).toHaveAttribute('data-lens-resolved', 'true', { timeout: 30_000 });
+      }
       const { violations } = await runAxe(
         page,
         `${surface} [RC7-E8-2]`,
         include,
       );
+      incomplete[surface] = await page.evaluate(async (context) => {
+        const run = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<any> } }).axe.run;
+        const result = await run(context ? { include: [context] } : document, {
+          runOnly: { type: 'rule', values: ['color-contrast'] },
+          resultTypes: ['incomplete'],
+        });
+        return result.incomplete.find((entry: { id: string }) => entry.id === 'color-contrast')?.nodes.length ?? 0;
+      }, include ?? null);
       return violations.filter((v) => v.id === "color-contrast");
     };
     const found: Record<string, unknown> = {};
@@ -897,21 +908,53 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     });
     await arrivedJob(page);
     found.f01 = await contrast("job paper (F01)");
-    await page.goto(
-      `/doc/${JOB}?unfold=pieces&lens=spec&room=${LIVING}&line=${line}`,
-      { waitUntil: "domcontentloaded", timeout: 120_000 },
+    const room = page.locator(
+      `[data-paper-chapter="ffe"] [data-pieces-room="${LIVING}"]`,
     );
-    await arrivedJob(page);
+    const toggle = room.getByRole("button", { name: /Living Room/ }).first();
+    await tabTo(page, toggle, "contrast job → Living Room disclosure");
+    if ((await toggle.getAttribute("aria-expanded")) !== "true")
+      await page.keyboard.press("Enter");
+    const door = room.getByRole("link", { name: /Edit room selections/ });
+    await tabTo(page, door, "contrast Living Room → Edit room selections");
+    await page.keyboard.press("Enter");
     await expect(
-      instrument(page).getByTestId("spec-fields-pane"),
-    ).toContainText(LINE_NAME, { timeout: 60_000 });
+      instrument(page).locator(`[data-room-heading="${LIVING}"]`),
+    ).toBeFocused({ timeout: 30_000 });
+    await tabTo(
+      page,
+      instrument(page)
+        .getByRole("group", { name: "Schedule view" })
+        .getByRole("button", { name: "Specifications" }),
+      "contrast unfold → Specifications",
+      true,
+    );
+    await page.keyboard.press("Enter");
+    const lineButton = instrument(page)
+      .getByTestId("spec-lens")
+      .locator(`[data-line-id="${line}"] > button`);
+    await tabTo(page, lineButton, "contrast Specifications → line");
+    await page.keyboard.press("Enter");
+    await expect(lineButton).toHaveAttribute("aria-current", "true", {
+      timeout: 30_000,
+    });
+    await expect(instrument(page).getByTestId("spec-fields-pane")).toContainText(
+      LINE_NAME,
+      { timeout: 60_000 },
+    );
+    await expect(page.getByText('Authorizations & trade scopes', { exact: false }).first()).toBeVisible();
+    await expect(page.locator('p').filter({ hasText: /^Working budget ·/ }).first()).toBeVisible();
+    await expect(page.getByText(/^Start with ·/).first()).toBeVisible();
+    await expect(page.getByText(/^(Studio only|Studio eyes only)$/).first()).toBeVisible();
     found.spec = await contrast("FF&E unfold, Specifications, line open");
 
     const job = psqlScalar(
       `SELECT id FROM public.projects WHERE name='E7 household job' AND designer_id='e7e70000-0000-4000-8000-000000000001';`,
     );
+    await page.goto("about:blank");
     await page.context().clearCookies();
     await signInAs(page, E7_OWNER);
+    await page.goto("about:blank");
     await page.goto(`/doc/${job}`, {
       waitUntil: "domcontentloaded",
       timeout: 120_000,
@@ -921,14 +964,17 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
     await expect(
       closeout.locator("[data-service-acceptance-request]").first(),
     ).toBeAttached({ timeout: 30_000 });
+    await expect(page.locator('[data-paper-chapter="schedule"] span').filter({ hasText: /^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)$/ }).first()).toBeVisible();
     found.e7 = await contrast("job paper (E7, acceptance active)");
     found.e7Closeout = await contrast(
       "acceptance/care chapter (E7)",
       '[data-paper-chapter="closeout"]',
     );
-    await closeout
-      .getByRole("button", { name: "Resolve this condition" })
-      .click();
+    const resolveButton = closeout.getByRole("button", {
+      name: "Resolve this condition",
+    });
+    await tabTo(page, resolveButton, "contrast job → Resolve this condition");
+    await page.keyboard.press("Enter");
     await expect(
       closeout.getByRole("form", { name: /^Resolve: / }),
     ).toBeVisible();
@@ -936,6 +982,7 @@ test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
       "resolve-condition form open",
       '[data-paper-chapter="closeout"]',
     );
+    console.log('[rc7-e8 contrast-incomplete]', test.info().project.name, JSON.stringify(incomplete));
     expect(
       Object.values(found).flat(),
       `color-contrast serious ${JSON.stringify(found)}`,

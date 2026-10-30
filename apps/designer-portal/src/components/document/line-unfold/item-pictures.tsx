@@ -25,6 +25,7 @@ import {
   type FfeItemImage,
 } from '@patina/supabase';
 import { DocumentAction } from '../document-action';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 export const UNLINK_COPY = 'Unlink — the file stays';
 export const DEAD_PICTURE_COPY = "The maker's photograph no longer loads";
@@ -289,7 +290,7 @@ export function ItemPictures({
                           href={`#picture-replacement-${itemId}`}
                           onClick={(event) => {
                             event.preventDefault();
-                            uploadControlRef.current?.scrollIntoView?.({ block: 'center' });
+                            scrollIntoRevealed(uploadControlRef.current, { block: 'center' });
                             uploadControlRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
                           }}
                         >

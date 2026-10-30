@@ -65,6 +65,7 @@ import {
 import { lineImageUrl } from "@/lib/document/pieces/spec-progress";
 import { ROUGH_IN_UNITS } from "@/lib/document/pieces/rough-in-keys";
 import { DimensionFields } from "../dimension-fields";
+import { conflictText } from "../spec-conflict-text";
 import {
   MakerMatchLine,
   MakerSearch,
@@ -286,38 +287,6 @@ function sameColumns(changes: SpecChanges, row: SpecChanges): boolean {
 }
 
 /**
- * RC7-E6-3 — the alert for fields whose row another session changed after
- * their edit began: what each now holds.
- */
-function conflictText(
-  fields: readonly (readonly [string, SpecChanges])[],
-  row: SpecChanges,
-): string {
-  // The chosen image has no field to save from: its retry is named apart.
-  const image = fields.some(([field]) => field === "Image")
-    ? ["Image changed in another session. Press Enter in the link field to save yours again."]
-    : [];
-  const said = fields.flatMap(([field, changes]) => {
-    if (field === "Image") return [];
-    const columns = Object.keys(changes) as SpecColumn[];
-    if (columns.length !== 1 || !TEXT_COLUMNS.has(columns[0])) {
-      return [`${field} changed in another session.`];
-    }
-    const value = String(row[columns[0]] ?? "").trim();
-    return [
-      value
-        ? `${field} changed in another session to “${value}”.`
-        : `${field} cleared in another session.`,
-    ];
-  });
-  if (said.length === 0) return image.join(" ");
-  return [
-    ...image,
-    `${said.join(" ")} Save again to replace ${said.length > 1 ? "them" : "it"}.`,
-  ].join(" ");
-}
-
-/**
  * RC7-E6-3 — a committed edit's three-way link back to its field. `base` is
  * the row value the edit began from; the pane writes only while the row
  * still holds it.
@@ -378,6 +347,10 @@ function useSpecEdit<T>(column: SpecColumn, value: T, version: number) {
     dirty: draft !== null,
     change,
     edit,
+    discard: () => {
+      setDraft(null);
+      conflicted.current = false;
+    },
     conflicted: () => conflicted.current,
   };
 }
@@ -724,6 +697,7 @@ export function SpecFieldsPane({
     ? (line.product?.name ?? line.name)
     : null;
   // The chosen image is a draft like a typed field's: it shows until saved.
+  const imageLinkRef = useRef<HTMLInputElement>(null);
   const imageEdit = useSpecEdit(
     "selected_media",
     spec?.selected_media,
@@ -1361,6 +1335,7 @@ export function SpecFieldsPane({
             )}
           </div>
           <input
+            ref={imageLinkRef}
             type="url"
             aria-label="Paste an image link"
             placeholder="https://"
@@ -1378,6 +1353,23 @@ export function SpecFieldsPane({
             }}
             className={`${INPUT_CLS} max-w-[360px]`}
           />
+          {imageEdit.dirty && imageEdit.conflicted() && (
+            <button
+              type="button"
+              className={ACT_CLS}
+              disabled={sendingSpec.current?.has("Image") ?? false}
+              onClick={() => {
+                if (sendingSpec.current?.has("Image")) return;
+                pendingSpec.current.delete("Image");
+                latestSpec.current.delete("Image");
+                imageEdit.discard();
+                revert("Image");
+                imageLinkRef.current?.focus();
+              }}
+            >
+              Discard my image change
+            </button>
+          )}
           {imageNote && <span className={REASON_CLS}>{imageNote}</span>}
         </Field>
 

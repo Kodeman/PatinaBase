@@ -106,7 +106,7 @@ function Figure({
 }) {
   return (
     <div className="flex-1 px-4 first:pl-0">
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
         {label}
       </p>
       <p className="mt-1 truncate font-heading text-[1.05rem] leading-none text-[var(--color-charcoal)]">
@@ -223,7 +223,7 @@ export function ProposalWatch({
       {/* The client's copy, as sent — a quiet peek; Preview opens it full-screen */}
       <div className="mt-4">
         <div className="mb-2 flex items-baseline justify-between gap-3">
-          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
             The client&rsquo;s copy · as sent
           </span>
           {hoistedLeader !== 'preview' && !previewInLetterhead && (

@@ -307,6 +307,36 @@ Deno.test("a numbered menu reply applies mark_done", async () => {
   assert(res.twiml.includes("2 left"));
 });
 
+// K12 (00904): a coordination item already resolved with another answer
+// (inventory rows 7-9) refuses with PT409 instead of the retried 40001. The
+// direct apply path reads PT409 as a known rollback: the studio owns the
+// message and the crew is told it did not save, instead of an ambiguous 503.
+Deno.test("a numbered menu reply refused with PT409 is a known rollback", async () => {
+  const now = new Date("2026-07-08T18:00:00Z");
+  const fake: FakeSupabase = createFakeSupabase(
+    baseSeed({
+      project_parties: [
+        { id: "53100000-0000-4000-8000-000000000001", phone_e164: "+15551110002", project_id: "53100000-0000-4000-8000-000000000003", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_conversations: [
+        {
+          id: "53100000-0000-4000-8000-000000000005", twilio_number: TO, phone_e164: "+15551110002", state: "idle",
+          active_project_id: "53100000-0000-4000-8000-000000000003", party_id: "53100000-0000-4000-8000-000000000001",
+          state_context: { menu: [{ n: 1, kind: "task", id: "task1", project_id: "53100000-0000-4000-8000-000000000003" }], menu_created_at: now.toISOString() },
+        },
+      ],
+    }),
+    { apply_field_effect: () => ({ data: null, error: { code: "PT409", message: "coordination item task1 was resolved with another answer" } }) },
+  );
+  const res = await processInbound(
+    params({ From: "+15551110002", Body: "DONE 1", MessageSid: "SMmenuPT409" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, now },
+  );
+  assertEquals(res.status, 200);
+  assertEquals(res.disposition, "effect_failed");
+  assert(res.twiml.includes("didn't save"), `the honest line: ${res.twiml}`);
+});
+
 // ── W4 round-1 review: the touch, and what it says about authority ──────────
 
 /** One conversation on a coordination menu, with the touch RPC recorded. */

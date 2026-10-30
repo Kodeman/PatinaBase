@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { HANDOFF_NOTE_ANCHOR } from '@/lib/document/desk-scope';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 export function HandoffNote({
   read,
@@ -29,7 +30,7 @@ export function HandoffNote({
 
   useEffect(() => {
     if (window.location.hash !== `#${HANDOFF_NOTE_ANCHOR}`) return;
-    ref.current?.scrollIntoView?.({ block: 'center' });
+    scrollIntoRevealed(ref.current, { block: 'center' });
     ref.current?.focus({ preventScroll: true });
   }, []);
 

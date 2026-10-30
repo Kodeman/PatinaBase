@@ -67,6 +67,8 @@ const REFUSAL: Record<string, string> = {
     "A named person is no longer the client or in the client's household. Update the signers, then try again.",
   evidence_manifest_invalid: "That evidence set isn't this job's service acceptance evidence. Choose another.",
   scope_edition_not_active: 'The agreed scope changed. Prepare the request against the current edition.',
+  acceptance_rerequest_needs_new_evidence:
+    'The client returned this same evidence. Revise the evidence, then ask again.',
   service_acceptance_recipient_missing: 'This job has no client account to send the request to.',
   stale_scope: 'The agreed scope changed since this opened. Read the request again.',
   stale_signer_policy: 'The signers changed since this opened. Read the request again.',
