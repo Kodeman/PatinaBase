@@ -378,6 +378,10 @@ function useSpecEdit<T>(column: SpecColumn, value: T, version: number) {
     dirty: draft !== null,
     change,
     edit,
+    discard: () => {
+      setDraft(null);
+      conflicted.current = false;
+    },
     conflicted: () => conflicted.current,
   };
 }
@@ -1378,6 +1382,20 @@ export function SpecFieldsPane({
             }}
             className={`${INPUT_CLS} max-w-[360px]`}
           />
+          {imageEdit.dirty && imageEdit.conflicted() && (
+            <button
+              type="button"
+              className={ACT_CLS}
+              onClick={() => {
+                pendingSpec.current.delete("Image");
+                latestSpec.current.delete("Image");
+                imageEdit.discard();
+                revert("Image");
+              }}
+            >
+              Discard my change
+            </button>
+          )}
           {imageNote && <span className={REASON_CLS}>{imageNote}</span>}
         </Field>
 

@@ -16,6 +16,7 @@ import {
 import {
   useCreateSpecBookShare,
   usePrepareSpecBookIssue,
+  ProjectFfeSpecConflictError,
   useProjectFfeReadiness,
   useProjectV2,
   useRenderSpecBookArtifact,
@@ -477,6 +478,7 @@ export function SelectionEditor({
   readiness = "checking",
   missingFields = [],
   onSaved,
+  onConflict,
   onRoomAssigned,
   heading,
   focusField,
@@ -487,6 +489,7 @@ export function SelectionEditor({
   readiness?: DerivedReadiness;
   missingFields?: readonly string[];
   onSaved?: () => void;
+  onConflict?: () => void;
   onRoomAssigned?: () => void;
   /** The fold's eyebrow lead: code · chapter. */
   heading?: string;
@@ -518,8 +521,13 @@ export function SelectionEditor({
   const [naField, setNaField] = useState<SpecField>("finish");
   const [naReason, setNaReason] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [peerSpec, setPeerSpec] = useState<ProjectFfeSpec | null>(null);
+  const spec = peerSpec && peerSpec.id === item.spec?.id && peerSpec.row_version >= (item.spec?.row_version ?? 0)
+    ? peerSpec : item.spec;
 
   useEffect(() => {
+    if (peerSpec?.id === item.spec?.id) return;
+    setPeerSpec(null);
     setDraft(item.spec ? editableSpecSeed(item.spec) : {});
     const raw: unknown = item.spec?.selected_dimensions ?? null;
     if (raw == null) {
@@ -540,7 +548,7 @@ export function SelectionEditor({
     setFeedback(null);
     // Keyed on the line and its spec, not the row: a room change refetches
     // the row and must not wipe a draft the designer has not saved.
-  }, [item.id, item.spec]);
+  }, [item.id, item.spec, peerSpec]);
 
   const set = (field: string, value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
@@ -581,7 +589,7 @@ export function SelectionEditor({
   };
 
   const save = async () => {
-    if (!item.spec) return;
+    if (!spec) return;
     setFeedback(null);
     let dimensions: Record<string, unknown> | null = null;
     if (rawDimensionsMode) {
@@ -599,10 +607,10 @@ export function SelectionEditor({
       dimensions = dimensionsValue;
     }
     try {
-      await updateSpec.mutateAsync({
+      const saved = await updateSpec.mutateAsync({
         projectId: item.project_id,
-        specId: item.spec.id,
-        expectedRowVersion: item.spec.row_version,
+        specId: spec.id,
+        expectedRowVersion: spec.row_version,
         changes: {
           sku: draft.sku?.trim() || null,
           finish: draft.finish?.trim() || null,
@@ -617,42 +625,92 @@ export function SelectionEditor({
           warranty_notes: draft.warranty_notes?.trim() || null,
         },
       });
+      setPeerSpec(saved);
+      setDraft(editableSpecSeed(saved));
       setFeedback("Line saved.");
       onSaved?.();
     } catch (error) {
-      setFeedback(
-        error instanceof Error
-          ? error.message
-          : "Line could not be saved.",
-      );
+      if (error instanceof ProjectFfeSpecConflictError && error.current?.id !== spec.id) {
+        setPeerSpec(spec);
+        onConflict?.();
+        setFeedback("This selection changed in another session. Waiting for its current value before saving again.");
+        return;
+      }
+      if (error instanceof ProjectFfeSpecConflictError && error.current?.id === spec.id) {
+        const peer = error.current;
+        const base = editableSpecSeed(spec);
+        const theirs = editableSpecSeed(peer);
+        const changed = Object.keys(base).filter((field) =>
+          field !== "selected_dimensions" && (draft[field] ?? "") !== (base[field] ?? ""));
+        setDraft((current) => Object.fromEntries(
+          Object.keys(theirs).map((field) => [field,
+            field !== "selected_dimensions" && (current[field] ?? "") !== (base[field] ?? "")
+              ? current[field] : theirs[field]]),
+        ));
+        if (JSON.stringify(dimensions) === JSON.stringify(spec.selected_dimensions)) {
+          setDimensionsValue(peer.selected_dimensions && isDimensionsObject(peer.selected_dimensions)
+            ? peer.selected_dimensions : null);
+          setRawDimensionsText(peer.selected_dimensions == null ? "" : JSON.stringify(peer.selected_dimensions, null, 2));
+        }
+        setPeerSpec(peer);
+        onConflict?.();
+        const labels: Record<string, string> = {
+          color_fabric: "Color / fabric", exact_location: "Exact location",
+          client_notes: "Client note", trade_notes: "Vendor note", install_notes: "Install note",
+          care_notes: "Care", warranty_notes: "Warranty", sku: "SKU",
+          finish: "Finish", material: "Material",
+        };
+        const field = changed.find((key) => theirs[key] !== base[key]);
+        const value = field ? theirs[field]?.trim() : "";
+        setFeedback(field
+          ? `${labels[field]} ${value ? `changed in another session to “${value}”.` : "cleared in another session."} Save again to replace it.`
+          : dimensions && JSON.stringify(dimensions) !== JSON.stringify(spec.selected_dimensions)
+            ? "Dimensions changed in another session. Save again to replace them."
+            : "This selection changed in another session. Save again to keep your changes.");
+      } else {
+        setFeedback(error instanceof Error ? error.message : "Line could not be saved.");
+      }
     }
   };
 
   const declareNa = async () => {
-    if (!item.spec || !naReason.trim()) {
+    if (!spec || !naReason.trim()) {
       setFeedback("An N/A declaration requires a reason.");
       return;
     }
     try {
-      await updateSpec.mutateAsync({
+      const saved = await updateSpec.mutateAsync({
         projectId: item.project_id,
-        specId: item.spec.id,
-        expectedRowVersion: item.spec.row_version,
+        specId: spec.id,
+        expectedRowVersion: spec.row_version,
         changes: {
           na_declarations: {
-            ...item.spec.na_declarations,
+            ...spec.na_declarations,
             ...buildNaDeclarationUpdate(naField, naReason),
           },
         },
       });
+      setPeerSpec(saved);
       setNaReason("");
       setFeedback(`${naField.replaceAll("_", " ")} marked N/A.`);
     } catch (error) {
-      setFeedback(
-        error instanceof Error
-          ? error.message
-          : "Declaration could not be saved.",
-      );
+      if (error instanceof ProjectFfeSpecConflictError && error.current?.id !== spec.id) {
+        setPeerSpec(spec);
+        onConflict?.();
+        setFeedback("This selection changed in another session. Waiting for its current value before saving again.");
+        return;
+      }
+      if (error instanceof ProjectFfeSpecConflictError && error.current?.id === spec.id) {
+        const peer = error.current;
+        setPeerSpec(peer);
+        onConflict?.();
+        const value = peer[naField];
+        setFeedback(typeof value === "string" && value.trim()
+          ? `${naField === "selected_dimensions" ? "Dimensions" : naField[0].toUpperCase() + naField.slice(1).replaceAll("_", " ")} changed in another session to “${value.trim()}”. Save again to replace it.`
+          : "This selection changed in another session. Save again to replace it.");
+      } else {
+        setFeedback(error instanceof Error ? error.message : "Declaration could not be saved.");
+      }
     }
   };
 
@@ -666,7 +724,7 @@ export function SelectionEditor({
     </DocumentAction>
   ) : null;
 
-  if (!item.spec) {
+  if (!spec) {
     return (
       <div className="sb-editor">
         <p className="sb-warn">
@@ -686,7 +744,7 @@ export function SelectionEditor({
     ["color_fabric", "Color / fabric"],
     ["exact_location", "Exact location"],
   ] as const;
-  const configuration = extractConfigurationSnapshotEnvelope(item.spec);
+  const configuration = extractConfigurationSnapshotEnvelope(spec);
   const configurationSnapshot =
     configuration?.snapshot && typeof configuration.snapshot === "object"
       ? (configuration.snapshot as Record<string, unknown>)
@@ -714,7 +772,7 @@ export function SelectionEditor({
     >
       <p className="eb sb-spec-head">
         {heading && <span>{heading}</span>}
-        <span>Project line · v{item.spec.row_version}</span>
+        <span>Project line · v{spec.row_version}</span>
         <ReadinessWord
           status={readiness}
           missingFields={missingFields}
@@ -1714,6 +1772,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                                             readiness={itemReadiness}
                                             missingFields={itemMissing}
                                             onRoomAssigned={workbench.refetch}
+                                            onConflict={() => { void workbench.refetch(); }}
                                             heading={[item.document_code, group.title]
                                               .filter(Boolean)
                                               .join(" · ")}

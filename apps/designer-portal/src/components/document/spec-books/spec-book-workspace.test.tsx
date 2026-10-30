@@ -6,7 +6,7 @@
  * `useUpdateProjectFfeSpec` is exercised — every other hook this module
  * imports (for `SpecBookWorkspace`, not rendered here) is a harmless stub.
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { SpecBookWorkItem } from "@patina/supabase";
 import {
@@ -30,6 +30,9 @@ let mockReadinessData: Array<{
 }> = [];
 
 jest.mock("@patina/supabase", () => ({
+  ProjectFfeSpecConflictError: class extends Error {
+    constructor(readonly current: unknown) { super("This selection changed in another session. Refresh before saving."); }
+  },
   useCreateSpecBookShare: () => ({
     mutateAsync: jest.fn(),
     isPending: false,
@@ -336,6 +339,86 @@ describe("SelectionEditor — structured dimensions", () => {
     expect(
       screen.queryByRole("button", { name: "Save the specification" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("SelectionEditor — peer conflict", () => {
+  it("refetches without asking to refresh if the peer row is temporarily unreadable", async () => {
+    const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
+      ProjectFfeSpecConflictError: new (current: unknown) => Error;
+    };
+    const onConflict = jest.fn();
+    mutateAsync.mockRejectedValueOnce(new ProjectFfeSpecConflictError(null));
+    render(<SelectionEditor item={buildItem()} onConflict={onConflict} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Finish" }), { target: { value: "Mine" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
+    expect(await screen.findByRole("status")).not.toHaveTextContent("Refresh before saving");
+    expect(screen.getByRole("textbox", { name: "Finish" })).toHaveValue("Mine");
+    expect(onConflict).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps edits typed while a stale save is pending", async () => {
+    const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
+      ProjectFfeSpecConflictError: new (current: unknown) => Error;
+    };
+    let reject!: (reason: Error) => void;
+    mutateAsync.mockReturnValueOnce(new Promise((_resolve, failed) => { reject = failed; }));
+    render(<SelectionEditor item={buildItem()} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Finish" }), { target: { value: "Mine" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Material" }), { target: { value: "Later edit" } });
+    await act(async () => reject(new ProjectFfeSpecConflictError(buildSpec({
+      row_version: 4, finish: "Peer oak", material: "Peer ash",
+    }))));
+    expect(screen.getByRole("textbox", { name: "Finish" })).toHaveValue("Mine");
+    expect(screen.getByRole("textbox", { name: "Material" })).toHaveValue("Later edit");
+  });
+
+  it("keeps the N/A reason and uses the peer version on retry", async () => {
+    const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
+      ProjectFfeSpecConflictError: new (current: unknown) => Error;
+    };
+    const peer = buildSpec({ row_version: 4, finish: "Peer oak" });
+    const onConflict = jest.fn();
+    mutateAsync.mockRejectedValueOnce(new ProjectFfeSpecConflictError(peer)).mockResolvedValueOnce(peer);
+    render(<SelectionEditor item={buildItem()} onConflict={onConflict} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Reason for not applicable" }), {
+      target: { value: "No finish requested" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Mark N/A" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Finish changed in another session to “Peer oak”. Save again to replace it.");
+    expect(onConflict).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("textbox", { name: "Reason for not applicable" })).toHaveValue("No finish requested");
+    fireEvent.click(screen.getByRole("button", { name: "Mark N/A" }));
+    await screen.findByText("finish marked N/A.");
+    expect(mutateAsync.mock.calls[1][0].expectedRowVersion).toBe(4);
+  });
+
+  it("keeps a focused draft, shows the peer finish, refetches, and retries against its version without undoing unrelated peer edits", async () => {
+    const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
+      ProjectFfeSpecConflictError: new (current: unknown) => Error;
+    };
+    const initial = buildItem();
+    const peer = buildSpec({ row_version: 4, finish: "Peer oak", material: "Peer ash" });
+    const onConflict = jest.fn();
+    mutateAsync.mockRejectedValueOnce(new ProjectFfeSpecConflictError(peer)).mockResolvedValueOnce({ ...peer, finish: "Mine" });
+    const { rerender } = render(<SelectionEditor item={initial} onConflict={onConflict} />);
+    const finish = screen.getByRole("textbox", { name: "Finish" });
+    fireEvent.change(finish, { target: { value: "Mine" } });
+    finish.focus();
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Finish changed in another session to “Peer oak”. Save again to replace it.");
+    expect(onConflict).toHaveBeenCalledTimes(1);
+    rerender(<SelectionEditor item={{ ...initial, spec: peer }} onConflict={onConflict} />);
+    expect(finish).toHaveValue("Mine");
+    expect(finish).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "Material" })).toHaveValue("Peer ash");
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
+    expect(await screen.findByText("Line saved.")).toBeInTheDocument();
+    expect(mutateAsync.mock.calls[1][0]).toMatchObject({
+      expectedRowVersion: 4,
+      changes: { finish: "Mine", material: "Peer ash" },
+    });
   });
 });
 
@@ -860,6 +943,26 @@ describe("SQ-857 — the spec book walk fixes", () => {
     (mockWorkbenchHookResult as { data: { items: SpecBookWorkItem[] } }).data.items =
       items;
   }
+
+  it("refetches the open workbench row on a stale save without losing the draft", async () => {
+    withLines(buildItem());
+    const refetch = jest.fn();
+    (mockWorkbenchHookResult as { refetch: typeof refetch }).refetch = refetch;
+    const { ProjectFfeSpecConflictError } = jest.requireMock("@patina/supabase") as {
+      ProjectFfeSpecConflictError: new (current: unknown) => Error;
+    };
+    mutateAsync.mockRejectedValueOnce(new ProjectFfeSpecConflictError(buildSpec({
+      row_version: 4, finish: "Peer oak",
+    })));
+    render(<SpecBookWorkspace projectId="project-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Sofa" }));
+    const finish = screen.getByRole("textbox", { name: "Finish" });
+    fireEvent.change(finish, { target: { value: "Mine" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the specification" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Finish changed in another session to “Peer oak”.");
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(finish).toHaveValue("Mine");
+  });
 
   it("never prints a schema key in the state cell or the opened piece", async () => {
     withLines(buildItem({}, { id: "bench", name: "Built-in bench", item_type: "allowance", document_code: "F-01", project_room_id: null, room: null, image_url: null }));

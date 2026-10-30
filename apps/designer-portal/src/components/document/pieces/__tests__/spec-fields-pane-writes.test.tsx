@@ -690,6 +690,21 @@ describe("RC7-E6-3 (A06): a save another session got to first", () => {
     });
   });
 
+  it("discards a conflicting chosen image and reveals the peer image without saving", async () => {
+    render(<Harness />);
+    const link = screen.getByRole("textbox", { name: "Paste an image link" });
+    fireEvent.change(link, { target: { value: "https://example.com/mine.jpg" } });
+    await act(async () => fireEvent.keyDown(link, { key: "Enter" }));
+    server = { ...server, row_version: server.row_version + 1,
+      selected_media: [{ url: "https://example.com/peer.jpg" }] as never };
+    await answer(0);
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute("src", "https://example.com/mine.jpg");
+    fireEvent.click(screen.getByRole("button", { name: "Discard my change" }));
+    expect(screen.getByRole("img", { name: "The image for Sofa" })).toHaveAttribute("src", "https://example.com/peer.jpg");
+    expect(screen.queryByRole("button", { name: "Discard my change" })).toBeNull();
+    expect(mockSpecCalls).toHaveLength(1);
+  });
+
   it("A, then image B sent, then C chosen before B lands: C sends on B's row with no alert", async () => {
     server = { ...server, selected_media: [{ url: "https://example.com/a.jpg" }] as never };
     render(<Harness />);
