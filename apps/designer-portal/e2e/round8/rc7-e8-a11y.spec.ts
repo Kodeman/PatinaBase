@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -589,32 +588,35 @@ const instrument = (page: Page) =>
 
 test.describe("RC-7 E8 X05 keyboard-only processes and axe", () => {
   test.setTimeout(300_000);
+  let folioId = "";
+  let folioStoragePath = "";
 
   // The keyboard save writes through the portal: never the shared stack, and
   // only when rc7_owned.stack names RC7_OWNED_STACK.
   test.beforeAll(async ({}, info) => {
-    psqlRun(e8OwnedStackSql("rc7-e8 a11y keyboard save and private print"));
+    psqlRun(e8OwnedStackSql("rc7-e8 a11y keyboard save and private folio"));
     const stamp = Date.now();
-    const prefix = `${JOB}/plans/rc7-e8-a11y-${info.project.name}-${stamp}`;
+    folioStoragePath = `${JOB}/plans/rc7-e8-a11y-${info.project.name}-${stamp}.pdf`;
     const bytes = readFileSync(path.resolve(__dirname, "../fixtures/whitlock-set.pdf"));
     const { error } = await adminDb.storage
       .from("project-documents")
-      .upload(`${prefix}.pdf`, bytes, { contentType: "application/pdf" });
+      .upload(folioStoragePath, bytes, { contentType: "application/pdf" });
     if (error) throw error;
-    psqlAsUserRow(F01_DESIGNER_ID, `SELECT to_jsonb(public.file_plan_prints('${JOB}', '${prefix}-file', '${JSON.stringify([
-      {
-        kind: "new_sheet",
-        sheet: { number: `E8A-${info.project.name[0]}-${stamp}`, title: "E8 a11y private folio file" },
-        print: {
-          storage_path: `${prefix}.pdf`,
-          sha256: createHash("sha256").update(bytes).digest("hex"),
-          size_bytes: bytes.length,
-        },
-      },
-    ])}'::jsonb))::text;`);
+    const [id] = psqlAsUserRow(F01_DESIGNER_ID, `INSERT INTO public.project_documents
+      (project_id, title, doc_type, storage_path, size_bytes, uploaded_by, anchor_kind, client_visible)
+      VALUES ('${JOB}', 'E8 a11y private folio file', 'pdf', '${folioStoragePath}', ${bytes.length},
+              '${F01_DESIGNER_ID}', 'letterhead', false)
+      RETURNING id::text;`);
+    if (!id) throw new Error("F01 studio-only folio insert returned no id");
+    folioId = id;
   });
 
-  test.afterAll(() => {
+  test.afterAll(async () => {
+    if (folioId) psqlRun(`DELETE FROM public.project_documents WHERE id = '${folioId}';`);
+    if (folioStoragePath) {
+      const { error } = await adminDb.storage.from("project-documents").remove([folioStoragePath]);
+      if (error) throw error;
+    }
     const project = test.info().project.name;
     mkdirSync(OUT, { recursive: true });
     const file = path.join(OUT, `rc7-e8-a11y-${project}.json`);
