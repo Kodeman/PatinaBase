@@ -107,10 +107,14 @@ describe('the round-8 job cover (RC-4 D3)', () => {
     );
   });
 
-  it('reserves the desktop cover plate before the Press band resolves', () => {
-    expect(ROUND8_CSS).toMatch(
-      /@media \(min-width: 600px\) \{\s*\[data-paper-renderer="round8"\] \[data-r8-cover-plate\] \{\s*min-height: 254px;/,
-    );
+  it('does not reserve a Press-band box on proposal or brief papers', () => {
+    for (const stage of ['proposal', 'brief'] as const) {
+      const { container, unmount } = renderCover({ stage, projectId: undefined, instruments: <section>Other instruments</section> });
+      expect(container.querySelector('[data-r8-cover-plate] [data-press-band]')).toBeNull();
+      unmount();
+    }
+    expect(ROUND8_CSS).not.toMatch(/\[data-r8-cover-plate\]\s*\{\s*min-height:/);
+    expect(ROUND8_CSS).toMatch(/\[data-r8-cover-plate\] \[data-press-band\]\s*\{\s*min-height: 220px;/);
   });
 });
 

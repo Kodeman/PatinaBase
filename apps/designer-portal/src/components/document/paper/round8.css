@@ -379,10 +379,6 @@
 }
 
 @media (min-width: 600px) {
-  [data-paper-renderer="round8"] [data-r8-cover-plate] {
-    min-height: 254px;
-  }
-
   [data-paper-renderer="round8"] [data-r8-cover-plate] [data-press-band] {
     min-height: 220px;
     padding: 32px 40px;
