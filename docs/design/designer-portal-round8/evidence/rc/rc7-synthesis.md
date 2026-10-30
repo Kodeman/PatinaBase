@@ -96,7 +96,7 @@ Totals now:
 
 | ID | Severity / confidence | What | State |
 |---|---|---|---|
-| RC7-E1-1 | low / medium-high | A household signer of an earlier request (r1/r2) reads the C6 client projection of a completion attached to r4. Only client-projection fields are exposed. | A ready row filter for `00895:55` passed under a scratch apply; reproducer `defect_e1_c6_audience.sql` exits 3 as recorded. Ruling a. |
+| RC7-E1-1 | low / medium-high | A household signer of an earlier request (r1/r2) reads the C6 client projection of a completion attached to r4. Only client-projection fields are exposed. | A ready row filter for `00895:55` passed under a scratch apply; reproducer `defect_e1_c6_audience.sql` exits 3 as recorded. Ruling a. RC8-FIX7 (00903) renamed it `e1_c6_audience.sql`, inside the `e1_*.sql` gate; it exits 0. |
 | RC7-E3-1 | medium / high | `service_arrangements` has no rows, by design (00868:125-126). | Content ruling b. |
 | RC7-E3-2 | medium / high | `margin_notes` has no scope or next-owner column. The Field writer sends no `subject_kind`/`subject_id`. | Ruling c. The fixme must be rewritten through the product path after the ruling. |
 | RC7-E3-5 | medium / high | ⌘K cold start creates a second `design_services` draft for a household with an open Direction. If that one executes, the lineage forks. | Reproduced with DB readback (2 drafts). Ruling d. |

@@ -177,7 +177,7 @@ SELECT pg_temp.assert_true((SELECT count(*) FROM storage.objects WHERE id::text 
  'X02 linked but nonsigner household member has no bytes or acceptance list');
 -- RC7-E1-1 (fixed by 00903): the cross-request C6 audience assertions (8 reads
 -- [], r4 signer 6 reads one) run as their own passing suite,
--- defect_e1_c6_audience.sql.
+-- e1_c6_audience.sql (in the e1_*.sql gate).
 RESET ROLE;
 
 SELECT pg_temp.actor(10);
