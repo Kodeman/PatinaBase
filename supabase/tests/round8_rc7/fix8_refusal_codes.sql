@@ -6,8 +6,10 @@
 -- XX000. Rows 45-46 are transient and keep 40001 with a "40001 on purpose"
 -- comment. Row 35's raise left _place_product_in_project_v2_00438_impl in 00873.
 -- Rows 47-49 were found by FIX8 outside the RC-7 inventory, in two renamed
--- impls: 47-48 (stale configuration saves) move to PT409, 49 to XX000.
--- Part 1 reads every redefined head definition. Part 2 drives one refusal
+-- impls: 47-48 (stale configuration saves) move to PT409; 49 is transient and
+-- keeps a commented 40001.
+-- Part 1 reads every redefined head definition and counts codes; Part 1b binds
+-- each raise's message to its code. Part 2 drives one refusal
 -- through each Tier 1 homeowner-facing function as its real actor. Rolled back.
 \set ON_ERROR_STOP on
 \if :{?expected_port}
@@ -61,7 +63,7 @@ DECLARE
     ["public.merge_studio_product(uuid,uuid)", 0, 0, 1],
     ["public._spec_book_trade_chapter(uuid,text)", 0, 0, 1],
     ["public._save_product_configuration_impl(jsonb)", 2, 0, 0],
-    ["public._continue_board_in_project_v1_impl(uuid)", 0, 1, 0]
+    ["public._continue_board_in_project_v1_impl(uuid)", 0, 0, 1]
   ]';
   r jsonb;
   defs text;
@@ -97,14 +99,101 @@ BEGIN
     END IF;
     passed := passed + 1;
   END LOOP;
-  -- Rows 1-37 less row 35, plus 47-48, are 38 PT409 raises; rows 38-44 and 49
-  -- are 8 XX000 raises.
-  IF passed <> 33 OR pt409 <> 38 OR xx000 <> 8 THEN
-    RAISE EXCEPTION 'ASSERTION FAILED: % functions, % PT409, % XX000 (expected 33, 38, 8)', passed, pt409, xx000;
+  -- Rows 1-37 less row 35, plus 47-48, are 38 PT409 raises; rows 38-44 are
+  -- 7 XX000 raises.
+  IF passed <> 33 OR pt409 <> 38 OR xx000 <> 7 THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: % functions, % PT409, % XX000 (expected 33, 38, 7)', passed, pt409, xx000;
   END IF;
-  RAISE NOTICE 'PASS: 33 functions; 38 PT409, 8 XX000, 2 commented 40001';
+  RAISE NOTICE 'PASS: 33 functions; 38 PT409, 7 XX000, 3 commented 40001';
 END
 $catalog$;
+
+-- ── Part 1b: each raise keeps its message's code ───────────────────────────
+-- Counts alone survive a swap (advance_project_phase's PT409 trading codes with
+-- one of its XX000s keeps every total), so every RAISE ... 'message' ...
+-- ERRCODE = 'X' pair with X in 40001/PT409/XX000 must match this list exactly.
+DO $binding$
+DECLARE
+  -- [function, code, message literal as written in the body]
+  expected CONSTANT jsonb := '[
+    ["public._respond_project_approval_checked(uuid,text,uuid,timestamptz,text,text,text)", "PT409", "project approval decision changed since it was loaded"],
+    ["public._apply_client_decision_authorized(uuid,uuid,uuid,text,text,text,integer)", "PT409", "decision % was already resolved with another option"],
+    ["public._apply_client_decision_authorized(uuid,uuid,uuid,text,text,text,integer)", "PT409", "decision % was already resolved with another option"],
+    ["public.approve_client_signoff(uuid,text,text)", "PT409", "decision % was already resolved by another actor"],
+    ["public.advance_project_phase(uuid,uuid,text)", "PT409", "advance_project_phase: phase status changed (expected %, found %)"],
+    ["public.advance_project_phase(uuid,uuid,text)", "XX000", "advance_project_phase: delayed phase changed during resume"],
+    ["public.advance_project_phase(uuid,uuid,text)", "XX000", "advance_project_phase: phase changed during completion"],
+    ["public.advance_project_phase(uuid,uuid,text)", "XX000", "advance_project_phase: successor changed during activation"],
+    ["public.advance_project_phase(uuid,uuid,text)", "XX000", "advance_project_phase: project pointer update failed"],
+    ["public._resolve_coordination_item_authorized(uuid,uuid,text,uuid,text,uuid)", "PT409", "coordination item % was resolved with another selection"],
+    ["public._resolve_coordination_item_authorized(uuid,uuid,text,uuid,text,uuid)", "PT409", "coordination item % was resolved with another answer"],
+    ["public._resolve_coordination_item_authorized(uuid,uuid,text,uuid,text,uuid)", "PT409", "coordination item % was resolved with another revision"],
+    ["public._resolve_coordination_item_authorized(uuid,uuid,text,uuid,text,uuid)", "PT409", "coordination item % was resolved with another answer"],
+    ["public._resolve_coordination_item_authorized(uuid,uuid,text,uuid,text,uuid)", "PT409", "coordination item % already moved to another court"],
+    ["public.apply_phase_template(uuid,text,uuid)", "PT409", "template request % conflicts with its recorded effect"],
+    ["public.apply_phase_template(uuid,text,uuid)", "PT409", "template % was already applied but its recorded effect changed"],
+    ["public.update_project_phase(uuid,uuid,timestamptz,jsonb)", "PT409", "update_project_phase: phase changed since it was read"],
+    ["public.update_project_phase(uuid,uuid,timestamptz,jsonb)", "XX000", "update_project_phase: phase changed during update"],
+    ["public.update_proposal_phase(uuid,uuid,jsonb,timestamptz)", "PT409", "proposal phase % changed since it was loaded"],
+    ["public.remove_proposal_phase(uuid,uuid,timestamptz)", "PT409", "proposal phase % changed since it was loaded"],
+    ["public.publish_client_decision(uuid)", "PT409", "publish receipt conflicts with the current request"],
+    ["public.extend_and_reopen_client_decision(uuid,timestamptz,timestamptz)", "PT409", "decision % already reflects a different extend-and-reopen effect"],
+    ["public.extend_and_reopen_client_decision(uuid,timestamptz,timestamptz)", "PT409", "decision % changed since it was loaded"],
+    ["public.update_client_decision(uuid,jsonb,jsonb,timestamptz)", "PT409", "decision % changed since it was loaded"],
+    ["public.withdraw_project_approval_decision(uuid,timestamptz,text,text)", "PT409", "project approval decision changed since it was loaded"],
+    ["public.supersede_project_approval_decision(uuid,jsonb,timestamptz,text,text)", "PT409", "project approval decision changed since it was loaded"],
+    ["public.field_time_report_decide(uuid,text,integer,uuid)", "PT409", "field_time_report_decide: field_time_report_stale — expected version %, found %"],
+    ["public.rerate_pending_time_entries(uuid,integer)", "PT409", "rerate_pending_time_entries: the rate changed since you saved it; save it again to price these hours"],
+    ["public.set_project_operational_status(uuid,project_status,project_status)", "PT409", "project % changed since it was loaded"],
+    ["public.archive_project(uuid,project_status)", "PT409", "project % changed since it was loaded"],
+    ["public.reassign_project_lead(uuid,uuid,uuid)", "PT409", "project % lead changed since it was loaded"],
+    ["public.create_client_decision(uuid,jsonb,jsonb,uuid[],uuid[])", "PT409", "p_decision_id was already used for another decision"],
+    ["public.set_project_decision_authority(uuid,uuid,uuid,integer)", "PT409", "authority revision conflict: expected 0 for first assignment"],
+    ["public.set_project_decision_authority(uuid,uuid,uuid,integer)", "PT409", "authority revision conflict: expected %, actual %"],
+    ["public.revise_project_ffe_configuration(uuid,uuid,uuid,integer,text,uuid,integer)", "PT409", "project specification changed in another session"],
+    ["public.revise_project_ffe_configuration(uuid,uuid,uuid,integer,text,uuid,integer)", "PT409", "configuration version changed in another session"],
+    ["public.approve_product_configuration(uuid,integer)", "PT409", "configuration changed in another session"],
+    ["public.create_custom_commission_revision(uuid,jsonb)", "PT409", "configuration is not the latest version; refresh before revising"],
+    ["public.upsert_product_configuration_schema(uuid,jsonb,integer)", "PT409", "configuration definition changed in another session (expected %, current %)"],
+    ["public._record_project_ffe_receipt_batch_00446_impl(uuid,jsonb,receiving_inspection_outcome,text,uuid[],uuid,uuid,text,text,text,date,uuid,boolean,uuid,uuid)", "PT409", "receipt command is still in progress"],
+    ["public.spec_book_bump_spec_version()", "PT409", "row_version is managed by the database"],
+    ["public.delete_project_phase(uuid,uuid)", "XX000", "delete_project_phase: follower set changed during relink"],
+    ["public.delete_project_phase(uuid,uuid)", "XX000", "delete_project_phase: phase changed during delete"],
+    ["public.merge_studio_product(uuid,uuid)", "40001", "A line or board reference was added to this product while it merged. Try the merge again."],
+    ["public._spec_book_trade_chapter(uuid,text)", "40001", "spec book trade chapter % could not be filed"],
+    ["public._save_product_configuration_impl(jsonb)", "PT409", "configuration changed in another session"],
+    ["public._save_product_configuration_impl(jsonb)", "PT409", "configuration is not the latest version; refresh before saving"],
+    ["public._continue_board_in_project_v1_impl(uuid)", "40001", "continue_board_in_project: idempotent insert lost lineage"]
+  ]';
+  want text[];
+  got text[];
+  missing text[];
+  extra text[];
+BEGIN
+  SELECT array_agg(concat_ws(' | ', e->>0, e->>1, e->>2) ORDER BY 1)
+    INTO want FROM jsonb_array_elements(expected) e;
+  SELECT array_agg(concat_ws(' | ', f.fn, f.code, f.msg) ORDER BY 1) INTO got
+  FROM (
+    SELECT fns.fn,
+      CASE lower(m[2]) WHEN 'serialization_failure' THEN '40001' ELSE upper(m[2]) END AS code,
+      replace(m[1], '''''', '''') AS msg
+    FROM (SELECT DISTINCT e->>0 AS fn FROM jsonb_array_elements(expected) e) fns
+    CROSS JOIN LATERAL regexp_matches(pg_get_functiondef(to_regprocedure(fns.fn)),
+      'RAISE\s+EXCEPTION\s+''((?:[^'']|'''')*)''[^;]*?ERRCODE\s*=\s*''([A-Za-z0-9_]+)''', 'gi') m
+  ) f
+  WHERE f.code IN ('40001', 'PT409', 'XX000');
+  SELECT array_agg(x) INTO missing FROM (SELECT unnest(want) EXCEPT ALL SELECT unnest(got)) d(x);
+  SELECT array_agg(x) INTO extra FROM (SELECT unnest(got) EXCEPT ALL SELECT unnest(want)) d(x);
+  IF missing IS NOT NULL OR extra IS NOT NULL THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: raise codes moved off their messages; expected but absent: %; present but unexpected: %',
+      missing, extra;
+  END IF;
+  IF cardinality(want) <> 48 THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: % bound raises, expected 48', cardinality(want);
+  END IF;
+  RAISE NOTICE 'PASS: 48 raises bound to their codes (38 PT409, 7 XX000, 3 40001)';
+END
+$binding$;
 
 -- ── Part 2: Tier 1 refusals through the public entry points ────────────────
 CREATE OR REPLACE FUNCTION pg_temp.fix8_actor(p_actor uuid)

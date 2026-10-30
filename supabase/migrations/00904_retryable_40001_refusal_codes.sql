@@ -10,7 +10,7 @@
 --   rows 38–44 post-lock invariants            40001 → XX000 (HTTP 500), message unchanged
 --   rows 45–46 transient races                 keep 40001, one-line comment naming the race
 --   rows 47–49 found by FIX8, not in the RC-7 inventory: 47–48 stale
---              refusals → PT409, 49 post-lock invariant → XX000
+--              refusals → PT409; 49 transient (T), keeps 40001 with a comment
 -- Row 35 (_place_product_in_project_v2_00438_impl) is not redefined here: its
 -- latest body on this branch (00873:242) no longer carries the raise; the
 -- in-progress check moved to place_product_in_project_v2, which raises PT409
@@ -25,7 +25,9 @@
 -- owner and ACL. No GRANT/REVOKE, so the legacy-grants seed is unaffected.
 -- Rows 47–49 live in renamed impls (00435:432, 00462:2036 ALTER … RENAME):
 -- their bodies are the pre-rename CREATE OR REPLACE of the original name,
--- re-emitted under the impl name; header and body otherwise verbatim.
+-- re-emitted under the impl name; header and body otherwise verbatim. Row 49
+-- is latent: 00447's public continue_board_in_project no longer calls the
+-- revoked impl.
 --
 -- Pre-flight: function → source file:line of each raise → inventory row → new code
 --   _respond_project_approval_checked             00810:674                        rows 1              → PT409
@@ -59,7 +61,7 @@
 --   merge_studio_product                          00830:207                        rows 45             → 40001
 --   _spec_book_trade_chapter                      00767:341                        rows 46             → 40001
 --   _save_product_configuration_impl              00415:271,282                    rows 47, 48         → PT409  (found by FIX8, not in the RC-7 inventory)
---   _continue_board_in_project_v1_impl            00407:265                        rows 49             → XX000  (found by FIX8, not in the RC-7 inventory)
+--   _continue_board_in_project_v1_impl            00407:265                        rows 49             → 40001  (T; found by FIX8, not in the RC-7 inventory)
 -- ═══════════════════════════════════════════════════════════════════════════
 
 SET LOCAL lock_timeout = '5s';
@@ -6417,8 +6419,9 @@ BEGIN
     WHERE board.source_project_board_id = p_project_board_id;
 
     IF v_new_id IS NULL THEN
+      -- 40001 on purpose (K12): ON CONFLICT DO NOTHING locks nothing, so a concurrent continuation's board can be deleted before this SELECT; the retry inserts afresh, and each further failure needs another insert-then-delete.
       RAISE EXCEPTION 'continue_board_in_project: idempotent insert lost lineage'
-        USING ERRCODE = 'XX000';
+        USING ERRCODE = 'serialization_failure';
     END IF;
 
     RETURN v_new_id;
