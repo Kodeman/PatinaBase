@@ -389,8 +389,7 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="da-glyph-btn t-meta inline-flex min-h-11 min-w-11 items-center justify-center uppercase tracking-[0.08em]"
-        style={{ color: 'var(--color-quiet-ink)' }}
+        className="da-glyph-btn t-meta inline-flex min-h-11 min-w-11 items-center justify-center text-[var(--color-quiet-ink)] uppercase tracking-[0.08em]"
       >
         <span className={`da-score-hover block${open ? ' da-score-on' : ''}`}>
           The folio · {chains.length} {chains.length === 1 ? 'file' : 'files'}{' '}

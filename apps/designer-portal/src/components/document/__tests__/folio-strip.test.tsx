@@ -104,7 +104,9 @@ describe('FolioStrip — a scan chip navigates to the Room View', () => {
     mockUseFolioFiles.mockReturnValue({ data: [scanFile()] });
     render(<FolioLetterhead projectId="project-1" />);
 
-    expect(screen.getByRole('button', { name: /The folio · 1 file/ })).toHaveClass('t-meta');
+    const disclosure = screen.getByRole('button', { name: /The folio · 1 file/ });
+    expect(disclosure).toHaveClass('t-meta', 'text-[var(--color-quiet-ink)]');
+    expect(disclosure).not.toHaveAttribute('style');
   });
 
   it('a real (non-scan) file never navigates to the Room View', () => {
