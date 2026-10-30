@@ -126,6 +126,7 @@ import {
   scheduleQuietStatus,
 } from '@/lib/document/lens-quiet-status';
 import { ActFailLine } from '@/components/feedback/act-fail-line';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 /**
  * OD-12 — the quiet height, held at EVERY density so a body shorter than its
@@ -741,9 +742,7 @@ export function ScheduleSpine({
     // Scroll after the unfold paints — the page's rAF + smooth + scroll-mt
     // pattern; each PhaseSection wears phaseAnchorId(phaseId) as its DOM id.
     requestAnimationFrame(() => {
-      document
-        .getElementById(phaseAnchorId(phaseId))
-        ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      scrollIntoRevealed(document.getElementById(phaseAnchorId(phaseId)), { block: 'start', behavior: 'smooth' });
     });
   }, []);
 

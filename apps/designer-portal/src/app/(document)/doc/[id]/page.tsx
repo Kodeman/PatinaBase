@@ -99,7 +99,7 @@ import {
 } from '@/hooks/use-document-running-index';
 import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
 import { landSection } from '@/lib/document/land-section';
-import { revealPaperThrough, scrollIntoRevealed } from '@/components/document/frame/use-chapter-reveal';
+import { revealPaperThrough, scrollIntoRevealed } from '@/lib/document/paper-reveal';
 import { useLensDensity, useLensResolved } from '@/hooks/use-lens-density';
 import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';

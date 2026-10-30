@@ -56,6 +56,7 @@ import {
 import { DraftReview, landOnMakerAddress } from '../buying/draft-review';
 import { DocSheet } from './doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 /** The line as `useProjectFFEItems` returns it, as far as the note reads it. */
 export interface AskMakerPiece extends InstallReadingPiece {
@@ -393,7 +394,7 @@ export function AskMakerSheet({
 /** Land on a control another region owns (L-10): bring it into view, focus it. */
 function landOn(selector: string) {
   const target = document.querySelector<HTMLElement>(selector);
-  target?.scrollIntoView({ block: 'center' });
+  scrollIntoRevealed(target, { block: 'center' });
   target?.focus({ preventScroll: true });
 }
 
@@ -528,7 +529,7 @@ function InstallReadingLive({
     if (!asks || unsettled) return false;
     const heldLanding = heldReason === NO_MAKER ? addMakerRef.current : heldReason ? actRef.current : null;
     if (heldReason) {
-      heldLanding?.scrollIntoView?.({ block: 'center' });
+      scrollIntoRevealed(heldLanding, { block: 'center' });
       heldLanding?.focus({ preventScroll: true });
     } else press();
     return true;

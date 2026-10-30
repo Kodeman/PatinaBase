@@ -62,6 +62,7 @@ import {
   focusLineAct,
   roomHeading,
 } from '@/lib/document/pieces/sheet-focus';
+import { scrollIntoRevealed } from '@/lib/document/paper-reveal';
 
 /** How long a landing waits, once the sheet's reads have answered. */
 const LANDING_WAIT_MS = 8000;
@@ -293,14 +294,14 @@ function useSheetLanding(
         `[data-line-id="${CSS.escape(id)}"]`,
       );
       if (!row) return false;
-      row.scrollIntoView?.({ block: 'center' });
+      scrollIntoRevealed(row, { block: 'center' });
       focusLineAct(host, id);
       return true;
     };
     const landOnRoom = () => {
       const heading = room ? roomHeading(host, room) : null;
       if (!heading) return false;
-      (heading.closest('section, tbody') ?? heading).scrollIntoView?.({
+      scrollIntoRevealed(heading.closest('section, tbody') ?? heading, {
         block: 'start',
       });
       heading.focus({ preventScroll: true });
@@ -334,7 +335,7 @@ function useSheetLanding(
         if (landOnRoom()) return true;
         if (!fallback) return false;
       }
-      host.scrollIntoView?.({ block: 'start' });
+      scrollIntoRevealed(host, { block: 'start' });
       return true;
     };
 

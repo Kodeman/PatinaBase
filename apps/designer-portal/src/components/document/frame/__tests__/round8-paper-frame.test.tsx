@@ -9,15 +9,9 @@ import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
 import { rememberPaperOrigin, takeDeskReturn } from '@/lib/document/paper/paper-origin';
 import { LENS_RESOLVE_MAX_MS, LENS_RESOLVE_STABLE_FRAMES } from '@/lib/document/lens-constants';
 import { UNFOLD_REGION_EVENT } from '@/lib/document/document-index';
-import {
-  REVEAL_FAILSAFE_MS,
-  revealStep,
-  scrollIntoRevealed,
-  SHOWN_ATTRIBUTE,
-  useChapterReveal,
-  type RevealState,
-} from '../use-chapter-reveal';
-import { readFileSync } from 'node:fs';
+import { REVEAL_FAILSAFE_MS, revealStep, useChapterReveal, type RevealState } from '../use-chapter-reveal';
+import { scrollIntoRevealed, SHOWN_ATTRIBUTE } from '@/lib/document/paper-reveal';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // The Closeout chapter's acceptance instrument reads its own data; its
@@ -571,7 +565,7 @@ describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
    * offset, and its rect follows `window.scrollY`. The sampler's frames run
    * only when the test flushes them.
    */
-  function mounted(layout: Record<string, [top: number, height: number]>) {
+  function mounted(layout: Record<string, [top: number, height: number]>, before?: (paper: HTMLElement) => void) {
     const shell = document.createElement('div');
     shell.setAttribute('data-document-shell', '');
     shell.setAttribute('data-paper-renderer', 'round8');
@@ -588,6 +582,7 @@ describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
     const queue: FrameRequestCallback[] = [];
     jest.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => queue.push(cb));
     jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    before?.(paper);
     const hook = renderHook(() => useChapterReveal({ current: grid }));
     const flush = () => queue.splice(0).forEach((cb) => cb(performance.now()));
     const scrollTo = (y: number) => {
@@ -665,17 +660,88 @@ describe('RC7-E8-4 — the paper body reveals chapter by chapter', () => {
     expect(shownAtScroll).toEqual(['brief', 'design', 'schedule', 'ffe']);
   });
 
-  it('page.tsx scrolls to a chapter only through the reveal', () => {
-    const page = readFileSync(
-      join(__dirname, '..', '..', '..', '..', 'app', '(document)', 'doc', '[id]', 'page.tsx'),
-      'utf8',
+  it('reveals the target even when its scroll is a no-op (already in place, or no scrollIntoView)', () => {
+    const { at, shown } = mounted(LAYOUT);
+    // design already sits in the first screen: the scroll moves nothing.
+    const target = at('design') as HTMLElement;
+    target.scrollIntoView = jest.fn();
+    scrollIntoRevealed(target, { block: 'center' });
+    expect(window.scrollY).toBe(0);
+    expect(shown()).toEqual(['brief', 'design']);
+    // jsdom-like: no scrollIntoView at all. Still revealed.
+    const lower = at('schedule') as HTMLElement & { scrollIntoView?: unknown };
+    lower.scrollIntoView = undefined;
+    scrollIntoRevealed(lower, { block: 'start' });
+    expect(shown()).toEqual(['brief', 'design', 'schedule']);
+    scrollIntoRevealed(null);
+  });
+
+  it('reveals through the chapter a hash names, at mount', () => {
+    const line = document.createElement('div');
+    line.id = 'ffe-selection-l1';
+    window.history.replaceState(null, '', '#ffe-selection-l1');
+    try {
+      const { at, shown, queue } = mounted(LAYOUT, (paper) => paper.querySelector('[data-paper-chapter="schedule"]')!.appendChild(line));
+      // Before any sampler frame.
+      expect(queue).toHaveLength(1);
+      expect(at('schedule').contains(line)).toBe(true);
+      expect(shown()).toEqual(['brief', 'design', 'schedule']);
+    } finally {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  });
+
+  it('reveals what a position restored before mount puts in view', () => {
+    Object.defineProperty(window, 'scrollY', { value: 1100, configurable: true });
+    const { shown } = mounted(LAYOUT);
+    expect(shown()).toEqual(['brief', 'design', 'schedule', 'ffe']);
+  });
+
+  /*
+   * Every scroll to an element of the paper goes through `scrollIntoRevealed`.
+   * A bare scroll is allowed only where it can never reach a round-8 chapter.
+   */
+  it('scrolls nowhere on the document surface except through the reveal', () => {
+    const SCROLL = /\.\s*scroll(?:IntoView|To|By)\s*(?:\?\.\s*)?\(/g;
+    const src = join(__dirname, '..', '..', '..', '..');
+    const OUTSIDE_THE_PAPER: Record<string, number> = {
+      'app/(document)/doc/[id]/page.tsx': 1, // toTop: the letterhead, in the cover (never held)
+      'components/document/letterhead-instruments.tsx': 2, // the cover
+      'components/document/letterhead-vitals.tsx': 1, // the cover
+      'components/document/margin-rail.tsx': 1, // the margin
+      'components/document/day-sheet.tsx': 1, // the Desk
+      'components/document/arrival/arrival-mount.tsx': 1, // the Desk roster
+      'components/document/help/desk-walkthrough.tsx': 1, // the Desk tour
+      'components/document/accounts/accounts-receivables-page.tsx': 1, // its own page
+      'components/document/spec-books/spec-book-workspace.tsx': 1, // its own page
+      'components/document/rooms/drafting/drafting-room.tsx': 1, // a room
+      'components/document/rooms/drafting/agreement/agreement-composer.tsx': 4, // a room
+      'components/document/rooms/piece/piece-room.tsx': 1, // a room
+      'components/document/pieces/build-room-shell.tsx': 1, // standalone only; embedded, the host lands
+      'components/document/coordination/coordination-band.tsx': 1, // not mounted on the paper
+    };
+    const walk = (dir: string): string[] =>
+      readdirSync(join(src, dir), { withFileTypes: true }).flatMap((entry) => {
+        const rel = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) return entry.name === '__tests__' ? [] : walk(rel);
+        return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [rel] : [];
+      });
+    const files = ['app/(document)/doc/[id]/page.tsx', ...walk('components/document')].filter(
+      (rel) => rel !== 'components/document/frame/use-chapter-reveal.ts',
     );
-    // The returning reader's landing reveals before it scrolls.
+    expect(files).toEqual(expect.arrayContaining(['components/document/ffe-section.tsx', 'components/document/paper/chapters/ffe-chapter.tsx']));
+    const bare = Object.fromEntries(
+      files
+        .map((rel) => [rel, (readFileSync(join(src, rel), 'utf8').match(SCROLL) ?? []).length] as const)
+        .filter(([, n]) => n > 0),
+    );
+    expect(bare).toEqual(OUTSIDE_THE_PAPER);
+    // The scan itself sees every spelling.
+    const spellings = ['a?.scrollIntoView?.(x)', 'b.scrollTo (0)', 'c\n  .scrollBy?. (1)', 'd.scrollIntoView('];
+    expect(spellings.filter((text) => text.match(SCROLL))).toEqual(spellings);
+    // The returning reader's landing and the section landing reveal first.
+    const page = readFileSync(join(src, 'app/(document)/doc/[id]/page.tsx'), 'utf8');
     expect(page).toMatch(/scrollIntoRevealed\(el, \{ block: 'start' \}\)/);
-    // The one bare scroll left lands on the letterhead, which is never held.
-    expect(page.match(/\.scrollIntoView\(/g)).toEqual(['.scrollIntoView(']);
-    expect(page).toMatch(/head\.scrollIntoView\(/);
-    expect(page).not.toMatch(/window\.scroll(To|By)?\(/);
     expect(page).toMatch(/revealPaperThrough\(section\);\s*landSection\(/);
   });
 });

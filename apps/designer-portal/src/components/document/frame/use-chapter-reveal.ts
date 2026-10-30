@@ -29,6 +29,10 @@
  *
  * The sampler stops once every chapter shows, at lens resolution, or at the
  * CSS failsafe (`REVEAL_FAILSAFE_MS`), whichever comes first.
+ *
+ * Accepted residual: find-in-page or a screen reader's virtual cursor can reach
+ * held text already in the viewport without a scroll or focus; it shows at lens
+ * resolution (typically ≤ 2.5s) or the 3.5s per-chapter failsafe at the latest.
  */
 
 import { useLayoutEffect, type RefObject } from 'react';
@@ -36,8 +40,8 @@ import { LOADING_SELECTOR } from '@/hooks/use-lens-density';
 import { LENS_RESOLVE_STABLE_FRAMES } from '@/lib/document/lens-constants';
 import { UNFOLD_REGION_EVENT } from '@/lib/document/document-index';
 import { ROUND8_PAPER_ORDER } from '@/lib/document/round8-paper-order';
+import { heldChildren, revealThrough, SHOWN_ATTRIBUTE } from '@/lib/document/paper-reveal';
 
-export const SHOWN_ATTRIBUTE = 'data-paper-shown';
 /** round8.css's per-chapter `doc-fade` delay: nothing is held past it. */
 export const REVEAL_FAILSAFE_MS = 3500;
 /** What can still move the paper below it: a body printing its loading
@@ -45,33 +49,15 @@ export const REVEAL_FAILSAFE_MS = 3500;
  *  whose own data reads `full` takes its height at once (D-B46). */
 const UNSETTLED_SELECTOR = `${LOADING_SELECTOR}, [data-density="quiet"]`;
 
-/** The paper's held children, in paper order: everything below the cover. */
-function heldChildren(paper: Element): HTMLElement[] {
-  return Array.from(paper.children).filter(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement && !child.hasAttribute('data-paper-cover'),
-  );
-}
-
-/** Mark every child up to and including the one holding `target`. */
-export function revealThrough(paper: Element, target: Element | null): void {
-  if (!target) return;
-  const children = heldChildren(paper);
-  const index = children.findIndex((child) => child.contains(target));
-  for (let i = 0; i <= index; i++) children[i]!.setAttribute(SHOWN_ATTRIBUTE, '');
-}
-
-/** Reveal through `target` when it lies in a round-8 paper. A landing that
- *  scrolls on its own calls this before its scroll. */
-export function revealPaperThrough(target: Element | null): void {
-  const paper = target?.closest('[data-paper-renderer="round8"] [data-document-paper]');
-  if (paper) revealThrough(paper, target);
-}
-
-/** `el.scrollIntoView(options)`, with its chapter and all above it revealed first. */
-export function scrollIntoRevealed(el: Element, options?: ScrollIntoViewOptions): void {
-  revealPaperThrough(el);
-  el.scrollIntoView(options);
+/** The element `location.hash` names, if any. */
+function hashTarget(): Element | null {
+  const id = window.location.hash.slice(1);
+  if (!id) return null;
+  try {
+    return document.getElementById(decodeURIComponent(id));
+  } catch {
+    return document.getElementById(id);
+  }
 }
 
 /** Reveal through the lowest held child that meets the viewport. */
@@ -129,6 +115,10 @@ export function useChapterReveal(gridRef: RefObject<HTMLElement | null>): void {
     const shell = grid?.closest('[data-document-shell]');
     if (!paper || !shell) return;
     const state: RevealState = { tops: new WeakMap() };
+    // A hash or a restored position that landed before this effect ran: show
+    // the chapter it names or sits in now, not when the sampler reaches it.
+    revealThrough(paper, hashTarget());
+    if (window.scrollY > 0) revealInView(paper);
     const started = performance.now();
     let frame = 0;
     const tick = () => {

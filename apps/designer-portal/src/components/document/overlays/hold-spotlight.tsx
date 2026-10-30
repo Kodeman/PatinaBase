@@ -21,6 +21,7 @@ import { focusableWithin, trapTabWithin } from "@/lib/full-screen-boundary";
 import type { SpotlightHold } from "@/lib/document/spotlight/use-hold-spotlight";
 import { DocumentAction } from "../document-action";
 import { topActiveModalDialog, topDismissiblePopover } from "./active-dialog";
+import { scrollIntoRevealed } from "@/lib/document/paper-reveal";
 
 export type { SpotlightHold };
 
@@ -343,7 +344,7 @@ export function HoldSpotlight({
     };
 
     const reveal = (el: HTMLElement) =>
-      el.scrollIntoView?.({
+      scrollIntoRevealed(el, {
         block: "center",
         behavior: reducedRef.current ? "auto" : "smooth",
       });
