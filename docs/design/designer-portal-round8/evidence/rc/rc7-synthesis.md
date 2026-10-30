@@ -124,6 +124,44 @@ K17 needed no code: the middleware fail-open is confirmed as the contract. K18 i
 | `whole_home` | Whole Home Renovation | Programming & Discovery 3 → Schematic 5 → Design Dev 6 → Construction Docs 4 → Construction Admin 12 (30) | studio / studio / studio / other / gc | Labelled design and procurement, but it has no procurement or furnishing phase. Fabrication sits under `other`, which names no party. Furniture install is folded into the GC. |
 | `fast_track` | Fast Track Refresh | Discovery+Concept 2 → Procurement+Install 4 (6) | studio / studio / studio / none / studio | The combined phases have no stage classification (00461). |
 
+## RC-8 final gate (2026-10-30)
+
+Two lanes ran on `29832f2e9`: [rc8-final-gate-a.md](rc8-final-gate-a.md) for SQL and static checks, and [rc8-final-gate-b.md](rc8-final-gate-b.md) for the browser. Each failed on test-side or contrast findings, so three more lanes ran. Each was cross-provider reviewed and merged into `r8-evidence`.
+
+| Lane | Finding | Built by / reviewed by | Commits | Merge | Result |
+|---|---|---|---|---|---|
+| FIX14 | Gate A: 6 jest failures. 4 in `page.test.tsx`: the tests asserted synchronously, but FIX10 `d30e988aa` moved the landing scroll into a microtask. 2 in `paper-order.test.tsx`: the synchronous rAF stub recursed through the re-arming reveal sampler, from E8 `15ea22fb1`. | Codex / Opus (2 rounds) | `d02258cf9`, `1d2d471a1` | `dc2fedf2b` | Test files only. Microtasks now flush before both positive and negative assertions. The held-paper test fails if the landing is deferred to a frame (proven against a temporary `requestAnimationFrame` revert). The rAF stub is async, cancellable and restored. Opus found no product regression: on legacy the microtask runs after React's sync `useSyncExternalStore` swap, which changes attributes only, and before paint. **Full designer jest on `dc2fedf2b`: 988/988 suites, 14,329/14,329 tests.** |
+| FIX15 | K21: hold 00905 | Codex / Opus | `d2edfb5b4`, `f2b85d296` | `dc2fedf2b` | 00905 moved to `supabase/migrations/_pending/`, which the CLI never reads. `fix9_launch_arrangements.sql` and the E3 fixture apply it explicitly with `\ir`. A fresh stack's ledger head is 00904, with 0 launch rows before the fixture. fix9 exits 0 ×2; fix7/fix8 exit 0; `db:generate` diff empty; E3 A04 2/2 per project. ROLLOUT §6, DECISIONS K21 and this synthesis are reconciled. |
+| FIX16 | Gate B: (1) WebKit `rc7-e8-a11y.spec.ts:926` failed depending on run order, exposing a real defect: the private-folio "studio" toggle rendered aged-oak 11px at 4.20:1. (2) `field-subject-return.spec.ts:61` still expected the raw ID that RC7-E3-3 replaced. (3) RC7-E8-5 was still a fixme. | Codex (re-dispatched after a context overflow) / Opus (2 rounds) | `91b9cf0ae`, `61082c2f8`, `0f3e2e48c` … `2a422101f`, `1d532fc00` | `2e6048522` | The folio toggle, version chip and superseded chips, plus the letterhead disclosure, now use quiet ink (#65594E, about 6.3:1) at 12px through a `--folio-ink` fallback variable. Hover and focus darkening are kept, and both renderers are covered. The a11y spec seeds and deletes its own plain studio-only folio file (0 rows left after the runs). The field mock carries the print label in `margin_items`. RC7-E8-5 is a live test. Results: a11y 8 passed / 2 skipped ×2 (both projects in one invocation); field 4/4 ×2; returning-reader CLS 0.0482 (raw CLS is now recorded beside the pre-scroll reading). |
+
+**Gate A, everything else on `29832f2e9`:**
+- SQL phases: 101 rows, exit 0. `edge_api`: 7/8 (`platform_acl_compatibility` is a KNOWN_FAILURES entry). `public_sd_hardening` passes unmodified.
+- ACL seed and `db:generate` diffs empty.
+- Designer type-check clean; lint 0 errors.
+- Supabase package: 2,130 passed.
+- Client type-check clean; admin build exit 0.
+- `check-send-authority` exit 0; `sms-inbound` 2/2.
+
+**Gate B, everything else (passed / skipped / failed):**
+- E2 18/0/0
+- E3 14/4/0
+- E4+E5 6/0/0
+- E6 12/0/0
+- E8 34/11/1 (fixed by FIX16)
+- first slice 238/4/2 (fixed by FIX16)
+- legacy G3 18/1/0
+- pieces 41/33/0
+- Every skip is a declared fixme, a viewport skip, or a WebKit walk-only or `layout-shift` skip.
+
+**New debt from the RC-8 reviews:**
+- `field-subject-return` asserts "Return to room" but no room name (the mock carries no `capture_room_name`).
+- The a11y `afterAll` skips writing its evidence JSON if storage removal throws.
+- One folio-strip unit test regex-matches source text rather than rendered output.
+- `fix9_launch_arrangements.sql` must run from its repo path; port-swapped scratch copies cannot resolve the held file.
+- The E3 fixture leaves C2 active on its own stack.
+- `public_sd_hardening` fails once `scope_editions` is active, so run it before any activation.
+- Nine hard-coded-port SQL files need mirrored copies on owned stacks.
+
 ## Open defects and observations
 
 | ID | Severity / confidence | What | State |
