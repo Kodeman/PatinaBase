@@ -199,7 +199,7 @@ function seedDefectObservation() {
   );
 }
 
-// RC7-E3-2: REST proves server acceptance of project_room; scope/next-owner columns deferred
+// RC7-E3-2: when enabled, REST would prove server acceptance of project_room; scope/next-owner columns deferred
 test.fixme("A15 Field observation records its typed room subject", async ({
   authenticatedPage: page,
 }) => {

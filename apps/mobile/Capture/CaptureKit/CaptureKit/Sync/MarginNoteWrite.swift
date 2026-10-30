@@ -18,6 +18,7 @@
 //  `.alreadyWritten`.
 
 import Foundation
+import os
 
 public enum MarginNoteSubject: Equatable, Sendable {
     case projectRoom(UUID)
@@ -144,6 +145,7 @@ public protocol MarginNoteGateway: Sendable {
 }
 
 public struct MarginNoteOrchestrator: Sendable {
+    private static let log = Logger(subsystem: "cloud.patina.field", category: "margin-note-write")
     private let gateway: any MarginNoteGateway
 
     public init(gateway: any MarginNoteGateway) {
@@ -160,15 +162,15 @@ public struct MarginNoteOrchestrator: Sendable {
         do {
             try await gateway.insertMarginNote(request)
         } catch {
-            let code = errorCode(error)
             let subjectGuard = [
                 "subject_invalid", "subject_requires_project", "subject_off_project",
                 "margin_notes_subject_pair_check", "margin_notes_subject_kind_check"
             ]
-            guard request.subjectKind != nil,
+            guard let code = errorCode(error), request.subjectKind != nil,
                   code == "PGRST204" ||
                     (code == "23514" && subjectGuard.contains(where: { error.localizedDescription.contains($0) }))
             else { throw error }
+            Self.log.notice("Untyped margin note fallback id \(request.id.uuidString, privacy: .public) code \(code, privacy: .public)")
             try await gateway.insertMarginNote(request.withoutSubject())
         }
         return .written

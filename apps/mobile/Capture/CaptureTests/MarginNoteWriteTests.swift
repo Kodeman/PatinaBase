@@ -162,6 +162,9 @@ struct MarginNoteWriteTests {
             #expect(request.contains("subject: MarginNoteComposer.subject("))
             #expect(request.contains("roomID: piece.venue?.projectRoomId.flatMap(UUID.init(uuidString:))"))
             #expect(request.contains("fieldCaptureID: captureID))"))
+            let write = try #require(lane.components(separatedBy: "MarginNoteOrchestrator(gateway: writes).write(")
+                .dropFirst().first?.components(separatedBy: ")").first)
+            #expect(write.contains("request, errorCode: SupabaseFieldWriteGateway.postgrestCode"))
         }
     }
 
@@ -178,6 +181,16 @@ struct MarginNoteWriteTests {
         #expect(gateway.requests.map(\.subjectKind) == ["project_room", nil])
         #expect(gateway.requests.map(\.subjectID) == [projectID, nil])
         #expect(gateway.requests.map(\.id) == [noteID, noteID])
+        let second = try #require(gateway.requests.last)
+        let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(second)) as? [String: String])
+        #expect(json == [
+            "id": noteID.uuidString,
+            "project_id": projectID.uuidString,
+            "designer_id": designerID.uuidString,
+            "body": "Spoken",
+            "anchor_kind": "letterhead",
+            "field_capture_id": captureID.uuidString
+        ])
     }
 
     @Test func subjectGuardRefusalRetriesOnceWithoutSubject() async throws {
