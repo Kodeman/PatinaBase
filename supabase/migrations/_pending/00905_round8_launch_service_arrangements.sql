@@ -1,5 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00905 — C2 launch service arrangement catalog (K10)
+-- Held per K21 (Kody, 2026-10-30); not part of the round-8 push.
+-- After review, renumber to the then-current migration head before release.
 -- DRAFT — Kody reviews before C2 activation (K10): patina_six defaults.
 -- DRAFT — Kody reviews before C2 activation (K10): design_only defaults.
 -- DRAFT — Kody reviews before C2 activation (K10): whole_home defaults.

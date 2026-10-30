@@ -2,7 +2,7 @@
 
 US-52 Room Proof 08, step RC-7 (Kody's K8 ruling: an evidence wave before any ship). Written on 2026-10-29. Synthesis base `74a324b26` on `r8-evidence` (RC-6 tip `0088093b7`; 125 commits). The program branch `redesign/designer-portal-round8` is still at `0088093b7`: RC-7 is not merged into it yet.
 
-Updated on 2026-10-30 for RC-8 (Kody's rulings K9–K20) and the final E8H numbers, at `977f734f2` on `r8-evidence`. The RC-7 sections below keep their original wording where RC-8 did not change them.
+Updated on 2026-10-30 for RC-8 (Kody's rulings K9–K20) and the final E8H numbers, at `977f734f2` on `r8-evidence`. K21 subsequently parked the K10 launch arrangements outside the round-8 push; the ship-chain corrections below reflect that ruling. The RC-7 sections keep their original wording where RC-8 did not change them.
 
 ## Verdict
 
@@ -13,11 +13,11 @@ Updated on 2026-10-30 for RC-8 (Kody's rulings K9–K20) and the final E8H numbe
   - **E2.** Phase B r2/r3 lost WebKit first taps (OBS-1). After the test fix `f484bafd3`, the unmodified runner passed 18/18 on both projects, twice, on fresh stacks (12/12 WebKit first taps). Job F is green: the 4/4 WebKit failure was a diagnostic-harness artifact (bisect at `74a22bd5a`, `5386a159e`, `74a324b26`: 9 passed each). See [merged gate](rc7-merged-gate.md#job-f-bisect-and-the-obs-1-test-fix).
   - **E8.** The E8 fixes (RC7-E8-1, -2, -4) landed after merged-gate Phase B. RC-8 re-ran E8 (E8H) on the merged tree `06fc86aea`, which carries FIX13: chromium 18 passed, 4 skipped, 0 failed (×2); webkit-iphone 15 passed, 7 skipped, 0 failed (×2). The skips are the `fixme`s RC7-E8-3, -5, -6, -7, plus WebKit capability skips (no `layout-shift`). The final zoom and a11y re-check: 11 passed, 3 skipped, 0 failed, ×2 on each engine. Details in [rc7-e8.md](rc7-e8.md) §11–12.
 - **Activation is not unblocked.** RC-7 moved 3 criteria to covered (A03, A19, A22) and 2 more for a named scope (X04, X06). RC-8 changed no rating beyond A04 and the E8H rows (see the ratings table), so 25 of 34 remain weak. What still gates C4/C6:
-  1. **Kody's rulings:** K9–K20 answered the old questions a–l (see "Questions for Kody"). Still open: the 00905 hold, the K10 content review of the four draft arrangements, O-5 (focus-indicator contrast), the 00867 ship ruling and the `lock_timeout` mechanism.
+  1. **Kody's rulings:** K9–K20 answered the old questions a–l (see "Questions for Kody"); K21 resolved the 00905 hold by parking it in `supabase/migrations/_pending/`. Still open: the K10 content review of the four draft arrangements, O-5 (focus-indicator contrast), the 00867 ship ruling and the `lock_timeout` mechanism.
   2. **A human screen-reader pass.** Not done (X05).
   3. **A device or VoiceOver walk** of the iOS acceptance and care surfaces. The iOS response path (A20) was never run; only the decoders ran (X08d).
   4. **Production data and activation migrations:**
-     - the `service_arrangements` catalog is a draft (00905, K10): four arrangements, no fees, unreviewed by Kody. C2 stays inactive;
+     - the `service_arrangements` catalog remains a draft (00905, K10), parked in `_pending/` under K21: four arrangements, no fees, unreviewed by Kody. C2 stays inactive; C4 activation also waits on its reviewed release;
      - the C2/C4/C6 activation migrations are not written (ROLLOUT §6.5).
   5. **D9 renderer coverage** (RC-5): no activation while any designer who could be asked to act still renders legacy.
   6. **Order:** C2 before or together with C4, then C6.
@@ -109,7 +109,7 @@ Kody's rulings are in `DECISIONS.md` (`036aac646`). The lane rules are in `brief
 | FIX12 | K13 | Codex / Opus (2 rounds) | `852f84aa2`, `06947fd30`, `82b9ef17d` | `764f3adf1` | The Field margin-note writer sends the subjects `project_room` and `field_capture`. It retries once without the subject on PGRST204 or a 00874 subject-guard 23514, and logs the note id plus the trigger code. Capture build passes; CaptureKit 928/928. Simulator only. Field builds carrying K13 ship only after 00874 is live on Strata. |
 | FIX13 | RC7-E8-2, RC7-E8-4 | Codex / Opus (2 rounds) | `7035f0043`, `e828ed666`, `bb9b5b1b6`, `e517fea0b`, `b4463b3cd` | `9bc16def1` | Contrast token swaps apply to both renderers (orchestrator ruling). The PressBand reserves space only while loading and only in round 8. Chromium first-visit CLS 0.0385 / 0.0385. LCP: chromium 1,796 / 1,732 ms, WebKit 1,610 / 1,494 ms. Axe color-contrast violations 0; axe `incomplete` per surface 1/5/8/5/0/0 (chromium), 0/4/7/3/0/0 (webkit). Jest 206/206, then 79/79. |
 | E8H | E8 observations as assertions | Opus / Codex (2 rounds) | `df56cf345`, `06fc86aea` (merge), `b02a53be7`, `a8060263c` | `6fdc4c9c1` | See [rc7-e8.md](rc7-e8.md) §12. Final re-check runs: chromium 11 passed / 3 skipped ×2; webkit-iphone 11 / 3 ×2 (zoom and a11y). Earlier full E8 runs: chromium 18 / 4 ×2; webkit-iphone 15 / 7 ×2. Census floor 71 at 390 @ 200% (the lens-band act is `display:none`; the duplicate in the fixed mobile bar is asserted present and focusable). H-1: axe now waits for running animations to settle (a terracotta-ink mid-fade frame read 4.11:1). |
-| K19 | K19 | Sonnet (doc and measurement) | `977f734f2` | on `r8-evidence` | Populated lock gate for 00896–00905 ([rc8-k19-locks.md](rc8-k19-locks.md)): 569 tables, 25,181 rows. None locks `auth.*` or `storage.*`. 00899 holds an AccessExclusive lock on `service_acceptance_requests` (9.8 ms). 00902 holds one on the `margin_items` view (26.0 ms). 105.7 ms in-transaction in total; 0 errors; 0 lost rows. ROLLOUT §6 now reads 00867 plus 00868–00905, 39 files. |
+| K19 | K19 | Sonnet (doc and measurement) | `977f734f2` | on `r8-evidence` | Populated lock gate for 00896–00905 ([rc8-k19-locks.md](rc8-k19-locks.md)): 569 tables, 25,181 rows. None locks `auth.*` or `storage.*`. 00899 holds an AccessExclusive lock on `service_acceptance_requests` (9.8 ms). 00902 holds one on the `margin_items` view (26.0 ms). 105.7 ms in-transaction in total; 0 errors; 0 lost rows. At K19, ROLLOUT §6 read 00867 plus 00868–00905 (39 files); K21 later parked 00905, leaving 38 in the current push. |
 | Seed | — | orchestrator | `ccaf673c1` | — | Regenerated `seed/00-legacy-grants.sql` for the 00902 `margin_items` grants. |
 | main | K20 | orchestrator | `5cf85c0ec` (pushed to `origin/main`) | — | Re-pinned the two 00835 hashes. When main next merges into round 8, resolve those lines to the round-8 side (`d6fe9e12f`). |
 
@@ -189,7 +189,7 @@ K17 needed no code: the middleware fail-open is confirmed as the contract. K18 i
   2. Household signers of any sent request on the project (today's behaviour).
 - **Recommendation: 1.** The fix is ready and the reproducer is written. Do not tighten the gate instead: that would refuse current signers before any completion exists.
 
-**b. ~~RC7-E3-1: which arrangements ship?~~ Answered: K10, option 1: The Patina Six, Design-Only, Whole Home Renovation, Fast Track Refresh. Built in FIX9 (00905) as drafts; the content review is open (new question 3).**
+**b. ~~RC7-E3-1: which arrangements ship?~~ Answered: K10, option 1: The Patina Six, Design-Only, Whole Home Renovation, Fast Track Refresh. Built in FIX9 (00905) as drafts; K21 holds the file outside the round-8 push, and the content review is open (new question 2).**
 - Options:
   1. Kody names the launch arrangements; a reviewed data migration loads them before C2 activation.
   2. Activate C2 with an empty catalog: no arrangement can be applied, and A04 stays unprovable.
@@ -252,7 +252,7 @@ K17 needed no code: the middleware fail-open is confirmed as the contract. K18 i
 - Today the skill has no such row.
 - **Recommendation: approve.**
 
-**k. ~~Ship chain items.~~ Answered: K19, update §6 and measure the locks before the ship request. Done: ROLLOUT §6 reads 39 files; locks in `rc8-k19-locks.md`. The older text below is superseded by "Ship chain reminder".**
+**k. ~~Ship chain items.~~ Answered: K19, update §6 and measure the locks before the ship request. Done: K19 originally measured 39 files including 00905; K21 then parked 00905, so the current ROLLOUT §6 ships 38; measurements remain in `rc8-k19-locks.md`. The older text below is superseded by "Ship chain reminder".**
 - 00900–00902 must ship together (a ROLLOUT note).
 - ROLLOUT §6.1 still says 33 files (00867–00899). With RC-7 it is 36. The lock behaviour of 00900–00902 on `auth.*`/`storage.*` was not measured in RC-7.
 - The earlier owed items are resolved: "00892 standalone?" by K7 (hold for the round-8 ship) and "household consent" by K6 (the studio's assertion is enough).
@@ -267,10 +267,9 @@ K17 needed no code: the middleware fail-open is confirmed as the contract. K18 i
 1. **K18: the skill edit.** The write to `.agents/skills/patina-db-migrations/SKILL.md` was permission-denied. Kody applies this text, or grants the write:
 
    > Deterministic refusals raise PT409, never 40001 — PostgREST 14.x retries 40001/40P01 without limit, so a refusal that fails the same way every time hangs until a 504 at 60 s. Use RAISE EXCEPTION ... USING ERRCODE = 'PT409' (HTTP 409); post-lock invariants raise XX000; keep 40001 only for genuinely transient conflicts, with a comment.
-2. **00905 hold.** Its catalog rows are immutable. Push it now, so that revisions become version 2, or hold it out of the round-8 push until the arrangements are reviewed? Holding it means pushing 00867–00904 first (ROLLOUT §6.1).
-3. **K10 content review** of the four drafts, including the `whole_home` flags (K10 table above).
-4. **O-5: focus-indicator contrast.** Fix it before activation, or accept it as debt?
-5. **Carried forward from RC-7:** the 00867 ship ruling, the D9 renderer-coverage gate, the `lock_timeout` mechanism, the demo-key allowlist and screen-reader verification. Household consent is also on the RC-8 carry-forward list, but K6 already ruled it: the studio's assertion is enough.
+2. **K10 content review** of the four drafts, including the `whole_home` flags (K10 table above). K21 resolved the hold: 00905 stays in `_pending/` and is renumbered to the then-current head after review, before C2/C4 activation.
+3. **O-5: focus-indicator contrast.** Fix it before activation, or accept it as debt?
+4. **Carried forward from RC-7:** the 00867 ship ruling, the D9 renderer-coverage gate, the `lock_timeout` mechanism, the demo-key allowlist and screen-reader verification. Household consent is also on the RC-8 carry-forward list, but K6 already ruled it: the studio's assertion is enough.
 
 ## Not verified
 
@@ -292,14 +291,14 @@ K17 needed no code: the middleware fail-open is confirmed as the contract. K18 i
 
 - **Runbook:** [ROLLOUT.md §6](../../ROLLOUT.md). It was updated in RC-8 (K19).
 - **Nothing is deployed.** Strata's head is still 00866.
-- **Migrations: 00867 plus 00868–00905, 39 files.** `supabase db push` cannot skip a file, so main's 00867 ships with this push, and Kody's "ship 00867?" ruling is required first.
-  - RC-8 adds three files: 00903 (K9/K11), 00904 (K12) and 00905 (K10, a draft catalog). They ship together with the rest.
-  - **00905 hold question (open):** its four rows are immutable once inserted, so a revision after Kody's review lands as `version = 2`. Hold 00905 out of the push, or ship it and revise by version? Holding it means pushing 00867–00904 first.
-- **Locks (K19):** 00896–00905 take no lock on `auth.*` or `storage.*`. The list of 13 files that do stays as it was. The longest file is 00904 at 34.8 ms with no relation lock, and all ten total 105.7 ms in-transaction. Strata runs with `lock_timeout = 0`. The `lock_timeout` mechanism is still a ship-time decision and is not verified.
+- **Migrations: 00867 plus 00868–00904, 38 files.** `supabase db push` cannot skip a file, so main's 00867 ships with this push, and Kody's "ship 00867?" ruling is required first.
+  - RC-8 adds two shipping files: 00903 (K9/K11) and 00904 (K12). They ship together with the rest.
+  - **00905 held (K21):** the four K10 draft arrangements are parked in `supabase/migrations/_pending/`, outside the round-8 push. After Kody reviews their content, renumber the file to the then-current head before release; C2 and C4 activation wait for that review.
+- **Locks (K19):** the measured 00896–00905 set took no lock on `auth.*` or `storage.*`. The list of 13 files that do stays as it was. The longest file is 00904 at 34.8 ms with no relation lock; all ten measured files totaled 105.7 ms in-transaction, including 00905's 3.3 ms with no AccessExclusive relation locks. The nine in this push total about 102.4 ms. Strata runs with `lock_timeout = 0`. The `lock_timeout` mechanism is still a ship-time decision and is not verified.
 - **Field order (K13):** Patina Field builds carrying K13 ship only after 00874 is live on Strata. The PGRST204 and subject-guard 23514 fallbacks are safety nets, not the gate.
 - **Edge functions:** ROLLOUT §6 counts 44. K12 also changes `sms-inbound` (`pipeline.ts:2156/:3527`), which redeploys in the chain.
 - **Before any ship:**
   1. Merge `r8-evidence` (RC-7 and RC-8) into `redesign/designer-portal-round8`. FIX10 must be re-checked and merged first.
-  2. Resolve the 00905 hold question and the K10 content review.
+  2. Complete the K10 content review; release held 00905 at the then-current head before C2/C4 activation.
   3. Get Kody's separate "ship".
 - **Source changed since RC-7:** RC-7 changed no edge-function source. RC-8 changed `sms-inbound`, the designer portal, the Field (Capture) margin-note writer, the seed grants and the migrations.

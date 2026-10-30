@@ -36,6 +36,7 @@ Append dated decisions during implementation; do not rewrite the historical Docu
 | 2026-10-29 / K18 | Kody | The `patina-db-migrations` skill has no PT409 rule | **Approved:** add a row saying deterministic refusals raise PT409, never 40001 | — | Skill text only | — |
 | 2026-10-29 / K19 (ship chain) | Kody | ROLLOUT §6 says 33 files; RC-7 adds 00900–00902; their locks were never measured | **Update §6 (the new file count, ship-together note) and measure the locks of the new migrations on an owned populated stack before the ship request** | Measuring locks during the ship | ROLLOUT §6 only | X10 |
 | 2026-10-29 / K20 | Kody | The edge_api `public_sd_hardening_contract_test` has been red on main since 00835 (2026-10-19) | **Re-pin the two 00835 hashes on main now** (a test-only commit) | Leaving main red until round 8 merges | Test only; no production effect | — |
+| 2026-10-30 / K21 | Kody | K10's four draft arrangements have not been reviewed | **Hold 00905 out of the round-8 push until the K10 arrangement content is reviewed; parked in `_pending/`.** Renumber to the then-current head on release; evidence docs refer to it as 00905 (K10 launch arrangements). | Shipping immutable version 1 rows before review | C2 launch catalog only; no round-8 production migration row or activation | K10 content review before release and C2 activation |
 
 ## Settled by the approved direction / preparation
 

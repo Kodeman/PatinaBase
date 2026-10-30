@@ -4495,30 +4495,33 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
     })) as unknown as typeof HTMLElement.prototype.getBoundingClientRect;
   });
 
-  it('does not jump to the active section for a first-time visitor (no MRU record for this document)', () => {
+  it('does not jump to the active section for a first-time visitor (no MRU record for this document)', async () => {
     mockRecentDocumentsInHand = [];
 
     render(<DocumentPage params={fulfilledParams} />);
+    await act(async () => {});
 
     expect(document.querySelector('[data-active-section]')).not.toBeNull();
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it('jumps to the active section as before for a visitor whose MRU already holds this document', () => {
+  it('jumps to the active section as before for a visitor whose MRU already holds this document', async () => {
     mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
 
     render(<DocumentPage params={fulfilledParams} />);
+    await act(async () => {});
 
     expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
   });
 
-  it('does not jump when the MRU holds other documents but not this one', () => {
+  it('does not jump when the MRU holds other documents but not this one', async () => {
     mockRecentDocumentsInHand = [
       { id: 'other-doc-1', title: 'Whitfield Residence' },
       { id: 'other-doc-2', title: 'Harper Loft' },
     ];
 
     render(<DocumentPage params={fulfilledParams} />);
+    await act(async () => {});
 
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
@@ -4539,22 +4542,24 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
       window.history.replaceState({}, '', '/');
     });
 
-    it('lands where the token names and never runs the resume jump', () => {
+    it('lands where the token names and never runs the resume jump', async () => {
       mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
       arriveWith({ kind: 'section', sectionKey: 'brief' });
 
       render(<DocumentPage params={fulfilledParams} />);
+      await act(async () => {});
 
       expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
       expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalledWith({ block: 'start' });
     });
 
-    it('runs the resume jump when the token names no landing', () => {
+    it('runs the resume jump when the token names no landing', async () => {
       mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
       arriveWith();
 
       render(<DocumentPage params={fulfilledParams} />);
+      await act(async () => {});
 
       expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
@@ -4575,61 +4580,71 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
       beginEntry();
     });
 
-    it('waits for the entry to end, then jumps on a declined end', () => {
+    it('waits for the entry to end, then jumps on a declined end', async () => {
       mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
       html.classList.add('arr-pre');
 
       render(<DocumentPage params={fulfilledParams} />);
+      await act(async () => {});
       expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
 
       html.classList.remove('arr-pre');
       end({ surface: 'document', how: 'declined', cause: 'late' });
+      await act(async () => {});
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
     });
 
     // Post-ship patch 1 — a wait that ends before ready ends over the held
     // paper, which is already mounted and laid out where it will show.
-    it('a declined end over the held paper jumps at once', () => {
+    it('a declined end over the held paper jumps at once', async () => {
       mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
       mockDocumentQuery = { ...mockDocumentQuery, data: { kind: 'engagement', row: rowFor('lead-1', 'discovery') } };
       mockDiscoveryQuery = { data: undefined, isLoading: true, isError: false };
       html.classList.add('arr-pre');
+      const originalRequestAnimationFrame = window.requestAnimationFrame;
+      window.requestAnimationFrame = jest.fn(() => 1);
       act(() => setArrivalWaiting(jest.fn(), '/doc/missing-document'));
 
       try {
         render(<DocumentPage params={fulfilledParams} />);
+        await act(async () => {});
         expect(
           document.querySelector('[data-arrival-held="document"] [data-active-section]'),
         ).not.toBeNull();
         expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
 
         html.classList.remove('arr-pre');
-        act(() => {
+        await act(async () => {
           setArrivalWaiting(null);
           window.dispatchEvent(
             new CustomEvent(EVENT_ENDED, {
               detail: { surface: 'document', how: 'declined', cause: 'late' },
             }),
           );
-          // The end reaches the jump before React re-renders the paper shown.
-          expect(document.querySelector('[data-arrival-held="document"]')).not.toBeNull();
+          await Promise.resolve();
+          await Promise.resolve();
+          // The landing microtask follows React's synchronous held-paper swap;
+          // it scrolls the same layout before the next frame.
           expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
         });
         expect(document.querySelector('[data-arrival-held]')).toBeNull();
       } finally {
+        window.requestAnimationFrame = originalRequestAnimationFrame;
         act(() => setArrivalWaiting(null));
       }
     });
 
-    it('never jumps after a played arrival', () => {
+    it('never jumps after a played arrival', async () => {
       mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
       html.classList.add('arr-on');
 
       render(<DocumentPage params={fulfilledParams} />);
+      await act(async () => {});
       noteRunStarted();
       html.classList.remove('arr-on');
       end({ surface: 'document', how: 'settled' });
+      await act(async () => {});
 
       expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
     });
