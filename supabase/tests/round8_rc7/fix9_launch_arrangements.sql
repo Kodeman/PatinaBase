@@ -14,6 +14,11 @@ DO $$ BEGIN RAISE EXCEPTION 'FIX9 refuses a non-owned 127.0.0.1:61622 cluster'; 
 \endif
 
 BEGIN;
+DO $$ BEGIN
+  IF (SELECT enabled FROM public.server_capabilities WHERE key = 'scope_editions') IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'FIX9 C2 must remain inactive after 00905';
+  END IF;
+END $$;
 UPDATE public.server_capabilities SET enabled = true WHERE key = 'scope_editions';
 GRANT EXECUTE ON FUNCTION public.apply_service_arrangement(uuid,text,uuid) TO authenticated;
 
@@ -56,6 +61,7 @@ SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000004
 SET LOCAL ROLE authenticated;
 DO $$
 DECLARE r record; first jsonb; replay jsonb; alias jsonb; refusal_state text; refusal_message text;
+  prior_phases uuid[];
 BEGIN
   FOR r IN SELECT x.arrangement_key, ('f9050000-0000-4000-8000-' || lpad(x.n::text, 12, '0'))::uuid AS proposal_id
     FROM (VALUES (1,'patina_six'),(2,'design_only'),(3,'whole_home'),(4,'fast_track')) x(n,arrangement_key)
@@ -67,6 +73,23 @@ BEGIN
     alias := public.apply_service_arrangement(r.proposal_id,r.arrangement_key,
       ('f9050002-0000-4000-8000-' || right(r.proposal_id::text,12))::uuid);
     INSERT INTO fix9_results VALUES (r.arrangement_key,r.proposal_id,first,replay,alias);
+    SELECT COALESCE(array_agg(id ORDER BY id),'{}'::uuid[]) INTO prior_phases
+      FROM public.proposal_phases WHERE proposal_id=r.proposal_id;
+    BEGIN
+      PERFORM public.apply_service_arrangement(r.proposal_id,
+        CASE WHEN r.arrangement_key='patina_six' THEN 'design_only' ELSE 'patina_six' END,
+        gen_random_uuid());
+      RAISE EXCEPTION 'FIX9 different arrangement unexpectedly applied %',r.arrangement_key;
+    EXCEPTION WHEN OTHERS THEN
+      GET STACKED DIAGNOSTICS refusal_state = RETURNED_SQLSTATE, refusal_message = MESSAGE_TEXT;
+      IF refusal_state <> '23514' OR refusal_message <> 'arrangement_already_applied' THEN
+        RAISE EXCEPTION 'FIX9 different arrangement %: % %',r.arrangement_key,refusal_state,refusal_message;
+      END IF;
+    END;
+    IF (SELECT COALESCE(array_agg(id ORDER BY id),'{}'::uuid[])
+        FROM public.proposal_phases WHERE proposal_id=r.proposal_id) IS DISTINCT FROM prior_phases THEN
+      RAISE EXCEPTION 'FIX9 different arrangement changed phases for %',r.arrangement_key;
+    END IF;
     PERFORM set_config('request.jwt.claim.sub','a0000000-0000-0000-0000-000000000005',true);
     BEGIN
       PERFORM public.apply_service_arrangement(r.proposal_id,r.arrangement_key,gen_random_uuid());
