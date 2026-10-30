@@ -82,7 +82,7 @@ function FileChip({
           type="button"
           onClick={() => setSlidOut((v) => !v)}
           aria-expanded={slidOut}
-          className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] uppercase tracking-[0.05em]"
+          className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center font-mono text-[11px] text-[var(--color-quiet-ink)] uppercase tracking-[0.05em]"
           title={slidOut ? 'Slide versions back' : 'Slide older versions out'}
         >
           <span
@@ -120,7 +120,7 @@ function FileChip({
             key={v.id}
             type="button"
             onClick={() => onOpen(v)}
-            className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center text-[11px]"
+            className="da-glyph-btn inline-flex min-h-11 min-w-11 items-center justify-center text-[11px] text-[var(--color-quiet-ink)]"
             title={`Superseded ${fmtDay(v.created_at)}`}
           >
             <span className="da-score-hover block">{fmtDay(v.created_at)}</span>
