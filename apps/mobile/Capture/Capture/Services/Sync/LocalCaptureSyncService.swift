@@ -766,7 +766,10 @@ final class LocalCaptureSyncService: CaptureSyncService {
             fieldCaptureID: captureID,
             transcript: piece.marginNoteBodyRaw
                 ?? piece.voiceTranscript
-                ?? piece.voicePartialTranscript)
+                ?? piece.voicePartialTranscript,
+            subject: MarginNoteComposer.subject(
+                roomID: piece.venue?.projectRoomId.flatMap(UUID.init(uuidString:)),
+                fieldCaptureID: captureID))
         else {
             piece.settleMarginNoteWithNothingToWrite()
             return
@@ -821,7 +824,10 @@ final class LocalCaptureSyncService: CaptureSyncService {
                   projectID: projectID,
                   designerID: designerID,
                   fieldCaptureID: captureID,
-                  transcript: piece.degradeNoteBodyRaw)
+                  transcript: piece.degradeNoteBodyRaw,
+                  subject: MarginNoteComposer.subject(
+                      roomID: piece.venue?.projectRoomId.flatMap(UUID.init(uuidString:)),
+                      fieldCaptureID: captureID))
         else { return }
 
         piece.markDegradeNoteStarted()

@@ -19,13 +19,37 @@
 
 import Foundation
 
-public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
+public enum MarginNoteSubject: Equatable, Sendable {
+    case planPrint(UUID)
+    case planIssue(UUID)
+    case projectRoom(UUID)
+    case fieldCapture(UUID)
+
+    public var kind: String {
+        switch self {
+        case .planPrint: "plan_print"
+        case .planIssue: "plan_issue"
+        case .projectRoom: "project_room"
+        case .fieldCapture: "field_capture"
+        }
+    }
+
+    public var id: UUID {
+        switch self {
+        case .planPrint(let id), .planIssue(let id), .projectRoom(let id), .fieldCapture(let id): id
+        }
+    }
+}
+
+public struct MarginNoteWriteRequest: Codable, Equatable, Sendable {
     public let id: UUID
     public let projectID: UUID
     public let designerID: UUID
     public let body: String
     public let anchorKind: String
     public let fieldCaptureID: UUID
+    public let subjectKind: String?
+    public let subjectID: UUID?
 
     public init(
         id: UUID,
@@ -33,7 +57,8 @@ public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
         designerID: UUID,
         body: String,
         anchorKind: String = "letterhead",
-        fieldCaptureID: UUID
+        fieldCaptureID: UUID,
+        subject: MarginNoteSubject? = nil
     ) {
         self.id = id
         self.projectID = projectID
@@ -41,6 +66,8 @@ public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
         self.body = body
         self.anchorKind = anchorKind
         self.fieldCaptureID = fieldCaptureID
+        self.subjectKind = subject?.kind
+        self.subjectID = subject?.id
     }
 
     enum CodingKeys: String, CodingKey {
@@ -50,10 +77,18 @@ public struct MarginNoteWriteRequest: Encodable, Equatable, Sendable {
         case designerID = "designer_id"
         case anchorKind = "anchor_kind"
         case fieldCaptureID = "field_capture_id"
+        case subjectKind = "subject_kind"
+        case subjectID = "subject_id"
     }
 }
 
 public enum MarginNoteComposer {
+    public static func subject(roomID: UUID?, fieldCaptureID: UUID?) -> MarginNoteSubject? {
+        if let roomID { return .projectRoom(roomID) }
+        if let fieldCaptureID { return .fieldCapture(fieldCaptureID) }
+        return nil
+    }
+
     /// Returns nil when there are no words to file. `margin_notes.body` is
     /// NOT NULL (00196:30) and a blank note in the margin is worse than none.
     /// The body is trimmed and NEVER truncated — the whole point of §9.4 is
@@ -63,7 +98,8 @@ public enum MarginNoteComposer {
         projectID: UUID,
         designerID: UUID,
         fieldCaptureID: UUID,
-        transcript: String?
+        transcript: String?,
+        subject: MarginNoteSubject? = nil
     ) -> MarginNoteWriteRequest? {
         let body = (transcript ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -74,7 +110,8 @@ public enum MarginNoteComposer {
             projectID: projectID,
             designerID: designerID,
             body: body,
-            fieldCaptureID: fieldCaptureID)
+            fieldCaptureID: fieldCaptureID,
+            subject: subject)
     }
 
     /// FC-R8's degrade, composed here so the drain has something real to write

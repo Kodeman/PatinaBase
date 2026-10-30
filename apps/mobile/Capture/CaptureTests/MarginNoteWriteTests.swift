@@ -39,6 +39,43 @@ struct MarginNoteWriteTests {
         #expect(json.count == 6)
     }
 
+    @Test func typedSubjectEncodesAsMarginNotesColumns() throws {
+        let request = try #require(MarginNoteComposer.request(
+            noteID: noteID, projectID: projectID, designerID: designerID,
+            fieldCaptureID: captureID, transcript: "Check the print",
+            subject: .planPrint(captureID)))
+        let data = try JSONEncoder().encode(request)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["subject_kind"] as? String == "plan_print")
+        #expect(json["subject_id"] as? String == captureID.uuidString)
+        #expect(json.count == 8)
+    }
+
+    @Test func queuedRequestWithoutSubjectStillDecodesAndOmitsSubject() throws {
+        let old = """
+        {"id":"\(noteID)","project_id":"\(projectID)","designer_id":"\(designerID)",
+         "body":"Old queued note","anchor_kind":"letterhead","field_capture_id":"\(captureID)"}
+        """
+        let request = try JSONDecoder().decode(MarginNoteWriteRequest.self, from: Data(old.utf8))
+        #expect(request.subjectKind == nil)
+        #expect(request.subjectID == nil)
+        let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+        #expect(json["subject_kind"] == nil)
+        #expect(json["subject_id"] == nil)
+    }
+
+    @Test func noteSubjectMapsRoomThenCaptureAndLeavesUnboundNotesUntyped() {
+        let room = MarginNoteComposer.subject(roomID: projectID, fieldCaptureID: captureID)
+        #expect(room == .projectRoom(projectID))
+        #expect(room?.kind == "project_room")
+        #expect(room?.id == projectID)
+        #expect(MarginNoteComposer.subject(roomID: nil, fieldCaptureID: captureID) == .fieldCapture(captureID))
+        #expect(MarginNoteComposer.subject(roomID: nil, fieldCaptureID: nil) == nil)
+        #expect(MarginNoteSubject.planIssue(noteID).kind == "plan_issue")
+        #expect(MarginNoteSubject.planPrint(noteID).kind == "plan_print")
+        #expect(MarginNoteSubject.fieldCapture(noteID).kind == "field_capture")
+    }
+
     @Test func anchorKindIsAlwaysLetterheadBecauseTheCheckAdmitsNothingElse() throws {
         let request = try #require(MarginNoteComposer.request(
             noteID: noteID, projectID: projectID, designerID: designerID,
