@@ -1,0 +1,159 @@
+{
+  "chromium 1280@200 job paper": {
+    "pageOverflowPx": 0,
+    "controls": 72,
+    "tabReached": 71,
+    "walkEnded": "left root",
+    "clipped": [],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 0.48
+  },
+  "chromium 1280@200 ffe spec": {
+    "pageOverflowPx": 0,
+    "controls": 66,
+    "tabReached": 66,
+    "walkEnded": "left root",
+    "clipped": [],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 0.48
+  },
+  "chromium 1280@200 ffe rough list": {
+    "pageOverflowPx": 0,
+    "controls": 178,
+    "tabReached": 178,
+    "walkEnded": "left root",
+    "clipped": [],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 0.48
+  },
+  "chromium 1280@200 drawing history": {
+    "pageOverflowPx": 0,
+    "controls": 2,
+    "tabReached": 2,
+    "walkEnded": "left root",
+    "clipped": [],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 0.48
+  },
+  "chromium 1280@200 viewer": {
+    "pageOverflowPx": 0,
+    "controls": 1,
+    "tabReached": 2,
+    "walkEnded": "left root",
+    "clipped": [],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 1
+  },
+  "chromium 390@200 job paper": {
+    "pageOverflowPx": 0,
+    "controls": 47,
+    "tabReached": 70,
+    "walkEnded": "left root",
+    "clipped": [
+      {
+        "selector": "a[data-action-key=\"press-add-cover-photo\"][data-action-variant=\"secondary\"]",
+        "name": "Add a photograph for the cover",
+        "reason": "outside viewport x 37..257 of 195"
+      },
+      {
+        "selector": "a[data-action-key=\"open-project-drawings\"][data-action-variant=\"secondary\"]",
+        "name": "Open project drawing sets",
+        "reason": "outside viewport x 18..204 of 195"
+      },
+      {
+        "selector": "button[data-action-key=\"ffe-lead-spec\"][data-action-variant=\"primary\"]",
+        "name": "Fill the 80 placeholders",
+        "reason": "outside viewport x 18..197 of 195"
+      },
+      {
+        "selector": "a[data-action-key=\"work-the-pieces\"][data-action-variant=\"secondary\"]",
+        "name": "Edit pieces & purchasing→",
+        "reason": "outside viewport x 18..217 of 195"
+      },
+      {
+        "selector": "button[data-action-key=\"release-for-authorization\"][data-action-variant=\"secondary\"]",
+        "name": "Prepare purchasing authorization",
+        "reason": "outside viewport x 18..250 of 195"
+      },
+      {
+        "selector": "button",
+        "name": "Bedroom⌄",
+        "reason": "outside viewport x 96..197 of 195"
+      },
+      {
+        "selector": "button[data-action-key=\"working-budget-sync\"][data-action-variant=\"secondary\"]",
+        "name": "Sync from the schedule",
+        "reason": "outside viewport x 37..206 of 195"
+      }
+    ],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 0.52
+  },
+  "chromium 390@200 ffe spec": {
+    "pageOverflowPx": 0,
+    "controls": 66,
+    "tabReached": 66,
+    "walkEnded": "left root",
+    "clipped": [
+      {
+        "selector": "select[aria-label=\"unit\"]",
+        "name": "unit",
+        "reason": "outside viewport x 135..197 of 195"
+      }
+    ],
+    "excluded": [],
+    "scrollContainers": [
+      {
+        "selector": "section",
+        "scrollWidth": 179,
+        "clientWidth": 159,
+        "reachedDescendants": 57,
+        "keyboardReachable": false,
+        "box": [18, 177]
+      }
+    ],
+    "chromeShare": 0.52
+  },
+  "chromium 390@200 ffe rough list": {
+    "pageOverflowPx": 0,
+    "controls": 178,
+    "tabReached": 178,
+    "walkEnded": "left root",
+    "clipped": [],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 0.52
+  },
+  "chromium 390@200 drawing history": {
+    "pageOverflowPx": 0,
+    "controls": 2,
+    "tabReached": 2,
+    "walkEnded": "left root",
+    "clipped": [],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 0.52
+  },
+  "chromium 390@200 viewer": {
+    "pageOverflowPx": 0,
+    "controls": 1,
+    "tabReached": 2,
+    "walkEnded": "left root",
+    "clipped": [
+      {
+        "selector": "button[data-action-key=\"close-plan-print-viewer\"][data-action-variant=\"tertiary\"]",
+        "name": "←Back to the document",
+        "reason": "outside viewport x 18..199 of 195"
+      }
+    ],
+    "excluded": [],
+    "scrollContainers": [],
+    "chromeShare": 1
+  }
+}

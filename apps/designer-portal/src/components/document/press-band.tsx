@@ -16,7 +16,7 @@
  * its photographs. A closed project's frozen edition offers no act at all.
  */
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,6 +60,7 @@ import {
   imageCaption,
 } from './press-band-preview';
 import { PressBandFocal, type FocalEdit } from './press-band-focal';
+import { Round8MarginContext } from './paper/margin-layout';
 import { DEAD_PICTURE_COPY } from './line-unfold/item-pictures';
 import { FOCUS_FFE_LINE_EVENT, focusFfeLinePending } from '@/lib/document/registry';
 
@@ -129,7 +130,7 @@ export function PressBand({
   clientFirstName: string | null;
 }) {
   // The open job reads live: the compose lane publishes with no studio act.
-  const { data, refetch, isFetching } = useClientEditions(projectId, { live: true });
+  const { data, refetch, isFetching, isLoading } = useClientEditions(projectId, { live: true });
   const editions = data?.editions ?? [];
   const pending = pendingEdition(editions);
   const current = currentEdition(editions);
@@ -144,7 +145,14 @@ export function PressBand({
   const { data: editorialAssets } = useClientEditorialAssets(projectId, !!data && !data.refreshRequired && !pending && !current);
 
   const headingId = useId();
-  if (!data) return null;
+  const round8 = useContext(Round8MarginContext);
+  if (!data) return isLoading && round8 ? (
+    <section
+      aria-hidden="true"
+      data-press-band
+      className="mt-3 flex w-full max-w-[760px] flex-col gap-4 rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-4 py-3"
+    />
+  ) : null;
   if (data.refreshRequired) {
     return (
       <section aria-labelledby={headingId} data-press-band className="mt-3 flex flex-col gap-2 text-left">

@@ -8,6 +8,7 @@
 import { act as reactAct, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ClientEdition, ClientEditions, ClientEditorialAsset } from '@patina/supabase';
 import { PressBand, publishedLine } from '../press-band';
+import { Round8MarginContext } from '../paper/margin-layout';
 import { editionDelta, PressBandPreview } from '../press-band-preview';
 import {
   CURRENT_ROW,
@@ -43,6 +44,8 @@ const mockUseClientEditions = jest.fn();
 const mockSourceUrls = jest.fn();
 const mockRefetchEditions = jest.fn();
 let mockData: ClientEditions | undefined;
+let mockIsLoading = false;
+let mockIsError = false;
 let mockEditorial: ClientEditorialAsset[] | undefined;
 let mockDeadPictures: { itemId: string; name: string }[] = [];
 
@@ -54,7 +57,7 @@ jest.mock('@patina/supabase', () => ({
   useProjectDeadPictureLinks: () => ({ data: mockDeadPictures }),
   useClientEditions: (...args: unknown[]) => {
     mockUseClientEditions(...args);
-    return { data: mockData, refetch: mockRefetchEditions, isFetching: false };
+    return { data: mockData, refetch: mockRefetchEditions, isFetching: mockIsLoading, isLoading: mockIsLoading, isError: mockIsError };
   },
   useClientEditorialAssets: (_projectId: string, enabled: boolean) => ({
     data: enabled === false ? undefined : mockEditorial?.map(asset => ({ ...asset, sha256: asset.id, focal: asset.focal ?? null, caption: { what: "the house", whose: null, when: null }, crops: { piece: { rect: [0,0,asset.width,asset.height], widths: [asset.width] } }, ...asset })) ?? (enabled === undefined ? mockData?.editions[0]?.images.map(image => ({
@@ -133,6 +136,8 @@ const frameRect = (frame: HTMLElement) => {
 
 beforeEach(() => {
   mockData = undefined;
+  mockIsLoading = false;
+  mockIsError = false;
   mockEditorial = undefined;
   mockDeadPictures = [];
   focusFfeLinePending.request = null;
@@ -142,6 +147,26 @@ beforeEach(() => {
 });
 
 describe('PressBand — the states', () => {
+  it('reserves the band while its edition read loads, then collapses on error', () => {
+    mockIsLoading = true;
+    const { container, rerender } = render(
+      <Round8MarginContext.Provider value><PressBand projectId="p-1" clientFirstName="June" /></Round8MarginContext.Provider>,
+    );
+    expect(container.querySelector('[data-press-band][aria-hidden="true"]')).toBeInTheDocument();
+    mockIsLoading = false;
+    mockIsError = true;
+    rerender(
+      <Round8MarginContext.Provider value><PressBand projectId="p-1" clientFirstName="June" /></Round8MarginContext.Provider>,
+    );
+    expect(container.querySelector('[data-press-band]')).toBeNull();
+  });
+
+  it('renders no loading placeholder under the legacy renderer', () => {
+    mockIsLoading = true;
+    const { container } = render(<PressBand projectId="p-1" clientFirstName="June" />);
+    expect(container.querySelector('[data-press-band]')).toBeNull();
+  });
+
   it('says a new edition is ready, with its preview, when one waits for review', () => {
     renderBand([PENDING_ROW, CURRENT_ROW, EARLIER_ROW]);
     expect(screen.getByRole('heading', { name: 'A new edition is ready' })).toBeInTheDocument();
