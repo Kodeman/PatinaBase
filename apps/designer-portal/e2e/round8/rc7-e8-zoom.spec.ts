@@ -5,7 +5,7 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures/auth";
 import { adminDb } from "../helpers/supabase-admin";
 import { psqlAsUserRow, psqlRun, psqlScalar } from "../helpers/psql";
-import { rc7OwnedStackSql } from "./owned-stack";
+import { e8OwnedStackSql } from "./rc7-e8-guard";
 
 /**
  * RC-7 E8 — X06 at 200% browser zoom. Zoom is emulated the way the existing
@@ -18,17 +18,30 @@ import { rc7OwnedStackSql } from "./owned-stack";
  * surface root, then walks the root in native tab order (Alt+Tab on WebKit)
  * and judges each control the keyboard reaches by what it shows WHILE
  * focused: it must be rendered, inside the viewport horizontally, on screen
- * vertically, and ≥ 98% visible inside every overflow:hidden/clip ancestor
- * that clips it. A control the walk never reaches is judged by its static
+ * vertically, and ≥ 98% visible inside every clipping ancestor (overflow
+ * hidden, clip, auto or scroll: a scroll container clips what it has not
+ * scrolled to). A control the walk never reaches is judged by its static
  * geometry. A fully clipped control is a clipped control (never presumed
  * intentional); an intentional exclusion must be named in INTENTIONALLY_HIDDEN.
+ *
+ * The walk itself is checked, so an empty or early-ended walk cannot pass:
+ * the census (every rendered, enabled focusable control under the root at the
+ * start of the walk, plus any mounted by the end of it; a start control that
+ * unmounted unreached and unreplaced stays in it) must reach the
+ * committed floor in MIN_CENSUS, the walk must end by leaving the root, ending
+ * or cycling (never the step limit), the census controls Tab focused must
+ * reach that floor less the KNOWN_UNREACHED ones, and every census control
+ * must have been focused by Tab — forwards, or on the Shift+Tab pass back up
+ * through the root that follows — or be named in INTENTIONALLY_HIDDEN or
+ * KNOWN_UNREACHED (each KNOWN_UNREACHED entry has a strict fixme).
  * Horizontal scroll containers are keyboard-reachable only if the walk
  * focused the container itself, or reached its focusable content and every
  * reached descendant was fully visible inside it on focus.
  *
- * Asserted at 1280@200%: 0 clipped controls, every horizontal scroll container
- * keyboard-reachable, no sideways page scroll. 390@200% (195 CSS px, below the
- * 1.4.10 floor) is recorded; its 0-clipped assertion is the RC7-E8-3 fixme.
+ * Asserted at both sizes: the walk checks above and no sideways page scroll.
+ * Asserted at 1280@200%: 0 clipped controls and every horizontal scroll
+ * container keyboard-reachable. 390@200% (195 CSS px, below the 1.4.10 floor)
+ * is recorded; its 0-clipped assertion is the RC7-E8-3 fixme.
  */
 
 const JOB = "f0180000-0000-4000-8000-000000000010";
@@ -54,15 +67,61 @@ const INTENTIONALLY_HIDDEN: ReadonlyArray<{
   selector: string;
   why: string;
 }> = [];
+/**
+ * Census controls Tab cannot reach because of a recorded defect: kept out of
+ * the gate and asserted by that defect's fixme.
+ */
+const KNOWN_UNREACHED: ReadonlyArray<{ defect: string; selector: string }> = [
+  {
+    // DEFECT RC7-E8-7: the lens band's to-top control renders only while the
+    // band is closed (lens-band.tsx:64, :78). Tab from "Project directory"
+    // scrolls the paper, the band opens, and the control unmounts as Tab
+    // reaches it, so focus lands on the next control instead.
+    defect: "RC7-E8-7",
+    selector: "button[data-lens-to-top]",
+  },
+];
+/**
+ * Committed census floor per surface: the smallest census any engine recorded
+ * on F01 at that zoom (data-rc7-e8/zoom-*.json). A walk over fewer controls
+ * fails. The job paper floor is one lower at 390@200 because the lens band's
+ * next act ("Open the task") is display:none there (line-2 sentence form) and
+ * the same act renders in the fixed mobile bar instead (min-[600px]:hidden),
+ * which sits outside [data-document-shell], the probe root.
+ */
+const MIN_CENSUS: Record<string, number> = {
+  "job paper": 72,
+  "ffe spec": 66,
+  "ffe rough list": 178,
+  "drawing history": 2,
+  viewer: 1,
+};
+const MIN_CENSUS_390: Record<string, number> = { "job paper": 71 };
+const censusFloor = (key: string) => {
+  const surface = Object.keys(MIN_CENSUS).find((s) => key.endsWith(s));
+  if (!surface) throw new Error(`${key}: no committed census floor`);
+  return key.startsWith("390@200")
+    ? (MIN_CENSUS_390[surface] ?? MIN_CENSUS[surface])
+    : MIN_CENSUS[surface];
+};
 const rpc = (sql: string) =>
   JSON.parse(psqlAsUserRow(DESIGNER, `SELECT to_jsonb(${sql})::text;`)[0]);
 const results: Record<string, unknown> = {};
 
-type Clip = { selector: string; name: string; reason: string };
+type Clip = {
+  selector: string;
+  name: string;
+  reason: string;
+  known?: string | null;
+};
 type Probe = {
   pageOverflowPx: number;
   controls: number;
+  census: number;
+  unmounted: number;
   tabReached: number;
+  backReached: number;
+  unreached: Clip[];
   walkEnded: string;
   clipped: Clip[];
   excluded: Array<Clip & { allowlist: string }>;
@@ -74,12 +133,16 @@ type Probe = {
     reachedDescendants: number;
   }>;
   chromeShare: number;
+  censusReached: number;
+  censusNames: string[];
+  reachedOutsideCensus: string[];
 };
 
 /** Installs window.__e8z: the static control census and the per-element visibility judge. */
 function install(args: {
   selector: string;
   allowlist: ReadonlyArray<{ name: string; selector: string }>;
+  knownUnreached: ReadonlyArray<{ defect: string; selector: string }>;
 }) {
   const describe = (el: Element) => {
     const tag = el.tagName.toLowerCase();
@@ -139,8 +202,8 @@ function install(args: {
             : true;
       if (!contains) continue;
       if (
-        /(hidden|clip)/.test(cs.overflowX) ||
-        /(hidden|clip)/.test(cs.overflowY)
+        /(hidden|clip|auto|scroll)/.test(cs.overflowX) ||
+        /(hidden|clip|auto|scroll)/.test(cs.overflowY)
       ) {
         const ar = a.getBoundingClientRect();
         const w = Math.max(
@@ -160,27 +223,34 @@ function install(args: {
     return null;
   };
   const root = document.querySelector(args.selector) ?? document.body;
-  const controls = [
-    ...root.querySelectorAll(
-      'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])',
-    ),
-  ].filter((el) => {
-    if ((el as HTMLButtonElement).disabled || el.closest("[inert]"))
-      return false;
-    const r = el.getBoundingClientRect();
-    return rendered(el) && r.width > 1 && r.height > 1;
-  });
+  const census = () =>
+    [
+      ...root.querySelectorAll(
+        'a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])',
+      ),
+    ].filter((el) => {
+      if ((el as HTMLButtonElement).disabled || el.closest("[inert]"))
+        return false;
+      const r = el.getBoundingClientRect();
+      return rendered(el) && r.width > 1 && r.height > 1;
+    });
+  const controls = census();
   const allow = (el: Element) =>
     args.allowlist.find((entry) => el.matches(entry.selector))?.name ?? null;
+  const knownUnreached = (el: Element) =>
+    args.knownUnreached.find((entry) => el.matches(entry.selector))?.defect ??
+    null;
   (window as unknown as { __e8z: unknown }).__e8z = {
     root,
     controls,
+    census,
     statics: controls.map((el) => judge(el, false)),
     reached: new Map<Element, string | null>(),
     judge,
     describe,
     name,
     allow,
+    knownUnreached,
   };
   return controls.length;
 }
@@ -188,18 +258,21 @@ function install(args: {
 type E8z = {
   root: Element;
   controls: Element[];
+  census: () => Element[];
   statics: Array<string | null>;
   reached: Map<Element, string | null>;
   judge: (el: Element, focused: boolean) => string | null;
   describe: (el: Element) => string;
   name: (el: Element) => string;
   allow: (el: Element) => string | null;
+  knownUnreached: (el: Element) => string | null;
 };
 
 async function probe(page: Page, rootSelector: string): Promise<Probe> {
   const count = await page.evaluate(install, {
     selector: rootSelector,
     allowlist: INTENTIONALLY_HIDDEN,
+    knownUnreached: KNOWN_UNREACHED,
   });
   // Native tab order from the root's start: focus the root (tabindex -1 only
   // for the walk), then Tab until focus leaves the root, ends, or cycles.
@@ -250,6 +323,34 @@ async function probe(page: Page, rootSelector: string): Promise<Probe> {
       break;
     }
   }
+  // Then Shift+Tab back up through the root: a control mounted above the
+  // forward walk's position (a band that appears once the page scrolls) is
+  // reachable only backwards. A control first reached here is judged the same way.
+  let entered = false;
+  let backReached = 0;
+  for (let step = 0; step < Math.max(60, count * 3); step++) {
+    await page.keyboard.press(`Shift+${key}`);
+    await page.waitForTimeout(150);
+    let state = "";
+    for (let attempt = 0; attempt < 4; attempt++) {
+      state = await page.evaluate((final) => {
+        const z = (window as unknown as { __e8z: E8z }).__e8z;
+        const el = document.activeElement;
+        if (!el || el === document.body) return "outside";
+        if (!z.root.contains(el) || el === z.root) return "outside";
+        if (z.reached.has(el)) return "inside";
+        const verdict = z.judge(el, true);
+        if (verdict !== null && !final) return "retry";
+        z.reached.set(el, verdict);
+        return "new";
+      }, attempt === 3);
+      if (state !== "retry") break;
+      await page.waitForTimeout(300);
+    }
+    if (state === "new") backReached++;
+    if (state !== "outside") entered = true;
+    else if (entered) break;
+  }
   return page
     .evaluate(() => {
       const z = (window as unknown as { __e8z: E8z }).__e8z;
@@ -267,6 +368,49 @@ async function probe(page: Page, rootSelector: string): Promise<Probe> {
       );
       for (const [el, verdict] of z.reached)
         if (!verdicts.has(el)) verdicts.set(el, verdict);
+      // The census: the start-of-walk controls still mounted, plus any the
+      // walk's lens mounted. Each must have been focused by Tab or allowlisted.
+      const census = new Set([
+        ...z.controls.filter((el) => el.isConnected),
+        ...z.census(),
+      ]);
+      const unreached: Clip[] = [];
+      for (const el of census) {
+        if (z.reached.has(el) || z.allow(el)) continue;
+        if (!verdicts.has(el)) {
+          const verdict = z.judge(el, false);
+          verdicts.set(el, verdict && `${verdict} (never reached by Tab)`);
+        }
+        unreached.push({
+          selector: z.describe(el),
+          name: z.name(el),
+          reason: "never focused by Tab",
+          known: z.knownUnreached(el),
+        });
+      }
+      // A start control that unmounted before Tab reached it, and that no
+      // mounted or reached node with the same selector and name replaced, was
+      // lost to the walk: it stays in the census, unreached.
+      const sig = (el: Element) => `${z.describe(el)}\u0000${z.name(el)}`;
+      const present = new Set([...census, ...z.reached.keys()].map(sig));
+      const lost = z.controls.filter(
+        (el) => !el.isConnected && !z.reached.has(el) && !present.has(sig(el)),
+      );
+      for (const el of lost) {
+        if (z.allow(el)) continue;
+        unreached.push({
+          selector: z.describe(el),
+          name: z.name(el),
+          reason: "unmounted before Tab reached it",
+          known: z.knownUnreached(el),
+        });
+      }
+      // Named lists keep the census itself in the evidence.
+      const censusNames = [...census, ...lost].map((el) => z.name(el));
+      const censusReached = [...census].filter((el) => z.reached.has(el)).length;
+      const reachedOutsideCensus = [...z.reached.keys()]
+        .filter((el) => !census.has(el))
+        .map((el) => z.name(el));
       for (const [el, reason] of verdicts) {
         if (reason === null) continue;
         const entry = { selector: z.describe(el), name: z.name(el), reason };
@@ -322,16 +466,23 @@ async function probe(page: Page, rootSelector: string): Promise<Probe> {
             document.documentElement.scrollWidth,
           ) - vw,
         controls: z.controls.length,
+        census: census.size + lost.length,
+        unmounted: z.controls.filter((el) => !el.isConnected).length,
         tabReached: z.reached.size,
+        backReached: 0,
+        unreached,
         walkEnded: "",
         clipped,
         excluded,
         scrollContainers,
         chromeShare:
           Math.round((Math.min(chrome, innerHeight) / innerHeight) * 100) / 100,
+        censusReached,
+        censusNames,
+        reachedOutsideCensus,
       };
     })
-    .then((result) => ({ ...result, walkEnded }));
+    .then((result) => ({ ...result, walkEnded, backReached }));
 }
 
 async function settleJob(page: Page, search = "") {
@@ -381,7 +532,12 @@ async function record(
     JSON.stringify({
       overflow: result.pageOverflowPx,
       controls: result.controls,
+      census: result.census,
+      unmounted: result.unmounted,
       tabReached: result.tabReached,
+      censusReached: result.censusReached,
+      backReached: result.backReached,
+      unreached: result.unreached.length,
       walk: result.walkEnded,
       clipped: result.clipped.length,
       excluded: result.excluded.length,
@@ -393,6 +549,31 @@ async function record(
 }
 
 let issueEntryText = "";
+
+/**
+ * The walk is real: a full census, a natural end, every census control focused
+ * by Tab. strict: a KNOWN_UNREACHED control fails too (its defect's fixme).
+ */
+function expectWalked(key: string, result: Probe, strict = false) {
+  expect(
+    result.census,
+    `${key}: census reaches the committed floor`,
+  ).toBeGreaterThanOrEqual(censusFloor(key));
+  expect(result.walkEnded, `${key}: the Tab walk ended naturally`).not.toBe(
+    "limit",
+  );
+  // Census controls Tab focused, against the floor less the known-unreached
+  // census controls (none in strict mode).
+  const known = strict ? 0 : result.unreached.filter((c) => c.known).length;
+  expect(
+    result.censusReached,
+    `${key}: Tab reached at least the committed census floor (less ${known} known-unreached)`,
+  ).toBeGreaterThanOrEqual(censusFloor(key) - known);
+  expect(
+    result.unreached.filter((c) => strict || !c.known),
+    `${key}: census controls Tab never focused (not allowlisted)`,
+  ).toEqual([]);
+}
 
 function expectReachable(key: string, result: Probe) {
   expect(result.clipped, `${key}: clipped controls`).toEqual([]);
@@ -519,9 +700,9 @@ test.describe("RC-7 E8 X06 200% zoom", () => {
   test.setTimeout(300_000);
 
   test.beforeAll(async ({}, info) => {
-    // Refuse before the storage upload and the RPC writes unless
-    // rc7_owned.stack names RC7_OWNED_STACK.
-    psqlRun(rc7OwnedStackSql("rc7-e8 zoom print fixture"));
+    // Refuse before the storage upload and the RPC writes: never the shared
+    // stack, and only when rc7_owned.stack names RC7_OWNED_STACK.
+    psqlRun(e8OwnedStackSql("rc7-e8 zoom print fixture"));
     // One filed, issued private print for the drawing/evidence viewer.
     const stamp = Date.now();
     const prefix = `${JOB}/plans/rc7-e8-${info.project.name}-${stamp}`;
@@ -581,11 +762,24 @@ test.describe("RC-7 E8 X06 200% zoom", () => {
               result.pageOverflowPx,
               `${key}: no sideways page scroll`,
             ).toBeLessThanOrEqual(1);
+            expectWalked(key, result);
             // 390@200% (below the 1.4.10 floor) is recorded only; RC7-E8-3 below.
             if (gated) expectReachable(key, result);
           }
         });
       }
+
+      // DEFECT RC7-E8-7 (see KNOWN_UNREACHED): the lens band's to-top control
+      // unmounts as Tab reaches it. Kept out of the gate.
+      if (gated)
+        test.fixme(`RC7-E8-7: ${zoom.label} Tab reaches the lens band's to-top control`, async ({
+          authenticatedPage: page,
+        }) => {
+          for (const [key, result] of await SURFACES[
+            "long content — the whole job paper"
+          ](page, `${zoom.label} RC7-E8-7`))
+            expectWalked(key, result, true);
+        });
 
       // DEFECT RC7-E8-3: at 390@200% (195 CSS px) DocumentAction buttons keep
       // their shrink-0 intrinsic width in row layout and run past the right

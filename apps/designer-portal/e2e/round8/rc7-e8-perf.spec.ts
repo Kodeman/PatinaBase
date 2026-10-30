@@ -233,6 +233,9 @@ async function scrollCls(
       ? 240
       : await page.evaluate(() => Math.floor(innerHeight * 0.9));
   let steps = 0;
+  // Where the window actually was after each step: `steps` counts attempts,
+  // so a page that never scrolled would otherwise read as a vacuous 0.
+  const ys: number[] = [];
   // The paper grows as stops open, so the bottom is re-read at every step.
   for (let y = step; y < (await docHeight()) + step; y += step) {
     steps++;
@@ -244,7 +247,11 @@ async function scrollCls(
           requestAnimationFrame(() => setTimeout(resolve, 150)),
         );
       }, y);
+    ys.push(await page.evaluate(() => Math.round(window.scrollY)));
   }
+  const scrollable = await page.evaluate(() =>
+    Math.round(document.documentElement.scrollHeight - innerHeight),
+  );
   if (lens) await scrollTo(page, 0);
   else await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(500);
@@ -254,9 +261,15 @@ async function scrollCls(
     steps,
     startHeight,
     height: await docHeight(),
+    scrollable,
+    maxScrollY: Math.max(0, ...ys),
+    moves: ys.filter((y, i) => y > (i === 0 ? 0 : ys[i - 1])).length,
     ...(await readShifts(page)),
   };
 }
+
+/** Two paced steps: below this the scroll proves nothing about the paper. */
+const MIN_TRAVEL_PX = 480;
 
 const ROUTE = { studio: "/desk", job: `/doc/${JOB}` } as const;
 
@@ -451,7 +464,18 @@ test.describe("RC-7 E8 X07 performance", () => {
           height: scroll.height,
         }),
       );
-      expect(scroll.steps, "the full document was scrolled").toBeGreaterThan(1);
+      // The window really moved, through the whole document, in several steps.
+      expect(
+        scroll.maxScrollY,
+        `the scroll travelled at least ${MIN_TRAVEL_PX}px`,
+      ).toBeGreaterThanOrEqual(MIN_TRAVEL_PX);
+      expect(
+        scroll.maxScrollY,
+        "the scroll reached the bottom of the document (within one step)",
+      ).toBeGreaterThanOrEqual(scroll.scrollable - scroll.step);
+      expect(scroll.moves, "scrollY advanced on several steps").toBeGreaterThan(
+        2,
+      );
       // The contract (paced, settled): a raw sum of exactly 0, not a rounded one.
       expect(
         scroll.cls,

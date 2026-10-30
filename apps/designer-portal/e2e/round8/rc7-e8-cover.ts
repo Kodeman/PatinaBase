@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { psqlRun, psqlScalar } from "../helpers/psql";
-import { rc7OwnedStackSql } from "./owned-stack";
+import { e8OwnedStackSql } from "./rc7-e8-guard";
 
 /**
  * RC-7 E8 lane-local helper: the studio's photographic cover (X04, X07).
@@ -25,8 +25,9 @@ const PHOTO = path.resolve(
 
 /** Uploads the reference photograph and points an active F01 board at it. Returns the DB readback. */
 export async function applyCover(purpose: string): Promise<string> {
-  // Refuse before any storage or DB write unless rc7_owned.stack names RC7_OWNED_STACK.
-  psqlRun(rc7OwnedStackSql(`${purpose}: cover guard`));
+  // Refuse before any storage or DB write: never the shared stack, and only
+  // when rc7_owned.stack names RC7_OWNED_STACK.
+  psqlRun(e8OwnedStackSql(`${purpose}: cover guard`));
   const api = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const upload = await fetch(
@@ -44,7 +45,7 @@ export async function applyCover(purpose: string): Promise<string> {
   );
   expect(upload.ok, `cover upload ${upload.status}`).toBe(true);
   psqlRun(
-    rc7OwnedStackSql(`${purpose}: cover fixture`) +
+    e8OwnedStackSql(`${purpose}: cover fixture`) +
       readFileSync(path.join(__dirname, "rc7-e8-cover-fixture.sql"), "utf8"),
   );
   const cover = psqlScalar(
