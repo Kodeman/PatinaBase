@@ -13,6 +13,8 @@ DO $$ BEGIN RAISE EXCEPTION 'FIX9 refuses a non-owned 127.0.0.1:61622 cluster'; 
 \quit 1
 \endif
 
+\ir ../../migrations/_pending/00905_round8_launch_service_arrangements.sql
+
 BEGIN;
 DO $$ BEGIN
   IF (SELECT enabled FROM public.server_capabilities WHERE key = 'scope_editions') IS DISTINCT FROM false THEN

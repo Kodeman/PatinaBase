@@ -13,6 +13,7 @@ DO $$ BEGIN
     RAISE EXCEPTION 'RC7-E3 refuses non-owned cluster';
   END IF;
 END $$;
+\ir ../../../../supabase/migrations/_pending/00905_round8_launch_service_arrangements.sql
 UPDATE public.server_capabilities SET enabled = true WHERE key = 'scope_editions';
 GRANT EXECUTE ON FUNCTION public.apply_service_arrangement(uuid,text,uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.assign_ffe_items_to_scope_package(uuid,uuid[],text,text) TO authenticated;
