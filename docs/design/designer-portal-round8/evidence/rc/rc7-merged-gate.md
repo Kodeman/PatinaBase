@@ -286,13 +286,43 @@ In 2 of 3 runs, one WebKit "Review and send" first tap did not open the sheet. T
 
 The product side is a ruling, not a fix: whether a landing scroll that fires once the page is interactive should yield to any scroll that happened after arrival, programmatic ones included. Until the fixed `openCloseout` has run long enough to bring the miss rate down from about 2 in 32 to zero, this stays an observation.
 
-**Separate finding: job F fails 4 of 4 on WebKit at `5386a159e`** (`@rc7-e2-completion job F`, `journey.ts:1020`). The two failure points:
+**Separate finding (superseded by the bisect below; it was a diagnostic-harness artifact): job F fails 4 of 4 on WebKit at `5386a159e`** (`@rc7-e2-completion job F`, `journey.ts:1020`). The two failure points:
 - **Runs 1 and 4:** `[data-studio-service] [data-blocker="studio_line_open"]` was not visible after 120 s (`journey.ts:1042`). The page snapshot shows "The client hasn't accepted the studio's services yet" even though the DB had the request `closed`/`accepted`.
 - **Runs 2 and 3:** `draft()` hung at `selectOption` (`journey.ts:412`) until the 600 s test timeout, while the snapshot shows the combobox present.
 
 Job F passed on WebKit in Phase B r1 and r3 at `c6434e3dd`. Between the two tips, FIX4 (`46fb4d68a`) changed `studio-service-section.tsx` (heading `tabIndex`, focus return), and this run was webkit-only with instrumentation. **The cause is not isolated.** The next step is to run the unmodified runner (both projects) at `5386a159e` and at `74a22bd5a`. The traces are in `$SP/rc7-gate/obs1/r*/run1/e2-rc7/test-results/*closure-not-the-service*`.
 
 **Teardown.** The runner stopped each stack (exit 0; containers 0, volumes 0). No listeners remain on 3910, 3912 or 651xx, and there are 0 `patina-rc7-gate*` containers or volumes.
+
+### Job F bisect and the OBS-1 test fix
+
+**Bisect.** I ran the **unmodified** E2 runner and journey with no tracing or instrumentation. Each SHA had its own detached worktree (`/Users/kody/Code/patina-r8-bisect-{a,b,c}`), set up with `pnpm install --frozen-lockfile --offline` plus the turbo `^...` build. Each run used a fresh owned stack (block 651), WebKit only. The only edit in each worktree was the runner's project list (`E2_PROJECTS = ['webkit-iphone']`); it was discarded with the worktree.
+
+| Point | SHA | Result | WebKit first taps | Teardown |
+|---|---|---|---|---|
+| a, pre-FIX4 | `74a22bd5a` | 9 passed (6.9m), job F green | 6 ok, 0 missed | containers 0, volumes 0 |
+| b, FIX4 | `5386a159e` | 9 passed (6.1m), job F green | 6 ok, 0 missed | containers 0, volumes 0 |
+| c, FIX4 + FIX5 | `74a324b26` | 9 passed (6.2m), job F green | 6 ok, 0 missed | containers 0, volumes 0 |
+
+**Verdict.** FIX4 is not implicated, and neither is FIX5. Job F is green at all three points. The 4/4 job F failure above appeared only under the diagnostic harness, whose two differences were `--trace on` and the instrumented `sendNotices`. I didn't test which of the two causes it, though full WebKit trace snapshots of the long job paper are the likelier one. **There is no job F product defect.** The worktrees were removed with `git worktree remove` and pruned.
+
+**OBS-1 test fix (`f484bafd3`).** `openCloseout` (`rc7-e2-consumer-journey.journey.ts:399`) now waits, after its `goto` and before it locates the section, for three things:
+- the shell's `[data-document-shell][data-arrival-ready]`;
+- no `arr-pre`/`arr-on` on `<html>`;
+- `scrollY` unchanged across two animation frames.
+
+The designer-portal type-check is clean.
+
+**Proof on the current tip `f484bafd3`** (FIX5 + the fix): I ran the unmodified runner, on both projects, twice, each on a fresh stack.
+
+| Run | Result | WebKit first taps | Teardown |
+|---|---|---|---|
+| 1 | **18 passed** (12.7m) | 6 `taps=1`, 0 missed | containers 0, volumes 0 |
+| 2 | **18 passed** (12.4m) | 6 `taps=1`, 0 missed | containers 0, volumes 0 |
+
+Counting every run since the trace began, WebKit first taps stand at 18/18 traced, 18/18 in the bisect and 12/12 with the fix, against 2 misses in 14 in Phase B. That makes the missing wait the most likely cause. With only 30 clean taps since the misses, absence isn't proof. The product question still stands: should the landing scroll yield to a programmatic scroll made after arrival?
+
+**Teardown.** No listeners on 3910, 3912 or 651xx; 0 `patina-rc7-gate*` containers or volumes and 0 `sidequest.owner=r8-rc7-gate` containers; no bisect worktrees left. The logs stay in `$SP/rc7-gate/bisect/` and `$SP/rc7-gate/fixrun/`.
 
 ## Not verified
 
