@@ -55,6 +55,7 @@ INSERT INTO paused VALUES
 ('public.record_external_fulfilment_event(uuid,text,jsonb,text[],text)','authenticated'),
 ('public.verify_external_fulfilment_event(uuid,text)','authenticated'),
 ('public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text)','authenticated'),
+('public.bind_fulfilment_evidence(uuid,uuid,text[],text)','authenticated'),
 ('public.record_fabrication_instruction(uuid,uuid,uuid,text[],jsonb,uuid)','authenticated');
 -- Reads and storage predicates that must stay granted throughout.
 CREATE TEMP TABLE kept_reads(signature regprocedure PRIMARY KEY);
@@ -84,6 +85,11 @@ BEGIN
    SELECT oid, grantee, privilege FROM (SELECT * FROM pg_temp.public_acls() EXCEPT SELECT * FROM acl_shipped) added
    EXCEPT SELECT signature::oid, 'authenticated'::regrole::oid, 'EXECUTE' FROM c2_kept), label || ': only the C2 three remain added');
 END $$;
+CREATE FUNCTION pg_temp.check_c2_kept(label text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+ PERFORM pg_temp.assert_true(has_function_privilege('authenticated', k.signature, 'EXECUTE'), label || ': C2 kept ' || k.signature)
+ FROM c2_kept k;
+END $$;
 
 -- 1. Deactivating a never-activated stack is a no-op.
 SAVEPOINT never_active;
@@ -103,6 +109,7 @@ GRANT EXECUTE ON FUNCTION public.create_external_fulfilment(uuid,uuid,text,text,
 GRANT EXECUTE ON FUNCTION public.record_external_fulfilment_event(uuid,text,jsonb,text[],text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.verify_external_fulfilment_event(uuid,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.bind_fulfilment_evidence(uuid,uuid,text[],text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.record_fabrication_instruction(uuid,uuid,uuid,text[],jsonb,uuid) TO authenticated;
 SELECT pg_temp.assert_true((SELECT enabled FROM public.server_capabilities WHERE key = 'scope_editions'), 'active: scope_editions on');
 SELECT pg_temp.assert_true(has_function_privilege(p.role_name, p.signature, 'EXECUTE'), 'active: granted ' || p.signature) FROM paused p;
@@ -110,10 +117,12 @@ SELECT pg_temp.assert_true(has_function_privilege(p.role_name, p.signature, 'EXE
 -- 3. Deactivate.
 \ir ../../migrations/_pending/00909_round8_c2_c4_deactivation.sql
 SELECT pg_temp.check_deactivated('deactivated');
+SELECT pg_temp.check_c2_kept('deactivated');
 
 -- 4. Re-running is a no-op.
 \ir ../../migrations/_pending/00909_round8_c2_c4_deactivation.sql
 SELECT pg_temp.check_deactivated('re-run');
+SELECT pg_temp.check_c2_kept('re-run');
 
 -- 5. Reactivation re-grants exactly C2 + C4 again (C5/C6/C3 stay off).
 \ir ../../migrations/_pending/00907_round8_c2_scope_editions_activation.sql

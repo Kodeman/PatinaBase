@@ -35,7 +35,7 @@ INSERT INTO c4_allowlist VALUES
 ('public.withdraw_service_acceptance_request(uuid,text,text)','authenticated'),
 ('public.present_service_acceptance_offline(uuid,text,text,text)','authenticated'),
 ('public.stamp_service_acceptance_paper_hash(uuid,text,text,text)','service_role');
--- Dependents that stay ungranted after C2 + C4 (C5 four, C6 three, C3 direct route).
+-- Dependents that stay ungranted after C2 + C4 (C5 five, C6 three, C3 direct route).
 CREATE TEMP TABLE still_inactive(signature regprocedure PRIMARY KEY);
 INSERT INTO still_inactive VALUES
 ('public.complete_studio_service(uuid,uuid,text,text)'),
@@ -45,6 +45,7 @@ INSERT INTO still_inactive VALUES
 ('public.record_external_fulfilment_event(uuid,text,jsonb,text[],text)'),
 ('public.verify_external_fulfilment_event(uuid,text)'),
 ('public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text)'),
+('public.bind_fulfilment_evidence(uuid,uuid,text[],text)'),
 ('public.record_fabrication_instruction(uuid,uuid,uuid,text[],jsonb,uuid)');
 -- C4 reads and storage predicates granted by 00886/00889.
 CREATE TEMP TABLE c4_reads(signature regprocedure PRIMARY KEY);

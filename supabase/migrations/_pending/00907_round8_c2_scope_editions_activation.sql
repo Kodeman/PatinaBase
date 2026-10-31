@@ -19,6 +19,11 @@
 -- as granted by 00868; margin_note_escalation stays off.
 --
 -- Review before release (Kody):
+--   * Arrangement composer (Codex review, 2026-10-31): the designer's
+--     ScopeArrangementChoices (scope-package-editor.tsx) is a disabled
+--     placeholder ("Not yet available") with no apply handler, and nothing in
+--     the portal calls apply_service_arrangement. Activating C2 makes the RPCs
+--     callable; designers cannot apply a K22 arrangement until it is built.
 --   * D9 renderer gate (RC-5): the arrangement composer and scope readings
 --     mount only in the round-8 renderer. Either every studio that could be
 --     asked to act renders round 8, or the legacy frame gains the sections.

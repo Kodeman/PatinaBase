@@ -10,8 +10,10 @@
 --   * scope_editions off: countersign stops minting; an addendum executed
 --     while off marks the job's active edition `stale` and supersedes its open
 --     acceptance requests (00886 _scope_after_execution);
---   * revoked from authenticated: the C4 seven, the C6 three, the C5 four and
---     the C3 direct route record_fabrication_instruction;
+--   * revoked from authenticated: the C4 seven, the C6 three, the C5 five
+--     (C5 §3.6: every mutation, including bind_fulfilment_evidence, which the
+--     RC-5 §1.9 list of four missed) and the C3 direct route
+--     record_fabrication_instruction;
 --   * revoked from service_role: the paper hash stamp.
 -- REVOKE of a privilege that was never granted is a no-op, so this also pauses
 -- C5/C6 whether or not they were ever activated.
@@ -54,6 +56,7 @@ REVOKE EXECUTE ON FUNCTION public.create_external_fulfilment(uuid,uuid,text,text
 REVOKE EXECUTE ON FUNCTION public.record_external_fulfilment_event(uuid,text,jsonb,text[],text) FROM authenticated;
 REVOKE EXECUTE ON FUNCTION public.verify_external_fulfilment_event(uuid,text) FROM authenticated;
 REVOKE EXECUTE ON FUNCTION public.set_ffe_item_external_fulfilment(uuid,uuid,bigint,text) FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.bind_fulfilment_evidence(uuid,uuid,text[],text) FROM authenticated;
 REVOKE EXECUTE ON FUNCTION public.record_fabrication_instruction(uuid,uuid,uuid,text[],jsonb,uuid) FROM authenticated;
 
 DO $$ BEGIN
