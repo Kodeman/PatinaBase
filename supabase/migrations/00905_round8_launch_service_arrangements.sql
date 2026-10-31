@@ -1,11 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00905 — C2 launch service arrangement catalog (K10)
--- Held per K21 (Kody, 2026-10-30); not part of the round-8 push.
--- After review, renumber to the then-current migration head before release.
--- DRAFT — Kody reviews before C2 activation (K10): patina_six defaults.
--- DRAFT — Kody reviews before C2 activation (K10): design_only defaults.
--- DRAFT — Kody reviews before C2 activation (K10): whole_home defaults.
--- DRAFT — Kody reviews before C2 activation (K10): fast_track defaults.
+-- Held per K21 (Kody, 2026-10-30) out of the round-8 push; released at 00905
+-- (the migration head was still 00904) after Kody approved all four
+-- arrangements as is (K22, 2026-10-30): patina_six, design_only, whole_home,
+-- fast_track. Phase content comes from the existing system phase templates.
 -- Data only; no grants or capability activation.
 -- ═══════════════════════════════════════════════════════════════════════════
 INSERT INTO public.service_arrangements (arrangement_key, version, phase_template_slug, parts)

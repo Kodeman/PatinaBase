@@ -14,8 +14,8 @@ DO $$ BEGIN RAISE EXCEPTION 'FIX9 refuses a non-owned 127.0.0.1:61622 cluster'; 
 \endif
 
 -- Run from this file's repo location: \ir resolves relative to the script, not the shell cwd.
--- The held rows are applied outside BEGIN, so they persist until this owned stack resets.
-\ir ../../migrations/_pending/00905_round8_launch_service_arrangements.sql
+-- 00905 replays at stack start; this re-apply is a no-op (ON CONFLICT DO NOTHING).
+\ir ../../migrations/00905_round8_launch_service_arrangements.sql
 
 BEGIN;
 DO $$ BEGIN
