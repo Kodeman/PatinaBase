@@ -134,6 +134,30 @@ SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.project_scope_edition
 
 -- Local-only activation is rolled back by the enclosing runner.
 UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+
+-- K23 (00906): an addendum on a job executed before C2 (no edition) executes and mints nothing.
+SET LOCAL ROLE authenticated;
+INSERT INTO scope_execution_results VALUES('legacy_addendum',public.create_service_addendum(
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='inactive'),'Legacy amendment'));
+SELECT public.copy_agreement_parts_from_authority((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='legacy_addendum'),'copy legacy fee parts');
+SELECT pg_temp.send_and_sign((SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='legacy_addendum'));
+INSERT INTO scope_execution_results VALUES('legacy_executed',public.countersign_design_services_agreement(
+ (SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='legacy_addendum'),'Execution Designer'));
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT (value->>'newlyExecuted')::boolean FROM scope_execution_results WHERE key='legacy_executed')
+ AND (SELECT commercial_state='executed' FROM public.proposals WHERE id=
+ (SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='legacy_addendum')),
+ 'K23 addendum on a pre-C2 job executes with scope editions on');
+SELECT pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM public.project_scope_editions WHERE project_id=
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='inactive')),
+ 'K23 addendum on a pre-C2 job mints no edition');
+SELECT pg_temp.assert_true((SELECT count(*)=2 AND max(execution_seq)=2 AND count(*) FILTER(WHERE commercial_document_id=
+ (SELECT id FROM public.project_commercial_documents WHERE proposal_id=
+ (SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='legacy_addendum')))=1
+ FROM public.project_commercial_execution_order WHERE project_id=
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='inactive')),
+ 'K23 addendum on a pre-C2 job still writes its execution order row');
 SELECT pg_temp.draft('f8693000-0000-4000-8000-000000000002');
 SELECT pg_temp.expect_error($q$SELECT public.upsert_agreement_parts('f8693000-0000-4000-8000-000000000002',
  jsonb_build_array(jsonb_set(pg_temp.policy(),'{payload,signers,0,profileId}','"f8690000-0000-4000-8000-000000000003"')),'bad signer')$q$,
@@ -218,6 +242,9 @@ SELECT pg_temp.assert_true((SELECT count(*)=2 AND count(*) FILTER(WHERE status='
  AND count(*) FILTER(WHERE status='superseded')=1 FROM public.project_scope_editions
  WHERE project_id=(SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),
  'native addendum atomically supersedes exactly one predecessor');
+SELECT pg_temp.assert_true((SELECT kind='amendment' AND edition_number=2 FROM public.project_scope_editions
+ WHERE status='active' AND source_proposal_id=(SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='amendment')),
+ 'K23 addendum on a job with an active edition still mints an amendment edition');
 SELECT pg_temp.assert_true((SELECT count(*)=2 AND min(execution_seq)=1 AND max(execution_seq)=2
  FROM public.project_commercial_execution_order WHERE project_id=
  (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),'amendment execution order is contiguous');
@@ -463,6 +490,22 @@ SELECT pg_temp.assert_true((SELECT NOT prosecdef AND proowner=(SELECT proowner F
  FROM pg_proc WHERE oid=to_regprocedure('public._guard_proposal_scope_edition()')),
  'pointer guard is invoker and shares native addendum owner');
 UPDATE public.server_capabilities SET enabled=true WHERE key='scope_editions';
+-- K23 (00906): a job whose latest edition is stale still reaches the mint and refuses (C2 §2.8).
+SET LOCAL ROLE authenticated;
+INSERT INTO scope_execution_results VALUES('stale_addendum',public.create_service_addendum(
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin'),'Addendum after stale'));
+SELECT public.copy_agreement_parts_from_authority((SELECT (value->>'proposalId')::uuid
+ FROM scope_execution_results WHERE key='stale_addendum'),'copy after stale');
+SELECT pg_temp.send_and_sign((SELECT (value->>'proposalId')::uuid FROM scope_execution_results WHERE key='stale_addendum'));
+SELECT pg_temp.expect_error(format('SELECT public.countersign_design_services_agreement(%L,''Execution Designer'')',
+ (SELECT value->>'proposalId' FROM scope_execution_results WHERE key='stale_addendum')),
+ 'PT409','scope_edition_stale','K23 addendum on a job whose latest edition is stale still refuses');
+RESET ROLE;
+SELECT pg_temp.assert_true((SELECT count(*)=3 FROM public.project_commercial_execution_order WHERE project_id=
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin'))
+ AND (SELECT count(*)=2 FROM public.project_scope_editions WHERE project_id=
+ (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='origin')),
+ 'K23 stale refusal writes no execution order row and no edition');
 SET LOCAL ROLE authenticated;
 INSERT INTO scope_execution_results VALUES('pointer_guard',public.create_service_addendum(
  (SELECT (value->>'projectId')::uuid FROM scope_execution_results WHERE key='build'),'Pointer guard draft'));

@@ -11,5 +11,6 @@ SET LOCAL statement_timeout = '30s';
 \ir ../../migrations/00885_round8_countersign_execution_time.sql
 \ir ../../migrations/00900_round8_external_install_hold_guard.sql
 \ir ../../migrations/00901_round8_client_threshold_external_field.sql
+\ir ../../migrations/00906_round8_legacy_jobs_stay_off_editions.sql
 \ir scope_composition_body.psql
 ROLLBACK;

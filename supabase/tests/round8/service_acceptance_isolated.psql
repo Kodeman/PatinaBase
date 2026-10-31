@@ -1,5 +1,5 @@
--- Applies 00886 (the head; no later redefiner) and runs the C4 oracle inside
--- one rolled-back transaction. Refuses any target but 127.0.0.1:expected_port.
+-- Applies 00886 and 00906 (which redefines its _scope_after_execution),
+-- then runs the C4 oracle inside one rolled-back transaction. Refuses any target but 127.0.0.1:expected_port.
 \set ON_ERROR_STOP on
 \if :{?expected_port}
 \else
@@ -16,5 +16,6 @@ BEGIN;
 SET LOCAL lock_timeout='3s';
 SET LOCAL statement_timeout='60s';
 \ir ../../migrations/00886_round8_service_acceptance.sql
+\ir ../../migrations/00906_round8_legacy_jobs_stay_off_editions.sql
 \ir service_acceptance_body.psql
 ROLLBACK;

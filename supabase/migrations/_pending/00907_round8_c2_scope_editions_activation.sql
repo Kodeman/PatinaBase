@@ -1,21 +1,18 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00906 — C2 activation: switch on scope editions and grant the C2 mutations
+-- 00907 — C2 activation: switch on scope editions and grant the C2 mutations
 -- Held in _pending/ until Kody's ship request; renumber to the then-current
--- head on release. Ship it in the same push as 00907 (C4): once C2 mints an
+-- head on release. Ship it in the same push as 00908 (C4): once C2 mints an
 -- edition, the designer's acceptance section offers a request that C4 refuses.
 --
--- BLOCKER (Codex review, 2026-10-31; confirmed on Strata): with the setting on,
--- _scope_after_execution (00886) mints for every executed document, and
--- _mint_scope_edition (00886:1305) refuses a non-origin document on a job with
--- no active edition (`scope_edition_stale`). Every job executed while C2 was
--- off has none (Strata: 8 such jobs, 0 editions, 4 open addenda), so
--- countersigning an addendum there would roll back. Do not release until a
--- legacy-job transition is ruled and built.
+-- The legacy-job blocker (Codex review, 2026-10-31) is resolved by K23 / 00906:
+-- a job executed while C2 was off has no edition and stays off editions, so
+-- countersigning an addendum there still executes. Apply 00906 first.
 -- Plan: contracts/C2-scope-editions.md §2.8; evidence/rc/rc5-rollout-rehearsal.md §1.7.
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Effect, global (server_capabilities has one row, not one per studio):
---   * countersign starts minting scope editions for every executed agreement
---     and addendum (00868 graft); invalidation already ran while inactive;
+--   * countersign starts minting scope editions for every executed origin
+--     agreement, and for an addendum on a job that already has an edition
+--     (00906, K23); invalidation already ran while inactive;
 --   * designers can apply a launch arrangement (00905, K22), assign FF&E lines
 --     to a scope package, and reconcile a stale edition.
 -- Not changed: C4, C5, C6 and the C3 direct route stay ungranted; reads stay

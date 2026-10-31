@@ -1,4 +1,4 @@
--- Gate for the held C2/C4 activation migrations (_pending/00906, _pending/00907).
+-- Gate for the held C2/C4 activation migrations (_pending/00907, _pending/00908).
 -- Owned stack only (any local port but the shared 54322). Run from this file's
 -- repo location: \ir resolves relative to the script. Everything is rolled back.
 \set ON_ERROR_STOP on
@@ -95,7 +95,7 @@ SELECT pg_temp.check_c4_acl(false);
 -- 2. C4 before C2 refuses, and leaves nothing granted.
 SAVEPOINT c4_first;
 \set ON_ERROR_STOP off
-\ir ../../migrations/_pending/00907_round8_c4_service_acceptance_activation.sql
+\ir ../../migrations/_pending/00908_round8_c4_service_acceptance_activation.sql
 \set ON_ERROR_STOP on
 ROLLBACK TO SAVEPOINT c4_first;
 SELECT :'LAST_ERROR_MESSAGE' = 'C4 activation refused: apply the C2 activation (scope_editions on, C2 grants) first' AS c4_refused \gset
@@ -103,7 +103,7 @@ SELECT pg_temp.assert_true(:'c4_refused'::boolean, 'C4 before C2 refuses with th
 SELECT pg_temp.check_c4_acl(false);
 
 -- 3. C2 activation.
-\ir ../../migrations/_pending/00906_round8_c2_scope_editions_activation.sql
+\ir ../../migrations/_pending/00907_round8_c2_scope_editions_activation.sql
 SELECT pg_temp.assert_true((SELECT enabled FROM public.server_capabilities WHERE key = 'scope_editions'), 'C2: scope_editions on');
 SELECT pg_temp.assert_true(has_function_privilege('authenticated', signature, 'EXECUTE')
   AND NOT has_function_privilege('anon', signature, 'EXECUTE'), 'C2: authenticated only ' || signature) FROM c2_mutations;
@@ -111,7 +111,7 @@ SELECT pg_temp.assert_true((SELECT enabled FROM public.server_capabilities WHERE
 SELECT pg_temp.check_c4_acl(false);
 
 -- 4. C4 activation.
-\ir ../../migrations/_pending/00907_round8_c4_service_acceptance_activation.sql
+\ir ../../migrations/_pending/00908_round8_c4_service_acceptance_activation.sql
 SELECT pg_temp.check_c4_acl(true);
 SELECT pg_temp.assert_true(NOT has_function_privilege(r, signature, 'EXECUTE'), 'still inactive for ' || r || ': ' || signature)
   FROM still_inactive, unnest(ARRAY['anon','authenticated']) r;
@@ -134,8 +134,8 @@ SELECT pg_temp.assert_true(NOT EXISTS (
   EXCEPT SELECT 'scope_editions', true), 'capabilities: only scope_editions changed');
 
 -- 5. Re-running both is a no-op.
-\ir ../../migrations/_pending/00906_round8_c2_scope_editions_activation.sql
-\ir ../../migrations/_pending/00907_round8_c4_service_acceptance_activation.sql
+\ir ../../migrations/_pending/00907_round8_c2_scope_editions_activation.sql
+\ir ../../migrations/_pending/00908_round8_c4_service_acceptance_activation.sql
 SELECT pg_temp.check_c4_acl(true);
 
 DO $$ BEGIN RAISE NOTICE 'C2/C4 activation gate: PASS % assertions', (SELECT n FROM assertion_count); END $$;
